@@ -3,7 +3,6 @@ package com.cabex.backend.notification.entity;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
