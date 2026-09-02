@@ -3,8 +3,6 @@ package com.cabex.backend.audit.entity;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -37,12 +35,12 @@ public class AuditLog {
     @Column(name = "entite_id")
     private Long entiteId;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "ancienne_valeur", columnDefinition = "json")
+    @Lob
+    @Column(name = "ancienne_valeur", columnDefinition = "LONGTEXT")
     private String ancienneValeur;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "nouvelle_valeur", columnDefinition = "json")
+    @Lob
+    @Column(name = "nouvelle_valeur", columnDefinition = "LONGTEXT")
     private String nouvelleValeur;
 
     @Column(name = "adresse_ip", length = 45)

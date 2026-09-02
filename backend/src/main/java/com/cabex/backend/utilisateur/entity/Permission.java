@@ -43,5 +43,5 @@ public class Permission {
 
     @ManyToMany(mappedBy = "permissions", fetch = FetchType.LAZY)
     @Builder.Default
-    private Set<RolePermission> rolePermissions = new HashSet<>();
+    private Set<RoleUtilisateur> roles = new HashSet<>();
 }

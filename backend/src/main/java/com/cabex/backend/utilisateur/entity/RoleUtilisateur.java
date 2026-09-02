@@ -40,11 +40,16 @@ public class RoleUtilisateur {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    @ManyToMany(mappedBy = "roles", fetch = FetchType.LAZY)
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "role_permission",
+        joinColumns = @JoinColumn(name = "role_id"),
+        inverseJoinColumns = @JoinColumn(name = "permission_id")
+    )
     @Builder.Default
-    private Set<Utilisateur> utilisateurs = new HashSet<>();
+    private Set<Permission> permissions = new HashSet<>();
 
     @OneToMany(mappedBy = "role", fetch = FetchType.LAZY)
     @Builder.Default
-    private Set<RolePermission> rolePermissions = new HashSet<>();
+    private Set<Utilisateur> utilisateurs = new HashSet<>();
 }

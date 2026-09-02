@@ -55,15 +55,6 @@ public class Utilisateur {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-        name = "role_permission",
-        joinColumns = @JoinColumn(name = "role_id"),
-        inverseJoinColumns = @JoinColumn(name = "permission_id")
-    )
-    @Builder.Default
-    private Set<Permission> permissions = new HashSet<>();
-
     @OneToMany(mappedBy = "utilisateur", fetch = FetchType.LAZY)
     @Builder.Default
     private Set<Notification> notifications = new HashSet<>();
