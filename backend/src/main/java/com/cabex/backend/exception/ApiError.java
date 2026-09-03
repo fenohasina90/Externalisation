@@ -30,7 +30,11 @@ public class ApiError {
     }
 
     public ApiError(HttpStatus status, String message, String path) {
-        this(status.value(), codeFromStatus(status), message, path, null);
+        this(status.value(), status.name(), message, path, null);
+    }
+
+    public ApiError(HttpStatus status, String message, String path, Map<String, String> fieldErrors) {
+        this(status.value(), status.name(), message, path, fieldErrors);
     }
 
     private static String codeFromStatus(HttpStatus status) {
