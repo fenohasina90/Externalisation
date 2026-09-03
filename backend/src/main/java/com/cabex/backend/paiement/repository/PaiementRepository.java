@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
@@ -24,6 +25,9 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
 
     @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.demande.id = :demandeId")
     BigDecimal sommePayeeParDemande(@Param("demandeId") Integer demandeId);
+
+    @Query("SELECT p FROM Paiement p WHERE p.demande.societe.id = :societeId ORDER BY p.datePaiement DESC")
+    List<Paiement> findBySocieteId(@Param("societeId") Integer societeId);
 
     @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.echeance.id = :echeanceId")
     BigDecimal sommePayeeParEcheance(@Param("echeanceId") Integer echeanceId);

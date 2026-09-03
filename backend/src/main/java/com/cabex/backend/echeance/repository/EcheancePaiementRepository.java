@@ -22,4 +22,11 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
 
     List<EcheancePaiement> findByDateEcheanceBetweenAndMontantPayeLessThan(LocalDate debut, LocalDate fin,
                                                                            BigDecimal montantPaye);
+
+    @Query("""
+            SELECT e FROM EcheancePaiement e
+            WHERE e.proposPaiement.demande.societe.id = :societeId
+            ORDER BY e.dateEcheance ASC
+            """)
+    List<EcheancePaiement> findBySocieteId(@Param("societeId") Integer societeId);
 }
