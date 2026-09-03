@@ -35,13 +35,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ValidationException.class)
     public ResponseEntity<ApiError> handleValidationBusiness(ValidationException ex, WebRequest request) {
-        ApiError error = new ApiError(
-                HttpStatus.BAD_REQUEST.value(),
-                HttpStatus.BAD_REQUEST.getReasonPhrase(),
+        return ResponseEntity.badRequest().body(new ApiError(
+                HttpStatus.BAD_REQUEST,
                 ex.getMessage(),
                 request.getDescription(false).replace("uri=", ""),
-                ex.getFieldErrors());
-        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+                ex.getFieldErrors()));
     }
 
     @ExceptionHandler(BusinessException.class)
@@ -72,8 +70,7 @@ public class GlobalExceptionHandler {
         }
         return new ResponseEntity<>(
                 new ApiError(
-                        HttpStatus.BAD_REQUEST.value(),
-                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        HttpStatus.BAD_REQUEST,
                         "Données obligatoires manquantes ou invalides",
                         request.getDescription(false).replace("uri=", ""),
                         fieldErrors),
@@ -87,8 +84,7 @@ public class GlobalExceptionHandler {
                 fieldErrors.putIfAbsent(v.getPropertyPath().toString(), v.getMessage()));
         return new ResponseEntity<>(
                 new ApiError(
-                        HttpStatus.BAD_REQUEST.value(),
-                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        HttpStatus.BAD_REQUEST,
                         "Erreur de validation des paramètres",
                         request.getDescription(false).replace("uri=", ""),
                         fieldErrors),
@@ -141,11 +137,7 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ApiError> build(HttpStatus status, String message, WebRequest request) {
-        ApiError error = new ApiError(
-                status.value(),
-                status.getReasonPhrase(),
-                message,
-                request.getDescription(false).replace("uri=", ""));
+        ApiError error = new ApiError(status, message, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(error, status);
     }
 }
