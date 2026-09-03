@@ -10,6 +10,8 @@ import com.cabex.backend.client.repository.ClientResponsableRepository;
 import com.cabex.backend.client.repository.SocieteRepository;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,13 @@ public class ResponsableService {
                               SocieteRepository societeRepository) {
         this.responsableRepository = responsableRepository;
         this.societeRepository = societeRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ResponsableResponse> getAll(String recherche, Integer societeId, Boolean actif,
+                                            Pageable pageable) {
+        return responsableRepository.rechercher(recherche, societeId, actif, pageable)
+                .map(ResponsableMapper::toResponse);
     }
 
     @Transactional(readOnly = true)
@@ -62,6 +71,13 @@ public class ResponsableService {
         responsable.setContact(request.contact());
         responsable.setEmail(request.email());
         responsable.setFonction(request.fonction());
+        return ResponsableMapper.toResponse(responsableRepository.save(responsable));
+    }
+
+    @Transactional
+    public ResponsableResponse toggleActivation(Integer id, boolean actif) {
+        ClientResponsable responsable = getEntity(id);
+        responsable.setActif(actif);
         return ResponsableMapper.toResponse(responsableRepository.save(responsable));
     }
 

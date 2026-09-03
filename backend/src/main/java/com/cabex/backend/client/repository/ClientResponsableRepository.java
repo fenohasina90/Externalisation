@@ -1,7 +1,11 @@
 package com.cabex.backend.client.repository;
 
 import com.cabex.backend.client.entity.ClientResponsable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -12,4 +16,18 @@ public interface ClientResponsableRepository extends JpaRepository<ClientRespons
     List<ClientResponsable> findBySocieteIdAndActifTrue(Integer societeId);
 
     long countBySocieteId(Integer societeId);
+
+    @Query("""
+            SELECT r FROM ClientResponsable r
+            WHERE (:societeId IS NULL OR r.societe.id = :societeId)
+              AND (:actif IS NULL OR r.actif = :actif)
+              AND (:recherche IS NULL OR :recherche = ''
+                   OR LOWER(r.nomClient) LIKE LOWER(CONCAT('%', :recherche, '%'))
+                   OR LOWER(COALESCE(r.contact, '')) LIKE LOWER(CONCAT('%', :recherche, '%'))
+                   OR LOWER(COALESCE(r.email, '')) LIKE LOWER(CONCAT('%', :recherche, '%')))
+            """)
+    Page<ClientResponsable> rechercher(@Param("recherche") String recherche,
+                                       @Param("societeId") Integer societeId,
+                                       @Param("actif") Boolean actif,
+                                       Pageable pageable);
 }
