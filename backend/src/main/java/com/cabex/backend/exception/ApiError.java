@@ -1,6 +1,7 @@
 package com.cabex.backend.exception;
 
 import lombok.Getter;
+import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -26,5 +27,13 @@ public class ApiError {
         this.message = message;
         this.path = path;
         this.fieldErrors = fieldErrors;
+    }
+
+    public ApiError(HttpStatus status, String message, String path) {
+        this(status.value(), codeFromStatus(status), message, path, null);
+    }
+
+    private static String codeFromStatus(HttpStatus status) {
+        return status.name().replace("_", "_");
     }
 }
