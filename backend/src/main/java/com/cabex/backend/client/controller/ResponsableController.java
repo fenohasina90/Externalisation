@@ -8,11 +8,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -21,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/responsables")
@@ -37,10 +40,14 @@ public class ResponsableController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('RESPONSABLE_VIEW')")
-    @Operation(summary = "Lister les responsables d'une société")
-    public ResponseEntity<List<ResponsableResponse>> getBySociete(
-            @RequestParam Integer societeId) {
-        return ResponseEntity.ok(responsableService.getBySociete(societeId));
+    @Operation(summary = "Lister / rechercher les responsables",
+            description = "Pagination, recherche par nom/contact/email, filtre par société et par actif")
+    public ResponseEntity<Page<ResponsableResponse>> getAll(
+            @RequestParam(value = "recherche", required = false) String recherche,
+            @RequestParam(value = "societeId", required = false) Integer societeId,
+            @RequestParam(value = "actif", required = false) Boolean actif,
+            Pageable pageable) {
+        return ResponseEntity.ok(responsableService.getAll(recherche, societeId, actif, pageable));
     }
 
     @GetMapping("/{id}")
@@ -65,9 +72,18 @@ public class ResponsableController {
         return ResponseEntity.ok(responsableService.update(id, request));
     }
 
+    @PatchMapping("/{id}/activation")
+    @PreAuthorize("hasAuthority('RESPONSABLE_UPDATE')")
+    @Operation(summary = "Activer / désactiver un responsable")
+    public ResponseEntity<ResponsableResponse> toggleActivation(@PathVariable Integer id,
+                                                                @RequestBody Map<String, Boolean> body) {
+        boolean actif = Boolean.TRUE.equals(body.get("actif"));
+        return ResponseEntity.ok(responsableService.toggleActivation(id, actif));
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('RESPONSABLE_DELETE')")
-    @Operation(summary = "Désactiver un responsable")
+    @Operation(summary = "Désactiver (supprimer) un responsable")
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
         responsableService.delete(id);
         return ResponseEntity.noContent().build();
