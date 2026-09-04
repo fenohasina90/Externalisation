@@ -38,6 +38,27 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
     BigDecimal sommePayeeParEcheance(@Param("echeanceId") Integer echeanceId);
 
     @Query("""
+        SELECT p.demande.societe.id, COALESCE(SUM(p.montantPaye), 0)
+        FROM Paiement p
+        WHERE p.actif = true
+        GROUP BY p.demande.societe.id
+        """)
+    List<Object[]> sommeParSociete();
+
+    @Query("""
+        SELECT COALESCE(COUNT(p), 0) FROM Paiement p
+        WHERE p.actif = true AND p.echeance IS NOT NULL
+        """)
+    long compterPaiementsSurEcheance();
+
+    @Query("""
+        SELECT COALESCE(COUNT(p), 0) FROM Paiement p
+        WHERE p.actif = true AND p.echeance IS NOT NULL
+          AND p.datePaiement <= p.echeance.dateEcheance
+        """)
+    long compterPaiementsSurEcheanceATemps();
+
+    @Query("""
         SELECT p FROM Paiement p
         WHERE p.actif = true
           AND (:recherche IS NULL OR LOWER(p.referencePaiement) LIKE LOWER(CONCAT('%', :recherche, '%')))

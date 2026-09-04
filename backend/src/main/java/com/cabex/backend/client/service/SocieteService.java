@@ -84,8 +84,12 @@ public class SocieteService {
 
     @Transactional(readOnly = true)
     public Page<SocieteResponse> getAll(String recherche, Boolean actif, Pageable pageable) {
+        Map<Integer, Integer> nbParSociete = new java.util.HashMap<>();
+        for (Object[] o : societeRepository.compterDemandesParSociete()) {
+            nbParSociete.put((Integer) o[0], ((Number) o[1]).intValue());
+        }
         return societeRepository.rechercher(recherche, actif, pageable)
-                .map(SocieteMapper::toResponse);
+                .map(s -> SocieteMapper.toResponse(s, nbParSociete.getOrDefault(s.getId(), 0)));
     }
 
     @Transactional(readOnly = true)

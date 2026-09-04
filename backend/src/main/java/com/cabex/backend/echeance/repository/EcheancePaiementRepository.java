@@ -1,6 +1,8 @@
 package com.cabex.backend.echeance.repository;
 
 import com.cabex.backend.echeance.entity.EcheancePaiement;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -62,10 +64,44 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
     long countEnRetard(@Param("jour") LocalDate jour);
 
     @Query("""
+            SELECT COUNT(e) FROM EcheancePaiement e
+            WHERE e.dateEcheance >= :jour
+              AND e.dateEcheance <= :fin
+              AND e.montantPaye < e.montantAttendu
+            """)
+    long countProches(@Param("jour") LocalDate jour, @Param("fin") LocalDate fin);
+
+    @Query("""
             SELECT e FROM EcheancePaiement e
             WHERE e.dateEcheance >= :jour
               AND e.montantPaye < e.montantAttendu
             ORDER BY e.dateEcheance ASC
             """)
     List<EcheancePaiement> findAVenir(@Param("jour") LocalDate jour);
+
+    @Query(value = """
+            SELECT e FROM EcheancePaiement e
+            WHERE e.dateEcheance < :jour
+              AND e.montantPaye < e.montantAttendu
+            ORDER BY e.dateEcheance ASC
+            """,
+            countQuery = """
+            SELECT COUNT(e) FROM EcheancePaiement e
+            WHERE e.dateEcheance < :jour
+              AND e.montantPaye < e.montantAttendu
+            """)
+    Page<EcheancePaiement> findEnRetardPagine(@Param("jour") LocalDate jour, Pageable pageable);
+
+    @Query(value = """
+            SELECT e FROM EcheancePaiement e
+            WHERE e.dateEcheance >= :jour
+              AND e.montantPaye < e.montantAttendu
+            ORDER BY e.dateEcheance ASC
+            """,
+            countQuery = """
+            SELECT COUNT(e) FROM EcheancePaiement e
+            WHERE e.dateEcheance >= :jour
+              AND e.montantPaye < e.montantAttendu
+            """)
+    Page<EcheancePaiement> findAVenirPagine(@Param("jour") LocalDate jour, Pageable pageable);
 }

@@ -11,6 +11,8 @@ import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -84,17 +86,15 @@ public class EcheanceGestionService {
     }
 
     @Transactional(readOnly = true)
-    public List<EcheanceResponse> getEnRetard() {
-        return echeanceRepository.findEnRetard(LocalDate.now()).stream()
-                .map(e -> EcheanceMapper.toEcheanceResponse(e, LocalDate.now(), JOURS_ALERTE))
-                .toList();
+    public Page<EcheanceResponse> getEnRetard(Pageable pageable) {
+        return echeanceRepository.findEnRetardPagine(LocalDate.now(), pageable)
+                .map(e -> EcheanceMapper.toEcheanceResponse(e, LocalDate.now(), JOURS_ALERTE));
     }
 
     @Transactional(readOnly = true)
-    public List<EcheanceResponse> getAVenir() {
-        return echeanceRepository.findAVenir(LocalDate.now()).stream()
-                .map(e -> EcheanceMapper.toEcheanceResponse(e, LocalDate.now(), JOURS_ALERTE))
-                .toList();
+    public Page<EcheanceResponse> getAVenir(Pageable pageable) {
+        return echeanceRepository.findAVenirPagine(LocalDate.now(), pageable)
+                .map(e -> EcheanceMapper.toEcheanceResponse(e, LocalDate.now(), JOURS_ALERTE));
     }
 
     private void recalculerPlan(ProposPaiement propos) {

@@ -16,6 +16,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+
 @Service
 public class DomaineGestionService {
 
@@ -29,8 +31,12 @@ public class DomaineGestionService {
 
     @Transactional(readOnly = true)
     public Page<DomaineResponse> getAll(String recherche, Boolean actif, Pageable pageable) {
+        Map<Object, Long> nbParDomaine = new java.util.HashMap<>();
+        for (Object[] o : domaineRepository.compterServicesParDomaine()) {
+            nbParDomaine.put(o[0], (long) o[1]);
+        }
         return domaineRepository.rechercher(recherche, actif, pageable)
-                .map(DomaineMapper::toResponse);
+                .map(d -> DomaineMapper.toResponse(d, nbParDomaine.getOrDefault(d.getId(), 0L)));
     }
 
     @Transactional(readOnly = true)

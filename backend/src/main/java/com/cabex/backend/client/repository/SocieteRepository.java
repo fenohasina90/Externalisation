@@ -38,4 +38,10 @@ public interface SocieteRepository extends JpaRepository<Societe, Integer> {
         ORDER BY s.nomSociete
         """)
     List<Societe> rechercherGlobale(@Param("q") String q, Pageable pageable);
+
+    @Query("""
+        SELECT d.societe.id, COUNT(d) FROM DemandeService d
+        GROUP BY d.societe.id
+        """)
+    List<Object[]> compterDemandesParSociete();
 }

@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface DomaineServiceRepository extends JpaRepository<DomaineService, Integer> {
 
     boolean existsByNomDomaine(String nomDomaine);
@@ -22,4 +24,10 @@ public interface DomaineServiceRepository extends JpaRepository<DomaineService, 
     Page<DomaineService> rechercher(@Param("recherche") String recherche,
                                     @Param("actif") Boolean actif,
                                     Pageable pageable);
+
+    @Query("""
+        SELECT s.domaine.id, COUNT(s) FROM Service s
+        GROUP BY s.domaine.id
+        """)
+    List<Object[]> compterServicesParDomaine();
 }

@@ -19,7 +19,6 @@ import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
-import com.cabex.backend.paiement.entity.Paiement;
 import com.cabex.backend.paiement.repository.PaiementRepository;
 import com.cabex.backend.service.repository.ServiceRepository;
 import org.springframework.stereotype.Service;
@@ -118,12 +117,8 @@ public class DashboardService {
                 : montantTotal == null ? BigDecimal.ZERO
                         : montantTotal.divide(BigDecimal.valueOf(totalDemandes), 2, RoundingMode.HALF_UP);
 
-        List<Paiement> surEcheance = paiementRepository.payesSurEcheance();
-        long totalPayts = surEcheance.size();
-        long aTemps = surEcheance.stream()
-                .filter(p -> p.getEcheance() != null
-                        && !p.getDatePaiement().isAfter(p.getEcheance().getDateEcheance()))
-                .count();
+        long totalPayts = paiementRepository.compterPaiementsSurEcheance();
+        long aTemps = paiementRepository.compterPaiementsSurEcheanceATemps();
         BigDecimal tauxPaiementATemps = totalPayts == 0 ? BigDecimal.ZERO
                 : BigDecimal.valueOf(aTemps * 100.0 / totalPayts).setScale(2, RoundingMode.HALF_UP);
 
@@ -210,13 +205,17 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public List<ClientRevenuResponse> clients() {
+        Map<Integer, BigDecimal> payeParClient = new java.util.HashMap<>();
+        for (Object[] o : paiementRepository.sommeParSociete()) {
+            payeParClient.put((Integer) o[0], toBigDecimal(o[1]));
+        }
         return demandeRepository.demandesParSociete().stream()
                 .map(o -> {
                     Integer clientId = (Integer) o[0];
                     String nom = (String) o[1];
                     long nb = (long) o[2];
                     BigDecimal total = toBigDecimal(o[3]);
-                    BigDecimal paye = paiementRepository.sommePayee(null, null, clientId, null, null);
+                    BigDecimal paye = payeParClient.getOrDefault(clientId, BigDecimal.ZERO);
                     return new ClientRevenuResponse(clientId, nom, nb, total, paye);
                 })
                 .toList();
@@ -239,9 +238,7 @@ public class DashboardService {
     }
 
     private long countProches(LocalDate today) {
-        return echeanceRepository.findAVenir(today).stream()
-                .filter(e -> !e.getDateEcheance().isAfter(today.plusDays(JOURS_ALERTE)))
-                .count();
+        return echeanceRepository.countProches(today, today.plusDays(JOURS_ALERTE));
     }
 
     private EcheanceAlerteResponse toAlerte(EcheancePaiement e, String statut) {

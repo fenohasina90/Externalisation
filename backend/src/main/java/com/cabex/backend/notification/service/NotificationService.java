@@ -13,6 +13,7 @@ import com.cabex.backend.security.SecurityUtils;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
 import com.cabex.backend.utilisateur.repository.UtilisateurRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,7 +45,7 @@ public class NotificationService {
     public NotificationsNonLuesResponse nonLues() {
         Integer userId = SecurityUtils.currentUserId();
         List<NotificationResponse> notifications = notificationRepository
-                .findByUtilisateurIdAndLuFalseOrderByDateCreationDesc(userId, Pageable.unpaged())
+                .findByUtilisateurIdAndLuFalseOrderByDateCreationDesc(userId, PageRequest.of(0, 50))
                 .getContent()
                 .stream()
                 .map(NotificationMapper::toResponse)
