@@ -29,4 +29,20 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
             ORDER BY e.dateEcheance ASC
             """)
     List<EcheancePaiement> findBySocieteId(@Param("societeId") Integer societeId);
+
+    @Query("""
+            SELECT e FROM EcheancePaiement e
+            WHERE e.dateEcheance < :jour
+              AND e.montantPaye < e.montantAttendu
+            ORDER BY e.dateEcheance ASC
+            """)
+    List<EcheancePaiement> findEnRetard(@Param("jour") LocalDate jour);
+
+    @Query("""
+            SELECT e FROM EcheancePaiement e
+            WHERE e.dateEcheance >= :jour
+              AND e.montantPaye < e.montantAttendu
+            ORDER BY e.dateEcheance ASC
+            """)
+    List<EcheancePaiement> findAVenir(@Param("jour") LocalDate jour);
 }
