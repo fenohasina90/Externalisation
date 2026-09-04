@@ -27,6 +27,10 @@ public class EcheanceMapper {
         if (!echeance.getDateEcheance().isAfter(aujourdhui.plusDays(joursAlerte))) {
             return "PROCHE";
         }
+        if (echeance.getMontantPaye() != null
+                && echeance.getMontantPaye().compareTo(BigDecimal.ZERO) > 0) {
+            return "PARTIELLE";
+        }
         return "A_VENIR";
     }
 
