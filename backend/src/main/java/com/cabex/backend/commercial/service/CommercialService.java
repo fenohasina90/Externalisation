@@ -6,6 +6,8 @@ import com.cabex.backend.commercial.dto.UpdateCommercialRequest;
 import com.cabex.backend.commercial.entity.Commercial;
 import com.cabex.backend.commercial.mapper.CommercialMapper;
 import com.cabex.backend.commercial.repository.CommercialRepository;
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.exception.DuplicateResourceException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
@@ -18,9 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class CommercialService {
 
     private final CommercialRepository commercialRepository;
+    private final AuditService auditService;
 
-    public CommercialService(CommercialRepository commercialRepository) {
+    public CommercialService(CommercialRepository commercialRepository, AuditService auditService) {
         this.commercialRepository = commercialRepository;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -47,7 +51,9 @@ public class CommercialService {
                 .contact(request.contact())
                 .actif(true)
                 .build();
-        return CommercialMapper.toResponse(commercialRepository.save(commercial));
+        Commercial saved = commercialRepository.save(commercial);
+        auditService.log(AuditActions.CREATE, "COMMERCIAL", "Commercial", saved.getId().longValue(), null, "nom=" + saved.getNomCommercial());
+        return CommercialMapper.toResponse(saved);
     }
 
     @Transactional
@@ -60,21 +66,28 @@ public class CommercialService {
         if (request.contact() != null) {
             commercial.setContact(request.contact());
         }
-        return CommercialMapper.toResponse(commercialRepository.save(commercial));
+        Commercial saved = commercialRepository.save(commercial);
+        auditService.log(AuditActions.UPDATE, "COMMERCIAL", "Commercial", saved.getId().longValue(), null, "nom=" + saved.getNomCommercial());
+        return CommercialMapper.toResponse(saved);
     }
 
     @Transactional
     public CommercialResponse toggleActivation(Integer id, boolean actif) {
         Commercial commercial = getEntity(id);
+        boolean previousActif = commercial.getActif();
         commercial.setActif(actif);
-        return CommercialMapper.toResponse(commercialRepository.save(commercial));
+        Commercial saved = commercialRepository.save(commercial);
+        auditService.log(AuditActions.UPDATE, "COMMERCIAL", "Commercial", saved.getId().longValue(), "actif=" + previousActif, "actif=" + actif);
+        return CommercialMapper.toResponse(saved);
     }
 
     @Transactional
     public void delete(Integer id) {
         Commercial commercial = getEntity(id);
+        String nom = commercial.getNomCommercial();
         commercial.setActif(false);
         commercialRepository.save(commercial);
+        auditService.log(AuditActions.DELETE, "COMMERCIAL", "Commercial", commercial.getId().longValue(), "nom=" + nom, null);
     }
 
     private Commercial getEntity(Integer id) {

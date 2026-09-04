@@ -1,5 +1,7 @@
 package com.cabex.backend.paiement.service;
 
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
@@ -41,19 +43,22 @@ public class PaiementGestionService {
     private final EcheancePaiementRepository echeanceRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final NotificationService notificationService;
+    private final AuditService auditService;
 
     public PaiementGestionService(PaiementRepository paiementRepository,
                                   DemandeServiceRepository demandeRepository,
                                   ModePaiementRepository modeRepository,
                                   EcheancePaiementRepository echeanceRepository,
                                   UtilisateurRepository utilisateurRepository,
-                                  NotificationService notificationService) {
+                                  NotificationService notificationService,
+                                  AuditService auditService) {
         this.paiementRepository = paiementRepository;
         this.demandeRepository = demandeRepository;
         this.modeRepository = modeRepository;
         this.echeanceRepository = echeanceRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.notificationService = notificationService;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -119,6 +124,10 @@ public class PaiementGestionService {
 
         notificationService.notifierPaiementEnregistre(paiement);
 
+        auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
+                Long.valueOf(paiement.getId()), null,
+                "montant=" + paiement.getMontantPaye() + ", réf=" + paiement.getReferencePaiement());
+
         return PaiementMapper.toResponse(paiement);
     }
 
@@ -156,7 +165,13 @@ public class PaiementGestionService {
         paiement.setReferenceVirement(request.referenceVirement());
         paiement.setCommentaire(request.commentaire());
 
-        return PaiementMapper.toResponse(paiementRepository.save(paiement));
+        PaiementResponse response = PaiementMapper.toResponse(paiementRepository.save(paiement));
+        auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
+                paiement.getId().longValue(), "montant=" + paiement.getMontantPaye()
+                        + ", réf=" + paiement.getReferencePaiement(),
+                "montant=" + request.montantPaye()
+                        + (request.referenceVirement() != null ? ", réf=" + request.referenceVirement() : ""));
+        return response;
     }
 
     @Transactional
@@ -165,7 +180,10 @@ public class PaiementGestionService {
         if (paiement.getEcheance() != null) {
             soustraireDeEcheance(paiement.getEcheance(), paiement.getMontantPaye());
         }
+        String ref = paiement.getReferencePaiement();
         paiementRepository.delete(paiement);
+        auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
+                Long.valueOf(id), "supprimé, réf=" + ref, null);
     }
 
     private void validerVirement(ModePaiement mode, String referenceVirement) {

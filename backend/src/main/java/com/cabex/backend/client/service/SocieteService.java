@@ -1,5 +1,7 @@
 package com.cabex.backend.client.service;
 
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.client.dto.CreateSocieteRequest;
 import com.cabex.backend.client.dto.DemandeFicheResponse;
 import com.cabex.backend.client.dto.EcheanceFicheResponse;
@@ -47,19 +49,22 @@ public class SocieteService {
     private final HistoriqueDemandeRepository historiqueRepository;
     private final PaiementRepository paiementRepository;
     private final EcheancePaiementRepository echeanceRepository;
+    private final AuditService auditService;
 
     public SocieteService(SocieteRepository societeRepository,
                           ClientResponsableRepository responsableRepository,
                           DemandeServiceRepository demandeRepository,
                           HistoriqueDemandeRepository historiqueRepository,
                           PaiementRepository paiementRepository,
-                          EcheancePaiementRepository echeanceRepository) {
+                          EcheancePaiementRepository echeanceRepository,
+                          AuditService auditService) {
         this.societeRepository = societeRepository;
         this.responsableRepository = responsableRepository;
         this.demandeRepository = demandeRepository;
         this.historiqueRepository = historiqueRepository;
         this.paiementRepository = paiementRepository;
         this.echeanceRepository = echeanceRepository;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -152,7 +157,9 @@ public class SocieteService {
                 .chiffreAffaireMensuel(request.chiffreAffaireMensuel())
                 .actif(true)
                 .build();
-        return SocieteMapper.toResponse(societeRepository.save(societe));
+        Societe saved = societeRepository.save(societe);
+        auditService.log(AuditActions.CREATE, "CLIENT", "Societe", saved.getId().longValue(), null, "nom=" + saved.getNomSociete());
+        return SocieteMapper.toResponse(saved);
     }
 
     @Transactional
@@ -167,7 +174,9 @@ public class SocieteService {
         societe.setDateCreation(request.dateCreation());
         societe.setNombrePersonnel(request.nombrePersonnel());
         societe.setChiffreAffaireMensuel(request.chiffreAffaireMensuel());
-        return SocieteMapper.toResponse(societeRepository.save(societe));
+        Societe saved = societeRepository.save(societe);
+        auditService.log(AuditActions.UPDATE, "CLIENT", "Societe", saved.getId().longValue(), null, "nom=" + saved.getNomSociete());
+        return SocieteMapper.toResponse(saved);
     }
 
     @Transactional
@@ -175,7 +184,9 @@ public class SocieteService {
         Societe societe = getEntity(id);
         societe.setActif(!archive);
         societe.setArchivedAt(archive ? LocalDateTime.now() : null);
-        return SocieteMapper.toResponse(societeRepository.save(societe));
+        Societe saved = societeRepository.save(societe);
+        auditService.log(archive ? AuditActions.ARCHIVE : AuditActions.UPDATE, "CLIENT", "Societe", saved.getId().longValue(), "actif=" + !archive, "actif=" + saved.getActif());
+        return SocieteMapper.toResponse(saved);
     }
 
     private DemandeFicheResponse toDemandeFiche(DemandeService d) {

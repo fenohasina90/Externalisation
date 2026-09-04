@@ -5,6 +5,8 @@ import com.cabex.backend.auth.dto.ChangePasswordRequest;
 import com.cabex.backend.auth.dto.ForgotPasswordRequest;
 import com.cabex.backend.auth.dto.LoginRequest;
 import com.cabex.backend.auth.dto.ResetPasswordRequest;
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.exception.BadRequestException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
@@ -46,6 +48,7 @@ public class AuthService {
     private final UtilisateurRepository utilisateurRepository;
     private final PasswordResetTokenRepository resetTokenRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditService auditService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public AuthService(AuthenticationManager authenticationManager,
@@ -53,13 +56,15 @@ public class AuthService {
                        JwtService jwtService,
                        UtilisateurRepository utilisateurRepository,
                        PasswordResetTokenRepository resetTokenRepository,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder,
+                       AuditService auditService) {
         this.authenticationManager = authenticationManager;
         this.userDetailsService = userDetailsService;
         this.jwtService = jwtService;
         this.utilisateurRepository = utilisateurRepository;
         this.resetTokenRepository = resetTokenRepository;
         this.passwordEncoder = passwordEncoder;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -75,6 +80,9 @@ public class AuthService {
 
             utilisateur.setDerniereConnexion(LocalDateTime.now());
             utilisateurRepository.save(utilisateur);
+
+            auditService.log(utilisateur, AuditActions.LOGIN, "AUTH", "Utilisateur",
+                    utilisateur.getId().longValue(), null, null);
 
             String token = jwtService.generateToken(principal);
             return new AuthResponse(token, "Bearer", UtilisateurMapper.toResponse(utilisateur));
