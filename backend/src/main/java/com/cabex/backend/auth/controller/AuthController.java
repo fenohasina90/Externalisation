@@ -6,6 +6,8 @@ import com.cabex.backend.auth.dto.ForgotPasswordRequest;
 import com.cabex.backend.auth.dto.LoginRequest;
 import com.cabex.backend.auth.dto.ResetPasswordRequest;
 import com.cabex.backend.auth.service.AuthService;
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -29,9 +31,11 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final AuditService auditService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, AuditService auditService) {
         this.authService = authService;
+        this.auditService = auditService;
     }
 
     @PostMapping("/login")
@@ -93,7 +97,11 @@ public class AuthController {
 
     @PostMapping("/logout")
     @Operation(summary = "Déconnexion", description = "Endpoint de déconnexion (le client doit supprimer son token ; le JWT est sans état)")
-    public ResponseEntity<HttpStatus.Series> logout() {
+    public ResponseEntity<HttpStatus.Series> logout(@AuthenticationPrincipal UserPrincipal principal) {
+        if (principal != null) {
+            auditService.log(AuditActions.LOGOUT, "AUTH", "Utilisateur",
+                    principal.getId().longValue(), null, null);
+        }
         return ResponseEntity.noContent().build();
     }
 }

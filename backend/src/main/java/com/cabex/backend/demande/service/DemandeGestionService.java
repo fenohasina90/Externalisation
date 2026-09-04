@@ -1,5 +1,7 @@
 package com.cabex.backend.demande.service;
 
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.client.entity.ClientResponsable;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.client.repository.ClientResponsableRepository;
@@ -55,6 +57,7 @@ public class DemandeGestionService {
     private final PaiementRepository paiementRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final NotificationService notificationService;
+    private final AuditService auditService;
 
     public DemandeGestionService(DemandeServiceRepository demandeRepository,
                                  SocieteRepository societeRepository,
@@ -65,7 +68,8 @@ public class DemandeGestionService {
                                  StatutDemandeRepository statutRepository,
                                  PaiementRepository paiementRepository,
                                  UtilisateurRepository utilisateurRepository,
-                                 NotificationService notificationService) {
+                                 NotificationService notificationService,
+                                 AuditService auditService) {
         this.demandeRepository = demandeRepository;
         this.societeRepository = societeRepository;
         this.responsableRepository = responsableRepository;
@@ -76,6 +80,7 @@ public class DemandeGestionService {
         this.paiementRepository = paiementRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.notificationService = notificationService;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -156,6 +161,9 @@ public class DemandeGestionService {
 
         notificationService.notifierNouvelleDemande(demande);
 
+        auditService.log(AuditActions.CREATE, "DEMANDE", "DemandeService",
+                Long.valueOf(demande.getId()), null, toResponse(demande).referenceDemande());
+
         return toResponse(demande);
     }
 
@@ -181,6 +189,13 @@ public class DemandeGestionService {
         }
 
         demande = demandeRepository.save(demande);
+
+        auditService.log(AuditActions.UPDATE, "DEMANDE", "DemandeService",
+                Long.valueOf(demande.getId()),
+                (request.debutService() != null ? "début=" + request.debutService() : "") +
+                        (request.finService() != null ? ", fin=" + request.finService() : ""),
+                toResponse(demande).referenceDemande());
+
         return toResponse(demande);
     }
 
@@ -200,15 +215,23 @@ public class DemandeGestionService {
 
         notificationService.notifierChangementStatut(demande, nouveau);
 
+        auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
+                Long.valueOf(demande.getId()), actuel, nouveau);
+
         return toResponse(demande);
     }
 
     @Transactional
     public DemandeResponse archive(Integer id, boolean archive) {
         DemandeService demande = getEntity(id);
+        String ancien = demande.getActif() != null && demande.getActif() ? "actif" : "inactif";
         demande.setActif(!archive);
         demande.setArchivedAt(archive ? java.time.LocalDateTime.now() : null);
-        return toResponse(demandeRepository.save(demande));
+        DemandeResponse response = toResponse(demandeRepository.save(demande));
+        auditService.log(archive ? AuditActions.ARCHIVE : AuditActions.UPDATE,
+                "DEMANDE", "DemandeService", Long.valueOf(demande.getId()),
+                ancien, archive ? "archivé" : "désarchivé");
+        return response;
     }
 
     @Transactional(readOnly = true)

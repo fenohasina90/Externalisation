@@ -1,5 +1,7 @@
 package com.cabex.backend.service.service;
 
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.exception.DuplicateResourceException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
@@ -33,15 +35,18 @@ public class ServiceGestionService {
     private final DomaineServiceRepository domaineRepository;
     private final HistoriqueTarifServiceRepository historiqueRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final AuditService auditService;
 
     public ServiceGestionService(ServiceRepository serviceRepository,
                           DomaineServiceRepository domaineRepository,
                           HistoriqueTarifServiceRepository historiqueRepository,
-                          UtilisateurRepository utilisateurRepository) {
+                          UtilisateurRepository utilisateurRepository,
+                          AuditService auditService) {
         this.serviceRepository = serviceRepository;
         this.domaineRepository = domaineRepository;
         this.historiqueRepository = historiqueRepository;
         this.utilisateurRepository = utilisateurRepository;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -73,6 +78,8 @@ public class ServiceGestionService {
                 .build();
         service = serviceRepository.save(service);
 
+        auditService.log(AuditActions.CREATE, "SERVICE", "Service", service.getId().longValue(), null, "nom=" + service.getNomService());
+
         HistoriqueTarifService historique = HistoriqueTarifService.builder()
                 .service(service)
                 .montant(request.tarifService())
@@ -90,15 +97,20 @@ public class ServiceGestionService {
         Service service = getEntity(id);
         service.setNomService(request.nomService().trim());
         service.setDescription(request.description());
-        return ServiceMapper.toResponse(serviceRepository.save(service));
+        Service saved = serviceRepository.save(service);
+        auditService.log(AuditActions.UPDATE, "SERVICE", "Service", saved.getId().longValue(), null, "nom=" + saved.getNomService());
+        return ServiceMapper.toResponse(saved);
     }
 
     @Transactional
     public ServiceResponse archive(Integer id, boolean archive) {
         Service service = getEntity(id);
+        boolean previousActif = service.getActif();
         service.setActif(!archive);
         service.setArchivedAt(archive ? LocalDateTime.now() : null);
-        return ServiceMapper.toResponse(serviceRepository.save(service));
+        Service saved = serviceRepository.save(service);
+        auditService.log(archive ? AuditActions.ARCHIVE : AuditActions.UPDATE, "SERVICE", "Service", saved.getId().longValue(), "actif=" + previousActif, "actif=" + saved.getActif());
+        return ServiceMapper.toResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -112,6 +124,7 @@ public class ServiceGestionService {
     @Transactional
     public HistoriqueTarifResponse updateTarif(Integer serviceId, UpdateTarifRequest request) {
         Service service = getEntity(serviceId);
+        String ancienTarif = "tarif=" + service.getTarifService();
 
         // Fermer le tarif courant actif s'il existe
         historiqueRepository.findFirstByServiceIdOrderByDateDebutDesc(serviceId)
@@ -133,6 +146,8 @@ public class ServiceGestionService {
 
         service.setTarifService(request.montant());
         serviceRepository.save(service);
+
+        auditService.log(AuditActions.UPDATE, "SERVICE", "Tarif", service.getId().longValue(), ancienTarif, "tarif=" + request.montant());
 
         return HistoriqueTarifMapper.toResponse(nouveau);
     }
