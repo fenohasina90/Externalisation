@@ -116,4 +116,21 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
         ORDER BY d.dateDemande DESC
         """)
     List<DemandeService> rechercherGlobale(@Param("q") String q, Pageable pageable);
+
+    @Query("""
+        SELECT d.commercial.id, d.commercial.nomCommercial, COUNT(DISTINCT d.id)
+        FROM DemandeService d
+        WHERE d.commercial IS NOT NULL
+        GROUP BY d.commercial.id, d.commercial.nomCommercial
+        ORDER BY COUNT(DISTINCT d.id) DESC
+        """)
+    List<Object[]> compterParCommercial();
+
+    @Query("""
+        SELECT d.service.id, d.service.nomService, COUNT(DISTINCT d.id)
+        FROM DemandeService d
+        GROUP BY d.service.id, d.service.nomService
+        ORDER BY COUNT(DISTINCT d.id) DESC
+        """)
+    List<Object[]> compterParService();
 }

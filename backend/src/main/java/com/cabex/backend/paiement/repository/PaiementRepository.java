@@ -14,27 +14,33 @@ import java.util.Optional;
 
 public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
 
+    Optional<Paiement> findByIdAndActifTrue(Integer id);
+
     Optional<Paiement> findByReferencePaiement(String referencePaiement);
 
     boolean existsByReferencePaiement(String referencePaiement);
 
     long count();
 
-    @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p")
+    @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.actif = true")
     BigDecimal sommeTotalePayee();
 
-    @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.demande.id = :demandeId")
+    @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.demande.id = :demandeId AND p.actif = true")
     BigDecimal sommePayeeParDemande(@Param("demandeId") Integer demandeId);
 
-    @Query("SELECT p FROM Paiement p WHERE p.demande.societe.id = :societeId ORDER BY p.datePaiement DESC")
+    @Query("SELECT p FROM Paiement p WHERE p.demande.societe.id = :societeId AND p.actif = true ORDER BY p.datePaiement DESC")
     List<Paiement> findBySocieteId(@Param("societeId") Integer societeId);
 
-    @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.echeance.id = :echeanceId")
+    @Query("SELECT p FROM Paiement p WHERE p.echeance IS NOT NULL AND p.actif = true ORDER BY p.datePaiement DESC")
+    List<Paiement> payesSurEcheance();
+
+    @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.echeance.id = :echeanceId AND p.actif = true")
     BigDecimal sommePayeeParEcheance(@Param("echeanceId") Integer echeanceId);
 
     @Query("""
         SELECT p FROM Paiement p
-        WHERE (:recherche IS NULL OR LOWER(p.referencePaiement) LIKE LOWER(CONCAT('%', :recherche, '%')))
+        WHERE p.actif = true
+          AND (:recherche IS NULL OR LOWER(p.referencePaiement) LIKE LOWER(CONCAT('%', :recherche, '%')))
           AND (:demandeId IS NULL OR p.demande.id = :demandeId)
           AND (:modeId IS NULL OR p.modePaiement.id = :modeId)
           AND (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
@@ -49,7 +55,8 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
 
     @Query("""
         SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p
-        WHERE (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
+        WHERE p.actif = true
+          AND (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
           AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
           AND (:societeId IS NULL OR p.demande.societe.id = :societeId)
           AND (:serviceId IS NULL OR p.demande.service.id = :serviceId)
@@ -64,7 +71,8 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
     @Query("""
         SELECT p.modePaiement.libelle, COALESCE(SUM(p.montantPaye), 0)
         FROM Paiement p
-        WHERE (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
+        WHERE p.actif = true
+          AND (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
           AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
           AND (:societeId IS NULL OR p.demande.societe.id = :societeId)
           AND (:serviceId IS NULL OR p.demande.service.id = :serviceId)
@@ -80,6 +88,7 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
     @Query("""
         SELECT EXTRACT(YEAR FROM p.datePaiement), EXTRACT(MONTH FROM p.datePaiement), COALESCE(SUM(p.montantPaye), 0)
         FROM Paiement p
+        WHERE p.actif = true
         GROUP BY EXTRACT(YEAR FROM p.datePaiement), EXTRACT(MONTH FROM p.datePaiement)
         ORDER BY EXTRACT(YEAR FROM p.datePaiement), EXTRACT(MONTH FROM p.datePaiement)
         """)
@@ -87,7 +96,8 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
 
     @Query("""
         SELECT p FROM Paiement p
-        WHERE (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
+        WHERE p.actif = true
+          AND (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
           AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
           AND (:societeId IS NULL OR p.demande.societe.id = :societeId)
           AND (:serviceId IS NULL OR p.demande.service.id = :serviceId)
@@ -104,7 +114,8 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
 
     @Query("""
         SELECT p FROM Paiement p
-        WHERE LOWER(p.referencePaiement) LIKE LOWER(CONCAT('%', :q, '%'))
+        WHERE p.actif = true
+          AND (LOWER(p.referencePaiement) LIKE LOWER(CONCAT('%', :q, '%')))
            OR (p.demande IS NOT NULL AND LOWER(p.demande.referenceDemande) LIKE LOWER(CONCAT('%', :q, '%')))
            OR (p.demande IS NOT NULL AND LOWER(p.demande.societe.nomSociete) LIKE LOWER(CONCAT('%', :q, '%')))
            OR (p.modePaiement IS NOT NULL AND LOWER(p.modePaiement.libelle) LIKE LOWER(CONCAT('%', :q, '%')))

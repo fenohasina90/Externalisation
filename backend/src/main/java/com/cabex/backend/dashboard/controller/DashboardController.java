@@ -5,6 +5,7 @@ import com.cabex.backend.dashboard.dto.DashboardSummaryResponse;
 import com.cabex.backend.dashboard.dto.DemandeMoisResponse;
 import com.cabex.backend.dashboard.dto.EcheanceDashboardResponse;
 import com.cabex.backend.dashboard.dto.PaiementDashboardResponse;
+import com.cabex.backend.dashboard.dto.PerformanceIndicateursResponse;
 import com.cabex.backend.dashboard.dto.ServiceRevenuResponse;
 import com.cabex.backend.dashboard.dto.StatutCountResponse;
 import com.cabex.backend.dashboard.service.DashboardService;
@@ -36,6 +37,13 @@ public class DashboardController {
     @Operation(summary = "Résumé des KPI principaux")
     public ResponseEntity<DashboardSummaryResponse> summary() {
         return ResponseEntity.ok(dashboardService.summary());
+    }
+
+    @GetMapping("/performances")
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Indicateurs de performance (délai moyen, taux de terminées, paiement à temps, etc.)")
+    public ResponseEntity<PerformanceIndicateursResponse> performances() {
+        return ResponseEntity.ok(dashboardService.performances());
     }
 
     @GetMapping("/demandes")

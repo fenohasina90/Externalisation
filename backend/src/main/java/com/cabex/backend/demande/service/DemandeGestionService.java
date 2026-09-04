@@ -37,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -101,9 +102,16 @@ public class DemandeGestionService {
     @Transactional(readOnly = true)
     public List<HistoriqueDemandeResponse> getHistorique(Integer demandeId) {
         getEntity(demandeId);
-        return historiqueRepository.findByDemandeIdOrderByIdAsc(demandeId).stream()
-                .map(DemandeMapper::toHistoriqueResponse)
-                .toList();
+        List<HistoriqueDemande> historique = historiqueRepository.findByDemandeIdOrderByIdAsc(demandeId);
+        List<HistoriqueDemandeResponse> resultat = new ArrayList<>();
+        String ancienStatut = null;
+        for (HistoriqueDemande h : historique) {
+            resultat.add(DemandeMapper.toHistoriqueResponse(h, ancienStatut));
+            if (h.getStatut() != null) {
+                ancienStatut = h.getStatut().getStatut();
+            }
+        }
+        return resultat;
     }
 
     @Transactional

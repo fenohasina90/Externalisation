@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 
@@ -181,9 +182,11 @@ public class PaiementGestionService {
             soustraireDeEcheance(paiement.getEcheance(), paiement.getMontantPaye());
         }
         String ref = paiement.getReferencePaiement();
-        paiementRepository.delete(paiement);
+        paiement.setActif(false);
+        paiement.setArchivedAt(LocalDateTime.now());
+        paiementRepository.save(paiement);
         auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
-                Long.valueOf(id), "supprimé, réf=" + ref, null);
+                Long.valueOf(id), "supprimé (archivé), réf=" + ref, null);
     }
 
     private void validerVirement(ModePaiement mode, String referenceVirement) {
@@ -256,7 +259,7 @@ public class PaiementGestionService {
     }
 
     private Paiement getEntity(Integer id) {
-        return paiementRepository.findById(id)
+        return paiementRepository.findByIdAndActifTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Paiement", id)));
     }
