@@ -1,9 +1,11 @@
 package com.cabex.backend.client.controller;
 
 import com.cabex.backend.client.dto.CreateSocieteRequest;
+import com.cabex.backend.client.dto.RisqueClientResponse;
 import com.cabex.backend.client.dto.SocieteDetailResponse;
 import com.cabex.backend.client.dto.SocieteResponse;
 import com.cabex.backend.client.dto.UpdateSocieteRequest;
+import com.cabex.backend.client.service.RisqueService;
 import com.cabex.backend.client.service.SocieteService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -33,9 +35,11 @@ import java.util.Map;
 public class SocieteController {
 
     private final SocieteService societeService;
+    private final RisqueService risqueService;
 
-    public SocieteController(SocieteService societeService) {
+    public SocieteController(SocieteService societeService, RisqueService risqueService) {
         this.societeService = societeService;
+        this.risqueService = risqueService;
     }
 
     @GetMapping
@@ -51,9 +55,17 @@ public class SocieteController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('CLIENT_VIEW')")
     @Operation(summary = "Fiche client 360°",
-            description = "Informations générales + responsables + demandes + services utilisés + paiements + échéances")
+            description = "Informations générales + responsables + commerciaux + demandes + services utilisés + paiements + échéances + pièces jointes + synthèse + niveau de risque")
     public ResponseEntity<SocieteDetailResponse> getDetail(@PathVariable Integer id) {
         return ResponseEntity.ok(societeService.getDetail(id));
+    }
+
+    @GetMapping("/{id}/risque")
+    @PreAuthorize("hasAuthority('CLIENT_VIEW')")
+    @Operation(summary = "Score de risque de paiement",
+            description = "Niveau de vigilance (FAIBLE / MOYEN / ELEVE) selon l'historique de paiement — indicateur d'aide à la décision")
+    public ResponseEntity<RisqueClientResponse> risque(@PathVariable Integer id) {
+        return ResponseEntity.ok(risqueService.calculer(id));
     }
 
     @PostMapping

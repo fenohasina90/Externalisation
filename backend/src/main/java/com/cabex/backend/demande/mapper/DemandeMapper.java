@@ -28,6 +28,10 @@ public class DemandeMapper {
     }
 
     public static HistoriqueDemandeResponse toHistoriqueResponse(HistoriqueDemande h) {
+        return toHistoriqueResponse(h, null);
+    }
+
+    public static HistoriqueDemandeResponse toHistoriqueResponse(HistoriqueDemande h, String ancienStatut) {
         if (h == null) {
             return null;
         }
@@ -35,6 +39,7 @@ public class DemandeMapper {
                 h.getId(),
                 h.getStatut() != null ? h.getStatut().getId() : null,
                 h.getStatut() != null ? h.getStatut().getStatut() : null,
+                ancienStatut,
                 h.getCommentaire(),
                 h.getUtilisateur() != null ? h.getUtilisateur().getId() : null,
                 h.getUtilisateur() != null

@@ -66,4 +66,10 @@ public class Paiement {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Column(name = "actif", nullable = false)
+    private Boolean actif = true;
+
+    @Column(name = "archived_at")
+    private LocalDateTime archivedAt;
 }

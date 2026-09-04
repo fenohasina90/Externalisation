@@ -2,24 +2,31 @@ package com.cabex.backend.client.service;
 
 import com.cabex.backend.audit.action.AuditActions;
 import com.cabex.backend.audit.service.AuditService;
+import com.cabex.backend.client.dto.CommercialFicheResponse;
 import com.cabex.backend.client.dto.CreateSocieteRequest;
 import com.cabex.backend.client.dto.DemandeFicheResponse;
 import com.cabex.backend.client.dto.EcheanceFicheResponse;
 import com.cabex.backend.client.dto.PaiementFicheResponse;
+import com.cabex.backend.client.dto.PieceJointeFicheResponse;
 import com.cabex.backend.client.dto.ResponsableResponse;
+import com.cabex.backend.client.dto.RisqueClientResponse;
 import com.cabex.backend.client.dto.ServiceUtiliseResponse;
 import com.cabex.backend.client.dto.SocieteDetailResponse;
 import com.cabex.backend.client.dto.SocieteResponse;
+import com.cabex.backend.client.dto.SyntheseClientFiche;
 import com.cabex.backend.client.dto.UpdateSocieteRequest;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.client.mapper.ResponsableMapper;
 import com.cabex.backend.client.mapper.SocieteMapper;
 import com.cabex.backend.client.repository.ClientResponsableRepository;
 import com.cabex.backend.client.repository.SocieteRepository;
+import com.cabex.backend.commercial.entity.Commercial;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.HistoriqueDemande;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
+import com.cabex.backend.document.entity.PieceJointe;
+import com.cabex.backend.document.repository.PieceJointeRepository;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.echeance.mapper.EcheanceMapper;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
@@ -36,7 +43,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class SocieteService {
@@ -49,6 +58,8 @@ public class SocieteService {
     private final HistoriqueDemandeRepository historiqueRepository;
     private final PaiementRepository paiementRepository;
     private final EcheancePaiementRepository echeanceRepository;
+    private final PieceJointeRepository pieceJointeRepository;
+    private final RisqueService risqueService;
     private final AuditService auditService;
 
     public SocieteService(SocieteRepository societeRepository,
@@ -57,6 +68,8 @@ public class SocieteService {
                           HistoriqueDemandeRepository historiqueRepository,
                           PaiementRepository paiementRepository,
                           EcheancePaiementRepository echeanceRepository,
+                          PieceJointeRepository pieceJointeRepository,
+                          RisqueService risqueService,
                           AuditService auditService) {
         this.societeRepository = societeRepository;
         this.responsableRepository = responsableRepository;
@@ -64,6 +77,8 @@ public class SocieteService {
         this.historiqueRepository = historiqueRepository;
         this.paiementRepository = paiementRepository;
         this.echeanceRepository = echeanceRepository;
+        this.pieceJointeRepository = pieceJointeRepository;
+        this.risqueService = risqueService;
         this.auditService = auditService;
     }
 
@@ -130,13 +145,71 @@ public class SocieteService {
                         EcheanceMapper.calculerStatutEcheance(e, today, JOURS_ALERTE)))
                 .toList();
 
+        List<CommercialFicheResponse> commerciaux = commerciauxDuClient(demandes);
+
+        List<PieceJointeFicheResponse> piecesJointes = pieceJointeRepository
+                .findByDemandeSocieteId(id).stream()
+                .map(this::toPieceJointeFiche)
+                .toList();
+
+        SyntheseClientFiche synthese = syntheseDuClient(demandes, paiements, echeances, id);
+
         return new SocieteDetailResponse(
                 SocieteMapper.toResponse(societe, demandes.size()),
                 responsables,
+                commerciaux,
                 demandesFiche,
                 services,
                 paiements,
-                echeances);
+                echeances,
+                piecesJointes,
+                synthese);
+    }
+
+    private List<CommercialFicheResponse> commerciauxDuClient(List<DemandeService> demandes) {
+        Map<Integer, Commercial> distincts = new LinkedHashMap<>();
+        for (DemandeService d : demandes) {
+            if (d.getCommercial() != null) {
+                distincts.putIfAbsent(d.getCommercial().getId(), d.getCommercial());
+            }
+        }
+        return distincts.values().stream()
+                .map(c -> new CommercialFicheResponse(
+                        c.getId(), c.getNomCommercial(), c.getImmatricule(), c.getEmail(), c.getContact()))
+                .toList();
+    }
+
+    private PieceJointeFicheResponse toPieceJointeFiche(PieceJointe p) {
+        return new PieceJointeFicheResponse(
+                p.getId(),
+                p.getNomOriginal(),
+                p.getTypeFichier(),
+                p.getTailleFichier(),
+                p.getDescription(),
+                p.getDemande() != null ? p.getDemande().getId() : null,
+                p.getDemande() != null ? p.getDemande().getReferenceDemande() : null,
+                p.getCreatedAt());
+    }
+
+    private SyntheseClientFiche syntheseDuClient(List<DemandeService> demandes,
+                                                 List<PaiementFicheResponse> paiements,
+                                                 List<EcheanceFicheResponse> echeances,
+                                                 Integer societeId) {
+        BigDecimal montantTotal = demandes.stream()
+                .map(d -> d.getTarifServiceApplique() == null ? BigDecimal.ZERO : d.getTarifServiceApplique())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal montantPaye = paiements.stream()
+                .map(PaiementFicheResponse::montantPaye)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal resteAPayer = montantTotal.subtract(montantPaye).max(BigDecimal.ZERO);
+
+        long enRetard = echeances.stream()
+                .filter(e -> "EN_RETARD".equals(e.statut()))
+                .count();
+
+        RisqueClientResponse risque = risqueService.calculer(societeId);
+        return new SyntheseClientFiche(
+                montantTotal, montantPaye, resteAPayer, enRetard, risque.tauxPaiementATemps(), risque.risque());
     }
 
     @Transactional
