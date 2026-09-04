@@ -8,6 +8,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -62,15 +64,15 @@ public class EcheanceController {
     @PreAuthorize("hasAuthority('DEMANDE_VIEW')")
     @Operation(summary = "Liste des échéances en retard",
             description = "Date limite dépassée et montant restant à payer")
-    public ResponseEntity<List<EcheanceResponse>> getEnRetard() {
-        return ResponseEntity.ok(echeanceService.getEnRetard());
+    public ResponseEntity<Page<EcheanceResponse>> getEnRetard(Pageable pageable) {
+        return ResponseEntity.ok(echeanceService.getEnRetard(pageable));
     }
 
     @GetMapping("/echeances/a-venir")
     @PreAuthorize("hasAuthority('DEMANDE_VIEW')")
     @Operation(summary = "Liste des échéances à venir",
             description = "Non échues et non entièrement payées")
-    public ResponseEntity<List<EcheanceResponse>> getAVenir() {
-        return ResponseEntity.ok(echeanceService.getAVenir());
+    public ResponseEntity<Page<EcheanceResponse>> getAVenir(Pageable pageable) {
+        return ResponseEntity.ok(echeanceService.getAVenir(pageable));
     }
 }
