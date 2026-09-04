@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface SocieteRepository extends JpaRepository<Societe, Integer> {
 
     boolean existsByNomSociete(String nomSociete);
@@ -26,4 +28,14 @@ public interface SocieteRepository extends JpaRepository<Societe, Integer> {
     Page<Societe> rechercher(@Param("recherche") String recherche,
                              @Param("actif") Boolean actif,
                              Pageable pageable);
+
+    @Query("""
+        SELECT s FROM Societe s
+        WHERE LOWER(s.nomSociete) LIKE LOWER(CONCAT('%', :q, '%'))
+           OR LOWER(COALESCE(s.contact, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+           OR LOWER(COALESCE(s.email, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+           OR LOWER(COALESCE(s.activite, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+        ORDER BY s.nomSociete
+        """)
+    List<Societe> rechercherGlobale(@Param("q") String q, Pageable pageable);
 }

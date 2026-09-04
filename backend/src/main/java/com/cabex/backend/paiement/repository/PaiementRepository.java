@@ -46,4 +46,69 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
                               @Param("dateDebut") LocalDate dateDebut,
                               @Param("dateFin") LocalDate dateFin,
                               Pageable pageable);
+
+    @Query("""
+        SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p
+        WHERE (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
+          AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
+          AND (:societeId IS NULL OR p.demande.societe.id = :societeId)
+          AND (:serviceId IS NULL OR p.demande.service.id = :serviceId)
+          AND (:domaineId IS NULL OR p.demande.service.domaine.id = :domaineId)
+        """)
+    BigDecimal sommePayee(@Param("dateDebut") LocalDate dateDebut,
+                          @Param("dateFin") LocalDate dateFin,
+                          @Param("societeId") Integer societeId,
+                          @Param("serviceId") Integer serviceId,
+                          @Param("domaineId") Integer domaineId);
+
+    @Query("""
+        SELECT p.modePaiement.libelle, COALESCE(SUM(p.montantPaye), 0)
+        FROM Paiement p
+        WHERE (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
+          AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
+          AND (:societeId IS NULL OR p.demande.societe.id = :societeId)
+          AND (:serviceId IS NULL OR p.demande.service.id = :serviceId)
+          AND (:domaineId IS NULL OR p.demande.service.domaine.id = :domaineId)
+        GROUP BY p.modePaiement.libelle
+        """)
+    List<Object[]> sommeParMode(@Param("dateDebut") LocalDate dateDebut,
+                                @Param("dateFin") LocalDate dateFin,
+                                @Param("societeId") Integer societeId,
+                                @Param("serviceId") Integer serviceId,
+                                @Param("domaineId") Integer domaineId);
+
+    @Query("""
+        SELECT EXTRACT(YEAR FROM p.datePaiement), EXTRACT(MONTH FROM p.datePaiement), COALESCE(SUM(p.montantPaye), 0)
+        FROM Paiement p
+        GROUP BY EXTRACT(YEAR FROM p.datePaiement), EXTRACT(MONTH FROM p.datePaiement)
+        ORDER BY EXTRACT(YEAR FROM p.datePaiement), EXTRACT(MONTH FROM p.datePaiement)
+        """)
+    List<Object[]> montantsParMois();
+
+    @Query("""
+        SELECT p FROM Paiement p
+        WHERE (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
+          AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
+          AND (:societeId IS NULL OR p.demande.societe.id = :societeId)
+          AND (:serviceId IS NULL OR p.demande.service.id = :serviceId)
+          AND (:domaineId IS NULL OR p.demande.service.domaine.id = :domaineId)
+          AND (:commercialId IS NULL OR p.demande.commercial.id = :commercialId)
+        ORDER BY p.datePaiement DESC
+        """)
+    List<Paiement> rechercherRapport(@Param("dateDebut") LocalDate dateDebut,
+                                     @Param("dateFin") LocalDate dateFin,
+                                     @Param("societeId") Integer societeId,
+                                     @Param("serviceId") Integer serviceId,
+                                     @Param("domaineId") Integer domaineId,
+                                     @Param("commercialId") Integer commercialId);
+
+    @Query("""
+        SELECT p FROM Paiement p
+        WHERE LOWER(p.referencePaiement) LIKE LOWER(CONCAT('%', :q, '%'))
+           OR (p.demande IS NOT NULL AND LOWER(p.demande.referenceDemande) LIKE LOWER(CONCAT('%', :q, '%')))
+           OR (p.demande IS NOT NULL AND LOWER(p.demande.societe.nomSociete) LIKE LOWER(CONCAT('%', :q, '%')))
+           OR (p.modePaiement IS NOT NULL AND LOWER(p.modePaiement.libelle) LIKE LOWER(CONCAT('%', :q, '%')))
+        ORDER BY p.datePaiement DESC
+        """)
+    List<Paiement> rechercherGlobale(@Param("q") String q, Pageable pageable);
 }

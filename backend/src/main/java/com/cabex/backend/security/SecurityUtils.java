@@ -25,4 +25,11 @@ public final class SecurityUtils {
         UserPrincipal principal = currentUser();
         return "SUPER_ADMIN".equalsIgnoreCase(principal.getRoleName());
     }
+
+    public static void requirePermission(String codePermission) {
+        UserPrincipal principal = currentUser();
+        if (!principal.hasPermission(codePermission)) {
+            throw new UnauthorizedException("Permission requise: " + codePermission);
+        }
+    }
 }

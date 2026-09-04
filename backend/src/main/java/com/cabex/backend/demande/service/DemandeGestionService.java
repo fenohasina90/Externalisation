@@ -85,10 +85,10 @@ public class DemandeGestionService {
 
     @Transactional(readOnly = true)
     public Page<DemandeResponse> getAll(String recherche, Integer societeId, Integer serviceId,
-                                        Integer commercialId, String statut,
+                                        Integer domaineId, Integer commercialId, String statut,
                                         LocalDate dateDebut, LocalDate dateFin,
                                         Boolean actif, Pageable pageable) {
-        return demandeRepository.rechercher(recherche, societeId, serviceId, commercialId,
+        return demandeRepository.rechercher(recherche, societeId, serviceId, domaineId, commercialId,
                         statut, dateDebut, dateFin, actif, pageable)
                 .map(d -> toResponse(d));
     }
