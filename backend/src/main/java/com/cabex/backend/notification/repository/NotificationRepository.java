@@ -18,6 +18,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     long countByUtilisateurIdAndLuFalse(Integer utilisateurId);
 
+    boolean existsByUtilisateurIdAndTypeNotificationAndReferenceIdAndLuFalse(
+            Integer utilisateurId, String typeNotification, Long referenceId);
+
     @Modifying
     @Query("UPDATE Notification n SET n.lu = true, n.dateLecture = :date WHERE n.utilisateur.id = :userId AND n.lu = false")
     int marquerToutLu(@Param("userId") Integer userId, @Param("date") LocalDateTime date);
