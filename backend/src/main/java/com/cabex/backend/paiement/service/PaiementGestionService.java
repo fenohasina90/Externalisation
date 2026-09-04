@@ -8,6 +8,7 @@ import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
+import com.cabex.backend.notification.service.NotificationService;
 import com.cabex.backend.paiement.dto.CreatePaiementRequest;
 import com.cabex.backend.paiement.dto.ModePaiementResponse;
 import com.cabex.backend.paiement.dto.PaiementResponse;
@@ -39,17 +40,20 @@ public class PaiementGestionService {
     private final ModePaiementRepository modeRepository;
     private final EcheancePaiementRepository echeanceRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final NotificationService notificationService;
 
     public PaiementGestionService(PaiementRepository paiementRepository,
                                   DemandeServiceRepository demandeRepository,
                                   ModePaiementRepository modeRepository,
                                   EcheancePaiementRepository echeanceRepository,
-                                  UtilisateurRepository utilisateurRepository) {
+                                  UtilisateurRepository utilisateurRepository,
+                                  NotificationService notificationService) {
         this.paiementRepository = paiementRepository;
         this.demandeRepository = demandeRepository;
         this.modeRepository = modeRepository;
         this.echeanceRepository = echeanceRepository;
         this.utilisateurRepository = utilisateurRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -112,6 +116,8 @@ public class PaiementGestionService {
         paiement = paiementRepository.save(paiement);
 
         ajouterAEcheance(echeance, request.montantPaye());
+
+        notificationService.notifierPaiementEnregistre(paiement);
 
         return PaiementMapper.toResponse(paiement);
     }

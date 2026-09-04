@@ -22,6 +22,7 @@ import com.cabex.backend.demande.repository.StatutDemandeRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
+import com.cabex.backend.notification.service.NotificationService;
 import com.cabex.backend.paiement.repository.PaiementRepository;
 import com.cabex.backend.security.SecurityUtils;
 import com.cabex.backend.service.entity.Service;
@@ -53,6 +54,7 @@ public class DemandeGestionService {
     private final StatutDemandeRepository statutRepository;
     private final PaiementRepository paiementRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final NotificationService notificationService;
 
     public DemandeGestionService(DemandeServiceRepository demandeRepository,
                                  SocieteRepository societeRepository,
@@ -62,7 +64,8 @@ public class DemandeGestionService {
                                  HistoriqueDemandeRepository historiqueRepository,
                                  StatutDemandeRepository statutRepository,
                                  PaiementRepository paiementRepository,
-                                 UtilisateurRepository utilisateurRepository) {
+                                 UtilisateurRepository utilisateurRepository,
+                                 NotificationService notificationService) {
         this.demandeRepository = demandeRepository;
         this.societeRepository = societeRepository;
         this.responsableRepository = responsableRepository;
@@ -72,6 +75,7 @@ public class DemandeGestionService {
         this.statutRepository = statutRepository;
         this.paiementRepository = paiementRepository;
         this.utilisateurRepository = utilisateurRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -150,6 +154,8 @@ public class DemandeGestionService {
         enviereHistorique(demande, STATUT_EN_ATTENTE,
                 "Demande créée" + (request.commentaire() != null ? " : " + request.commentaire() : null));
 
+        notificationService.notifierNouvelleDemande(demande);
+
         return toResponse(demande);
     }
 
@@ -191,6 +197,9 @@ public class DemandeGestionService {
         }
 
         enviereHistorique(demande, nouveau, request.commentaire());
+
+        notificationService.notifierChangementStatut(demande, nouveau);
+
         return toResponse(demande);
     }
 
