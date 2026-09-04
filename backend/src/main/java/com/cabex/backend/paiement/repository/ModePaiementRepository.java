@@ -1,6 +1,8 @@
 package com.cabex.backend.paiement.repository;
 
 import com.cabex.backend.paiement.entity.ModePaiement;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
@@ -10,4 +12,6 @@ public interface ModePaiementRepository extends JpaRepository<ModePaiement, Inte
     Optional<ModePaiement> findByCode(String code);
 
     boolean existsByCode(String code);
+
+    Page<ModePaiement> findByActif(Boolean actif, Pageable pageable);
 }
