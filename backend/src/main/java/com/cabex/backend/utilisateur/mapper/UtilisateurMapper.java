@@ -48,6 +48,7 @@ public class UtilisateurMapper {
                 utilisateur.getId(),
                 utilisateur.getNom(),
                 utilisateur.getPrenom(),
+                utilisateur.getUsername(),
                 utilisateur.getEmail(),
                 utilisateur.getActif(),
                 utilisateur.getDerniereConnexion(),

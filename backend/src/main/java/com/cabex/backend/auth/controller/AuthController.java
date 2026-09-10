@@ -39,10 +39,10 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    @Operation(summary = "Connexion", description = "Authentifie un utilisateur et retourne un token JWT")
+    @Operation(summary = "Connexion", description = "Authentifie un utilisateur par username + mot de passe et retourne un token JWT")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Connexion réussie"),
-            @ApiResponse(responseCode = "401", description = "Email/mot de passe incorrect ou compte désactivé"),
+            @ApiResponse(responseCode = "401", description = "Username/mot de passe incorrect ou compte désactivé"),
             @ApiResponse(responseCode = "400", description = "Données de connexion invalides")
     })
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {

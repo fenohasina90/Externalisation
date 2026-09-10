@@ -97,7 +97,7 @@ public class DemandeController {
     @PatchMapping("/{id}/statut")
     @PreAuthorize("hasAuthority('DEMANDE_STATUS_UPDATE')")
     @Operation(summary = "Changer le statut d'une demande",
-            description = "Cycle EN_ATTENTE → APPROUVEE → EN_COURS → TERMINEE, ou → ANNULEE ; chaque changement est historié")
+            description = "Cycle EN_ATTENTE → VALIDATION (auto, paiement du 1er tranche) → EN_COURS (auto) → TERMINEE, ou → ANNULEE ; chaque changement est historié")
     public ResponseEntity<DemandeResponse> changeStatut(@PathVariable Integer id,
                                                         @Valid @RequestBody ChangeStatutRequest request) {
         return ResponseEntity.ok(demandeService.changeStatut(id, request));

@@ -24,9 +24,11 @@ public interface SocieteRepository extends JpaRepository<Societe, Integer> {
                OR LOWER(COALESCE(s.activite, '')) LIKE LOWER(CONCAT('%', :recherche, '%'))
                OR LOWER(COALESCE(s.contact, '')) LIKE LOWER(CONCAT('%', :recherche, '%')))
           AND (:actif IS NULL OR s.actif = :actif)
+          AND (:domaineId IS NULL OR s.domaine.id = :domaineId)
         """)
     Page<Societe> rechercher(@Param("recherche") String recherche,
                              @Param("actif") Boolean actif,
+                             @Param("domaineId") Integer domaineId,
                              Pageable pageable);
 
     @Query("""

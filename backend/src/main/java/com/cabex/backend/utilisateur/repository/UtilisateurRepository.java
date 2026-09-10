@@ -16,9 +16,13 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, Intege
 
     Optional<Utilisateur> findByEmail(String email);
 
+    Optional<Utilisateur> findByUsername(String username);
+
     List<Utilisateur> findByRoleNomRoleAndActifTrue(String nomRole);
 
     boolean existsByEmail(String email);
+
+    boolean existsByUsername(String username);
 
     long countByActifTrue();
 
@@ -27,6 +31,7 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, Intege
             WHERE (:search IS NULL OR :search = ''
                    OR LOWER(u.nom) LIKE LOWER(CONCAT('%', :search, '%'))
                    OR LOWER(u.prenom) LIKE LOWER(CONCAT('%', :search, '%'))
+                   OR LOWER(u.username) LIKE LOWER(CONCAT('%', :search, '%'))
                    OR LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')))
             """)
     Page<Utilisateur> findWithFilters(@Param("search") String search, Pageable pageable);

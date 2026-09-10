@@ -4,6 +4,7 @@ import com.cabex.backend.audit.action.AuditActions;
 import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
+import com.cabex.backend.demande.service.DemandeGestionService;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.echeance.entity.ProposPaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
@@ -45,6 +46,7 @@ public class PaiementGestionService {
     private final UtilisateurRepository utilisateurRepository;
     private final NotificationService notificationService;
     private final AuditService auditService;
+    private final DemandeGestionService demandeGestionService;
 
     public PaiementGestionService(PaiementRepository paiementRepository,
                                   DemandeServiceRepository demandeRepository,
@@ -52,7 +54,8 @@ public class PaiementGestionService {
                                   EcheancePaiementRepository echeanceRepository,
                                   UtilisateurRepository utilisateurRepository,
                                   NotificationService notificationService,
-                                  AuditService auditService) {
+                                  AuditService auditService,
+                                  DemandeGestionService demandeGestionService) {
         this.paiementRepository = paiementRepository;
         this.demandeRepository = demandeRepository;
         this.modeRepository = modeRepository;
@@ -60,6 +63,7 @@ public class PaiementGestionService {
         this.utilisateurRepository = utilisateurRepository;
         this.notificationService = notificationService;
         this.auditService = auditService;
+        this.demandeGestionService = demandeGestionService;
     }
 
     @Transactional(readOnly = true)
@@ -106,6 +110,7 @@ public class PaiementGestionService {
 
         validerVirement(mode, request.referenceVirement());
         validerMontant(demande, echeance, request.montantPaye(), BigDecimal.ZERO, null);
+        validerDatePaiement(demande, request.datePaiement());
 
         Paiement paiement = Paiement.builder()
                 .referencePaiement(genererReference(LocalDate.now().getYear()))
@@ -122,6 +127,9 @@ public class PaiementGestionService {
         paiement = paiementRepository.save(paiement);
 
         ajouterAEcheance(echeance, request.montantPaye());
+
+        demandeGestionService.validerParPremierPaiement(
+                demande, echeance != null ? echeance.getNumeroEcheance() : null);
 
         notificationService.notifierPaiementEnregistre(paiement);
 
@@ -154,6 +162,7 @@ public class PaiementGestionService {
         validerVirement(mode, request.referenceVirement());
         validerMontant(demande, nouvelleEcheance, request.montantPaye(),
                 paiement.getMontantPaye(), paiement.getEcheance());
+        validerDatePaiement(demande, request.datePaiement());
 
         if (paiement.getEcheance() != null) {
             soustraireDeEcheance(paiement.getEcheance(), paiement.getMontantPaye());
@@ -194,6 +203,15 @@ public class PaiementGestionService {
                 && (referenceVirement == null || referenceVirement.isBlank())) {
             throw new BusinessException(
                     "La référence du virement est obligatoire pour un paiement par virement");
+        }
+    }
+
+    private void validerDatePaiement(DemandeService demande, LocalDate date) {
+        if (demande.getDebutService() != null && demande.getFinService() != null
+                && (date.isBefore(demande.getDebutService()) || date.isAfter(demande.getFinService()))) {
+            throw new BusinessException(
+                    "Le paiement doit être effectué entre le début et la fin du service ("
+                            + demande.getDebutService() + " → " + demande.getFinService() + ")");
         }
     }
 

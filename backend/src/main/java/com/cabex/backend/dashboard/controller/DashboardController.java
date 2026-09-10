@@ -34,56 +34,56 @@ public class DashboardController {
 
     @GetMapping("/summary")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
-    @Operation(summary = "Résumé des KPI principaux")
+    @Operation(summary = "Résumé des KPI principaux (personnalisé selon le rôle)")
     public ResponseEntity<DashboardSummaryResponse> summary() {
         return ResponseEntity.ok(dashboardService.summary());
     }
 
     @GetMapping("/performances")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
-    @Operation(summary = "Indicateurs de performance (délai moyen, taux de terminées, paiement à temps, etc.)")
+    @Operation(summary = "Indicateurs de performance (personnalisés selon le rôle)")
     public ResponseEntity<PerformanceIndicateursResponse> performances() {
         return ResponseEntity.ok(dashboardService.performances());
     }
 
     @GetMapping("/demandes")
-    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
-    @Operation(summary = "Statistiques des demandes (par statut et par mois)")
+    @PreAuthorize("hasAuthority('DASHBOARD_DEMANDE_VIEW')")
+    @Operation(summary = "Statistiques des demandes (par statut) — SUPER_ADMIN + ACCUEIL")
     public ResponseEntity<List<StatutCountResponse>> demandes() {
         return ResponseEntity.ok(dashboardService.demandesParStatut());
     }
 
     @GetMapping("/demandes/mois")
-    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
-    @Operation(summary = "Nombre de demandes par mois (graphique)")
+    @PreAuthorize("hasAuthority('DASHBOARD_DEMANDE_VIEW')")
+    @Operation(summary = "Nombre de demandes par mois — SUPER_ADMIN + ACCUEIL")
     public ResponseEntity<List<DemandeMoisResponse>> demandesParMois() {
         return ResponseEntity.ok(dashboardService.demandesParMois());
     }
 
     @GetMapping("/paiements")
-    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
-    @Operation(summary = "Statistiques des paiements (par mode et par mois)")
+    @PreAuthorize("hasAuthority('DASHBOARD_PAIEMENT_VIEW')")
+    @Operation(summary = "Statistiques des paiements (par mode et par mois) — SUPER_ADMIN + ECONOMAT")
     public ResponseEntity<PaiementDashboardResponse> paiements() {
         return ResponseEntity.ok(dashboardService.paiements());
     }
 
     @GetMapping("/echeances")
-    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
-    @Operation(summary = "Échéances en retard et à venir")
+    @PreAuthorize("hasAuthority('DASHBOARD_PAIEMENT_VIEW')")
+    @Operation(summary = "Échéances en retard et à venir — SUPER_ADMIN + ECONOMAT")
     public ResponseEntity<EcheanceDashboardResponse> echeances() {
         return ResponseEntity.ok(dashboardService.echeances());
     }
 
     @GetMapping("/services")
-    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
-    @Operation(summary = "Revenus par service")
+    @PreAuthorize("hasAuthority('DASHBOARD_PAIEMENT_VIEW')")
+    @Operation(summary = "Revenus par service — SUPER_ADMIN + ECONOMAT")
     public ResponseEntity<List<ServiceRevenuResponse>> services() {
         return ResponseEntity.ok(dashboardService.services());
     }
 
     @GetMapping("/clients")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
-    @Operation(summary = "Top clients (nombre de demandes et revenus)")
+    @Operation(summary = "Top clients (personnalisé selon le rôle)")
     public ResponseEntity<List<ClientRevenuResponse>> clients() {
         return ResponseEntity.ok(dashboardService.clients());
     }

@@ -18,9 +18,9 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     @Transactional(readOnly = true)
-    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        return utilisateurRepository.findByEmail(email)
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        return utilisateurRepository.findByUsername(username)
                 .map(UserPrincipal::from)
-                .orElseThrow(() -> new UsernameNotFoundException("Email ou mot de passe incorrect"));
+                .orElseThrow(() -> new UsernameNotFoundException("Username ou mot de passe incorrect"));
     }
 }

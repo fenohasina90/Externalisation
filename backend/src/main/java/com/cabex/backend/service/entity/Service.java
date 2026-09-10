@@ -33,10 +33,6 @@ public class Service {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "domaine_id", nullable = false)
-    private DomaineService domaine;
-
     @Column(name = "actif", nullable = false)
     @Builder.Default
     private Boolean actif = true;

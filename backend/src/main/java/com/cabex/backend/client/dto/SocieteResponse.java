@@ -17,6 +17,8 @@ public record SocieteResponse(
         BigDecimal chiffreAffaireMensuel,
         Boolean actif,
         Integer nombreDemandes,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        Integer domaineId,
+        String nomDomaine
 ) {
 }

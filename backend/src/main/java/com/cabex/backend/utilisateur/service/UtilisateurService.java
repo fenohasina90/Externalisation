@@ -49,6 +49,10 @@ public class UtilisateurService {
 
     @Transactional
     public UtilisateurResponse create(CreateUtilisateurRequest request) {
+        String username = request.username().trim();
+        if (utilisateurRepository.existsByUsername(username)) {
+            throw new DuplicateResourceException("Un utilisateur avec l'username '" + username + "' existe déjà");
+        }
         if (utilisateurRepository.existsByEmail(request.email().trim().toLowerCase())) {
             throw new DuplicateResourceException("Un utilisateur avec l'email '" + request.email() + "' existe déjà");
         }
@@ -57,6 +61,7 @@ public class UtilisateurService {
         Utilisateur utilisateur = Utilisateur.builder()
                 .nom(request.nom().trim())
                 .prenom(request.prenom().trim())
+                .username(username)
                 .email(request.email().trim().toLowerCase())
                 .mdpHash(passwordEncoder.encode(request.password()))
                 .role(role)
@@ -71,6 +76,12 @@ public class UtilisateurService {
     public UtilisateurResponse update(Integer id, UpdateUtilisateurRequest request) {
         Utilisateur utilisateur = getEntity(id);
 
+        String username = request.username().trim();
+        if (!utilisateur.getUsername().equalsIgnoreCase(username)
+                && utilisateurRepository.existsByUsername(username)) {
+            throw new DuplicateResourceException("Un utilisateur avec l'username '" + username + "' existe déjà");
+        }
+
         String email = request.email().trim().toLowerCase();
         if (!utilisateur.getEmail().equalsIgnoreCase(email)
                 && utilisateurRepository.existsByEmail(email)) {
@@ -79,6 +90,7 @@ public class UtilisateurService {
 
         utilisateur.setNom(request.nom().trim());
         utilisateur.setPrenom(request.prenom().trim());
+        utilisateur.setUsername(username);
         utilisateur.setEmail(email);
         if (request.roleId() != null) {
             utilisateur.setRole(getRole(request.roleId()));

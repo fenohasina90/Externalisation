@@ -14,6 +14,10 @@ public record CreateUtilisateurRequest(
         @Size(max = 100, message = "Le prénom ne doit pas dépasser 100 caractères")
         String prenom,
 
+        @NotBlank(message = "L'username est obligatoire")
+        @Size(max = 100, message = "L'username ne doit pas dépasser 100 caractères")
+        String username,
+
         @NotBlank(message = "L'email est obligatoire")
         @Email(message = "L'email doit être valide")
         String email,

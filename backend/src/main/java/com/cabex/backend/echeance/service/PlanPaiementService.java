@@ -74,14 +74,27 @@ public class PlanPaiementService {
         }
 
         String statutActuel = statutActuel(demandeId);
-        if (!"APPROUVEE".equals(statutActuel) && !"EN_COURS".equals(statutActuel)) {
+        if ("TERMINEE".equals(statutActuel) || "ANNULEE".equals(statutActuel)) {
             throw new BusinessException(
-                    "La demande doit être approuvée ou en cours pour créer un plan de paiement");
+                    "Le plan de paiement ne peut pas être créé pour une demande terminée ou annulée");
         }
 
         if (request.dateFin() != null && request.dateDebut() != null
                 && request.dateFin().isBefore(request.dateDebut())) {
             throw new BusinessException(ErrorMessages.DATE_FIN_AVANT_DEBUT);
+        }
+
+        if (request.dateDebut() != null && demande.getDebutService() != null
+                && request.dateDebut().isBefore(demande.getDebutService())) {
+            throw new BusinessException(
+                    "Le plan de paiement doit commencer après le début du service ("
+                            + demande.getDebutService() + ")");
+        }
+        if (request.dateFin() != null && demande.getFinService() != null
+                && request.dateFin().isAfter(demande.getFinService())) {
+            throw new BusinessException(
+                    "Le plan de paiement doit se terminer avant la fin du service ("
+                            + demande.getFinService() + ")");
         }
 
         ProposPaiement propos = ProposPaiement.builder()
@@ -112,6 +125,20 @@ public class PlanPaiementService {
         if (request.dateFin() != null && request.dateDebut() != null
                 && request.dateFin().isBefore(request.dateDebut())) {
             throw new BusinessException(ErrorMessages.DATE_FIN_AVANT_DEBUT);
+        }
+
+        DemandeService demandeCourante = propos.getDemande();
+        if (request.dateDebut() != null && demandeCourante.getDebutService() != null
+                && request.dateDebut().isBefore(demandeCourante.getDebutService())) {
+            throw new BusinessException(
+                    "Le plan de paiement doit commencer après le début du service ("
+                            + demandeCourante.getDebutService() + ")");
+        }
+        if (request.dateFin() != null && demandeCourante.getFinService() != null
+                && request.dateFin().isAfter(demandeCourante.getFinService())) {
+            throw new BusinessException(
+                    "Le plan de paiement doit se terminer avant la fin du service ("
+                            + demandeCourante.getFinService() + ")");
         }
 
         propos.setDateDebut(request.dateDebut());

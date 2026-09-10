@@ -11,12 +11,10 @@ import com.cabex.backend.service.dto.HistoriqueTarifResponse;
 import com.cabex.backend.service.dto.ServiceResponse;
 import com.cabex.backend.service.dto.UpdateServiceRequest;
 import com.cabex.backend.service.dto.UpdateTarifRequest;
-import com.cabex.backend.service.entity.DomaineService;
 import com.cabex.backend.service.entity.HistoriqueTarifService;
 import com.cabex.backend.service.entity.Service;
 import com.cabex.backend.service.mapper.HistoriqueTarifMapper;
 import com.cabex.backend.service.mapper.ServiceMapper;
-import com.cabex.backend.service.repository.DomaineServiceRepository;
 import com.cabex.backend.service.repository.HistoriqueTarifServiceRepository;
 import com.cabex.backend.service.repository.ServiceRepository;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
@@ -32,26 +30,23 @@ import java.util.List;
 public class ServiceGestionService {
 
     private final ServiceRepository serviceRepository;
-    private final DomaineServiceRepository domaineRepository;
     private final HistoriqueTarifServiceRepository historiqueRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final AuditService auditService;
 
     public ServiceGestionService(ServiceRepository serviceRepository,
-                          DomaineServiceRepository domaineRepository,
                           HistoriqueTarifServiceRepository historiqueRepository,
                           UtilisateurRepository utilisateurRepository,
                           AuditService auditService) {
         this.serviceRepository = serviceRepository;
-        this.domaineRepository = domaineRepository;
         this.historiqueRepository = historiqueRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
-    public Page<ServiceResponse> getAll(String recherche, Integer domaineId, Boolean actif, Pageable pageable) {
-        return serviceRepository.rechercher(recherche, domaineId, actif, pageable)
+    public Page<ServiceResponse> getAll(String recherche, Boolean actif, Pageable pageable) {
+        return serviceRepository.rechercher(recherche, actif, pageable)
                 .map(ServiceMapper::toResponse);
     }
 
@@ -65,15 +60,11 @@ public class ServiceGestionService {
         if (serviceRepository.existsByNomService(request.nomService().trim())) {
             throw new DuplicateResourceException(ErrorMessages.referenceDejaUtilisee(request.nomService().trim()));
         }
-        DomaineService domaine = domaineRepository.findById(request.domaineId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        ErrorMessages.introuvable("Domaine", request.domaineId())));
 
         Service service = Service.builder()
                 .nomService(request.nomService().trim())
                 .tarifService(request.tarifService())
                 .description(request.description())
-                .domaine(domaine)
                 .actif(true)
                 .build();
         service = serviceRepository.save(service);

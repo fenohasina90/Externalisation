@@ -17,8 +17,6 @@ public class ServiceMapper {
                 service.getNomService(),
                 service.getTarifService(),
                 service.getDescription(),
-                service.getDomaine() != null ? service.getDomaine().getId() : null,
-                service.getDomaine() != null ? service.getDomaine().getNomDomaine() : null,
                 service.getActif()
         );
     }

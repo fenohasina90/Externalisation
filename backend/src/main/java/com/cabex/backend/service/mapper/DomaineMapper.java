@@ -8,7 +8,7 @@ public class DomaineMapper {
     private DomaineMapper() {
     }
 
-    public static DomaineResponse toResponse(DomaineService domaine, long nombreServices) {
+    public static DomaineResponse toResponse(DomaineService domaine, long nombreSocietes) {
         if (domaine == null) {
             return null;
         }
@@ -17,13 +17,13 @@ public class DomaineMapper {
                 domaine.getNomDomaine(),
                 domaine.getDescription(),
                 domaine.getActif(),
-                nombreServices
+                nombreSocietes
         );
     }
 
     public static DomaineResponse toResponse(DomaineService domaine) {
-        return toResponse(domaine, domaine != null && domaine.getServices() != null
-                ? domaine.getServices().size()
+        return toResponse(domaine, domaine != null && domaine.getSocietes() != null
+                ? domaine.getSocietes().size()
                 : 0);
     }
 }

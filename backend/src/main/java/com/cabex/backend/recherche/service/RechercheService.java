@@ -12,6 +12,7 @@ import com.cabex.backend.recherche.dto.RechercheDemandeItem;
 import com.cabex.backend.recherche.dto.RechercheGlobaleResponse;
 import com.cabex.backend.recherche.dto.RecherchePaiementItem;
 import com.cabex.backend.recherche.dto.RechercheServiceItem;
+import com.cabex.backend.security.SecurityUtils;
 import com.cabex.backend.service.repository.ServiceRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -58,7 +59,9 @@ public class RechercheService {
         List<RechercheDemandeItem> demandes = demandeRepository
                 .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
                 .stream().map(this::toDemandeItem).toList();
-        List<RecherchePaiementItem> paiements = paiementRepository
+        List<RecherchePaiementItem> paiements = "ACCUEIL".equalsIgnoreCase(SecurityUtils.currentRoleName())
+                ? List.of()
+                : paiementRepository
                 .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
                 .stream().map(this::toPaiementItem).toList();
         return new RechercheGlobaleResponse(clients, services, demandes, paiements);
@@ -69,8 +72,7 @@ public class RechercheService {
     }
 
     private RechercheServiceItem toServiceItem(com.cabex.backend.service.entity.Service s) {
-        return new RechercheServiceItem(s.getId(), s.getNomService(),
-                s.getDomaine() != null ? s.getDomaine().getNomDomaine() : null, s.getTarifService());
+        return new RechercheServiceItem(s.getId(), s.getNomService(), s.getTarifService());
     }
 
     private RechercheDemandeItem toDemandeItem(DemandeService d) {

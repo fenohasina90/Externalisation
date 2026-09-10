@@ -32,7 +32,7 @@ public class DomaineGestionService {
     @Transactional(readOnly = true)
     public Page<DomaineResponse> getAll(String recherche, Boolean actif, Pageable pageable) {
         Map<Object, Long> nbParDomaine = new java.util.HashMap<>();
-        for (Object[] o : domaineRepository.compterServicesParDomaine()) {
+        for (Object[] o : domaineRepository.compterSocietesParDomaine()) {
             nbParDomaine.put(o[0], (long) o[1]);
         }
         return domaineRepository.rechercher(recherche, actif, pageable)

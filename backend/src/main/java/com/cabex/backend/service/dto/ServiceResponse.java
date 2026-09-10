@@ -7,8 +7,6 @@ public record ServiceResponse(
         String nomService,
         BigDecimal tarifService,
         String description,
-        Integer domaineId,
-        String nomDomaine,
         Boolean actif
 ) {
 }

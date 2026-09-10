@@ -53,7 +53,7 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
               AND e.montantPaye < e.montantAttendu
               AND (:societeId IS NULL OR e.proposPaiement.demande.societe.id = :societeId)
               AND (:serviceId IS NULL OR e.proposPaiement.demande.service.id = :serviceId)
-              AND (:domaineId IS NULL OR e.proposPaiement.demande.service.domaine.id = :domaineId)
+              AND (:domaineId IS NULL OR e.proposPaiement.demande.societe.domaine.id = :domaineId)
             """)
     BigDecimal sommeEnRetardFiltree(@Param("jour") LocalDate jour,
                                     @Param("societeId") Integer societeId,

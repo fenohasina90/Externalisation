@@ -1,5 +1,6 @@
 package com.cabex.backend.echeance.service;
 
+import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.echeance.dto.CreateEcheanceRequest;
 import com.cabex.backend.echeance.dto.EcheanceResponse;
 import com.cabex.backend.echeance.dto.UpdateEcheanceRequest;
@@ -51,6 +52,8 @@ public class EcheanceGestionService {
                     "L'échéance n°" + request.numeroEcheance() + " existe déjà pour ce plan");
         }
 
+        validerDateDansIntervalle(propos, request.dateEcheance());
+
         EcheancePaiement echeance = EcheancePaiement.builder()
                 .proposPaiement(propos)
                 .numeroEcheance(request.numeroEcheance())
@@ -75,6 +78,8 @@ public class EcheanceGestionService {
                     "Le montant attendu ne peut pas être inférieur au montant déjà payé");
         }
 
+        validerDateDansIntervalle(echeance.getProposPaiement(), request.dateEcheance());
+
         echeance.setDateEcheance(request.dateEcheance());
         echeance.setMontantAttendu(request.montantAttendu());
         echeance.setCommentaire(request.commentaire());
@@ -95,6 +100,16 @@ public class EcheanceGestionService {
     public Page<EcheanceResponse> getAVenir(Pageable pageable) {
         return echeanceRepository.findAVenirPagine(LocalDate.now(), pageable)
                 .map(e -> EcheanceMapper.toEcheanceResponse(e, LocalDate.now(), JOURS_ALERTE));
+    }
+
+    private void validerDateDansIntervalle(ProposPaiement propos, LocalDate date) {
+        DemandeService demande = propos.getDemande();
+        if (demande != null && demande.getDebutService() != null && demande.getFinService() != null
+                && (date.isBefore(demande.getDebutService()) || date.isAfter(demande.getFinService()))) {
+            throw new BusinessException(
+                    "L'échéance doit être comprise entre le début et la fin du service ("
+                            + demande.getDebutService() + " → " + demande.getFinService() + ")");
+        }
     }
 
     private void recalculerPlan(ProposPaiement propos) {

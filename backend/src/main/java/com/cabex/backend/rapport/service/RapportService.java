@@ -114,8 +114,8 @@ public class RapportService {
             List<DemandeService> list = e.getValue();
             return new RapportServiceLigne(serviceId,
                     list.get(0).getService().getNomService(),
-                    list.get(0).getService().getDomaine() != null
-                            ? list.get(0).getService().getDomaine().getNomDomaine() : null,
+                    list.get(0).getSociete() != null && list.get(0).getSociete().getDomaine() != null
+                            ? list.get(0).getSociete().getDomaine().getNomDomaine() : null,
                     list.size(), sommeTarif(list));
         }).sorted(Comparator.comparing(RapportServiceLigne::revenu).reversed()).toList();
     }

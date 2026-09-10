@@ -16,9 +16,6 @@ public record CreateServiceRequest(
         @DecimalMin(value = "0.0", message = "Le tarif doit être positif ou nul")
         BigDecimal tarifService,
 
-        String description,
-
-        @NotNull(message = "Le domaine est obligatoire")
-        Integer domaineId
+        String description
 ) {
 }

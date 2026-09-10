@@ -20,6 +20,7 @@ import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import com.cabex.backend.paiement.repository.PaiementRepository;
+import com.cabex.backend.security.SecurityUtils;
 import com.cabex.backend.service.repository.ServiceRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,32 +67,66 @@ public class DashboardService {
     @Transactional(readOnly = true)
     public DashboardSummaryResponse summary() {
         LocalDate today = LocalDate.now();
+        String role = SecurityUtils.currentRoleName();
+
+        Map<String, Long> parStatut = groupStatuts();
+        long demandesEnCours = parStatut.getOrDefault("EN_COURS", 0L);
+        long demandesEnAttente = parStatut.getOrDefault("EN_ATTENTE", 0L);
+
+        if ("ECONOMAT".equalsIgnoreCase(role)) {
+            BigDecimal montantTotal = demandeRepository.sommeTarifTotal(null, null, null, null, null, null);
+            BigDecimal montantPaye = paiementRepository.sommeTotalePayee();
+            if (montantTotal == null) montantTotal = BigDecimal.ZERO;
+            if (montantPaye == null) montantPaye = BigDecimal.ZERO;
+            BigDecimal reste = montantTotal.subtract(montantPaye).max(BigDecimal.ZERO);
+            return new DashboardSummaryResponse(
+                    null, null, null,
+                    montantTotal, montantPaye, reste,
+                    echeanceRepository.countEnRetard(today),
+                    countProches(today),
+                    null, null);
+        }
+
+        long clients = societeRepository.countByActifTrue();
+        long demandes = demandeRepository.countByActifTrue();
+        long services = serviceRepository.countByActifTrue();
+
+        if ("ACCUEIL".equalsIgnoreCase(role)) {
+            return new DashboardSummaryResponse(
+                    clients, demandes, services,
+                    null, null, null,
+                    null, null,
+                    demandesEnAttente, demandesEnCours);
+        }
+
         BigDecimal montantTotal = demandeRepository.sommeTarifTotal(null, null, null, null, null, null);
         BigDecimal montantPaye = paiementRepository.sommeTotalePayee();
         if (montantTotal == null) montantTotal = BigDecimal.ZERO;
         if (montantPaye == null) montantPaye = BigDecimal.ZERO;
         BigDecimal reste = montantTotal.subtract(montantPaye).max(BigDecimal.ZERO);
 
-        Map<String, Long> parStatut = groupStatuts();
-        long demandesEnCours = parStatut.getOrDefault("EN_COURS", 0L);
-        long demandesEnAttente = parStatut.getOrDefault("EN_ATTENTE", 0L);
-
         return new DashboardSummaryResponse(
-                societeRepository.countByActifTrue(),
-                demandeRepository.countByActifTrue(),
-                serviceRepository.countByActifTrue(),
-                montantTotal,
-                montantPaye,
-                reste,
+                clients, demandes, services,
+                montantTotal, montantPaye, reste,
                 echeanceRepository.countEnRetard(today),
                 countProches(today),
-                demandesEnAttente,
-                demandesEnCours
-        );
+                demandesEnAttente, demandesEnCours);
     }
 
     @Transactional(readOnly = true)
     public PerformanceIndicateursResponse performances() {
+        String role = SecurityUtils.currentRoleName();
+
+        if ("ECONOMAT".equalsIgnoreCase(role)) {
+            long totalPayts = paiementRepository.compterPaiementsSurEcheance();
+            long aTemps = paiementRepository.compterPaiementsSurEcheanceATemps();
+            BigDecimal tauxPaiementATemps = totalPayts == 0 ? BigDecimal.ZERO
+                    : BigDecimal.valueOf(aTemps * 100.0 / totalPayts).setScale(2, RoundingMode.HALF_UP);
+            return new PerformanceIndicateursResponse(
+                    null, null, null, null, tauxPaiementATemps,
+                    null, null, List.of());
+        }
+
         List<Object[]> termeinees = historiqueRepository.termeineesEtDates();
         long nbTerminees = termeinees.size();
         long totalDemandes = demandeRepository.countByActifTrue();
@@ -117,11 +152,6 @@ public class DashboardService {
                 : montantTotal == null ? BigDecimal.ZERO
                         : montantTotal.divide(BigDecimal.valueOf(totalDemandes), 2, RoundingMode.HALF_UP);
 
-        long totalPayts = paiementRepository.compterPaiementsSurEcheance();
-        long aTemps = paiementRepository.compterPaiementsSurEcheanceATemps();
-        BigDecimal tauxPaiementATemps = totalPayts == 0 ? BigDecimal.ZERO
-                : BigDecimal.valueOf(aTemps * 100.0 / totalPayts).setScale(2, RoundingMode.HALF_UP);
-
         ServiceTopResponse serviceTop = null;
         List<Object[]> services = demandeRepository.compterParService();
         if (!services.isEmpty()) {
@@ -145,9 +175,20 @@ public class DashboardService {
                 .map(e -> new DemandeTermineeMoisResponse(e.getKey().toString(), e.getValue()))
                 .toList();
 
+        if ("ACCUEIL".equalsIgnoreCase(role)) {
+            return new PerformanceIndicateursResponse(
+                    delaiMoyen, nbTerminees, tauxTerminees, montantMoyen, null,
+                    serviceTop, commercialTop, parMoisList);
+        }
+
+        long totalPayts = paiementRepository.compterPaiementsSurEcheance();
+        long aTemps = paiementRepository.compterPaiementsSurEcheanceATemps();
+        BigDecimal tauxPaiementATemps = totalPayts == 0 ? BigDecimal.ZERO
+                : BigDecimal.valueOf(aTemps * 100.0 / totalPayts).setScale(2, RoundingMode.HALF_UP);
+
         return new PerformanceIndicateursResponse(
-                delaiMoyen, nbTerminees, tauxTerminees, montantMoyen,
-                tauxPaiementATemps, serviceTop, commercialTop, parMoisList);
+                delaiMoyen, nbTerminees, tauxTerminees, montantMoyen, tauxPaiementATemps,
+                serviceTop, commercialTop, parMoisList);
     }
 
     @Transactional(readOnly = true)
@@ -205,6 +246,13 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public List<ClientRevenuResponse> clients() {
+        String role = SecurityUtils.currentRoleName();
+        if ("ACCUEIL".equalsIgnoreCase(role)) {
+            return demandeRepository.demandesParSociete().stream()
+                    .map(o -> new ClientRevenuResponse(
+                            (Integer) o[0], (String) o[1], (long) o[2], null, null))
+                    .toList();
+        }
         Map<Integer, BigDecimal> payeParClient = new java.util.HashMap<>();
         for (Object[] o : paiementRepository.sommeParSociete()) {
             payeParClient.put((Integer) o[0], toBigDecimal(o[1]));
@@ -215,6 +263,10 @@ public class DashboardService {
                     String nom = (String) o[1];
                     long nb = (long) o[2];
                     BigDecimal total = toBigDecimal(o[3]);
+                    if ("ECONOMAT".equalsIgnoreCase(role)) {
+                        BigDecimal paye = payeParClient.getOrDefault(clientId, BigDecimal.ZERO);
+                        return new ClientRevenuResponse(clientId, nom, null, total, paye);
+                    }
                     BigDecimal paye = payeParClient.getOrDefault(clientId, BigDecimal.ZERO);
                     return new ClientRevenuResponse(clientId, nom, nb, total, paye);
                 })

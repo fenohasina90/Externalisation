@@ -45,6 +45,8 @@ import java.util.Locale;
 public class DemandeGestionService {
 
     private static final String STATUT_EN_ATTENTE = "EN_ATTENTE";
+    private static final String STATUT_VALIDATION = "VALIDATION";
+    private static final String STATUT_EN_COURS = "EN_COURS";
     private static final String STATUT_ANNULEE = "ANNULEE";
     private static final String STATUT_TERMINEE = "TERMINEE";
 
@@ -286,11 +288,27 @@ public class DemandeGestionService {
             return STATUT_EN_ATTENTE.equals(nouveau);
         }
         return switch (actuel) {
-            case "EN_ATTENTE" -> "APPROUVEE".equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
-            case "APPROUVEE" -> "EN_COURS".equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
+            case "EN_ATTENTE" -> STATUT_ANNULEE.equals(nouveau);
+            case "VALIDATION" -> STATUT_EN_COURS.equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
             case "EN_COURS" -> STATUT_TERMINEE.equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
             default -> false;
         };
+    }
+
+    @Transactional
+    public void validerParPremierPaiement(DemandeService demande, Integer numeroEcheance) {
+        if (numeroEcheance == null || numeroEcheance != 1) {
+            return;
+        }
+        if (!STATUT_EN_ATTENTE.equals(statutActuel(demande.getId()))) {
+            return;
+        }
+        enviereHistorique(demande, STATUT_VALIDATION,
+                "Demande validée par le paiement du premier tranche (échéance n°1)");
+        notificationService.notifierChangementStatut(demande, STATUT_VALIDATION);
+        enviereHistorique(demande, STATUT_EN_COURS,
+                "Service démarré après validation (premier paiement enregistré)");
+        notificationService.notifierChangementStatut(demande, STATUT_EN_COURS);
     }
 
     private String genererReference(int annee) {

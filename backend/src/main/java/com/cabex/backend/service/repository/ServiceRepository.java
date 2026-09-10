@@ -13,28 +13,21 @@ public interface ServiceRepository extends JpaRepository<Service, Integer> {
 
     boolean existsByNomService(String nomService);
 
-    List<Service> findByDomaineId(Integer domaineId);
-
-    List<Service> findByDomaineIdAndActifTrue(Integer domaineId);
-
     long countByActifTrue();
 
     @Query("""
         SELECT s FROM Service s
         WHERE (:recherche IS NULL
                OR LOWER(s.nomService) LIKE LOWER(CONCAT('%', :recherche, '%')))
-          AND (:domaineId IS NULL OR s.domaine.id = :domaineId)
           AND (:actif IS NULL OR s.actif = :actif)
         """)
     Page<Service> rechercher(@Param("recherche") String recherche,
-                             @Param("domaineId") Integer domaineId,
                              @Param("actif") Boolean actif,
                              Pageable pageable);
 
     @Query("""
         SELECT s FROM Service s
         WHERE LOWER(s.nomService) LIKE LOWER(CONCAT('%', :q, '%'))
-           OR (s.domaine IS NOT NULL AND LOWER(s.domaine.nomDomaine) LIKE LOWER(CONCAT('%', :q, '%')))
         ORDER BY s.nomService
         """)
     List<Service> rechercherGlobale(@Param("q") String q, Pageable pageable);

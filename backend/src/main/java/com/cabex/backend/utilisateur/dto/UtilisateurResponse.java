@@ -7,6 +7,7 @@ public record UtilisateurResponse(
         Integer id,
         String nom,
         String prenom,
+        String username,
         String email,
         Boolean actif,
         LocalDateTime derniereConnexion,

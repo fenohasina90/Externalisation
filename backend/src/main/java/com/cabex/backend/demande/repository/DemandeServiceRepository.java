@@ -32,7 +32,7 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
         WHERE (:recherche IS NULL OR LOWER(d.referenceDemande) LIKE LOWER(CONCAT('%', :recherche, '%')))
           AND (:societeId IS NULL OR d.societe.id = :societeId)
           AND (:serviceId IS NULL OR d.service.id = :serviceId)
-          AND (:domaineId IS NULL OR d.service.domaine.id = :domaineId)
+          AND (:domaineId IS NULL OR d.societe.domaine.id = :domaineId)
           AND (:commercialId IS NULL OR d.commercial.id = :commercialId)
           AND (:dateDebut IS NULL OR d.debutService >= :dateDebut)
           AND (:dateFin IS NULL OR d.finService <= :dateFin)
@@ -64,7 +64,7 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
           AND (:dateFin IS NULL OR d.finService <= :dateFin)
           AND (:societeId IS NULL OR d.societe.id = :societeId)
           AND (:serviceId IS NULL OR d.service.id = :serviceId)
-          AND (:domaineId IS NULL OR d.service.domaine.id = :domaineId)
+          AND (:domaineId IS NULL OR d.societe.domaine.id = :domaineId)
           AND (:commercialId IS NULL OR d.commercial.id = :commercialId)
         """)
     BigDecimal sommeTarifTotal(@Param("dateDebut") LocalDate dateDebut,

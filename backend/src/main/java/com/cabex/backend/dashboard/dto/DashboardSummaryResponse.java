@@ -3,15 +3,15 @@ package com.cabex.backend.dashboard.dto;
 import java.math.BigDecimal;
 
 public record DashboardSummaryResponse(
-        long nombreClients,
-        long nombreDemandes,
-        long nombreServices,
+        Long nombreClients,
+        Long nombreDemandes,
+        Long nombreServices,
         BigDecimal montantTotal,
         BigDecimal montantPaye,
         BigDecimal resteAPayer,
-        long echeancesEnRetard,
-        long echeancesProches,
-        long demandesEnAttente,
-        long demandesEnCours
+        Long echeancesEnRetard,
+        Long echeancesProches,
+        Long demandesEnAttente,
+        Long demandesEnCours
 ) {
 }
