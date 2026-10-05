@@ -139,13 +139,13 @@ public class DemandeGestionService {
         }
 
         validateDates(request.debutService(), request.finService());
-        if (request.tarifServiceApplique() != null
-                && request.tarifServiceApplique().signum() < 0) {
+        if (request.tarif() != null
+                && request.tarif().signum() < 0) {
             throw new BusinessException(ErrorMessages.TARIF_POSITIF);
         }
 
-        BigDecimal tarif = request.tarifServiceApplique() != null
-                ? request.tarifServiceApplique()
+        BigDecimal tarif = request.tarif() != null
+                ? request.tarif()
                 : service.getTarifService();
 
         DemandeService demande = DemandeService.builder()
@@ -159,7 +159,7 @@ public class DemandeGestionService {
                 .commercial(commercial)
                 .clientResponsable(responsable)
                 .service(service)
-                .tarifServiceApplique(tarif)
+                .tarif(tarif)
                 .commentaire(request.commentaire())
                 .createdBy(currentUtilisateur())
                 .actif(true)
@@ -333,7 +333,7 @@ public class DemandeGestionService {
         if (montantPaye == null) {
             montantPaye = BigDecimal.ZERO;
         }
-        BigDecimal reste = demande.getTarifServiceApplique().subtract(montantPaye);
+        BigDecimal reste = demande.getTarif().subtract(montantPaye);
         String statut = statutActuel(demande.getId());
         return DemandeMapper.toResponse(demande, statut, montantPaye, reste.max(BigDecimal.ZERO));
     }

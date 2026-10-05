@@ -25,8 +25,7 @@ public record CreateDemandeRequest(
         @NotNull(message = "Le service est obligatoire")
         Integer serviceId,
 
-        @NotNull(message = "Le tarif appliqué est obligatoire")
-        BigDecimal tarifServiceApplique,
+        BigDecimal tarif,
 
         String commentaire
 ) {

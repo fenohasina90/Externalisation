@@ -213,7 +213,7 @@ public class RapportService {
             row.add(d.nomService());
             row.add(d.statutActuel());
             row.add(d.dateDemande());
-            row.add(format(d.tarifServiceApplique()));
+            row.add(format(d.tarif()));
             row.add(format(d.montantPaye()));
             row.add(format(d.resteAPayer()));
             lignes.add(row);
@@ -253,7 +253,7 @@ public class RapportService {
     }
 
     private BigDecimal sommeTarif(List<DemandeService> list) {
-        return list.stream().map(DemandeService::getTarifServiceApplique).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return list.stream().map(DemandeService::getTarif).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private DemandeResponse toDemandeResponse(DemandeService d) {
@@ -261,7 +261,7 @@ public class RapportService {
                 .map(h -> h.getStatut().getStatut()).orElse(null);
         BigDecimal paye = paiementRepository.sommePayeeParDemande(d.getId());
         if (paye == null) paye = BigDecimal.ZERO;
-        BigDecimal reste = d.getTarifServiceApplique().subtract(paye).max(BigDecimal.ZERO);
+        BigDecimal reste = d.getTarif().subtract(paye).max(BigDecimal.ZERO);
         return DemandeMapper.toResponse(d, statut, paye, reste);
     }
 

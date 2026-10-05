@@ -42,7 +42,7 @@ public class PlanPaiementController {
     @PostMapping("/demandes/{id}/plan-paiement")
     @PreAuthorize("hasAuthority('DEMANDE_UPDATE')")
     @Operation(summary = "Créer un plan de paiement pour une demande",
-            description = "Génère les échéances ; demande doit être approuvée ou en cours")
+            description = "Chaque échéance doit être comprise dans la période de service ; plan autorisé dès EN ATTENTE, refusé pour une demande TERMINEE ou ANNULEE")
     public ResponseEntity<PlanPaiementResponse> create(@PathVariable Integer id,
                                                        @Valid @RequestBody CreatePlanPaiementRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(planService.create(id, request));

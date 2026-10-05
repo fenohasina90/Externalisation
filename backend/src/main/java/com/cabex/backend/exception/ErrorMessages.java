@@ -22,7 +22,7 @@ public final class ErrorMessages {
     }
 
     // Authentication / autorisation
-    public static final String IDENTIFIANTS_INCORECTS = "Email ou mot de passe incorrect";
+    public static final String IDENTIFIANTS_INCORECTS = "Identifiant ou mot de passe incorrect";
     public static final String COMPTE_DESACTIVE = "Ce compte est désactivé";
     public static final String AUTH_REQUISE = "Authentification requise";
     public static final String ACCES_REFUSE = "Vous n'avez pas les permissions nécessaires pour effectuer cette action";

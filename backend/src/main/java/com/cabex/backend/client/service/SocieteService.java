@@ -209,7 +209,7 @@ public class SocieteService {
                                                  List<EcheanceFicheResponse> echeances,
                                                  Integer societeId) {
         BigDecimal montantTotal = demandes.stream()
-                .map(d -> d.getTarifServiceApplique() == null ? BigDecimal.ZERO : d.getTarifServiceApplique())
+                .map(d -> d.getTarif() == null ? BigDecimal.ZERO : d.getTarif())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal montantPaye = paiements.stream()
                 .map(PaiementFicheResponse::montantPaye)
@@ -279,7 +279,7 @@ public class SocieteService {
 
     private DemandeFicheResponse toDemandeFiche(DemandeService d) {
         BigDecimal montantPaye = paiementRepository.sommePayeeParDemande(d.getId());
-        BigDecimal reste = d.getTarifServiceApplique().subtract(montantPaye);
+        BigDecimal reste = d.getTarif().subtract(montantPaye);
         String statut = deriverStatut(d.getId());
         return new DemandeFicheResponse(
                 d.getId(),

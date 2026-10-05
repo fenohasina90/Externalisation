@@ -232,7 +232,7 @@ public class PaiementGestionService {
             if (dejaPayer == null) {
                 dejaPayer = BigDecimal.ZERO;
             }
-            reste = demande.getTarifServiceApplique().subtract(dejaPayer).add(ancienMontant);
+            reste = demande.getTarif().subtract(dejaPayer).add(ancienMontant);
         }
         if (montant.compareTo(reste) > 0) {
             throw new BusinessException(

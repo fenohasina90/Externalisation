@@ -20,7 +20,7 @@ public record DemandeResponse(
         String nomService,
         Integer domaineId,
         String nomDomaine,
-        BigDecimal tarifServiceApplique,
+        BigDecimal tarif,
         String commentaire,
         String statutActuel,
         BigDecimal montantPaye,

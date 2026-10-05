@@ -81,7 +81,7 @@ public class RechercheService {
         return new RechercheDemandeItem(d.getId(), d.getReferenceDemande(),
                 d.getSociete() != null ? d.getSociete().getNomSociete() : null,
                 d.getService() != null ? d.getService().getNomService() : null,
-                statut, d.getDateDemande(), d.getTarifServiceApplique());
+                statut, d.getDateDemande(), d.getTarif());
     }
 
     private RecherchePaiementItem toPaiementItem(Paiement p) {

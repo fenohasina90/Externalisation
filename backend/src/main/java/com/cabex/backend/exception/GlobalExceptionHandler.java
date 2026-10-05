@@ -113,7 +113,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ApiError> handleBadCredentials(BadCredentialsException ex, WebRequest request) {
-        return build(HttpStatus.UNAUTHORIZED, "Email ou mot de passe incorrect", request);
+        return build(HttpStatus.UNAUTHORIZED, "Identifiant ou mot de passe incorrect", request);
     }
 
     @ExceptionHandler(AuthenticationException.class)

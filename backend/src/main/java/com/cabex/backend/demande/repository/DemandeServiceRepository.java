@@ -59,7 +59,7 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
             LocalDate dateDebut, LocalDate dateFin);
 
     @Query("""
-        SELECT COALESCE(SUM(d.tarifServiceApplique), 0) FROM DemandeService d
+        SELECT COALESCE(SUM(d.tarif), 0) FROM DemandeService d
         WHERE (:dateDebut IS NULL OR d.debutService >= :dateDebut)
           AND (:dateFin IS NULL OR d.finService <= :dateFin)
           AND (:societeId IS NULL OR d.societe.id = :societeId)
@@ -83,15 +83,15 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
     List<Object[]> compterParStatut();
 
     @Query("""
-        SELECT d.service.id, d.service.nomService, COUNT(DISTINCT d.id), COALESCE(SUM(d.tarifServiceApplique), 0)
+        SELECT d.service.id, d.service.nomService, COUNT(DISTINCT d.id), COALESCE(SUM(d.tarif), 0)
         FROM DemandeService d
         GROUP BY d.service.id, d.service.nomService
-        ORDER BY COALESCE(SUM(d.tarifServiceApplique), 0) DESC
+        ORDER BY COALESCE(SUM(d.tarif), 0) DESC
         """)
     List<Object[]> revenuParService();
 
     @Query("""
-        SELECT d.societe.id, d.societe.nomSociete, COUNT(DISTINCT d.id), COALESCE(SUM(d.tarifServiceApplique), 0)
+        SELECT d.societe.id, d.societe.nomSociete, COUNT(DISTINCT d.id), COALESCE(SUM(d.tarif), 0)
         FROM DemandeService d
         GROUP BY d.societe.id, d.societe.nomSociete
         ORDER BY COUNT(DISTINCT d.id) DESC

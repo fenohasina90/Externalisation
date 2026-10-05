@@ -54,7 +54,7 @@ public class PdfGenerator {
                     {"Date de demande", valeurDate(d.getDateDemande())},
                     {"Début de service", valeurDate(d.getDebutService())},
                     {"Fin de service", valeurDate(d.getFinService())},
-                    {"Tarif appliqué", formatArgent(d.getTarifServiceApplique())}
+                    {"Tarif appliqué", formatArgent(d.getTarif())}
             });
 
             label(doc, "Informations de la demande");

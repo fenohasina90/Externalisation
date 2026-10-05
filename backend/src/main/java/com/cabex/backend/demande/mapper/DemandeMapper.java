@@ -72,7 +72,7 @@ public class DemandeMapper {
                         ? d.getSociete().getDomaine().getId() : null,
                 d.getSociete() != null && d.getSociete().getDomaine() != null
                         ? d.getSociete().getDomaine().getNomDomaine() : null,
-                d.getTarifServiceApplique(),
+                d.getTarif(),
                 d.getCommentaire(),
                 statutActuel,
                 montantPaye,

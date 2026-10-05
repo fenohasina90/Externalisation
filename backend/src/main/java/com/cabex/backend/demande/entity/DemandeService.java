@@ -57,8 +57,8 @@ public class DemandeService {
     @JoinColumn(name = "service_id", nullable = false)
     private Service service;
 
-    @Column(name = "tarif_service_applique", nullable = false, precision = 15, scale = 2)
-    private BigDecimal tarifServiceApplique;
+    @Column(name = "tarif", nullable = false, precision = 15, scale = 2)
+    private BigDecimal tarif;
 
     @Column(name = "commentaire", columnDefinition = "TEXT")
     private String commentaire;
