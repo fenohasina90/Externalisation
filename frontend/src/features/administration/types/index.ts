@@ -39,3 +39,33 @@ export interface CreateUtilisateurPayload {
 }
 
 export type UpdateUtilisateurPayload = Partial<CreateUtilisateurPayload>
+
+export type StatutDemandeReinitialisation =
+  | 'EN_ATTENTE'
+  | 'APPROUVEE'
+  | 'REFUSEE'
+  | 'EXPIREE'
+  | 'TERMINEE'
+
+export interface DemandeReinitialisation {
+  id: number
+  utilisateurId: number
+  nomComplet: string
+  username: string
+  email: string
+  statut: StatutDemandeReinitialisation
+  motifRefus: string | null
+  dateDemande: string
+  dateTraitement: string | null
+  traiteePar: string | null
+  dateGenerationMdp: string | null
+  dateExpirationMdp: string | null
+  genereePar: string | null
+}
+
+export interface MotDePasseTemporaire {
+  motDePasseTemporaire: string
+  expiration: string
+  message: string
+  demande: DemandeReinitialisation
+}

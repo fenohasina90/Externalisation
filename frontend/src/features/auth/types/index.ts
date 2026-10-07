@@ -14,6 +14,7 @@ export interface Utilisateur {
   username: string
   email: string
   actif: boolean
+  doitChangerMotDePasse: boolean
   derniereConnexion: string | null
   createdAt: string
   role: Role
@@ -33,11 +34,6 @@ export interface LoginCredentials {
 
 export interface ForgotPasswordPayload {
   email: string
-}
-
-export interface ResetPasswordPayload {
-  token: string
-  newPassword: string
 }
 
 export interface ChangePasswordPayload {

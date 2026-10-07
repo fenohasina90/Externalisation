@@ -47,6 +47,13 @@ public class Utilisateur {
     @Builder.Default
     private Boolean actif = true;
 
+    @Column(name = "doit_changer_mdp", nullable = false)
+    @Builder.Default
+    private Boolean doitChangerMdp = false;
+
+    @Column(name = "date_expiration_mdp_temporaire")
+    private LocalDateTime dateExpirationMdpTemporaire;
+
     @Column(name = "derniere_connexion")
     private LocalDateTime derniereConnexion;
 

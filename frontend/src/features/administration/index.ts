@@ -1,4 +1,5 @@
 export { AdministrationPage } from './screens/AdministrationPage'
 export { UtilisateursPage } from './screens/UtilisateursPage'
 export { AuditPage } from './screens/AuditPage'
+export { ReinitialisationsPage } from './screens/ReinitialisationsPage'
 export { ConfigurationPage } from './screens/ConfigurationPage'

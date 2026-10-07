@@ -10,6 +10,7 @@ public record UtilisateurResponse(
         String username,
         String email,
         Boolean actif,
+        Boolean doitChangerMotDePasse,
         LocalDateTime derniereConnexion,
         LocalDateTime createdAt,
         RoleResponse role,

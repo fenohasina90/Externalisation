@@ -12,7 +12,7 @@ interface FieldErrors {
 }
 
 function messageFor(error: ApiError): string {
-  if (error.status === 401) return MESSAGES.invalidCredentials
+  if (error.status === 401) return error.message || MESSAGES.invalidCredentials
   if (error.status === 403) return MESSAGES.accountDisabled
   if (error.status === 0) return MESSAGES.network
   return error.message || MESSAGES.generic
@@ -29,7 +29,9 @@ export function LoginPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  if (utilisateur) return <Navigate to={from} replace />
+  if (utilisateur) {
+    return <Navigate to={utilisateur.doitChangerMotDePasse ? '/changer-mot-de-passe' : from} replace />
+  }
 
   function validate(): FieldErrors {
     const errors: FieldErrors = {}

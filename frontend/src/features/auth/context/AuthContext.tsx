@@ -3,7 +3,13 @@ import { registerUnauthorizedHandler } from '@/api/http'
 import type { LoginCredentials, Utilisateur } from '../types'
 import { AuthContext, type AuthContextValue } from './authContext'
 import { authApi } from '../services/auth.service'
-import { clearSession, getSessionUtilisateur, getToken, saveSession } from '@/utils/storage'
+import {
+  clearSession,
+  getSessionUtilisateur,
+  getToken,
+  saveSession,
+  saveUtilisateur,
+} from '@/utils/storage'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [utilisateur, setUtilisateur] = useState<Utilisateur | null>(() =>
@@ -61,6 +67,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUtilisateur(null)
   }, [])
 
+  const refresh = useCallback(async (): Promise<void> => {
+    const response = await authApi.me()
+    saveUtilisateur(response.utilisateur)
+    setUtilisateur(response.utilisateur)
+  }, [])
+
   const hasPermission = useCallback(
     (permission: string): boolean => utilisateur?.permissions.includes(permission) ?? false,
     [utilisateur],
@@ -73,8 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const value = useMemo<AuthContextValue>(
-    () => ({ utilisateur, loading, login, logout, hasPermission, hasAnyRole }),
-    [utilisateur, loading, login, logout, hasPermission, hasAnyRole],
+    () => ({ utilisateur, loading, login, logout, refresh, hasPermission, hasAnyRole }),
+    [utilisateur, loading, login, logout, refresh, hasPermission, hasAnyRole],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

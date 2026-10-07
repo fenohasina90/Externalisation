@@ -8,6 +8,11 @@ const SECTIONS_ADMINISTRATION = [
     description: 'Gestion des comptes, des rôles et des permissions.',
   },
   {
+    to: '/administration/reinitialisations',
+    titre: 'Demandes de réinitialisation',
+    description: 'Approuver ou refuser les demandes de réinitialisation de mot de passe.',
+  },
+  {
     to: '/administration/audit',
     titre: "Journal d'audit",
     description: 'Traçabilité des opérations importantes de l’application.',
@@ -24,7 +29,7 @@ export function AdministrationPage() {
     <>
       <PageHeader
         titre="Administration"
-        sousTitre="Réservé au Super Administrateur"
+        sousTitre="Réservé aux administrateurs"
       />
       <div className="cards-grid">
         {SECTIONS_ADMINISTRATION.map((section) => (

@@ -6,6 +6,7 @@ export interface AuthContextValue {
   loading: boolean
   login: (credentials: LoginCredentials) => Promise<Utilisateur>
   logout: () => Promise<void>
+  refresh: () => Promise<void>
   hasPermission: (permission: string) => boolean
   hasAnyRole: (...roles: string[]) => boolean
 }

@@ -29,4 +29,4 @@ export interface PageQuery {
   recherche: string | null
 }
 
-export type NomRole = 'SUPER_ADMIN' | 'ACCUEIL' | 'ECONOMAT'
+export type NomRole = 'SUPER_ADMIN' | 'ADMIN' | 'ACCUEIL' | 'ECONOMAT'

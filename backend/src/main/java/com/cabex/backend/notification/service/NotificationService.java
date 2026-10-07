@@ -24,6 +24,7 @@ import java.util.List;
 public class NotificationService {
 
     private static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
+    private static final String ROLE_ADMIN = "ADMIN";
     private static final String ROLE_ACCUEIL = "ACCUEIL";
     private static final String ROLE_ECONOMAT = "ECONOMAT";
 
@@ -101,7 +102,7 @@ public class NotificationService {
 
     private List<String> typesAutorises() {
         String role = SecurityUtils.currentRoleName();
-        if (ROLE_SUPER_ADMIN.equalsIgnoreCase(role)) {
+        if (ROLE_SUPER_ADMIN.equalsIgnoreCase(role) || ROLE_ADMIN.equalsIgnoreCase(role)) {
             return null;
         }
         if (ROLE_ACCUEIL.equalsIgnoreCase(role)) {
@@ -168,6 +169,17 @@ public class NotificationService {
                 "⛔ L'échéance de la société " + societe + " est en retard.",
                 "DEMANDE", demande.getId() != null ? demande.getId().longValue() : null,
                 ROLE_SUPER_ADMIN, ROLE_ECONOMAT);
+    }
+
+    public void notifierDemandeReinitialisation(Utilisateur utilisateur, Long demandeId) {
+        String nomComplet = utilisateur.getPrenom() + " " + utilisateur.getNom();
+        creerPourRoles(
+                "DEMANDE_RESET_MDP",
+                "Demande de réinitialisation",
+                "🔐 " + nomComplet + " (" + utilisateur.getUsername() + ") demande la réinitialisation"
+                        + " de son mot de passe. Approuvez la demande puis générez un mot de passe temporaire.",
+                "PASSWORD_RESET", demandeId,
+                ROLE_SUPER_ADMIN, ROLE_ADMIN);
     }
 
     @Transactional

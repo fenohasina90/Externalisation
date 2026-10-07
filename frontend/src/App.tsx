@@ -1,11 +1,12 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
-import { ForgotPasswordPage, LoginPage, ResetPasswordPage } from '@/features/auth'
+import { ChangePasswordPage, ForgotPasswordPage, LoginPage } from '@/features/auth'
 import {
   AdministrationPage,
   AuditPage,
   ConfigurationPage,
+  ReinitialisationsPage,
   UtilisateursPage,
 } from '@/features/administration'
 import { ClientsPage } from '@/features/clients'
@@ -27,11 +28,11 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/mot-de-passe-oublie" element={<ForgotPasswordPage />} />
-      <Route path="/reinitialiser-mot-de-passe" element={<ResetPasswordPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/changer-mot-de-passe" element={<ChangePasswordPage />} />
           <Route path="/clients" element={<ClientsPage />} />
           <Route path="/responsables" element={<ResponsablesPage />} />
           <Route path="/commerciaux" element={<CommerciauxPage />} />
@@ -47,6 +48,7 @@ function App() {
           <Route path="/administration" element={<AdministrationPage />} />
           <Route path="/administration/utilisateurs" element={<UtilisateursPage />} />
           <Route path="/administration/audit" element={<AuditPage />} />
+          <Route path="/administration/reinitialisations" element={<ReinitialisationsPage />} />
           <Route path="/administration/configuration" element={<ConfigurationPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

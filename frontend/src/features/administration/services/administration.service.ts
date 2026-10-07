@@ -5,7 +5,10 @@ import type {
   ApplicationConfiguration,
   AuditEntry,
   CreateUtilisateurPayload,
+  DemandeReinitialisation,
+  MotDePasseTemporaire,
   Permission,
+  StatutDemandeReinitialisation,
 } from '../types'
 
 export const utilisateursApi = {
@@ -79,6 +82,45 @@ export const configurationApi = {
     const { data } = await http.put<ApplicationConfiguration>(`/configuration/${cle}`, {
       valeur,
     })
+    return data
+  },
+}
+
+export const reinitialisationsApi = {
+  async list(
+    statut: StatutDemandeReinitialisation | null,
+    page?: PageQuery,
+  ): Promise<ApiPage<DemandeReinitialisation>> {
+    const { data } = await http.get<ApiPage<DemandeReinitialisation>>('/password-resets', {
+      params: buildQuery({ statut }, page),
+    })
+    return data
+  },
+
+  async get(id: number): Promise<DemandeReinitialisation> {
+    const { data } = await http.get<DemandeReinitialisation>(`/password-resets/${id}`)
+    return data
+  },
+
+  async approuver(id: number): Promise<DemandeReinitialisation> {
+    const { data } = await http.post<DemandeReinitialisation>(
+      `/password-resets/${id}/approuver`,
+    )
+    return data
+  },
+
+  async refuser(id: number, motif: string): Promise<DemandeReinitialisation> {
+    const { data } = await http.post<DemandeReinitialisation>(
+      `/password-resets/${id}/refuser`,
+      { motif },
+    )
+    return data
+  },
+
+  async reinitialiser(id: number): Promise<MotDePasseTemporaire> {
+    const { data } = await http.post<MotDePasseTemporaire>(
+      `/password-resets/${id}/reinitialiser`,
+    )
     return data
   },
 }

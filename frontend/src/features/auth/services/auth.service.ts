@@ -5,7 +5,6 @@ import type {
   ForgotPasswordPayload,
   LoginCredentials,
   MessageResponse,
-  ResetPasswordPayload,
 } from '../types'
 
 export const authApi = {
@@ -21,11 +20,6 @@ export const authApi = {
 
   async forgotPassword(payload: ForgotPasswordPayload): Promise<MessageResponse> {
     const { data } = await http.post<MessageResponse>('/auth/forgot-password', payload)
-    return data
-  },
-
-  async resetPassword(payload: ResetPasswordPayload): Promise<MessageResponse> {
-    const { data } = await http.post<MessageResponse>('/auth/reset-password', payload)
     return data
   },
 

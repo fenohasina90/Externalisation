@@ -9,6 +9,10 @@ export function saveSession(token: string, utilisateur: unknown): void {
   localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(utilisateur))
 }
 
+export function saveUtilisateur(utilisateur: unknown): void {
+  localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(utilisateur))
+}
+
 export function getSessionUtilisateur<T>(): T | null {
   const raw = localStorage.getItem(STORAGE_KEYS.user)
   if (!raw) return null

@@ -29,7 +29,7 @@ export function ForgotPasswordPage() {
   return (
     <AuthLayout
       title="Mot de passe oublié"
-      subtitle="Saisissez votre adresse e-mail pour recevoir un lien de réinitialisation."
+      subtitle="Saisissez votre adresse e-mail : un administrateur approuvera votre demande et vous communiquera un mot de passe temporaire."
     >
       {message ? <Alert tone="success">{message}</Alert> : null}
       {error ? <Alert tone="danger">{error}</Alert> : null}
@@ -48,7 +48,7 @@ export function ForgotPasswordPage() {
           />
         </Field>
         <Button type="submit" loading={submitting} loadingLabel="Envoi…">
-          Envoyer le lien
+          Envoyer la demande
         </Button>
       </form>
 

@@ -51,6 +51,7 @@ public class UtilisateurMapper {
                 utilisateur.getUsername(),
                 utilisateur.getEmail(),
                 utilisateur.getActif(),
+                utilisateur.getDoitChangerMdp(),
                 utilisateur.getDerniereConnexion(),
                 utilisateur.getCreatedAt(),
                 toRoleResponse(utilisateur.getRole()),
