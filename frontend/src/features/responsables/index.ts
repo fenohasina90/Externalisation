@@ -1,0 +1,1 @@
+export { ResponsablesPage } from './screens/ResponsablesPage'

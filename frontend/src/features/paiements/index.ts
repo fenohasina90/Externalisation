@@ -1,0 +1,1 @@
+export { PaiementsPage } from './screens/PaiementsPage'

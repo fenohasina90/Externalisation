@@ -1,0 +1,1 @@
+export { PlansPaiementPage } from './screens/PlansPaiementPage'

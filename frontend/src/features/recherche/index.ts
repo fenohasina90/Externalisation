@@ -1,0 +1,1 @@
+export { RecherchePage } from './screens/RecherchePage'
