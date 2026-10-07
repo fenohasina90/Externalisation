@@ -30,9 +30,9 @@ function App() {
       <Route path="/mot-de-passe-oublie" element={<ForgotPasswordPage />} />
 
       <Route element={<ProtectedRoute />}>
+        <Route path="/changer-mot-de-passe" element={<ChangePasswordPage />} />
         <Route element={<AppLayout />}>
           <Route path="/" element={<DashboardPage />} />
-          <Route path="/changer-mot-de-passe" element={<ChangePasswordPage />} />
           <Route path="/clients" element={<ClientsPage />} />
           <Route path="/responsables" element={<ResponsablesPage />} />
           <Route path="/commerciaux" element={<CommerciauxPage />} />
@@ -50,8 +50,8 @@ function App() {
           <Route path="/administration/audit" element={<AuditPage />} />
           <Route path="/administration/reinitialisations" element={<ReinitialisationsPage />} />
           <Route path="/administration/configuration" element={<ConfigurationPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
   )
