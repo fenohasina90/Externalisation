@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { CommercialFormModal, CommerciauxTable } from '../components'
 import { MOCK_COMmerCIAUX, type StatutCommercialFilter } from '../data/mockCommerciaux'
 import { useCommerciauxListStatic } from '../hooks'
@@ -16,6 +17,7 @@ export function CommerciauxPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Commercial | null>(null)
   const [showFilters, setShowFilters] = useState(true)
+  const [confirmToggle, setConfirmToggle] = useState<{ id: number; actif: boolean } | null>(null)
 
   const { items, total, totalPages, page, setPage, search, setSearch, statut, setStatut } =
     useCommerciauxListStatic({ source: commerciaux, size: PAGE_SIZE })
@@ -198,7 +200,7 @@ export function CommerciauxPage() {
             <CommerciauxTable
               items={items}
               onEdit={openEdit}
-              onToggleActif={handleToggleActif}
+              onToggleActif={(id, actif) => setConfirmToggle({ id, actif })}
             />
           </div>
 
@@ -268,6 +270,25 @@ export function CommerciauxPage() {
         commercial={editing}
         onClose={closeModal}
         onSave={handleSave}
+      />
+
+      <ConfirmDialog
+        open={confirmToggle !== null}
+        titre={confirmToggle?.actif ? 'Activer ce commercial ?' : 'Désactiver ce commercial ?'}
+        message={
+          confirmToggle?.actif
+            ? 'Ce commercial sera de nouveau disponible pour les demandes de service.'
+            : 'Ce commercial ne sera plus proposé dans les nouvelles demandes. L’historique est conservé.'
+        }
+        confirmer={confirmToggle?.actif ? 'Activer' : 'Désactiver'}
+        ton={confirmToggle?.actif ? 'success' : 'danger'}
+        onAnnuler={() => setConfirmToggle(null)}
+        onConfirmer={() => {
+          if (!confirmToggle) return
+          const { id, actif } = confirmToggle
+          setConfirmToggle(null)
+          handleToggleActif(id, actif)
+        }}
       />
     </div>
   )

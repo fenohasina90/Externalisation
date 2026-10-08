@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { ResponsableFormModal } from '../components/ResponsableFormModal'
 import { ResponsablesTable } from '../components/ResponsablesTable'
 import { useResponsablesList } from '../hooks/useResponsablesList'
@@ -9,6 +10,7 @@ export default function ResponsablesPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Responsable | null>(null)
   const [showFilters, setShowFilters] = useState(true)
+  const [confirmToggle, setConfirmToggle] = useState<{ id: number; actif: boolean } | null>(null)
 
   const { items, total, totalPages, page, loading, error, setPage, search, setSearch, statut, setStatut, reload } =
     useResponsablesList(8)
@@ -188,7 +190,7 @@ export default function ResponsablesPage() {
               items={items}
               loading={loading}
               onEdit={openEdit}
-              onToggleActif={handleToggleActif}
+              onToggleActif={(id, actif) => setConfirmToggle({ id, actif })}
             />
           </div>
 
@@ -259,6 +261,25 @@ export default function ResponsablesPage() {
         responsable={editing}
         onClose={closeModal}
         onSaved={handleSaved}
+      />
+
+      <ConfirmDialog
+        open={confirmToggle !== null}
+        titre={confirmToggle?.actif ? 'Activer ce responsable ?' : 'Désactiver ce responsable ?'}
+        message={
+          confirmToggle?.actif
+            ? 'Ce responsable sera de nouveau proposé dans les demandes de service.'
+            : 'Ce responsable ne sera plus proposé dans les nouvelles demandes. L’historique est conservé.'
+        }
+        confirmer={confirmToggle?.actif ? 'Activer' : 'Désactiver'}
+        ton={confirmToggle?.actif ? 'success' : 'danger'}
+        onAnnuler={() => setConfirmToggle(null)}
+        onConfirmer={() => {
+          if (!confirmToggle) return
+          const { id, actif } = confirmToggle
+          setConfirmToggle(null)
+          void handleToggleActif(id, actif)
+        }}
       />
     </div>
   )

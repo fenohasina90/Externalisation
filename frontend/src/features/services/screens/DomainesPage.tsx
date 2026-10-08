@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { DomaineFormModal, DomainesTable } from '../components'
 import { MOCK_DOMAINES, type StatutDomaineFilter } from '../data/mockDomaines'
 import { useDomainesListStatic } from '../hooks'
@@ -14,6 +15,7 @@ export function DomainesPage() {
   const [domaines, setDomaines] = useState<Domaine[]>(MOCK_DOMAINES)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Domaine | null>(null)
+  const [confirmToggle, setConfirmToggle] = useState<{ id: number; actif: boolean } | null>(null)
 
   const { items, total, totalPages, page, setPage, search, setSearch, statut, setStatut } =
     useDomainesListStatic({ source: domaines, size: PAGE_SIZE })
@@ -159,7 +161,7 @@ export function DomainesPage() {
                 setEditing(d)
                 setModalOpen(true)
               }}
-              onToggleActif={handleToggleActif}
+              onToggleActif={(id, actif) => setConfirmToggle({ id, actif })}
             />
           </div>
           {total > 0 && (
@@ -209,6 +211,25 @@ export function DomainesPage() {
           setEditing(null)
         }}
         onSave={handleSave}
+      />
+
+      <ConfirmDialog
+        open={confirmToggle !== null}
+        titre={confirmToggle?.actif ? 'Activer ce domaine ?' : 'Désactiver ce domaine ?'}
+        message={
+          confirmToggle?.actif
+            ? 'Ce domaine sera de nouveau proposé pour les sociétés clientes.'
+            : 'Ce domaine ne sera plus proposé. Les sociétés associées sont conservées.'
+        }
+        confirmer={confirmToggle?.actif ? 'Activer' : 'Désactiver'}
+        ton={confirmToggle?.actif ? 'success' : 'danger'}
+        onAnnuler={() => setConfirmToggle(null)}
+        onConfirmer={() => {
+          if (!confirmToggle) return
+          const { id, actif } = confirmToggle
+          setConfirmToggle(null)
+          handleToggleActif(id, actif)
+        }}
       />
     </div>
   )

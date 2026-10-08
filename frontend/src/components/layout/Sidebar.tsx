@@ -1,10 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { Badge, Icon } from '@/components/ui'
 import { LIBELLES_ROLE } from '@/constants/labels'
 import { NAVIGATION, type BadgeKey, type NavItem } from '@/constants/navigation'
 import { useAuth } from '@/features/auth/hooks/useAuth'
 import { initiales } from '@/utils/format'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 
 interface SidebarProps {
   /** Ouverte (mobile uniquement : sur grand écran la sidebar est toujours visible). */
@@ -89,6 +90,7 @@ export function Sidebar({ open, onClose, badges = {} }: SidebarProps) {
   const { utilisateur, logout } = useAuth()
   const { pathname } = useLocation()
   const navigate = useNavigate()
+  const [confirmLogout, setConfirmLogout] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -152,13 +154,26 @@ export function Sidebar({ open, onClose, badges = {} }: SidebarProps) {
         <button
           type="button"
           className="sidebar__logout"
-          onClick={() => void handleLogout()}
+          onClick={() => setConfirmLogout(true)}
           aria-label="Se déconnecter"
           title="Se déconnecter"
         >
           <Icon name="logout" />
         </button>
       </div>
+
+      <ConfirmDialog
+        open={confirmLogout}
+        titre="Se déconnecter ?"
+        message="Vous devrez vous reconnecter pour accéder à l’application."
+        confirmer="Se déconnecter"
+        ton="primary"
+        onAnnuler={() => setConfirmLogout(false)}
+        onConfirmer={() => {
+          setConfirmLogout(false)
+          void handleLogout()
+        }}
+      />
     </aside>
   )
 }

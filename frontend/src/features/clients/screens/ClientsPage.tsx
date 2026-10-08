@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { ClientFormModal, ClientsTable } from '../components'
 import { CLIENT_OPTIONS, MOCK_CLIENTS, type ClientResume, type StatutClient } from '../data/mockClients'
 import { useClientsListStatic } from '../hooks'
@@ -11,6 +12,7 @@ export function ClientsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<ClientResume | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [confirmArchive, setConfirmArchive] = useState<ClientResume | null>(null)
 
   const liste = useClientsListStatic({ source: clients, size: PAGE_SIZE })
 
@@ -238,7 +240,10 @@ export function ClientsPage() {
                 setEditing(c)
                 setModalOpen(true)
               }}
-              onChangerStatut={handleStatut}
+              onArchiver={(code) => {
+                const cible = clients.find((c) => c.code === code) ?? null
+                setConfirmArchive(cible)
+              }}
             />
           </div>
           {liste.total > 0 && (
@@ -301,6 +306,21 @@ export function ClientsPage() {
           setEditing(null)
         }}
         onSave={handleSave}
+      />
+
+      <ConfirmDialog
+        open={confirmArchive !== null}
+        titre="Archiver ce client ?"
+        message={`« ${confirmArchive?.nom ?? ''} » sera masqué des listes courantes. Ses demandes et son historique sont conservés.`}
+        confirmer="Archiver"
+        ton="danger"
+        onAnnuler={() => setConfirmArchive(null)}
+        onConfirmer={() => {
+          if (!confirmArchive) return
+          const code = confirmArchive.code
+          setConfirmArchive(null)
+          handleStatut(code, 'Archivé')
+        }}
       />
     </div>
   )

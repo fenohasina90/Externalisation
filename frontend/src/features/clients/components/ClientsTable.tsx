@@ -4,7 +4,8 @@ import { initialesClient, type ClientResume } from '../data/mockClients'
 interface Props {
   items: ClientResume[]
   onEdit: (c: ClientResume) => void
-  onChangerStatut: (code: string, statut: ClientResume['statut']) => void
+  /** Archivage (avec confirmation dans la page). */
+  onArchiver: (code: string) => void
 }
 
 function statutPill(statut: ClientResume['statut']): string {
@@ -13,8 +14,8 @@ function statutPill(statut: ClientResume['statut']): string {
   return 'pill wt'
 }
 
-/** Tableau des clients — Consulter, Modifier, Archiver/Restaurer. */
-export function ClientsTable({ items, onEdit, onChangerStatut }: Props) {
+/** Tableau des clients — Consulter, Modifier, Archiver. */
+export function ClientsTable({ items, onEdit, onArchiver }: Props) {
   if (items.length === 0)
     return <div className="card-pad text-muted">Aucun client trouvé.</div>
 
@@ -63,7 +64,7 @@ export function ClientsTable({ items, onEdit, onChangerStatut }: Props) {
                   <button
                     type="button"
                     className="btn-link danger"
-                    onClick={() => onChangerStatut(c.code, 'Archivé')}
+                    onClick={() => onArchiver(c.code)}
                   >
                     Archiver
                   </button>

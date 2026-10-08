@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { STATUT_LABEL } from '@/features/demandes/data/mockDemandes'
 import { RESPONSABLES_PAR_CLIENT } from '@/features/demandes/data/mockDemandes'
 import { MOCK_DEMANDES } from '@/features/demandes/data/mockDemandes'
@@ -58,6 +59,7 @@ export function ClientDetailPage() {
   )
   const [onglet, setOnglet] = useState<Onglet>('informations')
   const [editOpen, setEditOpen] = useState(false)
+  const [confirmArchive, setConfirmArchive] = useState(false)
   const [pageDemandes, setPageDemandes] = useState(0)
   const [pagePaiements, setPagePaiements] = useState(0)
 
@@ -178,7 +180,7 @@ export function ClientDetailPage() {
             <button
               type="button"
               className="btn-ghost"
-              onClick={() => setClient({ ...client, statut: 'Archivé' })}
+              onClick={() => setConfirmArchive(true)}
             >
               Archiver
             </button>
@@ -569,6 +571,19 @@ export function ClientDetailPage() {
         onSave={(payload) => {
           setClient({ ...client, ...payload })
           setEditOpen(false)
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmArchive}
+        titre="Archiver ce client ?"
+        message={`« ${client.nom} » sera masqué des listes courantes. Ses demandes et son historique sont conservés.`}
+        confirmer="Archiver"
+        ton="danger"
+        onAnnuler={() => setConfirmArchive(false)}
+        onConfirmer={() => {
+          setConfirmArchive(false)
+          setClient({ ...client, statut: 'Archivé' })
         }}
       />
     </div>

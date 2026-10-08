@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { ServiceDetailDrawer, ServiceFormModal, ServicesTable } from '../components'
 import { MOCK_SERVICES, type StatutServiceFilter } from '../data/mockServices'
 import { useServicesListStatic } from '../hooks'
@@ -15,6 +16,7 @@ export function ServicesPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Service | null>(null)
   const [detail, setDetail] = useState<Service | null>(null)
+  const [confirmArchive, setConfirmArchive] = useState<Service | null>(null)
 
   const { items, total, totalPages, page, setPage, search, setSearch, statut, setStatut } =
     useServicesListStatic({ source: services, size: PAGE_SIZE })
@@ -170,7 +172,10 @@ export function ServicesPage() {
               items={items}
               onView={setDetail}
               onEdit={openEdit}
-              onArchive={handleArchive}
+              onArchive={(id) => {
+                const cible = services.find((s) => s.id === id) ?? null
+                setConfirmArchive(cible)
+              }}
             />
           </div>
           {total > 0 && (
@@ -227,8 +232,24 @@ export function ServicesPage() {
         onClose={() => setDetail(null)}
         onEdit={openEdit}
         onArchive={(id) => {
-          handleArchive(id)
+          const cible = services.find((s) => s.id === id) ?? null
           setDetail(null)
+          setConfirmArchive(cible)
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmArchive !== null}
+        titre="Archiver ce service ?"
+        message={`« ${confirmArchive?.nomService ?? ''} » sera masqué du catalogue. Les demandes existantes et l’historique des tarifs sont conservés.`}
+        confirmer="Archiver"
+        ton="danger"
+        onAnnuler={() => setConfirmArchive(null)}
+        onConfirmer={() => {
+          if (!confirmArchive) return
+          const id = confirmArchive.id
+          setConfirmArchive(null)
+          handleArchive(id)
         }}
       />
     </div>

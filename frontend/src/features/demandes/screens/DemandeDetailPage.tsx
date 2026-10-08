@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '@/features/auth/hooks/useAuth'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import {
   ChangerStatutModal,
   DEMANDE_FORM_VIDE,
@@ -40,6 +41,7 @@ export function DemandeDetailPage() {
   const [onglet, setOnglet] = useState<Onglet>('informations')
   const [editOpen, setEditOpen] = useState(false)
   const [statutOpen, setStatutOpen] = useState(false)
+  const [confirmDoc, setConfirmDoc] = useState<string | null>(null)
 
   // Échéances fixes de la maquette pour REF-2026-014 (montants figés).
   const montantPaye = initial?.montantPaye ?? 0
@@ -433,7 +435,7 @@ export function DemandeDetailPage() {
                           <button
                             type="button"
                             className="btn-link danger"
-                            onClick={() => setDocuments((d) => d.filter((x) => x.nom !== doc.nom))}
+                            onClick={() => setConfirmDoc(doc.nom)}
                           >
                             Supprimer
                           </button>
@@ -492,6 +494,21 @@ export function DemandeDetailPage() {
         demande={demande}
         onClose={() => setStatutOpen(false)}
         onConfirm={handleStatut}
+      />
+
+      <ConfirmDialog
+        open={confirmDoc !== null}
+        titre="Supprimer ce document ?"
+        message={`« ${confirmDoc ?? ''} » sera définitivement supprimé de la demande.`}
+        confirmer="Supprimer"
+        ton="danger"
+        onAnnuler={() => setConfirmDoc(null)}
+        onConfirmer={() => {
+          if (!confirmDoc) return
+          const nom = confirmDoc
+          setConfirmDoc(null)
+          setDocuments((d) => d.filter((x) => x.nom !== nom))
+        }}
       />
     </div>
   )

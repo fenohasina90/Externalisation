@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Utilisateur } from '@/features/auth/types'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { UtilisateurFormModal, UtilisateursTable } from '../components'
 import { MOCK_UTILISATEURS, type RoleFilter, type StatutUtilisateurFilter } from '../data/mockUtilisateurs'
 import { useUtilisateursListStatic } from '../hooks'
@@ -15,6 +16,7 @@ export function UtilisateursPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Utilisateur | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [confirmToggle, setConfirmToggle] = useState<{ id: number; actif: boolean } | null>(null)
 
   const { items, total, totalPages, page, setPage, search, setSearch, role, setRole, statut, setStatut } =
     useUtilisateursListStatic({ source: utilisateurs, size: PAGE_SIZE })
@@ -231,7 +233,7 @@ export function UtilisateursPage() {
                 setModalOpen(true)
               }}
               onResetPassword={handleResetPassword}
-              onToggleActif={handleToggleActif}
+              onToggleActif={(id, actif) => setConfirmToggle({ id, actif })}
             />
           </div>
           {total > 0 && (
@@ -281,6 +283,25 @@ export function UtilisateursPage() {
           setEditing(null)
         }}
         onSave={handleSave}
+      />
+
+      <ConfirmDialog
+        open={confirmToggle !== null}
+        titre={confirmToggle?.actif ? 'Activer ce compte ?' : 'Désactiver ce compte ?'}
+        message={
+          confirmToggle?.actif
+            ? 'Cet utilisateur pourra de nouveau se connecter à l’application.'
+            : 'Cet utilisateur ne pourra plus se connecter. Ses données sont conservées.'
+        }
+        confirmer={confirmToggle?.actif ? 'Activer' : 'Désactiver'}
+        ton={confirmToggle?.actif ? 'success' : 'danger'}
+        onAnnuler={() => setConfirmToggle(null)}
+        onConfirmer={() => {
+          if (!confirmToggle) return
+          const { id, actif } = confirmToggle
+          setConfirmToggle(null)
+          handleToggleActif(id, actif)
+        }}
       />
     </div>
   )
