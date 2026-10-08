@@ -113,9 +113,11 @@ export function Sidebar({ open, onClose, badges = {} }: SidebarProps) {
   return (
     <aside className={`sidebar${open ? ' sidebar--open' : ''}`}>
       <Link to="/" className="sidebar__brand" onClick={onClose}>
-        <span className="sidebar__logo" aria-hidden="true">
-          C
-        </span>
+        <img
+          className="sidebar__logo-img"
+          src="/logo-cabinet-excellent.jpg"
+          alt="Cabinet Excellent"
+        />
         <span>
           <strong>Cabinet Excellent</strong>
           <small>ESPACE DE GESTION</small>

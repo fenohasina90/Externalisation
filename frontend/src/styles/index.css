@@ -461,6 +461,14 @@ a {
   font-size: 19px;
 }
 
+.sidebar__logo-img {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 .sidebar__brand > span:last-child {
   display: flex;
   flex-direction: column;
