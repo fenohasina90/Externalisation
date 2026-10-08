@@ -1,11 +1,25 @@
 import { buildQuery, http } from '@/api/http'
 import type { ApiPage, PageQuery } from '@/types'
-import type { CreateResponsablePayload, Responsable } from '../types'
+import type {
+  CreateResponsablePayload,
+  Responsable,
+  ResponsablesFilters,
+  SocieteOption,
+  UpdateResponsablePayload,
+} from '../types'
+
+interface SocieteOptionResponse {
+  id: number
+  nomSociete: string
+}
 
 export const responsablesApi = {
-  async list(page?: PageQuery): Promise<ApiPage<Responsable>> {
+  async list(
+    page: PageQuery,
+    filters: ResponsablesFilters = {},
+  ): Promise<ApiPage<Responsable>> {
     const { data } = await http.get<ApiPage<Responsable>>('/responsables', {
-      params: buildQuery({}, page),
+      params: buildQuery({ actif: filters.actif }, page),
     })
     return data
   },
@@ -20,13 +34,22 @@ export const responsablesApi = {
     return data
   },
 
-  async update(id: number, payload: CreateResponsablePayload): Promise<Responsable> {
+  async update(id: number, payload: UpdateResponsablePayload): Promise<Responsable> {
     const { data } = await http.put<Responsable>(`/responsables/${id}`, payload)
     return data
   },
 
-  async toggleActivation(id: number): Promise<Responsable> {
-    const { data } = await http.patch<Responsable>(`/responsables/${id}/activation`)
+  /** Active ou désactive un responsable (il reste dans la liste avec le statut Inactif). */
+  async setActif(id: number, actif: boolean): Promise<Responsable> {
+    const { data } = await http.patch<Responsable>(`/responsables/${id}/activation`, { actif })
     return data
+  },
+
+  /** Sociétés clientes proposées dans le formulaire (dérivées de la liste des clients). */
+  async societes(): Promise<SocieteOption[]> {
+    const { data } = await http.get<ApiPage<SocieteOptionResponse>>('/clients', {
+      params: buildQuery({}, { page: 0, size: 500, recherche: null }),
+    })
+    return data.content.map((societe) => ({ id: societe.id, nom: societe.nomSociete }))
   },
 }

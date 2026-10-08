@@ -1,22 +1,36 @@
 export interface Responsable {
   id: number
-  nom: string
-  prenom: string | null
-  fonction: string | null
-  email: string | null
-  telephone: string | null
-  actif: boolean
   societeId: number | null
   nomSociete: string | null
+  nomClient: string
+  contact: string | null
+  email: string | null
+  fonction: string | null
+  actif: boolean
 }
 
 export interface CreateResponsablePayload {
-  nom: string
-  prenom?: string | null
-  fonction?: string | null
+  societeId: number
+  nomClient: string
+  contact?: string | null
   email?: string | null
-  telephone?: string | null
-  societeId?: number | null
+  fonction?: string | null
 }
 
-export type UpdateResponsablePayload = Partial<CreateResponsablePayload>
+export interface UpdateResponsablePayload {
+  nomClient: string
+  contact?: string | null
+  email?: string | null
+  fonction?: string | null
+}
+
+export interface SocieteOption {
+  id: number
+  nom: string
+}
+
+export type StatutFilter = 'tous' | 'actifs' | 'inactifs'
+
+export interface ResponsablesFilters {
+  actif?: boolean
+}
