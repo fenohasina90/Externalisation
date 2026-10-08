@@ -1989,6 +1989,50 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
+/* Rapports                                                        */
+/* ------------------------------------------------------------------ */
+
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.cat-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text-primary);
+}
+
+.cat-card--selected {
+  background: var(--highlight-bg);
+  border-color: var(--highlight-border);
+}
+
+.cat-label {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.rapport-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .rapport-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Panneau latéral de détail (drawer)                                  */
 /* ------------------------------------------------------------------ */
 
