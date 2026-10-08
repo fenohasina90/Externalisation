@@ -13,7 +13,6 @@ interface Props {
     username: string
     email: string
     role: RoleFilter
-    actif: boolean
   }) => void
 }
 
@@ -23,7 +22,6 @@ const emptyForm = {
   username: '',
   email: '',
   role: 'ACCUEIL' as RoleFilter,
-  actif: true,
 }
 
 type FormState = typeof emptyForm
@@ -48,7 +46,6 @@ export function UtilisateurFormModal({ open, utilisateur, onClose, onSave }: Pro
             username: utilisateur.username,
             email: utilisateur.email,
             role: utilisateur.role.nomRole as RoleFilter,
-            actif: utilisateur.actif,
           }
         : emptyForm,
     )
@@ -59,7 +56,7 @@ export function UtilisateurFormModal({ open, utilisateur, onClose, onSave }: Pro
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
-    setForm((f) => ({ ...f, [name]: name === 'actif' ? value === 'true' : value }))
+    setForm((f) => ({ ...f, [name]: value }))
   }
 
   const handleSubmit = (e: FormEvent) => {
@@ -82,7 +79,6 @@ export function UtilisateurFormModal({ open, utilisateur, onClose, onSave }: Pro
       username: form.username.trim(),
       email: form.email.trim(),
       role: form.role,
-      actif: form.actif,
     })
   }
 
@@ -158,24 +154,12 @@ export function UtilisateurFormModal({ open, utilisateur, onClose, onSave }: Pro
               />
             </label>
 
-            <label className="field">
+            <label className="field form-grid__full">
               Rôle <span className="required">*</span>
               <select name="role" value={form.role} onChange={handleChange} required>
                 <option value="SUPER_ADMIN">SUPER_ADMIN</option>
                 <option value="ACCUEIL">ACCUEIL</option>
                 <option value="ECONOMAT">ECONOMAT</option>
-              </select>
-            </label>
-
-            <label className="field">
-              Statut
-              <select
-                name="actif"
-                value={form.actif ? 'true' : 'false'}
-                onChange={handleChange}
-              >
-                <option value="true">Actif</option>
-                <option value="false">Inactif</option>
               </select>
             </label>
           </div>

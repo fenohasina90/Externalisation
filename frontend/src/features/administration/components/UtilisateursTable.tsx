@@ -5,6 +5,7 @@ interface Props {
   loading?: boolean
   onEdit: (u: Utilisateur) => void
   onResetPassword: (u: Utilisateur) => void
+  onToggleActif: (id: number, actif: boolean) => void
 }
 
 function initials(u: Utilisateur): string {
@@ -27,7 +28,7 @@ function rolePill(nomRole: string): string {
 }
 
 /** Tableau des utilisateurs — mêmes classes que les autres pages liste. */
-export function UtilisateursTable({ items, loading = false, onEdit, onResetPassword }: Props) {
+export function UtilisateursTable({ items, loading = false, onEdit, onResetPassword, onToggleActif }: Props) {
   if (loading) return <div className="card-pad text-muted">Chargement des utilisateurs...</div>
   if (items.length === 0)
     return <div className="card-pad text-muted">Aucun utilisateur trouvé.</div>
@@ -75,6 +76,23 @@ export function UtilisateursTable({ items, loading = false, onEdit, onResetPassw
                 <button type="button" className="btn-link" onClick={() => onResetPassword(u)}>
                   Réinit. mot de passe
                 </button>
+                {u.actif ? (
+                  <button
+                    type="button"
+                    className="btn-link danger"
+                    onClick={() => onToggleActif(u.id, false)}
+                  >
+                    Désactiver
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-link success"
+                    onClick={() => onToggleActif(u.id, true)}
+                  >
+                    Activer
+                  </button>
+                )}
               </div>
             </td>
           </tr>

@@ -42,9 +42,9 @@ export function UtilisateursPage() {
     username: string
     email: string
     role: RoleFilter
-    actif: boolean
   }) => {
     if (editing) {
+      // Modification : le statut existant est conservé (géré par l'action Activer/Désactiver).
       setUtilisateurs((prev) =>
         prev.map((u) =>
           u.id === editing.id
@@ -54,7 +54,6 @@ export function UtilisateursPage() {
                 prenom: payload.prenom,
                 username: payload.username,
                 email: payload.email,
-                actif: payload.actif,
                 role:
                   payload.role === 'tous'
                     ? u.role
@@ -64,6 +63,7 @@ export function UtilisateursPage() {
         ),
       )
     } else {
+      // Création : compte actif par défaut.
       const nextId = Math.max(0, ...utilisateurs.map((u) => u.id)) + 1
       const nomRole = (payload.role === 'tous' ? 'ACCUEIL' : payload.role) as Utilisateur['role']['nomRole']
       setUtilisateurs((prev) => [
@@ -74,7 +74,7 @@ export function UtilisateursPage() {
           prenom: payload.prenom,
           username: payload.username,
           email: payload.email,
-          actif: payload.actif,
+          actif: true,
           doitChangerMotDePasse: true,
           derniereConnexion: null,
           createdAt: '2026-10-04',
@@ -91,6 +91,10 @@ export function UtilisateursPage() {
     setMessage(
       `Mot de passe temporaire généré pour ${u.prenom} ${u.nom} : Cbx-${u.id}248 (démonstration, sans backend).`,
     )
+  }
+
+  const handleToggleActif = (id: number, actif: boolean) => {
+    setUtilisateurs((prev) => prev.map((u) => (u.id === id ? { ...u, actif } : u)))
   }
 
   useEffect(() => {
@@ -227,6 +231,7 @@ export function UtilisateursPage() {
                 setModalOpen(true)
               }}
               onResetPassword={handleResetPassword}
+              onToggleActif={handleToggleActif}
             />
           </div>
           {total > 0 && (
