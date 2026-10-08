@@ -1848,6 +1848,147 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
+/* Notifications                                                     */
+/* ------------------------------------------------------------------ */
+
+.notif-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.seg-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.seg-tab {
+  display: inline-flex;
+  align-items: center;
+  height: 42px;
+  box-sizing: border-box;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1px solid #d5ddd7;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.seg-tab--active {
+  border-color: var(--g);
+  color: var(--g);
+  font-weight: 700;
+}
+
+.notif-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notif-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+  background: #fff;
+}
+
+.notif-row:first-child {
+  border-top: none;
+}
+
+.notif-row--unread {
+  background: #f3f9f5;
+}
+
+.notif-dot {
+  flex: none;
+  width: 8px;
+  display: flex;
+  justify-content: center;
+}
+
+.notif-dot i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--g);
+  font-style: normal;
+}
+
+.notif-ic {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notif-ic--red { background: var(--danger-bg); color: var(--danger); }
+.notif-ic--orange { background: var(--warning-bg); color: var(--warning-text); }
+.notif-ic--blue { background: var(--info-bg); color: var(--info-text); }
+.notif-ic--green { background: var(--success-bg); color: var(--success); }
+.notif-ic--gray { background: var(--neutral-bg); color: var(--text-secondary); }
+
+.notif-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.notif-text {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.notif-time {
+  flex: none;
+  font-size: 13px;
+  color: var(--text-light);
+  white-space: nowrap;
+}
+
+.notif-actions {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+  .notif-row {
+    flex-wrap: wrap;
+  }
+
+  .notif-time {
+    margin-left: auto;
+  }
+
+  .notif-actions {
+    width: 100%;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Panneau latéral de détail (drawer)                                  */
 /* ------------------------------------------------------------------ */
 
