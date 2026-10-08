@@ -1,14 +1,27 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { DEMANDE_FORM_VIDE, DemandeForm, versDateFR, type DemandeFormValues } from '../components'
+import { DEMANDE_OPTIONS, RESPONSABLES_PAR_CLIENT } from '../data/mockDemandes'
 
 /**
  * Nouvelle demande de service — étape 1 : interface seule.
  * Le statut initial est « En attente », le tarif est figé à la création.
+ * Présélection du client via ?client=Nom (depuis la fiche client).
  */
 export function NouvelleDemandePage() {
   const navigate = useNavigate()
-  const [apercu, setApercu] = useState<DemandeFormValues>(DEMANDE_FORM_VIDE)
+  const [params] = useSearchParams()
+
+  const initial = useMemo<DemandeFormValues>(() => {
+    const clientParam = params.get('client')
+    if (clientParam && (DEMANDE_OPTIONS.clients as string[]).includes(clientParam)) {
+      const premiers = RESPONSABLES_PAR_CLIENT[clientParam] ?? []
+      return { ...DEMANDE_FORM_VIDE, client: clientParam, responsable: premiers[0] ?? '' }
+    }
+    return DEMANDE_FORM_VIDE
+  }, [params])
+
+  const [apercu, setApercu] = useState<DemandeFormValues>(initial)
 
   const handleSubmit = (v: DemandeFormValues) => {
     // Étape 2 : POST /api/demandes puis redirection vers le détail.
@@ -30,7 +43,8 @@ export function NouvelleDemandePage() {
       <div className="split-layout">
         <section className="card card-pad">
           <DemandeForm
-            initial={DEMANDE_FORM_VIDE}
+            key={initial.client}
+            initial={initial}
             submitLabel="Créer la demande"
             onCancel={() => navigate('/demandes')}
             onSubmit={handleSubmit}

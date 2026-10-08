@@ -1784,6 +1784,17 @@ body {
   gap: 14px;
 }
 
+/* Grille fixe à 2 colonnes pour les modales (champs alignés) */
+.form-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 480px) {
+  .form-grid--2 {
+    grid-template-columns: 1fr;
+  }
+}
+
 .modal-card {
   background: #fff;
   border-radius: 16px;

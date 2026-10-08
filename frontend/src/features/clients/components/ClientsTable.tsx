@@ -1,61 +1,78 @@
-import { Badge, Card, EmptyState, Pagination } from '@/components/ui'
-import { formatDate, formatMontant } from '@/utils/format'
-import type { Societe } from '../types'
+import { Link } from 'react-router-dom'
+import { initialesClient, type ClientResume } from '../data/mockClients'
 
-interface ClientsTableProps {
-  clients: Societe[]
-  page: number
-  totalPages: number
-  onPageChange: (page: number) => void
+interface Props {
+  items: ClientResume[]
+  onEdit: (c: ClientResume) => void
+  onChangerStatut: (code: string, statut: ClientResume['statut']) => void
 }
 
-export function ClientsTable({ clients, page, totalPages, onPageChange }: ClientsTableProps) {
-  if (clients.length === 0) {
-    return (
-      <Card>
-        <EmptyState
-          titre="Aucun client trouvé"
-          hint="Modifiez votre recherche ou ajoutez de nouveaux clients."
-        />
-      </Card>
-    )
-  }
+function statutPill(statut: ClientResume['statut']): string {
+  if (statut === 'Actif') return 'pill ok'
+  if (statut === 'Inactif') return 'pill wt'
+  return 'pill wt'
+}
+
+/** Tableau des clients — Consulter, Modifier, Archiver/Restaurer. */
+export function ClientsTable({ items, onEdit, onChangerStatut }: Props) {
+  if (items.length === 0)
+    return <div className="card-pad text-muted">Aucun client trouvé.</div>
 
   return (
-    <Card className="table-card">
-      <div className="table-wrap">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Société</th>
-              <th>Domaine</th>
-              <th>Contact</th>
-              <th>E-mail</th>
-              <th>Créée le</th>
-              <th>CA mensuel</th>
-              <th>Statut</th>
-            </tr>
-          </thead>
-          <tbody>
-            {clients.map((client) => (
-              <tr key={client.id}>
-                <td className="cell-strong">{client.nomSociete}</td>
-                <td>{client.nomDomaine ?? '—'}</td>
-                <td>{client.contact ?? '—'}</td>
-                <td>{client.email ?? '—'}</td>
-                <td>{formatDate(client.dateCreation)}</td>
-                <td className="cell-number">{formatMontant(client.chiffreAffaireMensuel)}</td>
-                <td>
-                  <Badge tone={client.actif ? 'success' : 'neutral'}>
-                    {client.actif ? 'Actif' : 'Inactif'}
-                  </Badge>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <Pagination page={page} totalPages={totalPages} onPageChange={onPageChange} />
-    </Card>
+    <table className="table">
+      <thead>
+        <tr>
+          <th>Client ⇅</th>
+          <th>Activité ⇅</th>
+          <th>Contact</th>
+          <th>Responsable ⇅</th>
+          <th>Nombre de demandes ⇅</th>
+          <th>Statut ⇅</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((c) => (
+          <tr key={c.code}>
+            <td>
+              <span className="fw-700">{c.nom}</span>
+              <div className="cell-hint">{c.code}</div>
+            </td>
+            <td className="text-secondary">{c.activite}</td>
+            <td className="text-secondary">
+              {c.email}
+              <div className="cell-hint">{c.telephone}</div>
+            </td>
+            <td>
+              <span className="avatar">{initialesClient(c.responsable)}</span>
+              <span className="fw-600">{c.responsable}</span>
+            </td>
+            <td className="cell-number fw-700">{c.nbDemandes}</td>
+            <td>
+              <span className={statutPill(c.statut)}>● {c.statut}</span>
+            </td>
+            <td>
+              <div className="table-actions">
+                <Link to={`/clients/${c.code}`} className="btn-link">
+                  Consulter
+                </Link>
+                <button type="button" className="btn-link" onClick={() => onEdit(c)}>
+                  Modifier
+                </button>
+                {c.statut !== 'Archivé' && (
+                  <button
+                    type="button"
+                    className="btn-link danger"
+                    onClick={() => onChangerStatut(c.code, 'Archivé')}
+                  >
+                    Archiver
+                  </button>
+                )}
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }
