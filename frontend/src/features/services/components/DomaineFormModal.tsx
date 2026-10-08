@@ -6,10 +6,11 @@ interface Props {
   /** Domaine à modifier, null pour une création. */
   domaine: Domaine | null
   onClose: () => void
-  onSave: (payload: { nomDomaine: string; actif: boolean }, id?: number) => void
+  /** Création : actif par défaut. Modification : statut conservé (géré par l'action Activer/Désactiver). */
+  onSave: (payload: { nomDomaine: string }, id?: number) => void
 }
 
-const emptyForm = { nomDomaine: '', actif: true }
+const emptyForm = { nomDomaine: '' }
 
 type FormState = typeof emptyForm
 
@@ -25,17 +26,15 @@ export function DomaineFormModal({ open, domaine, onClose, onSave }: Props) {
       setError(null)
       return
     }
-    setForm(
-      domaine ? { nomDomaine: domaine.nomDomaine, actif: domaine.actif } : emptyForm,
-    )
+    setForm(domaine ? { nomDomaine: domaine.nomDomaine } : emptyForm)
     setError(null)
   }, [open, domaine])
 
   if (!open) return null
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setForm((f) => ({ ...f, [name]: name === 'actif' ? value === 'true' : value }))
+    setForm((f) => ({ ...f, [name]: value }))
   }
 
   const handleSubmit = (e: FormEvent) => {
@@ -44,7 +43,7 @@ export function DomaineFormModal({ open, domaine, onClose, onSave }: Props) {
       setError('Le nom du domaine est obligatoire')
       return
     }
-    onSave({ nomDomaine: form.nomDomaine.trim(), actif: form.actif }, domaine?.id)
+    onSave({ nomDomaine: form.nomDomaine.trim() }, domaine?.id)
   }
 
   return (
@@ -80,18 +79,6 @@ export function DomaineFormModal({ open, domaine, onClose, onSave }: Props) {
                 placeholder="Ex. Comptabilité"
                 required
               />
-            </label>
-
-            <label className="field">
-              Statut
-              <select
-                name="actif"
-                value={form.actif ? 'true' : 'false'}
-                onChange={handleChange}
-              >
-                <option value="true">Actif</option>
-                <option value="false">Inactif</option>
-              </select>
             </label>
           </div>
 

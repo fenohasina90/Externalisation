@@ -29,16 +29,18 @@ export function DomainesPage() {
     }
   }, [domaines])
 
-  const handleSave = (payload: { nomDomaine: string; actif: boolean }, id?: number) => {
+  const handleSave = (payload: { nomDomaine: string }, id?: number) => {
     if (id != null) {
+      // Modification : le statut existant est conservé (géré par l'action Activer/Désactiver).
       setDomaines((prev) =>
-        prev.map((d) => (d.id === id ? { ...d, nomDomaine: payload.nomDomaine, actif: payload.actif } : d)),
+        prev.map((d) => (d.id === id ? { ...d, nomDomaine: payload.nomDomaine } : d)),
       )
     } else {
+      // Création : domaine actif par défaut.
       const nextId = Math.max(0, ...domaines.map((d) => d.id)) + 1
       setDomaines((prev) => [
         ...prev,
-        { id: nextId, nomDomaine: payload.nomDomaine, description: null, actif: payload.actif, nombreSocietes: 0 },
+        { id: nextId, nomDomaine: payload.nomDomaine, description: null, actif: true, nombreSocietes: 0 },
       ])
     }
     setModalOpen(false)

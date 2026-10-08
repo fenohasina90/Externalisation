@@ -1847,6 +1847,92 @@ body {
   color: var(--danger);
 }
 
+/* ------------------------------------------------------------------ */
+/* Panneau latéral de détail (drawer)                                  */
+/* ------------------------------------------------------------------ */
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(20 40 29 / 0.45);
+  z-index: 60;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(440px, 100%);
+  box-sizing: border-box;
+  background: #fff;
+  box-shadow: -12px 0 40px rgb(0 0 0 / 0.2);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  z-index: 61;
+  overflow-y: auto;
+}
+
+.drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.drawer__eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.drawer__close {
+  height: 36px;
+  padding: 0 12px;
+}
+
+.drawer__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.drawer__label {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+.drawer__text {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.drawer__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.drawer__footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
 /* Filtres alignés en ligne + header sticky */
 /* .page-header-sticky {
   position: sticky;

@@ -40,8 +40,8 @@ const services: NavItem = {
   to: '/services',
   icon: 'layers',
   children: [
-    { label: 'Domaines', to: '/services/domaines' },
     { label: 'Liste des services', to: '/services', end: true },
+    { label: 'Domaines', to: '/services/domaines' },
   ],
 }
 
