@@ -105,13 +105,21 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-card"
+        style={{ maxWidth: 560 }}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label={responsable ? 'Modifier un responsable' : 'Ajouter un responsable'}
+      >
         <header className="modal-header">
           <div>
             <h3 className="modal-title">
               {responsable ? 'Modifier un responsable' : 'Ajouter un responsable'}
             </h3>
-            <p className="modal-subtitle">Renseignez les informations de l’interlocuteur client.</p>
+            <p className="modal-subtitle">
+              Le formulaire de modification est identique, pré-rempli.
+            </p>
           </div>
           <button type="button" className="btn-ghost" onClick={onClose} aria-label="Fermer">
             ✕
@@ -131,7 +139,7 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
                 required
                 disabled={!!responsable}
               >
-                <option value={0}>Sélectionner une société</option>
+                <option value={0}>Sélectionner la société</option>
                 {societes.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.nom}
@@ -141,23 +149,45 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
             </label>
 
             <label className="field">
-              Nom complet / libellé <span className="required">*</span>
-              <input name="nomClient" value={form.nomClient} onChange={handleChange} required />
+              Nom <span className="required">*</span>
+              <input
+                name="nomClient"
+                value={form.nomClient}
+                onChange={handleChange}
+                placeholder="Nom et prénom"
+                required
+              />
             </label>
 
             <label className="field">
               Fonction
-              <input name="fonction" value={form.fonction} onChange={handleChange} />
+              <input
+                name="fonction"
+                value={form.fonction}
+                onChange={handleChange}
+                placeholder="Ex. Directeur financier"
+              />
             </label>
 
             <label className="field">
               Téléphone
-              <input name="contact" value={form.contact} onChange={handleChange} />
+              <input
+                name="contact"
+                value={form.contact}
+                onChange={handleChange}
+                placeholder="+261 34 00 000 00"
+              />
             </label>
 
-            <label className="field">
-              Email
-              <input type="email" name="email" value={form.email} onChange={handleChange} />
+            <label className="field form-grid__full">
+              Email <span className="required">*</span>
+              <input
+                type="email"
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                placeholder="nom@societe.mg"
+              />
             </label>
           </div>
 
@@ -166,7 +196,7 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
               Annuler
             </button>
             <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? 'Enregistrement...' : responsable ? 'Enregistrer' : 'Créer'}
+              {saving ? 'Enregistrement...' : 'Enregistrer'}
             </button>
           </footer>
         </form>
