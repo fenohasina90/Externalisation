@@ -13,7 +13,7 @@ import {
 import { ClientsPage } from '@/features/clients'
 import { CommerciauxPage } from '@/features/commerciaux'
 import { DashboardPage } from '@/features/dashboard'
-import { DemandesPage } from '@/features/demandes'
+import { DemandeDetailPage, DemandesPage, NouvelleDemandePage } from '@/features/demandes'
 import { DocumentsPage } from '@/features/documents'
 import { EcheancesPage } from '@/features/echeances'
 import { NotificationsPage } from '@/features/notifications'
@@ -40,6 +40,8 @@ function App() {
           <Route path="/services" element={<ServicesPage />} />
           <Route path="/services/domaines" element={<DomainesPage />} />
           <Route path="/demandes" element={<DemandesPage />} />
+          <Route path="/demandes/nouveau" element={<NouvelleDemandePage />} />
+          <Route path="/demandes/:reference" element={<DemandeDetailPage />} />
           <Route path="/plans-paiement" element={<PlansPaiementPage />} />
           <Route path="/echeances" element={<EcheancesPage />} />
           <Route path="/paiements" element={<PaiementsPage />} />

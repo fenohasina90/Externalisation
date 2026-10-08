@@ -9,9 +9,9 @@ export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const closeMenu = useCallback(() => setMenuOpen(false), [])
 
-  // Étape 1 : compteurs statiques (demandes branchées à l'étape demandes).
+  // Étape 1 : compteurs statiques (branchés sur les API à l'étape suivante).
   const { nonLues } = useNotificationsBadgeStatic()
-  const badges = { notifications: nonLues }
+  const badges = { notifications: nonLues, demandes: 8 }
 
   return (
     <div className="app">

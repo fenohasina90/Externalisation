@@ -13,7 +13,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   domaines: 'Domaines',
   tarifs: 'Tarifs',
   demandes: 'Demandes',
-  nouveau: 'Nouveau',
+  nouveau: 'Nouvelle demande',
   paiements: 'Paiements',
   echeanciers: 'Échéanciers',
   historique: 'Historique',

@@ -1,0 +1,1 @@
+export { useDemandesListStatic } from './useDemandesListStatic'
