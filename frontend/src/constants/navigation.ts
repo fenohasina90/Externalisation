@@ -35,15 +35,17 @@ const clientsAvecResponsables: NavItem = {
 
 const commerciaux: NavItem = { label: 'Commerciaux', to: '/commerciaux', icon: 'briefcase' }
 
-const services: NavItem = {
+const servicesAvecEnfants: NavItem = {
   label: 'Services',
   to: '/services',
   icon: 'layers',
   children: [
-    { label: 'Liste des services', to: '/services', end: true },
     { label: 'Domaines', to: '/services/domaines' },
+    { label: 'Liste des services', to: '/services', end: true },
   ],
 }
+
+const servicesSimple: NavItem = { label: 'Services', to: '/services', icon: 'layers' }
 
 const demandes: NavItem = {
   label: 'Demandes de service',
@@ -68,8 +70,6 @@ const paiements: NavItem = {
     { label: 'Historique', to: '/paiements/historique' },
   ],
 }
-const documents: NavItem = { label: 'Documents', to: '/documents', icon: 'folder' }
-
 const notifications: NavItem = {
   label: 'Notifications',
   to: '/notifications',
@@ -78,7 +78,12 @@ const notifications: NavItem = {
 }
 
 const rapports: NavItem = { label: 'Rapports', to: '/rapports', icon: 'chart' }
-const recherche: NavItem = { label: 'Recherche', to: '/recherche', icon: 'search' }
+const rapportsDemandes: NavItem = {
+  label: 'Rapports',
+  to: '/rapports',
+  icon: 'chart',
+  hint: 'demandes',
+}
 
 const administration: NavItem = {
   label: 'Administration',
@@ -102,13 +107,12 @@ export const NAVIGATION: Record<NomRole, NavSection[]> = {
         dashboard,
         clientsAvecResponsables,
         commerciaux,
-        services,
+        servicesAvecEnfants,
         demandes,
         paiements,
-        documents,
       ],
     },
-    { label: 'Pilotage', items: [notifications, rapports, recherche, administration] },
+    { label: 'Pilotage', items: [notifications, rapports, administration] },
   ],
   ADMIN: [
     {
@@ -117,26 +121,25 @@ export const NAVIGATION: Record<NomRole, NavSection[]> = {
         dashboard,
         clientsAvecResponsables,
         commerciaux,
-        services,
+        servicesAvecEnfants,
         demandes,
         paiements,
-        documents,
       ],
     },
-    { label: 'Pilotage', items: [notifications, rapports, recherche, administration] },
+    { label: 'Pilotage', items: [notifications, rapports, administration] },
   ],
   ACCUEIL: [
     {
       label: 'Activité',
-      items: [dashboard, clientsAvecResponsables, commerciaux, services, demandes, documents],
+      items: [dashboard, clientsAvecResponsables, commerciaux, servicesSimple, demandes],
     },
-    { label: 'Pilotage', items: [notifications, rapports, recherche] },
+    { label: 'Pilotage', items: [rapportsDemandes, notifications] },
   ],
   ECONOMAT: [
     {
       label: 'Activité',
       items: [dashboard, clients, demandesLectureSeule, paiements],
     },
-    { label: 'Pilotage', items: [notifications, rapports, recherche] },
+    { label: 'Pilotage', items: [rapports, notifications] },
   ],
 }
