@@ -77,9 +77,9 @@ export function DemandeDetailPage() {
             dateDemande: versDateFR(v.dateDemande),
             dateDebut: versDateFR(v.debutService),
             dateFin: versDateFR(v.finService),
-            tarif: v.tarif,
-            quantite: v.quantite,
-            montantTotal: v.tarif * v.quantite,
+            tarif: v.montantTotal,
+            quantite: 1,
+            montantTotal: v.montantTotal,
             commentaire: v.commentaire,
           }
         : d,
@@ -134,8 +134,7 @@ export function DemandeDetailPage() {
     dateDemande: versISO(demande.dateDemande),
     debutService: versISO(demande.dateDebut),
     finService: versISO(demande.dateFin),
-    tarif: demande.tarif,
-    quantite: demande.quantite,
+    montantTotal: demande.montantTotal,
     commentaire: demande.commentaire,
   }
 

@@ -3,7 +3,6 @@ import {
   COMMERCIAUX_OPTIONS,
   DEMANDE_OPTIONS,
   RESPONSABLES_PAR_CLIENT,
-  TARIF_PAR_SERVICE,
 } from '../data/mockDemandes'
 
 export interface DemandeFormValues {
@@ -15,8 +14,7 @@ export interface DemandeFormValues {
   dateDemande: string
   debutService: string
   finService: string
-  tarif: number
-  quantite: number
+  montantTotal: number
   commentaire: string
 }
 
@@ -40,8 +38,7 @@ export const DEMANDE_FORM_VIDE: DemandeFormValues = {
   dateDemande: '2026-09-02',
   debutService: '2026-09-01',
   finService: '2027-02-28',
-  tarif: 500000,
-  quantite: 2,
+  montantTotal: 1000000,
   commentaire: '',
 }
 
@@ -65,10 +62,6 @@ export function DemandeForm({ initial, submitLabel, onCancel, onSubmit, avecDocu
   const set = (cle: keyof DemandeFormValues, valeur: string | number) => {
     setForm((f) => {
       const next = { ...f, [cle]: valeur }
-      // Tarif courant récupéré automatiquement au changement de service.
-      if (cle === 'service' && typeof valeur === 'string' && TARIF_PAR_SERVICE[valeur] != null) {
-        next.tarif = TARIF_PAR_SERVICE[valeur]
-      }
       // Responsable réinitialisé au changement de client.
       if (cle === 'client' && typeof valeur === 'string') {
         const premiers = RESPONSABLES_PAR_CLIENT[valeur] ?? []
@@ -77,8 +70,6 @@ export function DemandeForm({ initial, submitLabel, onCancel, onSubmit, avecDocu
       return next
     })
   }
-
-  const montantTotal = form.tarif * form.quantite
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -94,8 +85,8 @@ export function DemandeForm({ initial, submitLabel, onCancel, onSubmit, avecDocu
       setError('La fin du service doit être postérieure au début')
       return
     }
-    if (form.tarif <= 0 || form.quantite <= 0) {
-      setError('Le tarif et la quantité doivent être positifs')
+    if (form.montantTotal <= 0) {
+      setError('Le montant total doit être positif')
       return
     }
     onSubmit({ ...form, commentaire: form.commentaire.trim() })
@@ -182,35 +173,15 @@ export function DemandeForm({ initial, submitLabel, onCancel, onSubmit, avecDocu
           <input type="date" value={form.finService} onChange={(e) => set('finService', e.target.value)} required />
         </label>
 
-        <label className="field">
-          Tarif (MGA) <span className="required">*</span>
-          <input
-            type="number"
-            min={1}
-            value={form.tarif}
-            onChange={(e) => set('tarif', Number(e.target.value))}
-            required
-          />
-          <span className="form-help">
-            Tarif courant du service récupéré automatiquement ; vous pouvez le modifier.
-          </span>
-        </label>
-
-        <label className="field">
-          Quantité <span className="required">*</span>
-          <input
-            type="number"
-            min={1}
-            value={form.quantite}
-            onChange={(e) => set('quantite', Number(e.target.value))}
-            required
-          />
-        </label>
-
         <label className="field form-grid__full">
-          Montant total (MGA)
-          <input type="text" value={montantTotal.toLocaleString('fr-FR')} readOnly disabled />
-          <span className="form-help">Tarif × quantité</span>
+          Montant total (MGA) <span className="required">*</span>
+          <input
+            type="number"
+            min={1}
+            value={form.montantTotal}
+            onChange={(e) => set('montantTotal', Number(e.target.value))}
+            required
+          />
         </label>
 
         <label className="field form-grid__full">

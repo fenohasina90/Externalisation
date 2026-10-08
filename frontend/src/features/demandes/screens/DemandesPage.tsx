@@ -8,7 +8,7 @@ const PAGE_SIZE = 8
 
 /** Liste des demandes — étape 1 : interface seule, données statiques. */
 export function DemandesPage() {
-  const [showFilters, setShowFilters] = useState(true)
+  const [showFilters, setShowFilters] = useState(false)
   const { items, total, totalPages, page, setPage, filtres, setFiltre, resetFiltres, hasActiveFiltres } =
     useDemandesListStatic(PAGE_SIZE)
 

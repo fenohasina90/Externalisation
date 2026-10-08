@@ -12,9 +12,8 @@ export function NouvelleDemandePage() {
 
   const handleSubmit = (v: DemandeFormValues) => {
     // Étape 2 : POST /api/demandes puis redirection vers le détail.
-    const montant = v.tarif * v.quantite
     alert(
-      `Demande créée (démonstration) : ${v.client} — ${v.service}, ${montant.toLocaleString('fr-FR')} MGA, statut En attente.`,
+      `Demande créée (démonstration) : ${v.client} — ${v.service}, ${v.montantTotal.toLocaleString('fr-FR')} MGA, statut En attente.`,
     )
     navigate('/demandes')
   }
@@ -47,20 +46,12 @@ export function NouvelleDemandePage() {
             <strong>{apercu.service || '—'}</strong>
           </div>
           <div className="rc">
-            <span>Tarif (instantané)</span>
-            <strong>{apercu.tarif.toLocaleString('fr-FR')} MGA</strong>
-          </div>
-          <div className="rc">
-            <span>Quantité</span>
-            <strong>{apercu.quantite}</strong>
-          </div>
-          <div className="rc">
             <span>Montant total</span>
-            <strong>{(apercu.tarif * apercu.quantite).toLocaleString('fr-FR')} MGA</strong>
+            <strong>{apercu.montantTotal.toLocaleString('fr-FR')} MGA</strong>
           </div>
           <div className="nt" style={{ marginTop: 12 }}>
-            <strong>Tarif figé</strong> : les échéances, paiements et rapports s&apos;appuient sur
-            ce tarif, même si le tarif du service change ensuite.
+            <strong>Montant figé</strong> : les échéances, paiements et rapports
+            s&apos;appuient sur ce montant, même si le tarif du service change ensuite.
           </div>
           <p className="form-help" style={{ marginTop: 8 }}>
             Période : {apercu.debutService ? versDateFR(apercu.debutService) : '—'} →{' '}
