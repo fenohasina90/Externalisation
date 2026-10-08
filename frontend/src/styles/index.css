@@ -783,6 +783,12 @@ a {
   padding: 24px;
 }
 
+/* Les pages liste (.app-page) gèrent déjà leur propre padding :
+   éviter le double padding qui forçait le zoom à 80 %. */
+.app__content:has(> .app-page) {
+  padding: 0;
+}
+
 /* --- Responsive : sidebar en tiroir sur mobile --- */
 
 @media (max-width: 900px) {
@@ -1258,27 +1264,27 @@ body {
 }
 
 .app-page {
-  padding: 28px 32px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   background: var(--bg-app);
   min-height: calc(100vh - 64px);
 }
 
 .page-header {
   display: flex;
-  /* flex-wrap: wrap; */
+  flex-wrap: wrap;
   justify-content: space-between;
-  /* align-items: flex-end; */
+  align-items: flex-start;
   gap: 12px;
 }
 
 .page-header h1 {
   margin: 0;
-  font-size: 34px;
+  font-size: clamp(24px, 2.2vw, 30px);
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.15;
   color: var(--text-primary);
 }
 
@@ -1302,7 +1308,7 @@ body {
 }
 
 .card-pad {
-  padding: 20px;
+  padding: 16px;
 }
 
 .card-pad h3 {
@@ -1313,16 +1319,16 @@ body {
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
 }
 
 .kpi-card {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 18px;
+  gap: 12px;
+  padding: 14px 16px;
 }
 
 .kpi-icon {
@@ -1357,7 +1363,7 @@ body {
 }
 
 .kpi-num {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
   line-height: 1.1;
 }
@@ -1387,7 +1393,7 @@ body {
 .field input,
 .field select,
 .field textarea {
-  height: 44px;
+  height: 42px;
   box-sizing: border-box;
   border: 1px solid #d5ddd7;
   border-radius: 10px;
@@ -1421,7 +1427,7 @@ body {
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13.5px;
   white-space: nowrap;
 }
 
@@ -1431,14 +1437,14 @@ body {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-light);
-  padding: 14px 16px;
+  padding: 10px 12px;
   background: var(--bg-soft);
   font-weight: 600;
   border-bottom: 1px solid var(--border);
 }
 
 .table td {
-  padding: 14px 16px;
+  padding: 10px 12px;
   border-top: 1px solid var(--border);
   vertical-align: middle;
   background: #fff;
@@ -1622,9 +1628,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 44px;
+  height: 40px;
   box-sizing: border-box;
-  padding: 0 18px;
+  padding: 0 16px;
   border-radius: 10px;
   border: 1px solid var(--g);
   background: var(--g);
@@ -1655,9 +1661,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 44px;
+  height: 40px;
   box-sizing: border-box;
-  padding: 0 18px;
+  padding: 0 16px;
   border-radius: 10px;
   border: 1px solid #d5ddd7;
   background: #fff;
@@ -1702,7 +1708,7 @@ body {
 }
 
 .truncate {
-  max-width: 240px;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1793,12 +1799,12 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 14px;
+  gap: 12px;
 }
 
 .filter-field {
-  flex: 1 1 240px;
-  min-width: 200px;
+  flex: 1 1 200px;
+  min-width: 180px;
 }
 
 .filter-actions {
@@ -1822,17 +1828,21 @@ body {
   }
 }
 
-/* Table avec corps scrollable, entête/pied fixes */
+/* Table : défilement de la page par défaut (lisible à 100 % de zoom).
+   Le tableau garde un défilement horizontal sur petits écrans et un
+   défilement vertical interne plafonné pour les grands tableaux. */
 .table-scroll-container {
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 340px);
-  overflow: hidden;
+  max-height: none;
+  overflow: visible;
 }
 
 .table-scroll-container .table-wrap {
   flex: 1 1 auto;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: min(60vh, 560px);
 }
 
 .table-scroll-container .table thead th {
@@ -1845,81 +1855,85 @@ body {
 
 .table-scroll-container .table-footer {
   flex: 0 0 auto;
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
   border-top: 1px solid var(--border);
 }
 
-/* Masquer la barre de défilement de la page (Responsables) tout en gardant le scroll */
-.app-page {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.app-page::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
-}
-
-/* Le scroll interne du tableau garde sa barre seulement au survol */
-.table-scroll-container .table-wrap {
-  scrollbar-width: thin;
-  scrollbar-color: #c9d5cb transparent;
-}
-
-.table-scroll-container .table-wrap::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.table-scroll-container .table-wrap::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.table-scroll-container .table-wrap::-webkit-scrollbar-thumb {
-  background: #c9d5cb;
-  border-radius: 999px;
-}
-
-.table-scroll-container .table-wrap:hover::-webkit-scrollbar-thumb {
-  background: var(--g);
-}
-
-/* Désactiver scroll global sur page responsables */
+/* Scroll naturel de la page : ne plus masquer la barre de défilement,
+   ne plus bloquer le scroll global sur les pages liste. */
 body.page-responsables {
-  overflow: hidden;
+  overflow: auto;
 }
 
 .app-page.responsables-page {
-  height: calc(100vh - 64px);
-  overflow: hidden;
-  padding-bottom: 16px;
+  height: auto;
+  min-height: calc(100vh - 64px);
+  overflow: visible;
+  padding-bottom: 20px;
 }
 
 .table-scroll-container.no-global-scroll {
-  max-height: calc(100vh - 280px);
+  max-height: none;
+}
+
+/* Écrans ≤ 1366 px (100 % de zoom) : densifier sans casser la maquette */
+@media (max-width: 1366px) {
+  .app-page {
+    padding: 18px 20px;
+    gap: 14px;
+  }
+
+  .table th,
+  .table td {
+    padding: 9px 10px;
+  }
+
+  .truncate {
+    max-width: 170px;
+  }
 }
 
 /* Responsive ajustements pour zoom */
 @media (max-width: 1200px) {
   .app-page.responsables-page {
-    height: calc(100dvh - 64px);
-    overflow: hidden;
+    min-height: calc(100dvh - 64px);
   }
 
-  .table-scroll-container.no-global-scroll {
-    max-height: calc(100dvh - 260px);
+  .table-scroll-container .table-wrap {
+    max-height: min(58vh, 520px);
   }
 }
 
 @media (max-width: 1024px) {
   .app-page {
-    padding: 20px 20px;
+    padding: 16px;
   }
 
-  .table-scroll-container.no-global-scroll {
-    max-height: calc(100dvh - 240px);
+  .kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+
+  .page-header h1 {
+    font-size: 24px;
+  }
+
+  .table-scroll-container .table-wrap {
+    max-height: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .actions {
+    width: 100%;
+  }
+
+  .actions .btn-primary,
+  .actions .btn-ghost {
+    flex: 1 1 150px;
+    justify-content: center;
+  }
+
+  .table-footer {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
