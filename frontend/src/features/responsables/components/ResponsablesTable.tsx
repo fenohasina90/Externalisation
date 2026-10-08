@@ -1,58 +1,86 @@
-import { Badge, Button } from '@/components/ui'
-
 import type { Responsable } from '../types'
 
-interface ResponsablesTableProps {
+interface Props {
   items: Responsable[]
-  onEdit: (responsable: Responsable) => void
-  onToggle: (responsable: Responsable) => void
+  loading: boolean
+  onEdit: (r: Responsable) => void
+  onToggleActif: (id: number, actif: boolean) => void
 }
 
-export function ResponsablesTable({ items, onEdit, onToggle }: ResponsablesTableProps) {
+function initials(nomClient: string) {
+  const parts = (nomClient || '').trim()
+  if (!parts) return '—'
+  const first = parts.split(/\s+/)[0]
+  return first[0]?.toUpperCase() || '—'
+}
+
+export function ResponsablesTable({ items, loading, onEdit, onToggleActif }: Props) {
+  if (loading) {
+    return <div className="card-pad text-muted">Chargement des responsables...</div>
+  }
+
+  if (items.length === 0) {
+    return <div className="card-pad text-muted">Aucun responsable trouvé.</div>
+  }
+
   return (
-    <div className="table-wrap">
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Nom</th>
-            <th>Société</th>
-            <th>Fonction</th>
-            <th>Téléphone</th>
-            <th>Email</th>
-            <th>Statut</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((responsable) => (
-            <tr key={responsable.id}>
-              <td className="cell-strong">{responsable.nomClient}</td>
-              <td>{responsable.nomSociete ?? '—'}</td>
-              <td>{responsable.fonction ?? '—'}</td>
-              <td>{responsable.contact ?? '—'}</td>
-              <td>{responsable.email ?? '—'}</td>
-              <td>
-                <Badge tone={responsable.actif ? 'success' : 'neutral'}>
-                  {responsable.actif ? 'Actif' : 'Inactif'}
-                </Badge>
-              </td>
-              <td>
-                <div className="table-actions">
-                  <Button variant="ghost" onClick={() => onEdit(responsable)}>
-                    Modifier
-                  </Button>
-                  <Button
-                    variant={responsable.actif ? 'danger' : 'secondary'}
-                    onClick={() => onToggle(responsable)}
+    <table className="table">
+      <thead>
+        <tr>
+          <th>Société</th>
+          <th>Nom</th>
+          <th>Fonction</th>
+          <th>Téléphone</th>
+          <th>Email</th>
+          <th>Statut</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((r) => (
+          <tr key={r.id}>
+            <td>
+              <b className="fw-700">{r.nomSociete ?? '—'}</b>
+            </td>
+            <td>
+              <span className="avatar">{initials(r.nomClient)}</span>
+              <span className="fw-600">{r.nomClient}</span>
+            </td>
+            <td className="text-secondary">{r.fonction ?? '—'}</td>
+            <td className="text-secondary">{r.contact ?? '—'}</td>
+            <td className="truncate text-secondary" title={r.email ?? ''}>
+              {r.email ?? '—'}
+            </td>
+            <td>
+              {r.actif ? <span className="pill ok">Actif</span> : <span className="pill wt">Inactif</span>}
+            </td>
+            <td>
+              <div className="table-actions">
+                <button type="button" className="btn-link" onClick={() => onEdit(r)}>
+                  Modifier
+                </button>
+                {r.actif ? (
+                  <button
+                    type="button"
+                    className="btn-link danger"
+                    onClick={() => onToggleActif(r.id, false)}
                   >
-                    {responsable.actif ? 'Désactiver' : 'Activer'}
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                    Désactiver
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-link success"
+                    onClick={() => onToggleActif(r.id, true)}
+                  >
+                    Activer
+                  </button>
+                )}
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }

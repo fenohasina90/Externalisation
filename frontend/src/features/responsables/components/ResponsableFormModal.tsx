@@ -1,171 +1,174 @@
-import { useState, type FormEvent } from 'react'
-import { Button, Field, Input, Select } from '@/components/ui'
-import { MESSAGES } from '@/constants/messages'
-import { useApi } from '@/hooks/useApi'
-import type { ApiError } from '@/types'
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { responsablesApi } from '../services/responsables.service'
-import type { CreateResponsablePayload, Responsable, UpdateResponsablePayload } from '../types'
+import type { Responsable } from '../types'
 
-interface ResponsableFormModalProps {
-  /** Absent : création. Présent : modification. */
-  responsable?: Responsable
+interface Props {
+  open: boolean
+  responsable: Responsable | null
   onClose: () => void
-  onSaved: (message: string) => void
+  onSaved: () => void
 }
 
-interface Values {
-  societeId: string
-  nomClient: string
-  fonction: string
-  contact: string
-  email: string
+const emptyForm = {
+  societeId: 0,
+  nomClient: '',
+  contact: '',
+  email: '',
+  fonction: '',
 }
 
-type Errors = Partial<Record<keyof Values, string>>
+type FormState = typeof emptyForm
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-export function ResponsableFormModal({
-  responsable,
-  onClose,
-  onSaved,
-}: ResponsableFormModalProps) {
-  const isEdit = Boolean(responsable)
-  const societes = useApi(() => responsablesApi.societes(), [])
-
-  const [values, setValues] = useState<Values>({
-    societeId: responsable ? String(responsable.societeId ?? '') : '',
-    nomClient: responsable?.nomClient ?? '',
-    fonction: responsable?.fonction ?? '',
-    contact: responsable?.contact ?? '',
-    email: responsable?.email ?? '',
-  })
-  const [errors, setErrors] = useState<Errors>({})
-  const [formError, setFormError] = useState<string | null>(null)
+export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Props) {
+  const [form, setForm] = useState<FormState>(emptyForm)
+  const [societes, setSocietes] = useState<{ id: number; nom: string }[]>([])
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  function updateField(field: keyof Values, value: string): void {
-    setValues((previous) => ({ ...previous, [field]: value }))
-    setErrors((previous) => ({ ...previous, [field]: undefined }))
-  }
-
-  const bind = (field: keyof Values) => ({
-    value: values[field],
-    onChange: (event: { target: { value: string } }) => updateField(field, event.target.value),
-  })
-
-  function validate(): Errors {
-    const result: Errors = {}
-    if (!isEdit && !values.societeId) result.societeId = 'La société est obligatoire.'
-    if (!values.nomClient.trim()) result.nomClient = 'Le nom du responsable est obligatoire.'
-    if (values.email.trim() && !EMAIL_PATTERN.test(values.email.trim())) {
-      result.email = 'L\'email doit être valide.'
+  useEffect(() => {
+    if (!open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setForm(emptyForm)
+      setError(null)
+      setSocietes([])
+      return
     }
-    return result
+    let mounted = true
+    ;(async () => {
+      try {
+        const sList = await responsablesApi.societes()
+        if (mounted) setSocietes(sList)
+      } catch (e) {
+        console.error(e)
+      }
+    })()
+
+    // Initialize form synchronously based on current props
+    const initialForm = responsable
+      ? {
+          societeId: responsable.societeId ?? 0,
+          nomClient: responsable.nomClient,
+          contact: responsable.contact ?? '',
+          email: responsable.email ?? '',
+          fonction: responsable.fonction ?? '',
+        }
+      : emptyForm
+    setForm(initialForm)
+    setError(null)
+
+    return () => {
+      mounted = false
+    }
+  }, [open, responsable])
+
+  if (!open) return null
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setForm((f) => ({
+      ...f,
+      [name]: value,
+    }))
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault()
-    setFormError(null)
-
-    const found = validate()
-    setErrors(found)
-    if (Object.keys(found).length > 0) return
-
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
     setSaving(true)
+    setError(null)
     try {
       if (responsable) {
-        const payload: UpdateResponsablePayload = {
-          nomClient: values.nomClient.trim(),
-          fonction: values.fonction.trim() || null,
-          contact: values.contact.trim() || null,
-          email: values.email.trim() || null,
-        }
-        await responsablesApi.update(responsable.id, payload)
-        onSaved('Responsable modifié.')
-      } else {
-        const payload: CreateResponsablePayload = {
-          societeId: Number(values.societeId),
-          nomClient: values.nomClient.trim(),
-          fonction: values.fonction.trim() || null,
-          contact: values.contact.trim() || null,
-          email: values.email.trim() || null,
-        }
-        await responsablesApi.create(payload)
-        onSaved('Responsable ajouté.')
-      }
-    } catch (error) {
-      const apiError = error as ApiError
-      if (apiError.fieldErrors) {
-        const newErrors: Errors = {}
-        Object.entries(apiError.fieldErrors).forEach(([key, message]) => {
-          const mapped = key === 'nomClient' ? 'nomClient' : key as keyof Values
-          if (mapped in values) newErrors[mapped] = message
+        await responsablesApi.update(responsable.id, {
+          nomClient: form.nomClient,
+          contact: form.contact || null,
+          email: form.email || null,
+          fonction: form.fonction || null,
         })
-        setErrors((previous) => ({ ...previous, ...newErrors }))
-        setFormError('Corrigez les champs signalés.')
       } else {
-        setFormError(apiError.message || MESSAGES.generic)
+        if (!form.societeId) throw new Error('Veuillez sélectionner une société')
+        await responsablesApi.create({
+          societeId: form.societeId,
+          nomClient: form.nomClient,
+          contact: form.contact || null,
+          email: form.email || null,
+          fonction: form.fonction || null,
+        })
       }
+      onSaved()
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string }
+      const msg = e?.response?.data?.message ?? e?.message ?? "Erreur lors de l'enregistrement"
+      setError(msg)
+    } finally {
       setSaving(false)
     }
   }
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="modal__header">
-          <h3 className="modal__title">
-            {isEdit ? 'Modifier le responsable' : 'Ajouter un responsable'}
-          </h3>
-          <button type="button" className="modal__close" onClick={onClose} aria-label="Fermer">
-            ×
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <header className="modal-header">
+          <div>
+            <h3 className="modal-title">
+              {responsable ? 'Modifier un responsable' : 'Ajouter un responsable'}
+            </h3>
+            <p className="modal-subtitle">Renseignez les informations de l’interlocuteur client.</p>
+          </div>
+          <button type="button" className="btn-ghost" onClick={onClose} aria-label="Fermer">
+            ✕
           </button>
-        </div>
-        <form className="modal__body form-grid" onSubmit={(event) => void handleSubmit(event)} noValidate>
-          {formError ? (
-            <div className="form-alert form-grid__full" role="alert">
-              {formError}
-            </div>
-          ) : null}
+        </header>
 
-          <div className="form-grid__full">
-            <Field label="Société *" id="societeId" error={errors.societeId}>
-              <Select id="societeId" {...bind('societeId')} disabled={isEdit || societes.loading}>
-                <option value="">
-                  {societes.loading ? 'Chargement…' : 'Sélectionner une société'}
-                </option>
-                {societes.data?.map((societe) => (
-                  <option key={societe.id} value={societe.id}>
-                    {societe.nom}
+        <form onSubmit={handleSubmit} className="modal-body">
+          {error && <div style={{ color: 'var(--danger)', fontSize: 14 }}>{error}</div>}
+
+          <div className="form-grid">
+            <label className="field">
+              Société <span className="required">*</span>
+              <select
+                name="societeId"
+                value={form.societeId}
+                onChange={handleChange}
+                required
+                disabled={!!responsable}
+              >
+                <option value={0}>Sélectionner une société</option>
+                {societes.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nom}
                   </option>
                 ))}
-              </Select>
-            </Field>
-            {societes.error ? <p className="field-error">{societes.error}</p> : null}
+              </select>
+            </label>
+
+            <label className="field">
+              Nom complet / libellé <span className="required">*</span>
+              <input name="nomClient" value={form.nomClient} onChange={handleChange} required />
+            </label>
+
+            <label className="field">
+              Fonction
+              <input name="fonction" value={form.fonction} onChange={handleChange} />
+            </label>
+
+            <label className="field">
+              Téléphone
+              <input name="contact" value={form.contact} onChange={handleChange} />
+            </label>
+
+            <label className="field">
+              Email
+              <input type="email" name="email" value={form.email} onChange={handleChange} />
+            </label>
           </div>
 
-          <Field label="Nom du responsable *" id="nomClient" error={errors.nomClient}>
-            <Input id="nomClient" placeholder="Nom et prénom" autoComplete="off" {...bind('nomClient')} />
-          </Field>
-          <Field label="Fonction" id="fonction" error={errors.fonction}>
-            <Input id="fonction" placeholder="Ex. Directeur financier" {...bind('fonction')} />
-          </Field>
-          <Field label="Téléphone" id="contact" error={errors.contact}>
-            <Input id="contact" type="tel" placeholder="+261 34 00 000 00" {...bind('contact')} />
-          </Field>
-          <Field label="Email" id="email" error={errors.email}>
-            <Input id="email" type="email" placeholder="nom@societe.mg" {...bind('email')} />
-          </Field>
-
-          <div className="modal__actions form-grid__full">
-            <Button type="button" variant="secondary" onClick={onClose}>
+          <footer className="modal-footer">
+            <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
               Annuler
-            </Button>
-            <Button type="submit" loading={saving} loadingLabel="Enregistrement…">
-              Enregistrer
-            </Button>
-          </div>
+            </button>
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Enregistrement...' : responsable ? 'Enregistrer' : 'Créer'}
+            </button>
+          </footer>
         </form>
       </div>
     </div>

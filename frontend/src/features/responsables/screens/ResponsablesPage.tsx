@@ -1,168 +1,265 @@
-import { useState } from 'react'
-import { Alert, Button, Card, EmptyState, Input, PageHeader, Pagination, Select, Spinner } from '@/components/ui'
-import { ResponsableFormModal, ResponsablesTable } from '../components'
-import { responsablesApi } from '../services/responsables.service'
+import { useEffect, useState } from 'react'
+import { ResponsableFormModal } from '../components/ResponsableFormModal'
+import { ResponsablesTable } from '../components/ResponsablesTable'
 import { useResponsablesList } from '../hooks/useResponsablesList'
 import type { Responsable, StatutFilter } from '../types'
+import { responsablesApi } from '../services/responsables.service'
 
-export function ResponsablesPage() {
-  const {
-    items,
-    total,
-    totalPages,
-    page,
-    loading,
-    error,
-    reload,
-    setPage,
-    search,
-    setSearch,
-    statut,
-    setStatut,
-  } = useResponsablesList(8)
+export default function ResponsablesPage() {
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editing, setEditing] = useState<Responsable | null>(null)
+  const [showFilters, setShowFilters] = useState(true)
 
-  const [editing, setEditing] = useState<Responsable | 'new' | null>(null)
-  const [toggling, setToggling] = useState<Responsable | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
-  const [toggleError, setToggleError] = useState<string | null>(null)
-  const [toggleBusy, setToggleBusy] = useState(false)
+  const { items, total, totalPages, page, loading, error, setPage, search, setSearch, statut, setStatut, reload } =
+    useResponsablesList(8)
 
-  function handleSaved(message: string): void {
+  const actifs = items.filter((r) => r.actif).length ?? 0
+  const inactifs = total - actifs
+  const pctActifs = total === 0 ? 0 : Math.round((actifs / total) * 100)
+
+  const openCreate = () => {
     setEditing(null)
-    setNotice(message)
+    setModalOpen(true)
+  }
+
+  const openEdit = (r: Responsable) => {
+    setEditing(r)
+    setModalOpen(true)
+  }
+
+  const closeModal = () => {
+    setModalOpen(false)
+    setEditing(null)
+  }
+
+  const handleSaved = () => {
+    closeModal()
     reload()
   }
 
-  async function confirmToggle(): Promise<void> {
-    if (!toggling) return
-    setToggleBusy(true)
-    setToggleError(null)
+  const handleToggleActif = async (id: number, actif: boolean) => {
     try {
-      await responsablesApi.setActif(toggling.id, !toggling.actif)
-      setNotice(toggling.actif ? 'Responsable désactivé.' : 'Responsable activé.')
-      setToggling(null)
+      await responsablesApi.setActif(id, actif)
       reload()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Une erreur est survenue.'
-      setToggleError(message)
-    } finally {
-      setToggleBusy(false)
+    } catch (err) {
+      console.error('Erreur lors du changement de statut du responsable', err)
     }
   }
 
-  const from = total === 0 ? 0 : page * 8 + 1
-  const to = page * 8 + items.length
+  useEffect(() => {
+    document.body.classList.add('page-responsables')
+    return () => {
+      document.body.classList.remove('page-responsables')
+    }
+  }, [])
+
 
   return (
-    <>
-      <PageHeader
-        titre="Responsables clients"
-        sousTitre={`${total} responsable(s) au total`}
-        actions={
-          <Button onClick={() => setEditing('new')}>
+    <div className="app-page responsables-page">
+      <header className="page-header page-header-sticky">
+        <div>
+          <h1>Responsables clients</h1>
+          <p>Gérez les interlocuteurs de chaque société cliente.</p>
+        </div>
+        <div className="actions">
+          <button type="button" className="btn-ghost" onClick={() => setShowFilters((v) => !v)}>
+            {showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}
+          </button>
+          <button type="button" className="btn-primary" onClick={openCreate}>
+            <svg className="sv" viewBox="0 0 24 24">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
             Ajouter un responsable
-          </Button>
-        }
-      />
+          </button>
+        </div>
+      </header>
 
-      {notice ? <Alert tone="success">{notice}</Alert> : null}
-
-      <div className="toolbar">
-        <Input
-          type="search"
-          placeholder="Nom, société, email…"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <Select
-          value={statut}
-          onChange={(event) => setStatut(event.target.value as StatutFilter)}
-        >
-          <option value="tous">Tous</option>
-          <option value="actifs">Actifs</option>
-          <option value="inactifs">Inactifs</option>
-        </Select>
-      </div>
-
-      {loading ? (
-        <Spinner label="Chargement des responsables…" />
-      ) : error ? (
-        <Alert tone="danger">{error}</Alert>
-      ) : items.length === 0 ? (
-        <Card>
-          <EmptyState
-            titre="Aucun responsable trouvé"
-            hint="Modifiez votre recherche ou ajoutez un responsable."
-          />
-        </Card>
-      ) : (
-        <Card className="table-card">
-          <ResponsablesTable
-            items={items}
-            onEdit={(responsable) => {
-              setNotice(null)
-              setEditing(responsable)
-            }}
-            onToggle={(responsable) => {
-              setNotice(null)
-              setToggleError(null)
-              setToggling(responsable)
-            }}
-          />
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-          />
-          <div className="pagination-info" style={{ padding: '10px 16px' }}>
-            Affichage de {from} à {to} sur {total} responsables
+      <section className="kpi-grid">
+        <div className="card kpi-card">
+          <span className="kpi-tag">Total</span>
+          <div className="kpi-icon">
+            <svg className="sv" viewBox="0 0 24 24">
+              <circle cx="9" cy="8" r="3.5" />
+              <path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.3c2 .7 3.5 2.6 3.5 5.2" />
+            </svg>
           </div>
-        </Card>
-      )}
-
-      {editing ? (
-        <ResponsableFormModal
-          key={editing === 'new' ? 'new' : editing.id}
-          responsable={editing === 'new' ? undefined : editing}
-          onClose={() => setEditing(null)}
-          onSaved={handleSaved}
-        />
-      ) : null}
-
-      {toggling ? (
-        <div className="modal-backdrop" onClick={() => setToggling(null)}>
-          <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <div className="modal__header">
-              <h3 className="modal__title">
-                {toggling.actif ? 'Désactiver le responsable' : 'Activer le responsable'}
-              </h3>
-              <button type="button" className="modal__close" onClick={() => setToggling(null)} aria-label="Fermer">
-                ×
-              </button>
-            </div>
-            <div className="modal__body">
-              <p>
-                {toggling.actif ? 'Voulez-vous désactiver' : 'Voulez-vous réactiver'} <strong>{toggling.nomClient}</strong> ({toggling.nomSociete ?? '—'}) ?
-                Le responsable reste dans la liste avec le statut {toggling.actif ? 'Inactif' : 'Actif'}.
-              </p>
-              {toggleError ? <Alert tone="danger">{toggleError}</Alert> : null}
-            </div>
-            <div className="modal__actions">
-              <Button variant="secondary" onClick={() => setToggling(null)}>
-                Annuler
-              </Button>
-              <Button
-                variant={toggling.actif ? 'danger' : 'primary'}
-                loading={toggleBusy}
-                loadingLabel="En cours…"
-                onClick={() => void confirmToggle()}
-              >
-                {toggling.actif ? 'Désactiver' : 'Activer'}
-              </Button>
-            </div>
+          <div>
+            <div className="kpi-num">{total}</div>
+            <div className="kpi-label">Responsables</div>
           </div>
         </div>
-      ) : null}
-    </>
+
+        <div className="card kpi-card hl">
+          <span className="kpi-tag">{pctActifs} %</span>
+          <div className="kpi-icon">
+            <svg className="sv" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M8 12l3 3 5-6" />
+            </svg>
+          </div>
+          <div>
+            <div className="kpi-num">{actifs}</div>
+            <div className="kpi-label">Actifs</div>
+          </div>
+        </div>
+
+        <div className="card kpi-card">
+          <span className="kpi-tag">À suivre</span>
+          <div
+            className="kpi-icon"
+            style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}
+          >
+            <svg className="sv" viewBox="0 0 24 24">
+              <path d="M12 3l10 18H2L12 3zM12 10v5M12 18h.01" />
+            </svg>
+          </div>
+          <div>
+            <div className="kpi-num">{inactifs}</div>
+            <div className="kpi-label">Inactifs</div>
+          </div>
+        </div>
+      </section>
+
+      {showFilters && (
+        <section className="card card-pad">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              reload()
+            }}
+            className="filters-inline"
+          >
+            <label className="field filter-field">
+              Recherche
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Nom, société, email…"
+              />
+            </label>
+
+            <label className="field filter-field">
+              Statut
+              <select
+                value={statut}
+                onChange={(e) => {
+                  const v = e.target.value as StatutFilter
+                  setStatut(v)
+                }}
+              >
+                <option value="tous">Tous</option>
+                <option value="actifs">Actifs</option>
+                <option value="inactifs">Inactifs</option>
+              </select>
+            </label>
+
+            {/* <div className="filter-actions">
+              <button type="submit" className="btn-primary" disabled={loading}>
+                Rechercher
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => {
+                  setSearch('')
+                  setStatut('tous')
+                  setPage(0)
+                }}
+                disabled={loading || !hasActiveFilters}
+              >
+                Réinitialiser
+              </button>
+            </div> */}
+          </form>
+        </section>
+      )}
+
+      <section className="card">
+        {error && (
+          <div className="card-pad" style={{ color: 'var(--danger)' }}>
+            {error}
+          </div>
+        )}
+
+        <div className="table-scroll-container no-global-scroll">
+          <div className="table-wrap">
+            <ResponsablesTable
+              items={items}
+              loading={loading}
+              onEdit={openEdit}
+              onToggleActif={handleToggleActif}
+            />
+          </div>
+
+          {!loading && total > 0 && (
+            <div className="table-footer">
+              <span>
+                Affichage de {page * 8 + 1} à {Math.min((page + 1) * 8, total)} sur {total} responsables
+              </span>
+              <div className="pagination">
+              <button
+                type="button"
+                className="pagination-item"
+                onClick={() => setPage(Math.max(0, page - 1))}
+                disabled={page <= 0}
+              >
+                ‹
+              </button>
+              {Array.from({ length: Math.max(1, totalPages) }).map((_, i) => {
+                const pageNum = i
+                const isActive = pageNum === page
+                const show =
+                  pageNum === 0 ||
+                  pageNum === totalPages - 1 ||
+                  Math.abs(pageNum - page) <= 1
+
+                if (!show && pageNum !== 1 && pageNum !== totalPages - 2) {
+                  if (pageNum === page - 2 || pageNum === page + 2) {
+                    return (
+                      <span
+                        key={pageNum}
+                        className="pagination-item"
+                        style={{ border: 'none', background: 'transparent' }}
+                      >
+                        …
+                      </span>
+                    )
+                  }
+                  return null
+                }
+
+                return (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    className={`pagination-item ${isActive ? 'active' : ''}`}
+                    onClick={() => setPage(pageNum)}
+                  >
+                    {pageNum + 1}
+                  </button>
+                )
+              })}
+              <button
+                type="button"
+                className="pagination-item"
+                onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+                disabled={page >= totalPages - 1}
+              >
+                ›
+              </button>
+            </div>
+          </div>
+        )}
+        </div>
+      </section>
+
+      <ResponsableFormModal
+        open={modalOpen}
+        responsable={editing}
+        onClose={closeModal}
+        onSaved={handleSaved}
+      />
+    </div>
   )
 }
