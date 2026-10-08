@@ -22,7 +22,7 @@ import { PlansPaiementPage } from '@/features/plan-paiement'
 import { RapportsPage } from '@/features/rapports'
 import { RecherchePage } from '@/features/recherche'
 import { ResponsablesPage } from '@/features/responsables'
-import { ServicesPage } from '@/features/services'
+import { DomainesPage, ServicesPage } from '@/features/services'
 
 function App() {
   return (
@@ -38,6 +38,7 @@ function App() {
           <Route path="/responsables" element={<ResponsablesPage />} />
           <Route path="/commerciaux" element={<CommerciauxPage />} />
           <Route path="/services" element={<ServicesPage />} />
+          <Route path="/services/domaines" element={<DomainesPage />} />
           <Route path="/demandes" element={<DemandesPage />} />
           <Route path="/plans-paiement" element={<PlansPaiementPage />} />
           <Route path="/echeances" element={<EcheancesPage />} />

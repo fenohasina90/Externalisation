@@ -215,9 +215,9 @@ export function UtilisateursPage() {
               <option value="inactifs">Inactifs</option>
             </select>
           </label>
-          <button type="submit" className="btn-primary">
+          {/* <button type="submit" className="btn-primary">
             Rechercher
-          </button>
+          </button> */}
         </form>
       </section>
 

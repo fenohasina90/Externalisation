@@ -35,7 +35,15 @@ const clientsAvecResponsables: NavItem = {
 
 const commerciaux: NavItem = { label: 'Commerciaux', to: '/commerciaux', icon: 'briefcase' }
 
-const services: NavItem = { label: 'Services & domaines', to: '/services', icon: 'layers' }
+const services: NavItem = {
+  label: 'Services',
+  to: '/services',
+  icon: 'layers',
+  children: [
+    { label: 'Domaines', to: '/services/domaines' },
+    { label: 'Liste des services', to: '/services', end: true },
+  ],
+}
 
 const demandes: NavItem = {
   label: 'Demandes de service',

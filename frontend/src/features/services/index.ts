@@ -1,1 +1,5 @@
 export { ServicesPage } from './screens/ServicesPage'
+export { DomainesPage } from './screens/DomainesPage'
+export { DomainesTable, DomaineFormModal } from './components'
+export { useDomainesListStatic } from './hooks'
+export type { Domaine, Service, HistoriqueTarif } from './types'
