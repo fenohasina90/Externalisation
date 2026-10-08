@@ -2328,6 +2328,102 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
+/* Pages d'erreur (404 / 403)                                        */
+/* ------------------------------------------------------------------ */
+
+.error-page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  background: #e6fbcb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 32px 16px;
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif;
+}
+
+.error-page__logo {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.error-page__card {
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgb(20 40 29 / 0.12);
+  max-width: 640px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 48px 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.error-page__code {
+  margin: 0;
+  font-size: 96px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.error-page__code--vert {
+  color: #1d4f00;
+}
+
+.error-page__code--rouge {
+  color: #b02a2a;
+}
+
+.error-page__bar {
+  width: 64px;
+  height: 6px;
+  border-radius: 3px;
+  background: #e00000;
+}
+
+.error-page__title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: #1d4f00;
+}
+
+.error-page__text {
+  margin: 0;
+  max-width: 420px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #4a5a50;
+}
+
+.error-page__action {
+  margin-top: 8px;
+  text-decoration: none;
+}
+
+.error-page__footer {
+  font-size: 14px;
+  color: #5a6850;
+}
+
+@media (max-width: 560px) {
+  .error-page__card {
+    padding: 32px 24px;
+  }
+
+  .error-page__code {
+    font-size: 72px;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Panneau latéral de détail (drawer)                                  */
 /* ------------------------------------------------------------------ */
 

@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
+import { ForbiddenPage, NotFoundPage } from '@/components/shared/ErrorPage'
 import { ChangePasswordPage, ForgotPasswordPage, LoginPage } from '@/features/auth'
 import {
   AdministrationPage,
@@ -35,6 +36,8 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/mot-de-passe-oublie" element={<ForgotPasswordPage />} />
+      <Route path="/404" element={<NotFoundPage />} />
+      <Route path="/403" element={<ForbiddenPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route path="/changer-mot-de-passe" element={<ChangePasswordPage />} />
@@ -67,7 +70,7 @@ function App() {
           <Route path="/administration/reinitialisations" element={<ReinitialisationsPage />} />
           <Route path="/administration/configuration" element={<ConfigurationPage />} />
         </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/404" replace />} />
       </Route>
     </Routes>
   )
