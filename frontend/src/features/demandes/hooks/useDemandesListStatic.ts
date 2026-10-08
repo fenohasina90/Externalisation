@@ -21,21 +21,23 @@ function versISO(dateFR: string): string {
   return `${a}-${m}-${j}`
 }
 
+export const FILTRES_DEMANDES_DEFAUT: DemandesFiltres = {
+  reference: '',
+  client: 'tous',
+  service: 'tous',
+  domaine: 'tous',
+  commercial: 'tous',
+  statut: 'tous',
+  dateDebut: '',
+  dateFin: '',
+  paiement: 'tous',
+  retard: 'tous',
+};
+
 /** Liste + filtres + pagination statiques (8 par page). */
 export function useDemandesListStatic(size = 8) {
   const [page, setPage] = useState(0)
-  const [filtres, setFiltres] = useState<DemandesFiltres>({
-    reference: '',
-    client: 'tous',
-    service: 'tous',
-    domaine: 'tous',
-    commercial: 'tous',
-    statut: 'tous',
-    dateDebut: '',
-    dateFin: '',
-    paiement: 'tous',
-    retard: 'tous',
-  })
+  const [filtres, setFiltres] = useState<DemandesFiltres>(FILTRES_DEMANDES_DEFAUT)
 
   const filtered = useMemo(
     () =>
@@ -65,6 +67,13 @@ export function useDemandesListStatic(size = 8) {
     setPage(0)
   }
 
+  const resetFiltres = () => {
+    setFiltres(FILTRES_DEMANDES_DEFAUT)
+    setPage(0)
+  }
+
+  const hasActiveFiltres = JSON.stringify(filtres) !== JSON.stringify(FILTRES_DEMANDES_DEFAUT)
+
   return {
     items: filtered.slice(safePage * size, safePage * size + size),
     total,
@@ -74,5 +83,7 @@ export function useDemandesListStatic(size = 8) {
     setPage,
     filtres,
     setFiltre,
+    resetFiltres,
+    hasActiveFiltres,
   }
 }

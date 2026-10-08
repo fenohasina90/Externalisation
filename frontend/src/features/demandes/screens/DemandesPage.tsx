@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DemandesTable } from '../components'
 import { DEMANDE_OPTIONS, MOCK_DEMANDES } from '../data/mockDemandes'
@@ -8,7 +8,8 @@ const PAGE_SIZE = 8
 
 /** Liste des demandes — étape 1 : interface seule, données statiques. */
 export function DemandesPage() {
-  const { items, total, totalPages, page, setPage, filtres, setFiltre } =
+  const [showFilters, setShowFilters] = useState(true)
+  const { items, total, totalPages, page, setPage, filtres, setFiltre, resetFiltres, hasActiveFiltres } =
     useDemandesListStatic(PAGE_SIZE)
 
   const kpis = useMemo(() => {
@@ -53,6 +54,9 @@ export function DemandesPage() {
           <p>Suivez toutes les demandes de service, leurs statuts et leur situation de paiement.</p>
         </div>
         <div className="actions">
+          <button type="button" className="btn-ghost" onClick={() => setShowFilters((v) => !v)}>
+            {showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}
+          </button>
           <button type="button" className="btn-ghost" onClick={exporter}>
             <svg className="sv" viewBox="0 0 24 24">
               <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
@@ -126,103 +130,123 @@ export function DemandesPage() {
         </div>
       </section>
 
+      {showFilters && (
       <section className="card card-pad">
-        <form onSubmit={(e) => e.preventDefault()} className="filters-inline">
-          <label className="field filter-field">
-            Référence
-            <input
-              type="text"
-              value={filtres.reference}
-              onChange={(e) => setFiltre('reference', e.target.value)}
-              placeholder="REF-2026-…"
-            />
-          </label>
-          <label className="field filter-field">
-            Client
-            <select value={filtres.client} onChange={(e) => setFiltre('client', e.target.value)}>
-              <option value="tous">Tous les clients</option>
-              {DEMANDE_OPTIONS.clients.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field filter-field">
-            Service
-            <select value={filtres.service} onChange={(e) => setFiltre('service', e.target.value)}>
-              <option value="tous">Tous les services</option>
-              {DEMANDE_OPTIONS.services.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field filter-field">
-            Domaine
-            <select value={filtres.domaine} onChange={(e) => setFiltre('domaine', e.target.value)}>
-              <option value="tous">Tous les domaines</option>
-              {DEMANDE_OPTIONS.domaines.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field filter-field">
-            Commercial
-            <select value={filtres.commercial} onChange={(e) => setFiltre('commercial', e.target.value)}>
-              <option value="tous">Tous</option>
-              {DEMANDE_OPTIONS.commerciaux.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field filter-field">
-            Statut
-            <select value={filtres.statut} onChange={(e) => setFiltre('statut', e.target.value as typeof filtres.statut)}>
-              <option value="tous">Tous</option>
-              <option value="EN_ATTENTE">En attente</option>
-              <option value="VALIDATION">Validation</option>
-              <option value="EN_COURS">En cours</option>
-              <option value="TERMINEE">Terminée</option>
-              <option value="ANNULEE">Annulée</option>
-            </select>
-          </label>
-          <label className="field filter-field">
-            Période (début)
-            <input type="date" value={filtres.dateDebut} onChange={(e) => setFiltre('dateDebut', e.target.value)} />
-          </label>
-          <label className="field filter-field">
-            Période (fin)
-            <input type="date" value={filtres.dateFin} onChange={(e) => setFiltre('dateFin', e.target.value)} />
-          </label>
-          <label className="field filter-field">
-            Paiement
-            <select value={filtres.paiement} onChange={(e) => setFiltre('paiement', e.target.value as typeof filtres.paiement)}>
-              <option value="tous">Tous</option>
-              <option value="Payé">Payé</option>
-              <option value="Partiel">Partiel</option>
-              <option value="En attente">En attente</option>
-              <option value="En retard">En retard</option>
-            </select>
-          </label>
-          <label className="field filter-field">
-            Retard
-            <select value={filtres.retard} onChange={(e) => setFiltre('retard', e.target.value as typeof filtres.retard)}>
-              <option value="tous">Tous</option>
-              <option value="oui">En retard</option>
-              <option value="non">À jour</option>
-            </select>
-          </label>
-          <button type="submit" className="btn-primary">
-            Appliquer
-          </button>
+        <form onSubmit={(e) => e.preventDefault()}>
+          <div className="filters-group filters-group--wide">
+            <p className="filters-group__title">Demande</p>
+            <label className="field">
+              Référence
+              <input
+                type="text"
+                value={filtres.reference}
+                onChange={(e) => setFiltre('reference', e.target.value)}
+                placeholder="REF-2026-…"
+              />
+            </label>
+            <label className="field">
+              Client
+              <select value={filtres.client} onChange={(e) => setFiltre('client', e.target.value)}>
+                <option value="tous">Tous les clients</option>
+                {DEMANDE_OPTIONS.clients.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Service
+              <select value={filtres.service} onChange={(e) => setFiltre('service', e.target.value)}>
+                <option value="tous">Tous les services</option>
+                {DEMANDE_OPTIONS.services.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Domaine
+              <select value={filtres.domaine} onChange={(e) => setFiltre('domaine', e.target.value)}>
+                <option value="tous">Tous les domaines</option>
+                {DEMANDE_OPTIONS.domaines.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Commercial
+              <select value={filtres.commercial} onChange={(e) => setFiltre('commercial', e.target.value)}>
+                <option value="tous">Tous</option>
+                {DEMANDE_OPTIONS.commerciaux.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="filters-group filters-group--wide">
+            <p className="filters-group__title">Suivi</p>
+            <label className="field">
+              Statut
+              <select value={filtres.statut} onChange={(e) => setFiltre('statut', e.target.value as typeof filtres.statut)}>
+                <option value="tous">Tous</option>
+                <option value="EN_ATTENTE">En attente</option>
+                <option value="VALIDATION">Validation</option>
+                <option value="EN_COURS">En cours</option>
+                <option value="TERMINEE">Terminée</option>
+                <option value="ANNULEE">Annulée</option>
+              </select>
+            </label>
+            <label className="field">
+              Paiement
+              <select value={filtres.paiement} onChange={(e) => setFiltre('paiement', e.target.value as typeof filtres.paiement)}>
+                <option value="tous">Tous</option>
+                <option value="Payé">Payé</option>
+                <option value="Partiel">Partiel</option>
+                <option value="En attente">En attente</option>
+                <option value="En retard">En retard</option>
+              </select>
+            </label>
+            <label className="field">
+              Retard
+              <select value={filtres.retard} onChange={(e) => setFiltre('retard', e.target.value as typeof filtres.retard)}>
+                <option value="tous">Tous</option>
+                <option value="oui">En retard</option>
+                <option value="non">À jour</option>
+              </select>
+            </label>
+            <label className="field">
+              Période (début)
+              <input type="date" value={filtres.dateDebut} onChange={(e) => setFiltre('dateDebut', e.target.value)} />
+            </label>
+            <label className="field">
+              Période (fin)
+              <input type="date" value={filtres.dateFin} onChange={(e) => setFiltre('dateFin', e.target.value)} />
+            </label>
+          </div>
+
+          <div className="filter-actions" style={{ marginTop: 12 }}>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={resetFiltres}
+              disabled={!hasActiveFiltres}
+            >
+              Réinitialiser
+            </button>
+            <button type="submit" className="btn-primary">
+              Appliquer
+            </button>
+          </div>
         </form>
       </section>
+      )}
 
       <section className="card">
         <div className="table-scroll-container no-global-scroll">

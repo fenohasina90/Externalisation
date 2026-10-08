@@ -2399,6 +2399,56 @@ body {
   padding-bottom: 2px;
 }
 
+/* Groupes de filtres (ex. liste des demandes : Demande / Suivi) */
+.filters-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 1100px) {
+  .filters-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .filters-group {
+    grid-template-columns: 1fr;
+  }
+}
+
+.filters-group + .filters-group {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.filters-group__title {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-light);
+}
+
+/* Variante large : 5 champs sur une seule ligne (ex. groupe Suivi) */
+.filters-group--wide {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .filters-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filters-group--wide {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 880px) {
   .filter-actions {
     margin-left: 0;
