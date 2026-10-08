@@ -1,0 +1,4 @@
+export { UtilisateursTable } from './UtilisateursTable'
+export { UtilisateurFormModal } from './UtilisateurFormModal'
+export { PermissionsMatrix } from './PermissionsMatrix'
+export { AuditTable } from './AuditTable'

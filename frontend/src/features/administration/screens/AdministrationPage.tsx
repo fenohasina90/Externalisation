@@ -4,8 +4,13 @@ import { Link } from 'react-router-dom'
 const SECTIONS_ADMINISTRATION = [
   {
     to: '/administration/utilisateurs',
-    titre: 'Utilisateurs & rôles',
-    description: 'Gestion des comptes, des rôles et des permissions.',
+    titre: 'Utilisateurs',
+    description: 'Gestion des comptes et de leurs rôles.',
+  },
+  {
+    to: '/administration/roles',
+    titre: 'Rôles & permissions',
+    description: 'Définir ce que chaque rôle peut voir et faire.',
   },
   {
     to: '/administration/reinitialisations',

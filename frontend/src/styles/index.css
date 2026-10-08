@@ -1513,6 +1513,70 @@ body {
   color: var(--warning-text);
 }
 
+/* Cases à cocher de la matrice des permissions */
+.perm-check {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--g);
+  cursor: pointer;
+}
+
+.perm-check:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Cartes de sélection du rôle (page Rôles et permissions) */
+.role-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.role-card:last-child {
+  margin-bottom: 0;
+}
+
+.role-card--selected {
+  background: var(--highlight-bg);
+  border-color: var(--highlight-border);
+}
+
+.role-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.role-card__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.role-card__desc {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.roles-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .roles-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .table-actions {
   display: flex;
   align-items: center;

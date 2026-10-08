@@ -7,6 +7,7 @@ import {
   AuditPage,
   ConfigurationPage,
   ReinitialisationsPage,
+  RolesPermissionsPage,
   UtilisateursPage,
 } from '@/features/administration'
 import { ClientsPage } from '@/features/clients'
@@ -47,6 +48,7 @@ function App() {
           <Route path="/recherche" element={<RecherchePage />} />
           <Route path="/administration" element={<AdministrationPage />} />
           <Route path="/administration/utilisateurs" element={<UtilisateursPage />} />
+          <Route path="/administration/roles" element={<RolesPermissionsPage />} />
           <Route path="/administration/audit" element={<AuditPage />} />
           <Route path="/administration/reinitialisations" element={<ReinitialisationsPage />} />
           <Route path="/administration/configuration" element={<ConfigurationPage />} />

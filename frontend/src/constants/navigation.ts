@@ -71,6 +71,7 @@ const administration: NavItem = {
   icon: 'gear',
   children: [
     { label: 'Utilisateurs', to: '/administration/utilisateurs' },
+    { label: 'Rôles & permissions', to: '/administration/roles' },
     { label: 'Réinitialisations', to: '/administration/reinitialisations' },
     { label: 'Audit', to: '/administration/audit' },
     { label: 'Configuration', to: '/administration/configuration' },
