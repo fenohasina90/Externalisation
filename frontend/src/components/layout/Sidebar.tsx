@@ -169,7 +169,7 @@ export function Sidebar({ open, onClose, badges = {} }: SidebarProps) {
         titre="Se déconnecter ?"
         message="Vous devrez vous reconnecter pour accéder à l’application."
         confirmer="Se déconnecter"
-        ton="primary"
+        ton="danger"
         onAnnuler={() => setConfirmLogout(false)}
         onConfirmer={() => {
           setConfirmLogout(false)

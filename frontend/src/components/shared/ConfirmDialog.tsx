@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom'
+
 interface ConfirmDialogProps {
   open: boolean
   titre: string
@@ -28,8 +30,10 @@ export function ConfirmDialog({
   const classeBouton =
     ton === 'danger' ? 'btn-danger' : ton === 'success' ? 'btn-primary' : 'btn-primary'
 
-  return (
-    <div className="modal-backdrop" onClick={onAnnuler}>
+  // Portail vers <body> : la modale recouvre tout l'écran quel que soit
+  // l'endroit où elle est déclarée (ex. à l'intérieur de la sidebar).
+  return createPortal(
+    <div className="modal-backdrop modal-backdrop--center" onClick={onAnnuler}>
       <div
         className="modal-card"
         style={{ maxWidth: 440 }}
@@ -60,6 +64,7 @@ export function ConfirmDialog({
           </button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

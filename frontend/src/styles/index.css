@@ -1181,6 +1181,11 @@ a {
   overflow-y: auto;
 }
 
+/* Variante centrée verticalement (ex. modale de confirmation) */
+.modal-backdrop--center {
+  align-items: center;
+}
+
 .modal {
   background: var(--c-surface);
   border: 1px solid var(--c-border);
