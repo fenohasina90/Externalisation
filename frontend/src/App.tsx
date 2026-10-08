@@ -17,7 +17,13 @@ import { DemandeDetailPage, DemandesPage, NouvelleDemandePage } from '@/features
 import { DocumentsPage } from '@/features/documents'
 import { EcheancesPage } from '@/features/echeances'
 import { NotificationsPage } from '@/features/notifications'
-import { PaiementsPage } from '@/features/paiements'
+import {
+  EcheancierDetailPage,
+  EcheanciersPage,
+  HistoriquePaiementsPage,
+  NouveauPaiementPage,
+  PaiementsPage,
+} from '@/features/paiements'
 import { PlansPaiementPage } from '@/features/plan-paiement'
 import { RapportsPage } from '@/features/rapports'
 import { RecherchePage } from '@/features/recherche'
@@ -45,6 +51,10 @@ function App() {
           <Route path="/plans-paiement" element={<PlansPaiementPage />} />
           <Route path="/echeances" element={<EcheancesPage />} />
           <Route path="/paiements" element={<PaiementsPage />} />
+          <Route path="/paiements/nouveau" element={<NouveauPaiementPage />} />
+          <Route path="/paiements/echeanciers" element={<EcheanciersPage />} />
+          <Route path="/paiements/echeanciers/:reference" element={<EcheancierDetailPage />} />
+          <Route path="/paiements/historique" element={<HistoriquePaiementsPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/rapports" element={<RapportsPage />} />

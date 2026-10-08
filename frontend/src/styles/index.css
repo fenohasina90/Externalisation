@@ -2033,9 +2033,45 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
-/* Demandes : onglets, stepper, mise en page création                 */
+/* Cartes radio (ex. mode de paiement Espèces / Virement)             */
 /* ------------------------------------------------------------------ */
 
+.rd-group {
+  display: flex;
+  gap: 10px;
+}
+
+.rd-group .rd {
+  flex: 1;
+}
+
+.rd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 42px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 1px solid #d5ddd7;
+  border-radius: 10px;
+  background: var(--bg-soft);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rd input {
+  accent-color: var(--g);
+}
+
+.rd.on {
+  border: 2px solid var(--g);
+  background: var(--highlight-bg);
+}
+
+/* ------------------------------------------------------------------ */
+/* Demandes : onglets, stepper, mise en page création                 */
+/* ------------------------------------------------------------------ */
 .tabs {
   display: flex;
   gap: 6px;
@@ -2397,6 +2433,14 @@ body {
   flex-wrap: wrap;
   margin-left: auto;
   padding-bottom: 2px;
+}
+
+/* Boutons de filtre en bas de carte, alignés à droite */
+.filter-actions--bottom {
+  width: 100%;
+  justify-content: flex-end;
+  margin-left: 0;
+  margin-top: 4px;
 }
 
 /* Groupes de filtres (ex. liste des demandes : Demande / Suivi) */

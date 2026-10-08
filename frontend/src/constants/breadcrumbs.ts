@@ -34,9 +34,15 @@ export function buildBreadcrumbs(pathname: string): Crumb[] {
   let path = ''
   return segments.map((segment, index) => {
     path += `/${segment}`
-    const label = /^\d+$/.test(segment)
-      ? 'Détail'
-      : SEGMENT_LABELS[segment] ?? segment
+    let label: string
+    if (/^\d+$/.test(segment)) {
+      label = 'Détail'
+    } else if (segment === 'nouveau') {
+      // « Nouveau » dépend du module parent (demandes / paiements).
+      label = segments[index - 1] === 'paiements' ? 'Nouveau paiement' : 'Nouvelle demande'
+    } else {
+      label = SEGMENT_LABELS[segment] ?? segment
+    }
     return { label, to: index < segments.length - 1 ? path : undefined }
   })
 }

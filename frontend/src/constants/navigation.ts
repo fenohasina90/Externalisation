@@ -58,9 +58,16 @@ const demandesLectureSeule: NavItem = {
   hint: 'lecture seule',
 }
 
-const plansPaiement: NavItem = { label: 'Plans de paiement', to: '/plans-paiement', icon: 'calendar' }
-const echeances: NavItem = { label: 'Échéances', to: '/echeances', icon: 'clock' }
-const paiements: NavItem = { label: 'Paiements', to: '/paiements', icon: 'card' }
+const paiements: NavItem = {
+  label: 'Paiements',
+  to: '/paiements',
+  icon: 'card',
+  children: [
+    { label: 'Paiements', to: '/paiements', end: true },
+    { label: 'Échéanciers', to: '/paiements/echeanciers' },
+    { label: 'Historique', to: '/paiements/historique' },
+  ],
+}
 const documents: NavItem = { label: 'Documents', to: '/documents', icon: 'folder' }
 
 const notifications: NavItem = {
@@ -97,8 +104,6 @@ export const NAVIGATION: Record<NomRole, NavSection[]> = {
         commerciaux,
         services,
         demandes,
-        plansPaiement,
-        echeances,
         paiements,
         documents,
       ],
@@ -114,8 +119,6 @@ export const NAVIGATION: Record<NomRole, NavSection[]> = {
         commerciaux,
         services,
         demandes,
-        plansPaiement,
-        echeances,
         paiements,
         documents,
       ],
@@ -132,7 +135,7 @@ export const NAVIGATION: Record<NomRole, NavSection[]> = {
   ECONOMAT: [
     {
       label: 'Activité',
-      items: [dashboard, clients, demandesLectureSeule, plansPaiement, echeances, paiements],
+      items: [dashboard, clients, demandesLectureSeule, paiements],
     },
     { label: 'Pilotage', items: [notifications, rapports, recherche] },
   ],

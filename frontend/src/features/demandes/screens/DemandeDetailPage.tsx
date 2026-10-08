@@ -336,7 +336,7 @@ export function DemandeDetailPage() {
           <section className="card">
             <div className="card-pad" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Échéances</h3>
-              <Link to="/echeances" className="lk">
+              <Link to={`/paiements/echeanciers/${demande.reference}`} className="lk">
                 Voir l&apos;échéancier complet ›
               </Link>
             </div>

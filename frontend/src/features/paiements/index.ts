@@ -1,1 +1,7 @@
 export { PaiementsPage } from './screens/PaiementsPage'
+export { NouveauPaiementPage } from './screens/NouveauPaiementPage'
+export { EcheanciersPage } from './screens/EcheanciersPage'
+export { EcheancierDetailPage } from './screens/EcheancierDetailPage'
+export { HistoriquePaiementsPage } from './screens/HistoriquePaiementsPage'
+export { PlansTable, HistoriqueTable, StatutPlanPill, ModePill, StatutEcheancePill } from './components'
+export { usePlansListStatic, useHistoriqueListStatic, type PlansFiltres } from './hooks'
