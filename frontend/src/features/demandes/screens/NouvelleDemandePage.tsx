@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { DEMANDE_FORM_VIDE, DemandeForm, versDateFR, type DemandeFormValues } from '../components'
+import { DemandeForm } from '../components'
+import type { DemandeFormValues } from '../data/mockDemandes'
+import { DEMANDE_FORM_VIDE, versDateFR } from '../data/mockDemandes'
 import { DEMANDE_OPTIONS, RESPONSABLES_PAR_CLIENT } from '../data/mockDemandes'
 
 /**

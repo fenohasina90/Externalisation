@@ -4,14 +4,13 @@ import { useAuth } from '@/features/auth/hooks/useAuth'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import {
   ChangerStatutModal,
-  DEMANDE_FORM_VIDE,
   DemandeForm,
   DemandeStepper,
   PaiementPill,
   StatutDemandePill,
-  versDateFR,
-  type DemandeFormValues,
 } from '../components'
+import type { DemandeFormValues } from '../data/mockDemandes'
+import { DEMANDE_FORM_VIDE, versDateFR } from '../data/mockDemandes'
 import { getDemandeDetail, type DocumentDetail } from '../data/mockDemandeDetail'
 import { STATUT_LABEL, type StatutDemandeUI } from '../data/mockDemandes'
 

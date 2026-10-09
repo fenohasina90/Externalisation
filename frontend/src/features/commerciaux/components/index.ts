@@ -1,2 +1,2 @@
-export { CommerciauxTable, commercialInitials } from './CommerciauxTable'
+export { CommerciauxTable } from './CommerciauxTable'
 export { CommercialFormModal } from './CommercialFormModal'

@@ -7,11 +7,13 @@ export {
   PaiementPill,
   DemandeStepper,
   DemandeForm,
-  DEMANDE_FORM_VIDE,
-  versDateFR,
   ChangerStatutModal,
-  TRANSITIONS_MANUELLES,
-  type DemandeFormValues,
 } from './components'
+export {
+  DEMANDE_FORM_VIDE,
+  TRANSITIONS_MANUELLES,
+  versDateFR,
+  type DemandeFormValues,
+} from './data/mockDemandes'
 export { useDemandesListStatic } from './hooks'
 export type { DemandesFiltres } from './hooks/useDemandesListStatic'

@@ -117,7 +117,46 @@ export const DEMANDE_OPTIONS = {
   commerciaux: COMMERCIAUX,
 }
 
-/** Libellés « Nom (Matricule) » pour le sélecteur commercial. */
+/** Transitions manuelles autorisées depuis chaque statut. */
+export const TRANSITIONS_MANUELLES: Record<StatutDemandeUI, StatutDemandeUI[]> = {
+  EN_ATTENTE: ['ANNULEE'],
+  VALIDATION: ['ANNULEE'],
+  EN_COURS: ['TERMINEE', 'ANNULEE'],
+  TERMINEE: [],
+  ANNULEE: [],
+}
+
+export interface DemandeFormValues {
+  client: string
+  responsable: string
+  commercial: string
+  domaine: string
+  service: string
+  dateDemande: string
+  debutService: string
+  finService: string
+  montantTotal: number
+  commentaire: string
+}
+
+export const DEMANDE_FORM_VIDE: DemandeFormValues = {
+  client: 'Atlas Conseil',
+  responsable: 'Amina Neme',
+  commercial: 'Jean Dupont',
+  domaine: 'Comptabilité',
+  service: 'Audit comptable',
+  dateDemande: '2026-09-02',
+  debutService: '2026-09-01',
+  finService: '2027-02-28',
+  montantTotal: 1000000,
+  commentaire: '',
+}
+
+/** Convertit aaaa-mm-jj → jj/mm/aaaa pour l'enregistrement statique. */
+export function versDateFR(iso: string): string {
+  const [a, m, j] = iso.split('-')
+  return `${j}/${m}/${a}`
+}
 export const COMMERCIAUX_OPTIONS = [
   { nom: 'Jean Dupont', matricule: 'C001' },
   { nom: 'Marie Martin', matricule: 'C002' },

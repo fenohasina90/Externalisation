@@ -1,22 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import {
   COMMERCIAUX_OPTIONS,
   DEMANDE_OPTIONS,
   RESPONSABLES_PAR_CLIENT,
+  type DemandeFormValues,
 } from '../data/mockDemandes'
-
-export interface DemandeFormValues {
-  client: string
-  responsable: string
-  commercial: string
-  domaine: string
-  service: string
-  dateDemande: string
-  debutService: string
-  finService: string
-  montantTotal: number
-  commentaire: string
-}
 
 interface Props {
   initial: DemandeFormValues
@@ -29,46 +17,20 @@ interface Props {
   onChange?: (v: DemandeFormValues) => void
 }
 
-export const DEMANDE_FORM_VIDE: DemandeFormValues = {
-  client: 'Atlas Conseil',
-  responsable: 'Amina Neme',
-  commercial: 'Jean Dupont',
-  domaine: 'Comptabilité',
-  service: 'Audit comptable',
-  dateDemande: '2026-09-02',
-  debutService: '2026-09-01',
-  finService: '2027-02-28',
-  montantTotal: 1000000,
-  commentaire: '',
-}
-
-/** Convertit aaaa-mm-jj → jj/mm/aaaa pour l'enregistrement statique. */
-export function versDateFR(iso: string): string {
-  const [a, m, j] = iso.split('-')
-  return `${j}/${m}/${a}`
-}
-
 /** Formulaire partagé création / modification d'une demande. */
 export function DemandeForm({ initial, submitLabel, onCancel, onSubmit, avecDocuments = false, onChange }: Props) {
   const [form, setForm] = useState<DemandeFormValues>(initial)
   const [error, setError] = useState<string | null>(null)
-  const onChangeRef = useRef(onChange)
-  onChangeRef.current = onChange
-
-  useEffect(() => {
-    onChangeRef.current?.(form)
-  }, [form])
 
   const set = (cle: keyof DemandeFormValues, valeur: string | number) => {
-    setForm((f) => {
-      const next = { ...f, [cle]: valeur }
-      // Responsable réinitialisé au changement de client.
-      if (cle === 'client' && typeof valeur === 'string') {
-        const premiers = RESPONSABLES_PAR_CLIENT[valeur] ?? []
-        next.responsable = premiers[0] ?? ''
-      }
-      return next
-    })
+    const next = { ...form, [cle]: valeur }
+    // Responsable réinitialisé au changement de client.
+    if (cle === 'client' && typeof valeur === 'string') {
+      const premiers = RESPONSABLES_PAR_CLIENT[valeur] ?? []
+      next.responsable = premiers[0] ?? ''
+    }
+    setForm(next)
+    onChange?.(next)
   }
 
   const handleSubmit = (e: FormEvent) => {

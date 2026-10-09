@@ -9,7 +9,7 @@ interface Props {
 }
 
 /** Initiales "JD" pour Jean Dupont (cf. maquette). */
-export function commercialInitials(nom: string): string {
+function commercialInitials(nom: string): string {
   const parts = (nom || '').trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return '—'
   if (parts.length === 1) return (parts[0][0] ?? '—').toUpperCase()

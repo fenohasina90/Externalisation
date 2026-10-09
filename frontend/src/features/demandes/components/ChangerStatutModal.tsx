@@ -1,15 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { STATUT_LABEL, type DemandeResume, type StatutDemandeUI } from '../data/mockDemandes'
+import { STATUT_LABEL, TRANSITIONS_MANUELLES, type DemandeResume, type StatutDemandeUI } from '../data/mockDemandes'
 import { StatutDemandePill } from './DemandesTable'
-
-/** Transitions manuelles autorisées depuis chaque statut. */
-export const TRANSITIONS_MANUELLES: Record<StatutDemandeUI, StatutDemandeUI[]> = {
-  EN_ATTENTE: ['ANNULEE'],
-  VALIDATION: ['ANNULEE'],
-  EN_COURS: ['TERMINEE', 'ANNULEE'],
-  TERMINEE: [],
-  ANNULEE: [],
-}
 
 const INDICATION: Record<StatutDemandeUI, string | null> = {
   EN_ATTENTE: null,
