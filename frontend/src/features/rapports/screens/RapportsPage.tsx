@@ -14,6 +14,7 @@ import {
  */
 export function RapportsPage() {
   const [categorie, setCategorie] = useState<CategorieRapport>('general')
+  const [showFilters, setShowFilters] = useState(false)
   const [dateDebut, setDateDebut] = useState('2026-09-01')
   const [dateFin, setDateFin] = useState('2026-10-04')
   const [client, setClient] = useState('tous')
@@ -21,6 +22,25 @@ export function RapportsPage() {
   const [domaine, setDomaine] = useState('tous')
   const [commercial, setCommercial] = useState('tous')
   const [statut, setStatut] = useState('tous')
+
+  const hasActiveFiltres =
+    dateDebut !== '2026-09-01' ||
+    dateFin !== '2026-10-04' ||
+    client !== 'tous' ||
+    service !== 'tous' ||
+    domaine !== 'tous' ||
+    commercial !== 'tous' ||
+    statut !== 'tous'
+
+  const resetFiltres = () => {
+    setDateDebut('2026-09-01')
+    setDateFin('2026-10-04')
+    setClient('tous')
+    setService('tous')
+    setDomaine('tous')
+    setCommercial('tous')
+    setStatut('tous')
+  }
 
   const labelCategorie =
     CATEGORIES_RAPPORT.find((c) => c.id === categorie)?.label ?? 'Rapport général'
@@ -71,22 +91,27 @@ export function RapportsPage() {
             </svg>
             CSV
           </button>
+          <button type="button" className="btn-ghost" onClick={() => setShowFilters((v) => !v)}>
+            {showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}
+          </button>
         </div>
       </header>
 
       <CategoriesRapports selection={categorie} onSelect={setCategorie} />
 
+      {showFilters && (
       <section className="card card-pad">
-        <form onSubmit={(e) => e.preventDefault()} className="filters-inline">
-          <label className="field filter-field">
+        <form onSubmit={(e) => e.preventDefault()}>
+          <div className="filters-line filters-line--4">
+          <label className="field">
             Période (début)
             <input type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} />
           </label>
-          <label className="field filter-field">
+          <label className="field">
             Période (fin)
             <input type="date" value={dateFin} onChange={(e) => setDateFin(e.target.value)} />
           </label>
-          <label className="field filter-field">
+          <label className="field">
             Client
             <select value={client} onChange={(e) => setClient(e.target.value)}>
               <option value="tous">Tous les clients</option>
@@ -97,7 +122,7 @@ export function RapportsPage() {
               ))}
             </select>
           </label>
-          <label className="field filter-field">
+          <label className="field">
             Service
             <select value={service} onChange={(e) => setService(e.target.value)}>
               <option value="tous">Tous les services</option>
@@ -108,7 +133,9 @@ export function RapportsPage() {
               ))}
             </select>
           </label>
-          <label className="field filter-field">
+          </div>
+          <div className="filters-line filters-line--4">
+          <label className="field">
             Domaine
             <select value={domaine} onChange={(e) => setDomaine(e.target.value)}>
               <option value="tous">Tous les domaines</option>
@@ -119,7 +146,7 @@ export function RapportsPage() {
               ))}
             </select>
           </label>
-          <label className="field filter-field">
+          <label className="field">
             Commercial
             <select value={commercial} onChange={(e) => setCommercial(e.target.value)}>
               <option value="tous">Tous</option>
@@ -130,7 +157,7 @@ export function RapportsPage() {
               ))}
             </select>
           </label>
-          <label className="field filter-field">
+          <label className="field">
             Statut
             <select value={statut} onChange={(e) => setStatut(e.target.value)}>
               <option value="tous">Tous</option>
@@ -141,11 +168,23 @@ export function RapportsPage() {
               <option value="ANNULEE">Annulée</option>
             </select>
           </label>
-          <button type="submit" className="btn-primary">
-            Appliquer
-          </button>
+          </div>
+          <div className="filter-actions filter-actions--bottom">
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={resetFiltres}
+              disabled={!hasActiveFiltres}
+            >
+              Réinitialiser
+            </button>
+            <button type="submit" className="btn-primary">
+              Appliquer
+            </button>
+          </div>
         </form>
       </section>
+      )}
 
       <section className="kpi-grid">
         <div className="card kpi-card">
