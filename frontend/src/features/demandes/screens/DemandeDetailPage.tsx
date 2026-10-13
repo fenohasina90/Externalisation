@@ -6,15 +6,23 @@ import {
   ChangerStatutModal,
   DemandeForm,
   DemandeStepper,
+  DossierEntrepriseDetail,
+  DossierEntrepriseFormModal,
   PaiementPill,
   StatutDemandePill,
 } from '../components'
 import type { DemandeFormValues } from '../data/mockDemandes'
-import { DEMANDE_FORM_VIDE, versDateFR } from '../data/mockDemandes'
+import { COMMERCIAUX_OPTIONS, DEMANDE_FORM_VIDE, versDateFR } from '../data/mockDemandes'
+import {
+  MOCK_DOSSIER_126,
+  dossierGenerique,
+  isCreationEntreprise,
+  type DossierEntreprise,
+} from '../data/mockDossierEntreprise'
 import { getDemandeDetail, type DocumentDetail } from '../data/mockDemandeDetail'
 import { STATUT_LABEL, type StatutDemandeUI } from '../data/mockDemandes'
 
-type Onglet = 'informations' | 'historique' | 'paiement' | 'documents'
+type Onglet = 'informations' | 'historique' | 'paiement' | 'documents' | 'dossier'
 
 function versISO(dateFR: string): string {
   const [j, m, a] = dateFR.split('/')
@@ -41,6 +49,11 @@ export function DemandeDetailPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [statutOpen, setStatutOpen] = useState(false)
   const [confirmDoc, setConfirmDoc] = useState<string | null>(null)
+  const [dossierOpen, setDossierOpen] = useState(false)
+  const [dossier, setDossier] = useState<DossierEntreprise | null>(() => {
+    if (reference === 'REF-2026-126') return MOCK_DOSSIER_126
+    return dossierGenerique(reference ?? '', '')
+  })
 
   // Échéances fixes de la maquette pour REF-2026-014 (montants figés).
   const montantPaye = initial?.montantPaye ?? 0
@@ -57,7 +70,25 @@ export function DemandeDetailPage() {
   }
 
   const resteAPayer = Math.max(0, demande.montantTotal - montantPaye)
-  const progression = demande.montantTotal === 0 ? 0 : Math.round((montantPaye / demande.montantTotal) * 100)
+  const progression =
+    demande.montantTotal === 0 ? 0 : Math.round((montantPaye / demande.montantTotal) * 100)
+
+  const estCreation = isCreationEntreprise(demande.service)
+  const numeroIM =
+    COMMERCIAUX_OPTIONS.find((c) => c.nom === demande.commercial)?.matricule ?? '—'
+  const onglets: Array<[Onglet, string]> = [
+    ['informations', 'Informations'],
+    ['historique', 'Historique'],
+    ['paiement', 'Paiement'],
+    ['documents', 'Documents'],
+    ...(estCreation ? [['dossier', 'Dossier entreprise'] as [Onglet, string]] : []),
+  ]
+
+  const handleDossierSave = (d: DossierEntreprise) => {
+    setDossier(d)
+    setDossierOpen(false)
+    ajouterHistorique('Modification', 'Dossier de création d’entreprise mis à jour')
+  }
 
   const ajouterHistorique = (type: 'Modification' | 'Statut', texte: string, commentaire = '—') => {
     const now = new Date()
@@ -163,14 +194,7 @@ export function DemandeDetailPage() {
       <DemandeStepper statut={demande.statut} />
 
       <nav className="tabs" aria-label="Sections de la demande">
-        {(
-          [
-            ['informations', 'Informations'],
-            ['historique', 'Historique'],
-            ['paiement', 'Paiement'],
-            ['documents', 'Documents'],
-          ] as Array<[Onglet, string]>
-        ).map(([id, label]) => (
+        {onglets.map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -459,6 +483,21 @@ export function DemandeDetailPage() {
         </section>
       )}
 
+      {onglet === 'dossier' && dossier && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button type="button" className="btn-primary" onClick={() => setDossierOpen(true)}>
+              Modifier le dossier
+            </button>
+          </div>
+          <DossierEntrepriseDetail
+            dossier={dossier}
+            dateDemande={demande.dateDemande}
+            numeroIM={numeroIM}
+          />
+        </>
+      )}
+
       {editOpen && (
         <div className="modal-backdrop" onClick={() => setEditOpen(false)}>
           <div
@@ -494,6 +533,15 @@ export function DemandeDetailPage() {
         onClose={() => setStatutOpen(false)}
         onConfirm={handleStatut}
       />
+
+      {dossier && (
+        <DossierEntrepriseFormModal
+          open={dossierOpen}
+          dossier={dossier}
+          onClose={() => setDossierOpen(false)}
+          onSave={handleDossierSave}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmDoc !== null}

@@ -8,6 +8,8 @@ export {
   DemandeStepper,
   DemandeForm,
   ChangerStatutModal,
+  DossierEntrepriseDetail,
+  DossierEntrepriseFormModal,
 } from './components'
 export {
   DEMANDE_FORM_VIDE,

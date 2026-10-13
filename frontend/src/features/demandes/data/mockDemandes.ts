@@ -76,7 +76,12 @@ function generer(): DemandeResume[] {
 
   return numeros.map((num, i) => {
     const statut = statuts[i]
-    const [service, domaine, tarifBase] = SERVICES[i % SERVICES.length]
+    // REF-2026-126 : demande de création d'entreprise (porte le dossier).
+    const creation = num === 126
+    const [serviceBase, domaineBase, tarifBase] = SERVICES[i % SERVICES.length]
+    const service = creation ? "Création d'entreprise" : serviceBase
+    const domaine = creation ? 'Conseil' : domaineBase
+    const tarif = creation ? 700000 : tarifBase
     const quantite = (i % 3) + 1
     const jour = pad((i % 27) + 1)
     const mois = pad((i % 9) + 1)
@@ -97,10 +102,10 @@ function generer(): DemandeResume[] {
       dateDebut: `${jour}/${mois}/2026`,
       dateFin: `${jour}/${pad(((i % 9) + 3) % 12 + 1)}/2027`,
       dateDemande: `${jour}/${mois}/2026`,
-      tarif: tarifBase,
+      tarif,
       quantite,
-      montantTotal: tarifBase * quantite,
-      commentaire: '',
+      montantTotal: tarif * quantite,
+      commentaire: creation ? 'Création de la société Sahan Agro SARL.' : '',
       statut,
       situationPaiement: situation,
     }
@@ -112,7 +117,7 @@ export const MOCK_DEMANDES: DemandeResume[] = [...HEROS, ...generer()]
 
 export const DEMANDE_OPTIONS = {
   clients: CLIENTS,
-  services: [...new Set(SERVICES.map(([s]) => s))],
+  services: [...new Set(SERVICES.map(([s]) => s)), "Création d'entreprise"],
   domaines: ['Comptabilité', 'Fiscalité', 'Finance', 'Social', 'Droit', 'Conseil'],
   commerciaux: COMMERCIAUX,
 }
@@ -179,6 +184,7 @@ export const RESPONSABLES_PAR_CLIENT: Record<string, string[]> = {
 }
 
 /** Tarif courant par service (récupéré automatiquement dans le formulaire). */
-export const TARIF_PAR_SERVICE: Record<string, number> = Object.fromEntries(
-  SERVICES.map(([nom, , tarif]) => [nom, tarif]),
-)
+export const TARIF_PAR_SERVICE: Record<string, number> = {
+  ...Object.fromEntries(SERVICES.map(([nom, , tarif]) => [nom, tarif])),
+  "Création d'entreprise": 700000,
+}
