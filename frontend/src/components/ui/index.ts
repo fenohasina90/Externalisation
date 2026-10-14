@@ -12,3 +12,4 @@ export {
   Pagination,
   Spinner,
 } from './content'
+export { TablePagination } from './TablePagination'

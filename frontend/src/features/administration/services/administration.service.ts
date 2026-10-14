@@ -58,10 +58,29 @@ export const permissionsApi = {
   },
 }
 
+export interface AuditFiltres {
+  utilisateurId?: number | null
+  action?: string | null
+  module?: string | null
+  entite?: string | null
+  dateDebut?: string | null
+  dateFin?: string | null
+}
+
 export const auditApi = {
-  async list(page?: PageQuery): Promise<ApiPage<AuditEntry>> {
+  async list(page: PageQuery, filters: AuditFiltres = {}): Promise<ApiPage<AuditEntry>> {
     const { data } = await http.get<ApiPage<AuditEntry>>('/audit', {
-      params: buildQuery({}, page),
+      params: buildQuery(
+        {
+          utilisateurId: filters.utilisateurId,
+          action: filters.action,
+          module: filters.module,
+          entite: filters.entite,
+          dateDebut: filters.dateDebut,
+          dateFin: filters.dateFin,
+        },
+        page,
+      ),
     })
     return data
   },

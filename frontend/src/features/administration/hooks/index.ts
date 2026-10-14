@@ -1,2 +1,2 @@
 export { useUtilisateursListStatic } from './useUtilisateursListStatic'
-export { useAuditListStatic } from './useAuditListStatic'
+export { useAuditList } from './useAuditList'

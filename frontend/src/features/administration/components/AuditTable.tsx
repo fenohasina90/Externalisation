@@ -1,25 +1,35 @@
-import { MOCK_AUDIT_REFS } from '../data/mockAudit'
+import { getLibelleActionAudit } from '../constants/labels'
 import type { AuditEntry } from '../types'
+import { formatDateHeure } from '@/utils/format'
 
-const ACTION_PILL: Record<string, { classe: string; label: string }> = {
-  CREATE: { classe: 'pill ok', label: 'Création' },
-  UPDATE: { classe: 'pill info', label: 'Modification' },
-  DELETE: { classe: 'pill danger', label: 'Désactivation' },
-  LOGIN: { classe: 'pill wt', label: 'Connexion' },
-  LOGOUT: { classe: 'pill wt', label: 'Déconnexion' },
-  PAYMENT: { classe: 'pill ok', label: 'Paiement' },
-  STATUS_CHANGE: { classe: 'pill info', label: 'Changement de statut' },
-  ARCHIVE: { classe: 'pill warning', label: 'Archivage' },
+const PILL_ACTION: Record<string, string> = {
+  CREATE: 'pill ok',
+  UPDATE: 'pill info',
+  DELETE: 'pill danger',
+  ARCHIVE: 'pill warning',
+  LOGIN: 'pill wt',
+  LOGOUT: 'pill wt',
+  PAYMENT: 'pill ok',
+  STATUS_CHANGE: 'pill info',
+  RESET_REQUEST: 'pill warning',
+  RESET_APPROVE: 'pill info',
+  RESET_SEND: 'pill info',
+  RESET_REJECT: 'pill danger',
+  RESET_DONE: 'pill ok',
 }
 
-function pill(action: string): { classe: string; label: string } {
-  return ACTION_PILL[action] ?? { classe: 'pill wt', label: action }
+function pill(action: string): string {
+  return PILL_ACTION[action] ?? 'pill wt'
 }
 
-/** Tableau du journal d'audit (lecture seule). */
-export function AuditTable({ items }: { items: AuditEntry[] }) {
-  if (items.length === 0)
-    return <div className="card-pad text-muted">Aucune entrée trouvée.</div>
+interface Props {
+  items: AuditEntry[]
+  onView: (id: number) => void
+}
+
+/** Tableau du journal d'audit (clic sur une ligne = détail). */
+export function AuditTable({ items, onView }: Props) {
+  if (items.length === 0) return <div className="card-pad text-muted">Aucune entrée trouvée.</div>
 
   return (
     <table className="table">
@@ -37,24 +47,30 @@ export function AuditTable({ items }: { items: AuditEntry[] }) {
         </tr>
       </thead>
       <tbody>
-        {items.map((e) => {
-          const p = pill(e.action)
-          return (
-            <tr key={e.id}>
-              <td className="text-secondary">{e.createdAt}</td>
-              <td className="fw-600">{e.nomUtilisateur ?? '—'}</td>
-              <td>
-                <span className={p.classe}>● {p.label}</span>
-              </td>
-              <td>{e.module}</td>
-              <td>{e.entite ?? '—'}</td>
-              <td className="text-secondary">{MOCK_AUDIT_REFS[e.id] ?? '—'}</td>
-              <td className="text-secondary">{e.ancienneValeur ?? '—'}</td>
-              <td>{e.nouvelleValeur ?? '—'}</td>
-              <td className="text-secondary">{e.adresseIp ?? '—'}</td>
-            </tr>
-          )
-        })}
+        {items.map((e) => (
+          <tr
+            key={e.id}
+            onClick={() => onView(e.id)}
+            style={{ cursor: 'pointer' }}
+            title="Voir le détail"
+          >
+            <td className="text-secondary">{formatDateHeure(e.createdAt)}</td>
+            <td className="fw-600">{e.nomUtilisateur ?? '—'}</td>
+            <td>
+              <span className={pill(e.action)}>● {getLibelleActionAudit(e.action)}</span>
+            </td>
+            <td>{e.module}</td>
+            <td>{e.entite ?? '—'}</td>
+            <td className="text-secondary">{e.entiteId ?? '—'}</td>
+            <td className="truncate text-secondary" title={e.ancienneValeur ?? ''}>
+              {e.ancienneValeur ?? '—'}
+            </td>
+            <td className="truncate" title={e.nouvelleValeur ?? ''}>
+              {e.nouvelleValeur ?? '—'}
+            </td>
+            <td className="text-secondary">{e.adresseIp ?? '—'}</td>
+          </tr>
+        ))}
       </tbody>
     </table>
   )

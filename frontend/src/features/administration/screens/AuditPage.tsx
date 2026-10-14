@@ -1,30 +1,27 @@
-import { useEffect, useMemo, useState } from 'react'
-import { AuditTable } from '../components'
-import { MOCK_AUDIT } from '../data/mockAudit'
-import { useAuditListStatic } from '../hooks'
+import { useEffect, useState } from 'react'
+import { Alert, Spinner, TablePagination } from '@/components/ui'
+import { useApi } from '@/hooks/useApi'
+import type { ApiPage } from '@/types'
+import type { Utilisateur } from '@/features/auth/types'
+import { AuditDetailModal, AuditTable } from '../components'
+import { ACTIONS_AUDIT, ENTITES_AUDIT, MODULES_AUDIT, getLibelleActionAudit } from '../constants/labels'
+import { utilisateursApi } from '../services/administration.service'
+import { useAuditList } from '../hooks/useAuditList'
 
 const PAGE_SIZE = 8
 
-/** Journal d'audit — étape 1 : interface seule, données statiques. */
+/** Journal d'audit branché sur l'API : filtres serveur, pagination, détail, export CSV. */
 export function AuditPage() {
-  const [dateDebut, setDateDebut] = useState('')
-  const [dateFin, setDateFin] = useState('')
+  const [detailId, setDetailId] = useState<number | null>(null)
 
-  const { items, total, totalPages, page, setPage, ...filtres } = useAuditListStatic({
-    source: MOCK_AUDIT,
-    size: PAGE_SIZE,
-  })
+  const { items, total, totalPages, page, loading, error, setPage, ...filtres } =
+    useAuditList(PAGE_SIZE)
 
-  const utilisateurs = useMemo(
-    () => [...new Set(MOCK_AUDIT.map((e) => e.nomUtilisateur).filter(Boolean))] as string[],
+  const { data: utilisateurs } = useApi<ApiPage<Utilisateur>>(
+    () => utilisateursApi.list({ page: 0, size: 100, recherche: null }),
     [],
   )
-  const actions = useMemo(() => [...new Set(MOCK_AUDIT.map((e) => e.action))], [])
-  const modules = useMemo(() => [...new Set(MOCK_AUDIT.map((e) => e.module))], [])
-  const entites = useMemo(
-    () => [...new Set(MOCK_AUDIT.map((e) => e.entite).filter(Boolean))] as string[],
-    [],
-  )
+  const optionsUtilisateurs = utilisateurs?.content ?? []
 
   useEffect(() => {
     document.body.classList.add('page-responsables')
@@ -34,9 +31,19 @@ export function AuditPage() {
   }, [])
 
   const handleExport = () => {
-    const header = 'Date;Utilisateur;Action;Module;Entite;Ancienne;Nouvelle;IP'
+    const header = 'Date;Utilisateur;Action;Module;Entite;IdEntite;Ancienne;Nouvelle;IP'
     const rows = items.map((e) =>
-      [e.createdAt, e.nomUtilisateur, e.action, e.module, e.entite, e.ancienneValeur, e.nouvelleValeur, e.adresseIp]
+      [
+        e.createdAt,
+        e.nomUtilisateur,
+        e.action,
+        e.module,
+        e.entite,
+        e.entiteId,
+        e.ancienneValeur,
+        e.nouvelleValeur,
+        e.adresseIp,
+      ]
         .map((v) => `"${(v ?? '').toString().replace(/"/g, '""')}"`)
         .join(';'),
     )
@@ -57,7 +64,7 @@ export function AuditPage() {
           <p>Historique des actions effectuées dans l&apos;application.</p>
         </div>
         <div className="actions">
-          <button type="button" className="btn-ghost" onClick={handleExport}>
+          <button type="button" className="btn-ghost" onClick={handleExport} disabled={items.length === 0}>
             <svg className="sv" viewBox="0 0 24 24">
               <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
             </svg>
@@ -71,13 +78,15 @@ export function AuditPage() {
           <label className="field filter-field">
             Utilisateur
             <select
-              value={filtres.utilisateur}
-              onChange={(e) => filtres.setUtilisateur(e.target.value)}
+              value={filtres.utilisateurId ?? ''}
+              onChange={(e) =>
+                filtres.setUtilisateurId(e.target.value === '' ? null : Number(e.target.value))
+              }
             >
-              <option value="tous">Tous</option>
-              {utilisateurs.map((u) => (
-                <option key={u} value={u}>
-                  {u}
+              <option value="">Tous</option>
+              {optionsUtilisateurs.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.prenom} {u.nom}
                 </option>
               ))}
             </select>
@@ -86,9 +95,9 @@ export function AuditPage() {
             Action
             <select value={filtres.action} onChange={(e) => filtres.setAction(e.target.value)}>
               <option value="toutes">Toutes</option>
-              {actions.map((a) => (
+              {ACTIONS_AUDIT.map((a) => (
                 <option key={a} value={a}>
-                  {a}
+                  {getLibelleActionAudit(a)}
                 </option>
               ))}
             </select>
@@ -97,7 +106,7 @@ export function AuditPage() {
             Module
             <select value={filtres.module} onChange={(e) => filtres.setModule(e.target.value)}>
               <option value="tous">Tous</option>
-              {modules.map((m) => (
+              {MODULES_AUDIT.map((m) => (
                 <option key={m} value={m}>
                   {m}
                 </option>
@@ -108,7 +117,7 @@ export function AuditPage() {
             Entité
             <select value={filtres.entite} onChange={(e) => filtres.setEntite(e.target.value)}>
               <option value="toutes">Toutes</option>
-              {entites.map((e) => (
+              {ENTITES_AUDIT.map((e) => (
                 <option key={e} value={e}>
                   {e}
                 </option>
@@ -117,11 +126,15 @@ export function AuditPage() {
           </label>
           <label className="field filter-field">
             Période (début)
-            <input type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} />
+            <input
+              type="date"
+              value={filtres.dateDebut}
+              onChange={(e) => filtres.setDateDebut(e.target.value)}
+            />
           </label>
           <label className="field filter-field">
             Période (fin)
-            <input type="date" value={dateFin} onChange={(e) => setDateFin(e.target.value)} />
+            <input type="date" value={filtres.dateFin} onChange={(e) => filtres.setDateFin(e.target.value)} />
           </label>
           <button type="submit" className="btn-primary">
             Appliquer
@@ -130,48 +143,31 @@ export function AuditPage() {
       </section>
 
       <section className="card">
-        <div className="table-scroll-container no-global-scroll">
-          <div className="table-wrap">
-            <AuditTable items={items} />
+        {loading && items.length === 0 ? (
+          <Spinner label="Chargement du journal…" />
+        ) : error ? (
+          <div className="card-pad">
+            <Alert tone="danger">{error}</Alert>
           </div>
-          {total > 0 && (
-            <div className="table-footer">
-              <span>
-                Affichage de {page * PAGE_SIZE + 1} à {Math.min((page + 1) * PAGE_SIZE, total)} sur{' '}
-                {total} entrées
-              </span>
-              <div className="pagination">
-                <button
-                  type="button"
-                  className="pagination-item"
-                  onClick={() => setPage(Math.max(0, page - 1))}
-                  disabled={page <= 0}
-                >
-                  ‹
-                </button>
-                {Array.from({ length: totalPages }).map((_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className={`pagination-item ${i === page ? 'active' : ''}`}
-                    onClick={() => setPage(i)}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  className="pagination-item"
-                  onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
-                  disabled={page >= totalPages - 1}
-                >
-                  ›
-                </button>
-              </div>
+        ) : (
+          <div className="table-scroll-container no-global-scroll">
+            <div className="table-wrap">
+              <AuditTable items={items} onView={setDetailId} />
             </div>
-          )}
-        </div>
+            {total > 0 && (
+              <div className="table-footer">
+                <span>
+                  Affichage de {page * PAGE_SIZE + 1} à {Math.min((page + 1) * PAGE_SIZE, total)} sur{' '}
+                  {total} entrées
+                </span>
+                <TablePagination page={page} totalPages={totalPages} onPageChange={setPage} />
+              </div>
+            )}
+          </div>
+        )}
       </section>
+
+      <AuditDetailModal id={detailId} onClose={() => setDetailId(null)} />
     </div>
   )
 }

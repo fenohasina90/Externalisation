@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/ui'
-import { MOCK_AUDIT } from '../data/mockAudit'
+import { useApi } from '@/hooks/useApi'
+import type { ApiPage } from '@/types'
+import type { AuditEntry } from '../types'
 import { MOCK_UTILISATEURS } from '../data/mockUtilisateurs'
 import { ROLES_CARTES } from '../data/mockRolesPermissions'
+import { auditApi } from '../services/administration.service'
 
 const SECTIONS = [
   {
@@ -64,6 +67,11 @@ const SECTIONS = [
 export function AdministrationPage() {
   const nbUtilisateurs = MOCK_UTILISATEURS.length
   const nbActifs = MOCK_UTILISATEURS.filter((u) => u.actif).length
+  const { data: audit } = useApi<ApiPage<AuditEntry>>(
+    () => auditApi.list({ page: 0, size: 1, recherche: null }),
+    [],
+  )
+  const nbTraces = audit?.totalElements ?? 0
 
   return (
     <div className="app-page responsables-page">
@@ -102,8 +110,8 @@ export function AdministrationPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{MOCK_AUDIT.length}</div>
-            <div className="kpi-label">Traces d&apos;audit (démo)</div>
+            <div className="kpi-num">{nbTraces}</div>
+            <div className="kpi-label">Traces d&apos;audit</div>
           </div>
         </div>
       </section>
