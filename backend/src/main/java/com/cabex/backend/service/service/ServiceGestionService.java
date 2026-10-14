@@ -2,6 +2,7 @@ package com.cabex.backend.service.service;
 
 import com.cabex.backend.audit.action.AuditActions;
 import com.cabex.backend.audit.service.AuditService;
+import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.DuplicateResourceException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
@@ -58,6 +59,7 @@ public class ServiceGestionService {
         Service service = Service.builder()
                 .nomService(request.nomService().trim())
                 .codeService(genererCode())
+                .typeService(normaliserType(request.typeService()))
                 .description(request.description())
                 .actif(true)
                 .build();
@@ -72,6 +74,7 @@ public class ServiceGestionService {
     public ServiceResponse update(Integer id, UpdateServiceRequest request) {
         Service service = getEntity(id);
         service.setNomService(request.nomService().trim());
+        service.setTypeService(normaliserType(request.typeService()));
         service.setDescription(request.description());
         Service saved = serviceRepository.save(service);
         auditService.log(AuditActions.UPDATE, "SERVICE", "Service", saved.getId().longValue(), null, "nom=" + saved.getNomService());
@@ -93,6 +96,20 @@ public class ServiceGestionService {
         return serviceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Service", id)));
+    }
+
+    /**
+     * Normalise le type (STANDARD par défaut) ; toute autre valeur est rejetée.
+     */
+    String normaliserType(String type) {
+        if (type == null || type.isBlank()) {
+            return "STANDARD";
+        }
+        String normalise = type.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!com.cabex.backend.dossier.DossierRegles.TYPES_SERVICE.contains(normalise)) {
+            throw new BusinessException(ErrorMessages.formatInvalide("type de service"));
+        }
+        return normalise;
     }
 
     /**

@@ -28,6 +28,10 @@ public class Service {
     @Column(name = "code_service", nullable = false, unique = true, length = 50)
     private String codeService;
 
+    @Column(name = "type_service", nullable = false, length = 30)
+    @Builder.Default
+    private String typeService = "STANDARD";
+
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 

@@ -37,7 +37,7 @@ class ServiceControllerTest {
     private ServiceGestionService serviceGestionService;
 
     private ServiceResponse service() {
-        return new ServiceResponse(1, "Audit comptable", "SRV-0001",
+        return new ServiceResponse(1, "Audit comptable", "SRV-0001", "STANDARD",
                 "Vérification des comptes", true);
     }
 

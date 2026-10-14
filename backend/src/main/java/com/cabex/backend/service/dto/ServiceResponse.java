@@ -4,6 +4,7 @@ public record ServiceResponse(
         Integer id,
         String nomService,
         String codeService,
+        String typeService,
         String description,
         Boolean actif
 ) {

@@ -72,11 +72,13 @@ class DemandeSansSocieteTest {
 
     private Service serviceCreation() {
         return Service.builder().id(11).nomService("Création d'entreprise")
+                .typeService("CREATION")
                 .actif(true).build();
     }
 
     private Service serviceAudit() {
         return Service.builder().id(1).nomService("Audit comptable")
+                .typeService("STANDARD")
                 .actif(true).build();
     }
 

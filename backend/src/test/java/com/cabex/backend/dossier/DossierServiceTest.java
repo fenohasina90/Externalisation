@@ -52,6 +52,7 @@ class DossierServiceTest {
         Service service = Service.builder()
                 .id(11)
                 .nomService("Création d'entreprise")
+                .typeService("CREATION")
                 
                 .actif(true)
                 .build();
@@ -138,6 +139,7 @@ class DossierServiceTest {
     void createServiceNonCreation400() {
         DemandeService demande = demandeCreation();
         demande.getService().setNomService("Audit comptable");
+        demande.getService().setTypeService("STANDARD");
         when(demandeRepository.findById(126)).thenReturn(Optional.of(demande));
 
         var ex = assertThrows(BusinessException.class,

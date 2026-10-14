@@ -7,20 +7,18 @@ import static org.junit.jupiter.api.Assertions.*;
 class DossierReglesTest {
 
     @Test
-    void serviceCreationDetecte() {
-        assertTrue(DossierRegles.estServiceCreation("Création d'entreprise"));
-        assertTrue(DossierRegles.estServiceCreation("CREATION D'ENTREPRISE"));
-        assertTrue(DossierRegles.estServiceCreation("Création de société"));
-        assertTrue(DossierRegles.estServiceCreation("  création d’Entreprise  "));
+    void serviceCreationDetecteParType() {
+        assertTrue(DossierRegles.estTypeCreation("CREATION"));
+        assertTrue(DossierRegles.estTypeCreation("creation"));
+        assertTrue(DossierRegles.estTypeCreation("  Creation  "));
     }
 
     @Test
     void serviceNonCreationRejete() {
-        assertFalse(DossierRegles.estServiceCreation("Audit comptable"));
-        assertFalse(DossierRegles.estServiceCreation("Création"));
-        assertFalse(DossierRegles.estServiceCreation("Entreprise"));
-        assertFalse(DossierRegles.estServiceCreation(null));
-        assertFalse(DossierRegles.estServiceCreation(""));
+        assertFalse(DossierRegles.estTypeCreation("STANDARD"));
+        assertFalse(DossierRegles.estTypeCreation("Audit comptable"));
+        assertFalse(DossierRegles.estTypeCreation(null));
+        assertFalse(DossierRegles.estTypeCreation(""));
     }
 
     @Test

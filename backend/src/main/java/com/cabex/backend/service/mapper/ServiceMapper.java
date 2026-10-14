@@ -16,6 +16,7 @@ public class ServiceMapper {
                 service.getId(),
                 service.getNomService(),
                 service.getCodeService(),
+                service.getTypeService(),
                 service.getDescription(),
                 service.getActif()
         );

@@ -1,6 +1,7 @@
 package com.cabex.backend.service.service;
 
 import com.cabex.backend.audit.service.AuditService;
+import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.service.dto.CreateServiceRequest;
@@ -73,7 +74,7 @@ class ServiceGestionServiceTest {
         });
 
         var reponse = serviceGestionService.create(
-                new CreateServiceRequest("Audit comptable", null));
+                new CreateServiceRequest("Audit comptable", null, null));
 
         assertEquals("SRV-0002", reponse.codeService());
         verify(auditService).log(eq("CREATE"), eq("SERVICE"), eq("Service"),
@@ -95,5 +96,48 @@ class ServiceGestionServiceTest {
         var ex = assertThrows(ResourceNotFoundException.class,
                 () -> serviceGestionService.getByCode("SRV-9999"));
         assertEquals(ErrorMessages.introuvable("Service", "SRV-9999"), ex.getMessage());
+    }
+
+    @Test
+    void createTypeCreationNormalise() {
+        when(serviceRepository.existsByNomService("Création d'entreprise")).thenReturn(false);
+        when(serviceRepository.findAllCodes()).thenReturn(List.of());
+        when(serviceRepository.existsByCodeService("SRV-0001")).thenReturn(false);
+        when(serviceRepository.save(any())).thenAnswer(inv -> {
+            Service s = inv.getArgument(0);
+            s.setId(2);
+            return s;
+        });
+
+        var reponse = serviceGestionService.create(
+                new CreateServiceRequest("Création d'entreprise", "creation", null));
+
+        assertEquals("CREATION", reponse.typeService());
+    }
+
+    @Test
+    void createTypeInvalide400() {
+        var ex = assertThrows(BusinessException.class,
+                () -> serviceGestionService.create(
+                        new CreateServiceRequest("X", "INCONNU", null)));
+        assertEquals(ErrorMessages.formatInvalide("type de service"), ex.getMessage());
+        verify(serviceRepository, never()).save(any());
+    }
+
+    @Test
+    void createSansTypeDefautStandard() {
+        when(serviceRepository.existsByNomService("Audit comptable")).thenReturn(false);
+        when(serviceRepository.findAllCodes()).thenReturn(List.of());
+        when(serviceRepository.existsByCodeService("SRV-0001")).thenReturn(false);
+        when(serviceRepository.save(any())).thenAnswer(inv -> {
+            Service s = inv.getArgument(0);
+            s.setId(3);
+            return s;
+        });
+
+        var reponse = serviceGestionService.create(
+                new CreateServiceRequest("Audit comptable", null, null));
+
+        assertEquals("STANDARD", reponse.typeService());
     }
 }

@@ -125,7 +125,7 @@ public class DemandeGestionService {
             throw new BusinessException(ErrorMessages.SERVICE_INDISPONIBLE);
         }
         boolean creationEntreprise =
-                com.cabex.backend.dossier.DossierRegles.estServiceCreation(service.getNomService());
+                com.cabex.backend.dossier.DossierRegles.estTypeCreation(service.getTypeService());
 
         Societe societe = null;
         if (request.societeId() != null) {

@@ -9,7 +9,7 @@ interface Props {
   onSave: (payload: CreateServicePayload | UpdateServicePayload, id?: number) => Promise<void>
 }
 
-const emptyForm = { nomService: '', description: '' }
+const emptyForm = { nomService: '', typeService: 'STANDARD', description: '' }
 
 type FormState = typeof emptyForm
 
@@ -31,6 +31,7 @@ export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
       service
         ? {
             nomService: service.nomService,
+            typeService: service.typeService ?? 'STANDARD',
             description: service.description ?? '',
           }
         : emptyForm,
@@ -40,7 +41,7 @@ export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
 
   if (!open) return null
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setForm((f) => ({ ...f, [name]: value }))
   }
@@ -56,6 +57,7 @@ export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
     try {
       const payload = {
         nomService: form.nomService.trim(),
+        typeService: form.typeService,
         description: form.description.trim() || null,
       }
       await onSave(payload, service?.id)
@@ -113,6 +115,21 @@ export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
               Le code sera généré automatiquement (SRV-0001, …).
             </p>
           )}
+
+            <label className="field form-grid__full">
+              Type de service
+              <select
+                name="typeService"
+                value={form.typeService}
+                onChange={handleChange}
+              >
+                <option value="STANDARD">Standard</option>
+                <option value="CREATION">Création d&apos;entreprise ou de société</option>
+              </select>
+              <span className="form-help">
+                Seul un service de création porte un dossier de création d&apos;entreprise.
+              </span>
+            </label>
 
             <label className="field form-grid__full">
               Description
