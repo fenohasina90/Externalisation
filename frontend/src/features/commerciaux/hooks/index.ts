@@ -1,1 +1,1 @@
-export { useCommerciauxListStatic } from './useCommerciauxListStatic'
+export { useCommerciauxList, type StatutCommercialFilter } from './useCommerciauxList'

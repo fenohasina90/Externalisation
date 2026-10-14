@@ -6,8 +6,8 @@ interface Props {
   /** Commercial à modifier, null pour une création. */
   commercial: Commercial | null
   onClose: () => void
-  /** Étape 1 : sauvegarde locale. Étape 2 : brancher l'API ici. */
-  onSave: (payload: CreateCommercialPayload, id?: number) => void
+  /** Sauvegarde via l'API (rejette en cas d'erreur serveur). */
+  onSave: (payload: CreateCommercialPayload, id?: number) => Promise<void>
 }
 
 const emptyForm = {
@@ -26,12 +26,14 @@ type FormState = typeof emptyForm
 export function CommercialFormModal({ open, commercial, onClose, onSave }: Props) {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm(emptyForm)
       setError(null)
+      setSaving(false)
       return
     }
     setForm(
@@ -53,7 +55,7 @@ export function CommercialFormModal({ open, commercial, onClose, onSave }: Props
     setForm((f) => ({ ...f, [name]: value }))
   }
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!form.nomCommercial.trim()) {
       setError('Le nom est obligatoire')
@@ -63,14 +65,22 @@ export function CommercialFormModal({ open, commercial, onClose, onSave }: Props
       setError("L'adresse e-mail est obligatoire")
       return
     }
-    onSave(
-      {
-        nomCommercial: form.nomCommercial.trim(),
-        contact: form.contact.trim() || null,
-        email: form.email.trim(),
-      },
-      commercial?.id,
-    )
+    setSaving(true)
+    setError(null)
+    try {
+      await onSave(
+        {
+          nomCommercial: form.nomCommercial.trim(),
+          contact: form.contact.trim() || null,
+          email: form.email.trim(),
+        },
+        commercial?.id,
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Échec de l'enregistrement")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -143,11 +153,11 @@ export function CommercialFormModal({ open, commercial, onClose, onSave }: Props
           </div>
 
           <footer className="modal-footer">
-            <button type="button" className="btn-ghost" onClick={onClose}>
+            <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
               Annuler
             </button>
-            <button type="submit" className="btn-primary">
-              Enregistrer
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Enregistrement…' : 'Enregistrer'}
             </button>
           </footer>
         </form>

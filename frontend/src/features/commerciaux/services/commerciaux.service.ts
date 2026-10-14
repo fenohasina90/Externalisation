@@ -3,9 +3,12 @@ import type { ApiPage, PageQuery } from '@/types'
 import type { Commercial, CreateCommercialPayload } from '../types'
 
 export const commerciauxApi = {
-  async list(page?: PageQuery): Promise<ApiPage<Commercial>> {
+  async list(
+    page: PageQuery,
+    filters: { actif?: boolean } = {},
+  ): Promise<ApiPage<Commercial>> {
     const { data } = await http.get<ApiPage<Commercial>>('/commerciaux', {
-      params: buildQuery({}, page),
+      params: buildQuery({ actif: filters.actif }, page),
     })
     return data
   },
@@ -25,8 +28,9 @@ export const commerciauxApi = {
     return data
   },
 
-  async toggleActivation(id: number): Promise<Commercial> {
-    const { data } = await http.patch<Commercial>(`/commerciaux/${id}/activation`)
+  /** Active ou désactive un commercial (il reste dans la liste avec le statut Inactif). */
+  async setActif(id: number, actif: boolean): Promise<Commercial> {
+    const { data } = await http.patch<Commercial>(`/commerciaux/${id}/activation`, { actif })
     return data
   },
 }

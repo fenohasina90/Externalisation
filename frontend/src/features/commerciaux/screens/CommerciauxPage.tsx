@@ -1,33 +1,31 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Alert, Spinner } from '@/components/ui'
 import { CommercialFormModal, CommerciauxTable } from '../components'
-import { MOCK_COMmerCIAUX, type StatutCommercialFilter } from '../data/mockCommerciaux'
-import { useCommerciauxListStatic } from '../hooks'
+import { useCommerciauxList, type StatutCommercialFilter } from '../hooks/useCommerciauxList'
+import { commerciauxApi } from '../services/commerciaux.service'
 import type { Commercial, CreateCommercialPayload } from '../types'
 
 const PAGE_SIZE = 8
 
 /**
- * Liste des commerciaux — étape 1 : interface seule, données statiques.
- * Même structure que ResponsablesPage (KPI, filtres, tableau, pagination, modale).
- * L'intégration backend remplacera l'état local par commerciauxApi.
+ * Liste des commerciaux branchée sur l'API :
+ * recherche, filtre statut, pagination serveur, création avec
+ * immatricule générée côté backend (C001, C002, … unique).
  */
 export function CommerciauxPage() {
-  const [commerciaux, setCommerciaux] = useState<Commercial[]>(MOCK_COMmerCIAUX)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Commercial | null>(null)
   const [showFilters, setShowFilters] = useState(true)
   const [confirmToggle, setConfirmToggle] = useState<{ id: number; actif: boolean } | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
-  const { items, total, totalPages, page, setPage, search, setSearch, statut, setStatut } =
-    useCommerciauxListStatic({ source: commerciaux, size: PAGE_SIZE })
+  const { items, total, totalPages, page, loading, error, setPage, search, setSearch, statut, setStatut, reload } =
+    useCommerciauxList(PAGE_SIZE)
 
-  const { actifs, inactifs, pctActifs } = useMemo(() => {
-    const actifsCount = commerciaux.filter((c) => c.actif).length
-    const inactifsCount = commerciaux.length - actifsCount
-    const pct = commerciaux.length === 0 ? 0 : Math.round((actifsCount / commerciaux.length) * 100)
-    return { actifs: actifsCount, inactifs: inactifsCount, pctActifs: pct }
-  }, [commerciaux])
+  const actifs = items.filter((c) => c.actif).length
+  const inactifs = items.filter((c) => !c.actif).length
+  const pctActifs = total === 0 ? 0 : Math.round((actifs / total) * 100)
 
   const openCreate = () => {
     setEditing(null)
@@ -44,48 +42,24 @@ export function CommerciauxPage() {
     setEditing(null)
   }
 
-  const handleSave = (payload: CreateCommercialPayload, id?: number) => {
+  const handleSave = async (payload: CreateCommercialPayload, id?: number) => {
     if (id != null) {
-      // Modification : le matricule existant est conservé (non modifiable).
-      setCommerciaux((prev) =>
-        prev.map((c) =>
-          c.id === id
-            ? {
-                ...c,
-                nomCommercial: payload.nomCommercial,
-                contact: payload.contact ?? null,
-                email: payload.email ?? null,
-              }
-            : c,
-        ),
-      )
+      await commerciauxApi.update(id, payload)
     } else {
-      // Création : matricule généré automatiquement (C001, C002, …).
-      const nextId = Math.max(0, ...commerciaux.map((c) => c.id)) + 1
-      const maxMatricule = commerciaux.reduce((max, c) => {
-        const n = c.immatricule?.match(/^C(\d+)$/)?.[1]
-        const num = n ? parseInt(n, 10) : 0
-        return num > max ? num : max
-      }, 0)
-      const nextMatricule = `C${String(maxMatricule + 1).padStart(3, '0')}`
-      setCommerciaux((prev) => [
-        ...prev,
-        {
-          id: nextId,
-          nomCommercial: payload.nomCommercial,
-          immatricule: nextMatricule,
-          contact: payload.contact ?? null,
-          email: payload.email ?? null,
-          tauxCommission: payload.tauxCommission ?? null,
-          actif: true,
-        },
-      ])
+      await commerciauxApi.create(payload)
     }
     closeModal()
+    reload()
   }
 
-  const handleToggleActif = (id: number, actif: boolean) => {
-    setCommerciaux((prev) => prev.map((c) => (c.id === id ? { ...c, actif } : c)))
+  const handleToggleActif = async (id: number, actif: boolean) => {
+    setActionError(null)
+    try {
+      await commerciauxApi.setActif(id, actif)
+      reload()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Échec du changement de statut')
+    }
   }
 
   useEffect(() => {
@@ -115,6 +89,12 @@ export function CommerciauxPage() {
         </div>
       </header>
 
+      {actionError && (
+        <div className="alert alert-danger" role="alert">
+          {actionError}
+        </div>
+      )}
+
       <section className="kpi-grid">
         <div className="card kpi-card">
           <span className="kpi-tag">Total</span>
@@ -125,7 +105,7 @@ export function CommerciauxPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{commerciaux.length}</div>
+            <div className="kpi-num">{total}</div>
             <div className="kpi-label">Commerciaux</div>
           </div>
         </div>
@@ -195,74 +175,82 @@ export function CommerciauxPage() {
       )}
 
       <section className="card">
-        <div className="table-scroll-container no-global-scroll">
-          <div className="table-wrap">
-            <CommerciauxTable
-              items={items}
-              onEdit={openEdit}
-              onToggleActif={(id, actif) => setConfirmToggle({ id, actif })}
-            />
+        {loading && items.length === 0 ? (
+          <Spinner label="Chargement des commerciaux…" />
+        ) : error ? (
+          <div className="card-pad">
+            <Alert tone="danger">{error}</Alert>
           </div>
-
-          {total > 0 && (
-            <div className="table-footer">
-              <span>
-                Affichage de {page * PAGE_SIZE + 1} à {Math.min((page + 1) * PAGE_SIZE, total)} sur{' '}
-                {total} commerciaux
-              </span>
-              <div className="pagination">
-                <button
-                  type="button"
-                  className="pagination-item"
-                  onClick={() => setPage(Math.max(0, page - 1))}
-                  disabled={page <= 0}
-                >
-                  ‹
-                </button>
-                {Array.from({ length: Math.max(1, totalPages) }).map((_, i) => {
-                  const pageNum = i
-                  const isActive = pageNum === page
-                  const show =
-                    pageNum === 0 || pageNum === totalPages - 1 || Math.abs(pageNum - page) <= 1
-
-                  if (!show && pageNum !== 1 && pageNum !== totalPages - 2) {
-                    if (pageNum === page - 2 || pageNum === page + 2) {
-                      return (
-                        <span
-                          key={pageNum}
-                          className="pagination-item"
-                          style={{ border: 'none', background: 'transparent' }}
-                        >
-                          …
-                        </span>
-                      )
-                    }
-                    return null
-                  }
-
-                  return (
-                    <button
-                      key={pageNum}
-                      type="button"
-                      className={`pagination-item ${isActive ? 'active' : ''}`}
-                      onClick={() => setPage(pageNum)}
-                    >
-                      {pageNum + 1}
-                    </button>
-                  )
-                })}
-                <button
-                  type="button"
-                  className="pagination-item"
-                  onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
-                  disabled={page >= totalPages - 1}
-                >
-                  ›
-                </button>
-              </div>
+        ) : (
+          <div className="table-scroll-container no-global-scroll">
+            <div className="table-wrap">
+              <CommerciauxTable
+                items={items}
+                onEdit={openEdit}
+                onToggleActif={(id, actif) => setConfirmToggle({ id, actif })}
+              />
             </div>
-          )}
-        </div>
+
+            {total > 0 && (
+              <div className="table-footer">
+                <span>
+                  Affichage de {page * PAGE_SIZE + 1} à {Math.min((page + 1) * PAGE_SIZE, total)} sur{' '}
+                  {total} commerciaux
+                </span>
+                <div className="pagination">
+                  <button
+                    type="button"
+                    className="pagination-item"
+                    onClick={() => setPage(Math.max(0, page - 1))}
+                    disabled={page <= 0}
+                  >
+                    ‹
+                  </button>
+                  {Array.from({ length: Math.max(1, totalPages) }).map((_, i) => {
+                    const pageNum = i
+                    const isActive = pageNum === page
+                    const show =
+                      pageNum === 0 || pageNum === totalPages - 1 || Math.abs(pageNum - page) <= 1
+
+                    if (!show && pageNum !== 1 && pageNum !== totalPages - 2) {
+                      if (pageNum === page - 2 || pageNum === page + 2) {
+                        return (
+                          <span
+                            key={pageNum}
+                            className="pagination-item"
+                            style={{ border: 'none', background: 'transparent' }}
+                          >
+                            …
+                          </span>
+                        )
+                      }
+                      return null
+                    }
+
+                    return (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        className={`pagination-item ${isActive ? 'active' : ''}`}
+                        onClick={() => setPage(pageNum)}
+                      >
+                        {pageNum + 1}
+                      </button>
+                    )
+                  })}
+                  <button
+                    type="button"
+                    className="pagination-item"
+                    onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+                    disabled={page >= totalPages - 1}
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       <CommercialFormModal
@@ -287,7 +275,7 @@ export function CommerciauxPage() {
           if (!confirmToggle) return
           const { id, actif } = confirmToggle
           setConfirmToggle(null)
-          handleToggleActif(id, actif)
+          void handleToggleActif(id, actif)
         }}
       />
     </div>

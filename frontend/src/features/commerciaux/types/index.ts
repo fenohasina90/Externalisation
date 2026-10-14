@@ -10,7 +10,6 @@ export interface Commercial {
 
 export interface CreateCommercialPayload {
   nomCommercial: string
-  immatricule?: string | null
   email?: string | null
   contact?: string | null
   tauxCommission?: number | null

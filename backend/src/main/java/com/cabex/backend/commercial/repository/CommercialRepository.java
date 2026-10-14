@@ -17,6 +17,10 @@ public interface CommercialRepository extends JpaRepository<Commercial, Integer>
 
     boolean existsByEmail(String email);
 
+    /** Toutes les immatricules, pour le calcul de la suivante (C001, C002, …). */
+    @Query("SELECT c.immatricule FROM Commercial c")
+    java.util.List<String> findAllImmatricules();
+
     @Query("""
             SELECT c FROM Commercial c
             WHERE (:recherche IS NULL OR :recherche = ''
