@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
+import { Autocomplete } from '@/components/ui'
 import { responsablesApi } from '../services/responsables.service'
 import type { Responsable } from '../types'
 
@@ -10,7 +11,7 @@ interface Props {
 }
 
 const emptyForm = {
-  societeId: 0,
+  societe: '',
   nomClient: '',
   contact: '',
   email: '',
@@ -22,6 +23,7 @@ type FormState = typeof emptyForm
 export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Props) {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [societes, setSocietes] = useState<{ id: number; nom: string }[]>([])
+  const [societeId, setSocieteId] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,13 +33,17 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
       setForm(emptyForm)
       setError(null)
       setSocietes([])
+      setSocieteId(null)
       return
     }
     let mounted = true
     ;(async () => {
       try {
         const sList = await responsablesApi.societes()
-        if (mounted) setSocietes(sList)
+        if (mounted) {
+          setSocietes(sList)
+          if (responsable?.societeId != null) setSocieteId(responsable.societeId)
+        }
       } catch (e) {
         console.error(e)
       }
@@ -46,7 +52,7 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
     // Initialize form synchronously based on current props
     const initialForm = responsable
       ? {
-          societeId: responsable.societeId ?? 0,
+          societe: responsable.nomSociete ?? '',
           nomClient: responsable.nomClient,
           contact: responsable.contact ?? '',
           email: responsable.email ?? '',
@@ -55,6 +61,7 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
       : emptyForm
     setForm(initialForm)
     setError(null)
+    if (!responsable) setSocieteId(null)
 
     return () => {
       mounted = false
@@ -63,12 +70,22 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
 
   if (!open) return null
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const societeOptions = societes.map((s) => ({ id: s.id, label: s.nom }))
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setForm((f) => ({
       ...f,
       [name]: value,
     }))
+  }
+
+  const resolveSocieteId = (): number | null => {
+    if (societeId != null) return societeId
+    const cherche = form.societe.trim().toLowerCase()
+    if (!cherche) return null
+    // Une société inexistante n'est jamais créée : la suggestion reste vide.
+    return societes.find((s) => s.nom.toLowerCase() === cherche)?.id ?? null
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -84,9 +101,10 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
           fonction: form.fonction || null,
         })
       } else {
-        if (!form.societeId) throw new Error('Veuillez sélectionner une société')
+        const cibleId = resolveSocieteId()
+        if (cibleId == null) throw new Error('Veuillez sélectionner une société existante')
         await responsablesApi.create({
-          societeId: form.societeId,
+          societeId: cibleId,
           nomClient: form.nomClient,
           contact: form.contact || null,
           email: form.email || null,
@@ -130,23 +148,22 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
           {error && <div style={{ color: 'var(--danger)', fontSize: 14 }}>{error}</div>}
 
           <div className="form-grid">
-            <label className="field">
-              Société <span className="required">*</span>
-              <select
-                name="societeId"
-                value={form.societeId}
-                onChange={handleChange}
-                required
-                disabled={!!responsable}
-              >
-                <option value={0}>Sélectionner la société</option>
-                {societes.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nom}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="field">
+              <span className="field-label">
+                Société <span className="required">*</span>
+              </span>
+              {responsable ? (
+                <input value={form.societe} disabled readOnly aria-label="Société" />
+              ) : (
+                <Autocomplete
+                  value={form.societe}
+                  placeholder="Nom de la société…"
+                  onTextChange={(texte) => setForm((f) => ({ ...f, societe: texte }))}
+                  onPick={(option) => setSocieteId(option ? Number(option.id) : null)}
+                  options={societeOptions}
+                />
+              )}
+            </div>
 
             <label className="field">
               Nom <span className="required">*</span>

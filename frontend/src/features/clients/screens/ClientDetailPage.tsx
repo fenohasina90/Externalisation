@@ -1,145 +1,142 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { STATUT_LABEL } from '@/features/demandes/data/mockDemandes'
-import { RESPONSABLES_PAR_CLIENT } from '@/features/demandes/data/mockDemandes'
-import { MOCK_DEMANDES } from '@/features/demandes/data/mockDemandes'
-import { MOCK_HISTORIQUE } from '@/features/paiements/data/mockPaiements'
-import { ModePill } from '@/features/paiements/components'
-import { MOCK_PLANS } from '@/features/paiements/data/mockPaiements'
+import { Alert, Spinner } from '@/components/ui'
+import { useApi } from '@/hooks/useApi'
+import { auditApi, type AuditFiltres } from '@/features/administration/services/administration.service'
+import type { AuditEntry } from '@/features/administration/types'
+import { formatDate, formatDateHeure, formatMontantMGA, formatTailleOctets } from '@/utils/format'
+import { getLibelleActionAudit } from '@/features/administration/constants/labels'
 import { ClientFormModal } from '../components'
-import {
-  ATLAS_DEMANDES,
-  ATLAS_DETAIL,
-  ATLAS_DOCUMENTS,
-  ATLAS_HISTORIQUE,
-  ATLAS_RESPONSABLES,
-  MOCK_CLIENTS,
-  initialesClient,
-  type ClientResume,
-  type EvenementClient,
-  type ResponsableClient,
-} from '../data/mockClients'
+import { clientsApi } from '../services/clients.service'
+import { responsablesApi } from '@/features/responsables/services/responsables.service'
+import { domainesApi } from '@/features/services/services/services.service'
+import type { Domaine } from '@/features/services/types'
+import type { ApiPage } from '@/types'
+import type { CreateSocietePayload, Societe, SocieteDetail } from '../types'
+import { codeSociete, statutSociete } from '../types'
 
 type Onglet = 'informations' | 'demandes' | 'paiements' | 'documents' | 'historique'
 
-function formatMGA(n: number): string {
-  return `${n.toLocaleString('fr-FR')} MGA`
+function initiales(nomComplet: string): string {
+  const parts = nomComplet.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '—'
+  if (parts.length === 1) return (parts[0][0] ?? '—').toUpperCase()
+  return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase()
 }
 
-function toneStatut(label: string): string {
-  if (label === 'En cours' || label === 'EN_COURS') return 'pill info'
-  if (label === 'Terminée' || label === 'TERMINEE' || label === 'Validation' || label === 'VALIDATION') return 'pill ok'
-  if (label === 'Annulée' || label === 'ANNULEE') return 'pill danger'
-  return 'pill wt'
+function statutPill(statut: string, fallback = 'pill wt'): string {
+  const code = statut.toUpperCase().replace(/ /g, '_')
+  if (code === 'EN_COURS' || statut === 'En cours') return 'pill info'
+  if (['TERMINEE', 'VALIDATION'].includes(code) || ['Terminée', 'Validation'].includes(statut))
+    return 'pill ok'
+  if (code === 'ANNULEE' || statut === 'Annulée') return 'pill danger'
+  if (statut === 'Payé' || statut === 'Payée') return 'pill ok'
+  if (statut === 'Partiel' || statut === 'Partielle') return 'pill warning'
+  if (statut === 'En retard') return 'pill danger'
+  if (statut === 'En attente' || code === 'EN_ATTENTE') return 'pill wt'
+  return fallback
 }
 
-function tonePaiement(label: string): string {
-  if (label === 'Payé') return 'pill ok'
-  if (label === 'Partiel') return 'pill warning'
-  if (label === 'En retard') return 'pill danger'
-  return 'pill wt'
-}
-
-function toneEvenement(e: EvenementClient): string {
-  if (e.categorie === 'Paiement') return 'pill info'
-  if (e.texte.startsWith('Création')) return 'pill ok'
-  return 'pill wt'
-}
-
-function paginer<T>(items: T[], page: number, size: number): T[] {
-  return items.slice(page * size, page * size + size)
-}
-
-/** Détail client 360° : informations, demandes, paiements, documents, historique. */
+/** Fiche client 360° branchée sur GET /api/clients/{id}. */
 export function ClientDetailPage() {
-  const { code } = useParams<{ code: string }>()
-  const [client, setClient] = useState<ClientResume | null>(
-    () => MOCK_CLIENTS.find((c) => c.code === code) ?? null,
-  )
+  const { id } = useParams<{ id: string }>()
+  const societeId = Number(id)
   const [onglet, setOnglet] = useState<Onglet>('informations')
   const [editOpen, setEditOpen] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [pageDemandes, setPageDemandes] = useState(0)
   const [pagePaiements, setPagePaiements] = useState(0)
 
-  const estAtlas = code === 'CLI-0248'
+  const {
+    data: detail,
+    loading,
+    error,
+    reload,
+  } = useApi<SocieteDetail>(() => clientsApi.getDetail(societeId), [societeId])
 
-  const demandes = useMemo(() => {
-    if (!client) return []
-    if (estAtlas) {
-      return ATLAS_DEMANDES.map((d) => ({
-        reference: d.reference,
-        service: d.service,
-        dateDebut: d.dateDebut,
-        dateFin: d.dateFin,
-        statut: d.statut,
-        paiement: d.paiement,
-      }))
-    }
-    return MOCK_DEMANDES.filter((d) => d.client === client.nom).map((d) => ({
-      reference: d.reference,
-      service: d.service,
-      dateDebut: d.dateDebut,
-      dateFin: d.dateFin,
-      statut: STATUT_LABEL[d.statut],
-      paiement: d.situationPaiement,
-    }))
-  }, [client, estAtlas])
-
-  const paiements = useMemo(
-    () => (client ? MOCK_HISTORIQUE.filter((h) => h.client === client.nom) : []),
-    [client],
+  const { data: domaines, reload: reloadDomaines } = useApi<ApiPage<Domaine>>(
+    () => domainesApi.list({ page: 0, size: 100, recherche: null }, {}),
+    [],
   )
 
-  const kpis = useMemo(() => {
-    if (!client) return null
-    if (estAtlas) {
-      const total = ATLAS_DETAIL.montantTotal
-      const paye = ATLAS_DETAIL.montantPaye
-      return { demandes: 15, total, paye, pctPaye: 68, reste: total - paye, pctReste: 32 }
+  const client: Societe | null = detail?.societe ?? null
+  const statut = client ? statutSociete(client) : 'Actif'
+  const synthese = detail?.synthese ?? null
+  const demandes = detail?.demandes ?? []
+  const paiements = detail?.paiements ?? []
+  const documents = detail?.piecesJointes ?? []
+
+  const filtresHistorique: AuditFiltres = { entite: 'Societe' }
+  const { data: audit } = useApi(
+    () => auditApi.list({ page: 0, size: 100, recherche: null }, filtresHistorique),
+    [societeId],
+  )
+  const historique: AuditEntry[] = (audit?.content ?? []).filter((e) => e.entiteId === societeId)
+
+  const pctPaye =
+    synthese?.montantTotal != null && synthese.montantTotal > 0 && synthese.montantPaye != null
+      ? Math.round((synthese.montantPaye / synthese.montantTotal) * 100)
+      : 0
+  const pctReste = synthese ? 100 - pctPaye : 0
+
+  const resolveDomaine = async (nom: string): Promise<number> => {
+    const cherche = nom.trim().toLowerCase();
+    const existants = (domaines?.content ?? []).map((d) => ({ id: d.id, nom: d.nomDomaine }));
+    const exact = existants.find((d) => d.nom.toLowerCase() === cherche);
+    if (exact) return exact.id;
+    const cree = await domainesApi.create({ nomDomaine: nom.trim() });
+    reloadDomaines();
+    return cree.id;
+  };
+
+  const handleEditSave = async (payload: CreateSocietePayload & { responsable: string }) => {
+    if (!client) return
+    const { responsable, ...societe } = payload
+    await clientsApi.update(client.id, societe)
+    const premier = detail?.responsables?.[0] ?? null
+    if (premier) {
+      if (responsable !== premier.nomClient) {
+        await responsablesApi.update(premier.id, { nomClient: responsable })
+      }
+    } else {
+      await responsablesApi.create({ societeId: client.id, nomClient: responsable })
     }
-    const dems = MOCK_DEMANDES.filter((d) => d.client === client.nom)
-    const total = dems.reduce((s, d) => s + d.montantTotal, 0)
-    const paye = MOCK_PLANS.filter((p) => p.client === client.nom).reduce((s, p) => s + p.montantPaye, 0)
-    const pctPaye = total === 0 ? 0 : Math.round((paye / total) * 100)
-    return { demandes: dems.length, total, paye, pctPaye, reste: total - paye, pctReste: 100 - pctPaye }
-  }, [client, estAtlas])
+    setEditOpen(false)
+    reload()
+  }
 
-  const responsables: ResponsableClient[] = useMemo(() => {
-    if (!client) return []
-    if (estAtlas) return ATLAS_RESPONSABLES
-    const noms = RESPONSABLES_PAR_CLIENT[client.nom] ?? [client.responsable]
-    return noms.map((nom, i) => ({
-      nom,
-      principal: i === 0,
-      fonction: '—',
-      telephone: '—',
-      email: '—',
-      actif: true,
-    }))
-  }, [client, estAtlas])
+  const handleArchive = async () => {
+    if (!client) return
+    await clientsApi.archive(client.id, true)
+    setConfirmArchive(false)
+    reload()
+  }
 
-  const documents = useMemo(() => (estAtlas ? ATLAS_DOCUMENTS : []), [estAtlas])
+  const telecharger = async (pieceId: number, nom: string | null) => {
+    const blob = await clientsApi.telechargerPiece(pieceId)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nom ?? `document-${pieceId}`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
-  const historique: EvenementClient[] = useMemo(() => {
-    if (!client) return []
-    if (estAtlas) return ATLAS_HISTORIQUE
-    return [
-      {
-        dateHeure: '14/01/2026 11:00',
-        categorie: 'Client' as const,
-        texte: 'Création du client',
-        utilisateur: 'Sarah Cohen',
-        commentaire: '—',
-      },
-    ]
-  }, [client, estAtlas])
-
-  if (!client || !kpis) {
+  if (loading) {
     return (
       <div className="app-page responsables-page">
-        <div className="alert alert-danger">Client introuvable.</div>
+        <Spinner label="Chargement du client…" />
+      </div>
+    )
+  }
+
+  if (error || !client) {
+    return (
+      <div className="app-page responsables-page">
+        <div className="card-pad">
+          <Alert tone="danger">{error ?? 'Client introuvable.'}</Alert>
+        </div>
         <Link to="/clients" className="btn-ghost" style={{ alignSelf: 'flex-start' }}>
           Retour à la liste
         </Link>
@@ -147,45 +144,35 @@ export function ClientDetailPage() {
     )
   }
 
-  const telechargerDoc = (nom: string) => {
-    const url = URL.createObjectURL(
-      new Blob([`Document de démonstration : ${nom}`], { type: 'text/plain;charset=utf-8' }),
-    )
-    const a = document.createElement('a')
-    a.href = url
-    a.download = nom
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-  }
+  const pageSizeDemandes = 5
+  const totalPagesDemandes = Math.max(1, Math.ceil(demandes.length / pageSizeDemandes))
+  const demandesPage = demandes.slice(pageDemandes * pageSizeDemandes, pageDemandes * pageSizeDemandes + pageSizeDemandes)
+  const pageSizePaiements = 5
+  const totalPagesPaiements = Math.max(1, Math.ceil(paiements.length / pageSizePaiements))
+  const paiementsPage = paiements.slice(pagePaiements * pageSizePaiements, pagePaiements * pageSizePaiements + pageSizePaiements)
 
   return (
     <div className="app-page responsables-page">
       <header className="page-header page-header-sticky">
         <div>
           <h1>
-            {client.nom}{' '}
-            <span className={client.statut === 'Actif' ? 'pill ok' : 'pill wt'}>
-              ● {client.statut}
-            </span>
+            {client.nomSociete}{' '}
+            <span className={statut === 'Actif' ? 'pill ok' : 'pill wt'}>● {statut}</span>
           </h1>
           <p>
-            {client.code} · {client.activite || '—'}
+            {codeSociete(client.id)} · {client.activite || '—'}
           </p>
         </div>
         <div className="actions">
           <button type="button" className="btn-ghost" onClick={() => setEditOpen(true)}>
             Modifier
           </button>
-          {client.statut !== 'Archivé' && (
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => setConfirmArchive(true)}
-            >
+          {statut !== 'Archivé' && (
+            <button type="button" className="btn-ghost" onClick={() => setConfirmArchive(true)}>
               Archiver
             </button>
           )}
-          <Link to={`/demandes/nouveau?client=${encodeURIComponent(client.nom)}`} className="btn-primary">
+          <Link to={`/demandes/nouveau?client=${encodeURIComponent(client.nomSociete)}`} className="btn-primary">
             <svg className="sv" viewBox="0 0 24 24">
               <path d="M12 5v14M5 12h14" />
             </svg>
@@ -202,7 +189,7 @@ export function ClientDetailPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{kpis.demandes}</div>
+            <div className="kpi-num">{client.nombreDemandes}</div>
             <div className="kpi-label">Demandes</div>
           </div>
         </div>
@@ -215,13 +202,13 @@ export function ClientDetailPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{formatMGA(kpis.total)}</div>
+            <div className="kpi-num">{synthese ? formatMontantMGA(synthese.montantTotal) : '—'}</div>
             <div className="kpi-label">Montant total</div>
           </div>
         </div>
 
         <div className="card kpi-card hl">
-          <span className="kpi-tag">{kpis.pctPaye} %</span>
+          {synthese && <span className="kpi-tag">{pctPaye} %</span>}
           <div className="kpi-icon">
             <svg className="sv" viewBox="0 0 24 24">
               <circle cx="12" cy="12" r="9" />
@@ -229,13 +216,13 @@ export function ClientDetailPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{formatMGA(kpis.paye)}</div>
+            <div className="kpi-num">{synthese ? formatMontantMGA(synthese.montantPaye) : '—'}</div>
             <div className="kpi-label">Montant payé</div>
           </div>
         </div>
 
         <div className="card kpi-card">
-          <span className="kpi-tag">{kpis.pctReste} %</span>
+          {synthese && <span className="kpi-tag">{pctReste} %</span>}
           <div
             className="kpi-icon"
             style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}
@@ -246,7 +233,7 @@ export function ClientDetailPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{formatMGA(kpis.reste)}</div>
+            <div className="kpi-num">{synthese ? formatMontantMGA(synthese.resteAPayer) : '—'}</div>
             <div className="kpi-label">Reste à payer</div>
           </div>
         </div>
@@ -261,14 +248,14 @@ export function ClientDetailPage() {
             ['documents', 'Documents'],
             ['historique', 'Historique'],
           ] as Array<[Onglet, string]>
-        ).map(([id, label]) => (
+        ).map(([tabId, label]) => (
           <button
-            key={id}
+            key={tabId}
             type="button"
             role="tab"
-            aria-selected={onglet === id}
-            className={`tab${onglet === id ? ' tab--active' : ''}`}
-            onClick={() => setOnglet(id)}
+            aria-selected={onglet === tabId}
+            className={`tab${onglet === tabId ? ' tab--active' : ''}`}
+            onClick={() => setOnglet(tabId)}
           >
             {label}
           </button>
@@ -284,11 +271,11 @@ export function ClientDetailPage() {
             <div className="info-grid">
               <div className="info-item">
                 <span>Client</span>
-                <b>{client.nom}</b>
+                <b>{client.nomSociete}</b>
               </div>
               <div className="info-item">
                 <span>Code</span>
-                <b>{client.code}</b>
+                <b>{codeSociete(client.id)}</b>
               </div>
               <div className="info-item">
                 <span>Activité</span>
@@ -296,23 +283,25 @@ export function ClientDetailPage() {
               </div>
               <div className="info-item">
                 <span>Contact</span>
-                <b>{client.telephone || '—'}</b>
+                <b>{client.contact || '—'}</b>
               </div>
               <div className="info-item">
                 <span>Email</span>
                 <b>{client.email || '—'}</b>
               </div>
               <div className="info-item">
+                <span>Domaine</span>
+                <b>{client.nomDomaine || '—'}</b>
+              </div>
+              <div className="info-item">
                 <span>Statut</span>
                 <b>
-                  <span className={client.statut === 'Actif' ? 'pill ok' : 'pill wt'}>
-                    ● {client.statut}
-                  </span>
+                  <span className={statut === 'Actif' ? 'pill ok' : 'pill wt'}>● {statut}</span>
                 </b>
               </div>
               <div className="info-item">
                 <span>Nombre de demandes</span>
-                <b>{client.nbDemandes}</b>
+                <b>{client.nombreDemandes}</b>
               </div>
             </div>
           </section>
@@ -337,16 +326,16 @@ export function ClientDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {responsables.map((r) => (
-                      <tr key={r.nom}>
+                    {(detail?.responsables ?? []).map((r, i) => (
+                      <tr key={r.id}>
                         <td>
-                          <span className="avatar">{initialesClient(r.nom)}</span>
-                          <span className="fw-600">{r.nom}</span>{' '}
-                          {r.principal && <span className="pill info">● Principal</span>}
+                          <span className="avatar">{initiales(r.nomClient)}</span>
+                          <span className="fw-600">{r.nomClient}</span>{' '}
+                          {i === 0 && <span className="pill info">● Principal</span>}
                         </td>
-                        <td className="text-secondary">{r.fonction}</td>
-                        <td className="text-secondary">{r.telephone}</td>
-                        <td className="text-secondary">{r.email}</td>
+                        <td className="text-secondary">{r.fonction ?? '—'}</td>
+                        <td className="text-secondary">{r.contact ?? '—'}</td>
+                        <td className="text-secondary">{r.email ?? '—'}</td>
                         <td>
                           {r.actif ? (
                             <span className="pill ok">● Actif</span>
@@ -356,6 +345,13 @@ export function ClientDetailPage() {
                         </td>
                       </tr>
                     ))}
+                    {(detail?.responsables ?? []).length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="text-muted">
+                          Aucun responsable pour ce client.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -381,46 +377,63 @@ export function ClientDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginer(demandes, pageDemandes, 5).map((d) => (
-                    <tr key={d.reference}>
-                      <td className="fw-700">{d.reference}</td>
-                      <td>{d.service}</td>
-                      <td className="text-secondary">{d.dateDebut}</td>
-                      <td className="text-secondary">{d.dateFin}</td>
+                  {demandesPage.map((d) => {
+                    const reste = d.resteAPayer ?? 0
+                    const paye = d.montantPaye ?? 0
+                    const situation = reste <= 0 && paye > 0 ? 'Payé' : paye > 0 ? 'Partiel' : 'En attente'
+                    return (
+                      <tr key={d.id}>
+                        <td className="fw-700">{d.referenceDemande}</td>
+                        <td>{d.serviceNom ?? '—'}</td>
+                        <td className="text-secondary">{formatDate(d.debutService)}</td>
+                        <td className="text-secondary">{formatDate(d.finService)}</td>
                       <td>
-                        <span className={toneStatut(d.statut)}>● {d.statut}</span>
+                        <span className={statutPill(d.statutActuel ?? '')}>
+                          ● {d.statutActuel?.replace(/_/g, ' ') ?? '—'}
+                        </span>
                       </td>
-                      <td>
-                        <span className={tonePaiement(d.paiement)}>● {d.paiement}</span>
-                      </td>
-                      <td>
-                        <Link to={`/demandes/${d.reference}`} className="lk">
-                          Voir ›
-                        </Link>
+                        <td>
+                          <span className={statutPill(situation)}>● {situation}</span>
+                        </td>
+                        <td>
+                          <Link to={`/demandes/${d.referenceDemande}`} className="lk">
+                            Voir ›
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {demandes.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="text-muted">
+                        Aucune demande pour ce client.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
-            <div className="table-footer">
-              <span>
-                Affichage de {pageDemandes * 5 + 1} à {Math.min((pageDemandes + 1) * 5, demandes.length)} sur{' '}
-                {demandes.length} demandes
-              </span>
-              <div className="pagination">
-                {Array.from({ length: Math.max(1, Math.ceil(demandes.length / 5)) }).map((_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className={`pagination-item ${i === pageDemandes ? 'active' : ''}`}
-                    onClick={() => setPageDemandes(i)}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
+            {demandes.length > 0 && (
+              <div className="table-footer">
+                <span>
+                  Affichage de {pageDemandes * pageSizeDemandes + 1} à{' '}
+                  {Math.min((pageDemandes + 1) * pageSizeDemandes, demandes.length)} sur{' '}
+                  {demandes.length} demandes
+                </span>
+                <div className="pagination">
+                  {Array.from({ length: totalPagesDemandes }).map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className={`pagination-item ${i === pageDemandes ? 'active' : ''}`}
+                      onClick={() => setPageDemandes(i)}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </section>
       )}
@@ -441,16 +454,18 @@ export function ClientDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginer(paiements, pagePaiements, 5).map((p) => (
-                    <tr key={p.reference}>
-                      <td className="fw-700">{p.reference}</td>
-                      <td className="text-secondary">{p.demandeRef}</td>
-                      <td className="text-secondary">{p.date}</td>
-                      <td className="cell-number fw-700">{formatMGA(p.montant)}</td>
+                  {paiementsPage.map((p) => (
+                    <tr key={p.id}>
+                      <td className="fw-700">{p.referencePaiement}</td>
+                      <td className="text-secondary">{p.referenceDemande}</td>
+                      <td className="text-secondary">{formatDate(p.datePaiement)}</td>
+                      <td className="cell-number fw-700">{formatMontantMGA(p.montantPaye)}</td>
                       <td>
-                        <ModePill mode={p.mode} />
+                        <span className={p.libelleMode === 'Virement' ? 'pill info' : 'pill wt'}>
+                          ● {p.libelleMode ?? '—'}
+                        </span>
                       </td>
-                      <td className="text-secondary">{p.refVirement ?? '—'}</td>
+                      <td className="text-secondary">{p.referenceVirement ?? '—'}</td>
                     </tr>
                   ))}
                   {paiements.length === 0 && (
@@ -466,11 +481,12 @@ export function ClientDetailPage() {
             {paiements.length > 0 && (
               <div className="table-footer">
                 <span>
-                  Affichage de {pagePaiements * 5 + 1} à{' '}
-                  {Math.min((pagePaiements + 1) * 5, paiements.length)} sur {paiements.length} paiements
+                  Affichage de {pagePaiements * pageSizePaiements + 1} à{' '}
+                  {Math.min((pagePaiements + 1) * pageSizePaiements, paiements.length)} sur{' '}
+                  {paiements.length} paiements
                 </span>
                 <div className="pagination">
-                  {Array.from({ length: Math.max(1, Math.ceil(paiements.length / 5)) }).map((_, i) => (
+                  {Array.from({ length: totalPagesPaiements }).map((_, i) => (
                     <button
                       key={i}
                       type="button"
@@ -499,21 +515,23 @@ export function ClientDetailPage() {
                     <th>Demande</th>
                     <th>Taille</th>
                     <th>Date d&apos;ajout</th>
-                    <th>Utilisateur</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {documents.map((doc) => (
-                    <tr key={doc.nom}>
-                      <td className="fw-600">{doc.nom}</td>
-                      <td className="text-secondary">{doc.type}</td>
-                      <td className="text-secondary">{doc.demande ?? '—'}</td>
-                      <td className="text-secondary">{doc.taille}</td>
-                      <td className="text-secondary">{doc.dateAjout}</td>
-                      <td>{doc.utilisateur}</td>
+                    <tr key={doc.id}>
+                      <td className="fw-600">{doc.nomOriginal}</td>
+                      <td className="text-secondary">{(doc.typeFichier ?? '').toUpperCase()}</td>
+                      <td className="text-secondary">{doc.referenceDemande ?? '—'}</td>
+                      <td className="text-secondary">{formatTailleOctets(doc.tailleFichier)}</td>
+                      <td className="text-secondary">{formatDateHeure(doc.createdAt)}</td>
                       <td>
-                        <button type="button" className="btn-link success" onClick={() => telechargerDoc(doc.nom)}>
+                        <button
+                          type="button"
+                          className="btn-link success"
+                          onClick={() => void telecharger(doc.id, doc.nomOriginal)}
+                        >
                           Télécharger
                         </button>
                       </td>
@@ -521,7 +539,7 @@ export function ClientDetailPage() {
                   ))}
                   {documents.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="text-muted">
+                      <td colSpan={6} className="text-muted">
                         Aucun document pour ce client.
                       </td>
                     </tr>
@@ -547,16 +565,24 @@ export function ClientDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {historique.map((h, i) => (
-                    <tr key={i}>
-                      <td className="text-secondary">{h.dateHeure}</td>
+                  {historique.map((h) => (
+                    <tr key={h.id}>
+                      <td className="text-secondary">{formatDateHeure(h.createdAt)}</td>
                       <td>
-                        <span className={toneEvenement(h)}>● {h.categorie}</span> {h.texte}
+                        <span className="pill info">● {getLibelleActionAudit(h.action)}</span>{' '}
+                        {h.nouvelleValeur ?? h.ancienneValeur ?? ''}
                       </td>
-                      <td>{h.utilisateur}</td>
-                      <td className="text-secondary">{h.commentaire}</td>
+                      <td>{h.nomUtilisateur ?? '—'}</td>
+                      <td className="text-secondary">—</td>
                     </tr>
                   ))}
+                  {historique.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="text-muted">
+                        Aucun événement pour ce client.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -567,23 +593,22 @@ export function ClientDetailPage() {
       <ClientFormModal
         open={editOpen}
         client={client}
+        domaines={(domaines?.content ?? []).map((d) => ({ id: d.id, nom: d.nomDomaine }))}
+        resolveDomaine={resolveDomaine}
         onClose={() => setEditOpen(false)}
-        onSave={(payload) => {
-          setClient({ ...client, ...payload })
-          setEditOpen(false)
-        }}
+        onSave={handleEditSave}
       />
 
       <ConfirmDialog
         open={confirmArchive}
         titre="Archiver ce client ?"
-        message={`« ${client.nom} » sera masqué des listes courantes. Ses demandes et son historique sont conservés.`}
+        message={`« ${client.nomSociete} » sera masqué des listes courantes. Ses demandes et son historique sont conservés.`}
         confirmer="Archiver"
         ton="danger"
         onAnnuler={() => setConfirmArchive(false)}
         onConfirmer={() => {
           setConfirmArchive(false)
-          setClient({ ...client, statut: 'Archivé' })
+          void handleArchive()
         }}
       />
     </div>

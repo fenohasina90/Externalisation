@@ -1,22 +1,35 @@
 import { buildQuery, http } from '@/api/http'
 import type { ApiPage, PageQuery } from '@/types'
-import type { CreateSocietePayload, Societe, UpdateSocietePayload } from '../types'
+import type { CreateSocietePayload, Societe, SocieteDetail, UpdateSocietePayload } from '../types'
 
-export interface SocieteFiltres {
+export interface ClientsFiltres {
   actif?: boolean
+  archive?: boolean
   domaineId?: number
 }
 
+export interface TriClients {
+  champ: 'nomSociete' | 'activite'
+  sens: 'asc' | 'desc'
+}
+
 export const clientsApi = {
-  async list(page?: PageQuery, filtres?: SocieteFiltres): Promise<ApiPage<Societe>> {
-    const { data } = await http.get<ApiPage<Societe>>('/clients', {
-      params: buildQuery({ ...filtres }, page),
-    })
+  async list(
+    page: PageQuery,
+    filtres: ClientsFiltres = {},
+    tri: TriClients = { champ: 'nomSociete', sens: 'asc' },
+  ): Promise<ApiPage<Societe>> {
+    const params = buildQuery(
+      { actif: filtres.actif, archive: filtres.archive, domaineId: filtres.domaineId },
+      page,
+    )
+    params.set('sort', `${tri.champ},${tri.sens}`)
+    const { data } = await http.get<ApiPage<Societe>>('/clients', { params })
     return data
   },
 
-  async get(id: number): Promise<Societe> {
-    const { data } = await http.get<Societe>(`/clients/${id}`)
+  async getDetail(id: number): Promise<SocieteDetail> {
+    const { data } = await http.get<SocieteDetail>(`/clients/${id}`)
     return data
   },
 
@@ -30,8 +43,17 @@ export const clientsApi = {
     return data
   },
 
-  async archive(id: number): Promise<Societe> {
-    const { data } = await http.patch<Societe>(`/clients/${id}/archive`)
+  /** Archive (définitif, sans restauration) ou restaure via l'API. */
+  async archive(id: number, archive: boolean): Promise<Societe> {
+    const { data } = await http.patch<Societe>(`/clients/${id}/archive`, { archive })
+    return data
+  },
+
+  /** Télécharge une pièce jointe (blob). */
+  async telechargerPiece(id: number): Promise<Blob> {
+    const { data } = await http.get<Blob>(`/documents/${id}/download`, {
+      responseType: 'blob',
+    })
     return data
   },
 }

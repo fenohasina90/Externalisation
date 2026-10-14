@@ -121,9 +121,11 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
           )}
 
           <h4 className="form-section">Société</h4>
-          <div className="form-grid">
+          <div className="form-grid form-grid--2">
             <label className="field">
-              Forme juridique <span className="required">*</span>
+              <span className="field-label">
+                Forme juridique <span className="required">*</span>
+              </span>
               <select
                 name="formeJuridique"
                 value={form.formeJuridique}
@@ -139,12 +141,16 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
             </label>
             {form.formeJuridique === 'AUTRE' && (
               <label className="field">
-                Préciser <span className="required">*</span>
+                <span className="field-label">
+                  Préciser <span className="required">*</span>
+                </span>
                 <input name="formePrecision" value={form.formePrecision} onChange={handleChange} required />
               </label>
             )}
             <label className="field form-grid__full">
-              Dénomination <span className="required">*</span>
+              <span className="field-label">
+                Dénomination <span className="required">*</span>
+              </span>
               <input name="denomination" value={form.denomination} onChange={handleChange} required />
             </label>
             <label className="field">
@@ -168,9 +174,12 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
             {form.formeJuridique !== 'INDIVIDUELLE' && <span className="required">*</span>}
           </h4>
           {form.associes.map((a, i) => (
-            <div key={i} className="form-grid" style={{ marginBottom: 12 }}>
+            <div key={i} className="form-grid form-grid--2" style={{ marginBottom: 12 }}>
               <label className="field">
-                Nom des associés {form.formeJuridique !== 'INDIVIDUELLE' && <span className="required">*</span>}
+              <span className="field-label">
+                Nom des associés{' '}
+                {form.formeJuridique !== 'INDIVIDUELLE' && <span className="required">*</span>}
+              </span>
                 <input value={a.nom} onChange={(e) => setAssocie(i, 'nom', e.target.value)} />
               </label>
               <label className="field">
@@ -211,7 +220,7 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
           </button>
 
           <h4 className="form-section">Gérance</h4>
-          <div className="form-grid">
+          <div className="form-grid form-grid--2">
             <label className="field">
               Nom du gérant
               <input name="nomGerant" value={form.nomGerant} onChange={handleChange} />
@@ -233,7 +242,7 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
           </div>
 
           <h4 className="form-section">Siège et établissement</h4>
-          <div className="form-grid">
+          <div className="form-grid form-grid--2">
             <label className="field">
               Secteur d’activité
               <input name="secteurActivite" value={form.secteurActivite} onChange={handleChange} />
@@ -302,7 +311,7 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
           </div>
 
           <h4 className="form-section">Activité et situation</h4>
-          <div className="form-grid">
+          <div className="form-grid form-grid--2">
             <label className="field form-grid__full">
               Objet social (principales activités)
               <textarea name="objetSocial" value={form.objetSocial} onChange={handleChange} rows={3} style={{ height: 80 }} />

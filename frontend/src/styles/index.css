@@ -2392,6 +2392,70 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
+/* Autocomplétion                                                    */
+/* ------------------------------------------------------------------ */
+
+.autocomplete {
+  position: relative;
+  display: block;
+}
+
+.autocomplete input {
+  width: 100%;
+}
+
+.autocomplete__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgb(15 23 42 / 0.16);
+  padding: 4px;
+}
+
+.autocomplete__option {
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.autocomplete__option--active,
+.autocomplete__option:hover {
+  background: var(--bg-soft);
+  color: var(--g);
+  font-weight: 600;
+}
+
+.autocomplete__info {
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+.autocomplete__hint {
+  margin: 2px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--highlight-bg);
+  border: 1px solid var(--highlight-border);
+  font-size: 13px;
+  color: var(--success);
+}
+
+/* ------------------------------------------------------------------ */
 /* Pages d'erreur (404 / 403)                                        */
 /* ------------------------------------------------------------------ */
 

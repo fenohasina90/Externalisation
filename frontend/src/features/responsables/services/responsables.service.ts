@@ -19,7 +19,7 @@ export const responsablesApi = {
     filters: ResponsablesFilters = {},
   ): Promise<ApiPage<Responsable>> {
     const { data } = await http.get<ApiPage<Responsable>>('/responsables', {
-      params: buildQuery({ actif: filters.actif }, page),
+      params: buildQuery({ actif: filters.actif, societeId: filters.societeId }, page),
     })
     return data
   },

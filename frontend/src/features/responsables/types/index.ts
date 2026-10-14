@@ -33,4 +33,5 @@ export type StatutFilter = 'tous' | 'actifs' | 'inactifs'
 
 export interface ResponsablesFilters {
   actif?: boolean
+  societeId?: number
 }

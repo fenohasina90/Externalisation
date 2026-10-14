@@ -1,2 +1,1 @@
-export { useClientsList } from './useClientsList'
-export { useClientsListStatic } from './useClientsListStatic'
+export { useClientsList, type StatutClientFilter } from './useClientsList'

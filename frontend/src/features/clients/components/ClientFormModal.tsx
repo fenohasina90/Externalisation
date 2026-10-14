@@ -1,77 +1,120 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
-import { CLIENT_OPTIONS, type ClientResume } from '../data/mockClients'
+import { Autocomplete } from '@/components/ui'
+import type { CreateSocietePayload, Societe } from '../types'
+
+export interface DomaineOption {
+  id: number
+  nom: string
+}
 
 interface Props {
   open: boolean
-  /** Client à modifier, null pour une création. */
-  client: ClientResume | null
+  /** Client à modifier, null pour une création (actif par défaut, sans champ statut). */
+  client: Societe | null
+  /** Responsable principal actuel (édition). */
+  responsableActuel?: string | null
+  domaines: DomaineOption[]
+  /** Résout un nom de domaine (sélection ou création si inexistant). */
+  resolveDomaine: (nom: string) => Promise<number>
   onClose: () => void
-  /** Création : actif par défaut (sans champ statut). */
-  onSave: (payload: {
-    nom: string
-    activite: string
-    responsable: string
-    telephone: string
-    email: string
-  }) => void
+  onSave: (
+    payload: CreateSocietePayload & { responsable: string },
+    id?: number,
+  ) => Promise<void>
 }
 
-const emptyForm = { nom: '', activite: '', responsable: '', telephone: '', email: '' }
+const emptyForm = {
+  nomSociete: '',
+  activite: '',
+  domaine: '',
+  responsable: '',
+  contact: '',
+  email: '',
+}
 
 type FormState = typeof emptyForm
 
-/** Modale Ajouter / Modifier un client (cf. maquette, sans champ statut). */
-export function ClientFormModal({ open, client, onClose, onSave }: Props) {
+function correspondExact(nom: string, domaines: DomaineOption[]): DomaineOption | null {
+  const cherche = nom.trim().toLowerCase()
+  if (!cherche) return null
+  return domaines.find((d) => d.nom.toLowerCase() === cherche) ?? null
+}
+
+/** Modale Ajouter / Modifier un client (domaine en autocomplétion, sans champ statut). */
+export function ClientFormModal({ open, client, responsableActuel, domaines, resolveDomaine, onClose, onSave }: Props) {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm(emptyForm)
       setError(null)
+      setSaving(false)
       return
     }
+    const nomDomaine = client
+      ? (domaines.find((d) => d.id === client.domaineId)?.nom ?? '')
+      : ''
     setForm(
       client
         ? {
-            nom: client.nom,
-            activite: client.activite,
-            responsable: client.responsable,
-            telephone: client.telephone,
-            email: client.email,
+            nomSociete: client.nomSociete,
+            activite: client.activite ?? '',
+            domaine: nomDomaine,
+            responsable: responsableActuel ?? client.responsablePrincipal ?? '',
+            contact: client.contact ?? '',
+            email: client.email ?? '',
           }
         : emptyForm,
     )
     setError(null)
-  }, [open, client])
+  }, [open, client, responsableActuel, domaines])
 
   if (!open) return null
 
-  const responsablesOptions = [...new Set([form.responsable, ...CLIENT_OPTIONS.responsables].filter(Boolean))]
-
-  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setForm((f) => ({ ...f, [name]: value }))
   }
 
-  const handleSubmit = (e: FormEvent) => {
+  const domaineExiste = correspondExact(form.domaine, domaines) !== null
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!form.nom.trim()) {
+    if (!form.nomSociete.trim()) {
       setError('Le nom de la société est obligatoire')
       return
     }
-    if (!form.responsable) {
+    if (!form.domaine.trim()) {
+      setError('Le domaine est obligatoire')
+      return
+    }
+    if (!form.responsable.trim()) {
       setError('Le responsable est obligatoire')
       return
     }
-    onSave({
-      nom: form.nom.trim(),
-      activite: form.activite.trim(),
-      responsable: form.responsable,
-      telephone: form.telephone.trim(),
-      email: form.email.trim(),
-    })
+    setSaving(true)
+    setError(null)
+    try {
+      const domaineId = await resolveDomaine(form.domaine.trim())
+      await onSave(
+        {
+          nomSociete: form.nomSociete.trim(),
+          activite: form.activite.trim() || null,
+          contact: form.contact.trim() || null,
+          email: form.email.trim() || null,
+          domaineId,
+          responsable: form.responsable.trim(),
+        },
+        client?.id,
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Échec de l'enregistrement")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -102,15 +145,15 @@ export function ClientFormModal({ open, client, onClose, onSave }: Props) {
             <label className="field form-grid__full">
               Client <span className="required">*</span>
               <input
-                name="nom"
-                value={form.nom}
+                name="nomSociete"
+                value={form.nomSociete}
                 onChange={handleChange}
                 placeholder="Nom de la société"
                 required
               />
             </label>
 
-            <label className="field form-grid__full">
+            <label className="field">
               Activité
               <input
                 name="activite"
@@ -120,24 +163,43 @@ export function ClientFormModal({ open, client, onClose, onSave }: Props) {
               />
             </label>
 
-            <label className="field form-grid__full">
+            <div className="field">
+              <span className="field-label">
+                Domaine <span className="required">*</span>
+              </span>
+              <Autocomplete
+                value={form.domaine}
+                placeholder="Ex. Services financiers"
+                onTextChange={(texte) => setForm((f) => ({ ...f, domaine: texte }))}
+                onPick={() => undefined}
+                options={domaines.map((d) => ({ id: d.id, label: d.nom }))}
+                // footer={
+                //   form.domaine.trim() !== '' && !domaineExiste ? (
+                //     <span className="autocomplete__hint">
+                //       « {form.domaine.trim()} » sera créé comme nouveau domaine.
+                //     </span>
+                //   ) : undefined
+                // }
+              />
+            </div>
+
+            <label className="field">
               Responsable <span className="required">*</span>
-              <select name="responsable" value={form.responsable} onChange={handleChange} required>
-                <option value="">Sélectionner un responsable</option>
-                {responsablesOptions.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
+              <input
+                name="responsable"
+                value={form.responsable}
+                onChange={handleChange}
+                placeholder="Nom et prénom"
+                required
+              />
             </label>
 
-            <label className="field form-grid__full">
-              Téléphone
+            <label className="field">
+              Contact
               <input
                 type="tel"
-                name="telephone"
-                value={form.telephone}
+                name="contact"
+                value={form.contact}
                 onChange={handleChange}
                 placeholder="+261 34 00 000 00"
               />
@@ -156,11 +218,11 @@ export function ClientFormModal({ open, client, onClose, onSave }: Props) {
           </div>
 
           <footer className="modal-footer">
-            <button type="button" className="btn-ghost" onClick={onClose}>
+            <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
               Annuler
             </button>
-            <button type="submit" className="btn-primary">
-              Enregistrer
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Enregistrement…' : 'Enregistrer'}
             </button>
           </footer>
         </form>

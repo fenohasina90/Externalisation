@@ -8,6 +8,23 @@ export function formatMontant(value: number | null | undefined): string {
   return formaterMontant.format(value)
 }
 
+const formaterEntier = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
+
+/** Montant entier suivi de la devise (ex. « 18 400 000 MGA »). */
+export function formatMontantMGA(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '—'
+  return `${formaterEntier.format(value)} MGA`
+}
+
+/** Taille de fichier lisible (o, Ko, Mo). */
+export function formatTailleOctets(octets: number | null | undefined): string {
+  if (octets === null || octets === undefined) return '—'
+  if (octets < 1024) return `${octets} o`
+  const ko = octets / 1024
+  if (ko < 1024) return `${Math.round(ko)} Ko`
+  return `${(ko / 1024).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mo`
+}
+
 export function formatDate(date: string | null | undefined): string {
   if (!date) return '—'
   const parsed = new Date(date)
