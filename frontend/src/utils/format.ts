@@ -10,10 +10,17 @@ export function formatMontant(value: number | null | undefined): string {
 
 const formaterEntier = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
 
+let deviseCourante = 'MGA'
+
+/** Devise affichée (issue de la configuration, « MGA » par défaut). */
+export function setDevise(devise: string): void {
+  if (devise.trim()) deviseCourante = devise.trim()
+}
+
 /** Montant entier suivi de la devise (ex. « 18 400 000 MGA »). */
 export function formatMontantMGA(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
-  return `${formaterEntier.format(value)} MGA`
+  return `${formaterEntier.format(value)} ${deviseCourante}`
 }
 
 /** Taille de fichier lisible (o, Ko, Mo). */

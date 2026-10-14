@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react'
+import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Can } from '@/components/shared/Can'
 import { Alert, Spinner } from '@/components/ui'
 import { ServiceDetailDrawer, ServiceFormModal, ServicesTable } from '../components'
 import { useServicesList, type StatutServiceFilter } from '../hooks/useServicesList'
 import { servicesApi } from '../services/services.service'
 import type { CreateServicePayload, Service, UpdateServicePayload } from '../types'
 
-const PAGE_SIZE = 8
 
 /**
  * Liste des services branchée sur l'API : recherche (nom ou code),
  * filtre statut, pagination serveur, code auto-généré (SRV-0001, …).
  */
 export function ServicesPage() {
+  // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
+  const PAGE_SIZE = useTaillePagination()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Service | null>(null)
   const [detail, setDetail] = useState<Service | null>(null)
@@ -75,19 +78,21 @@ export function ServicesPage() {
           <p>Catalogue des services d&apos;externalisation proposés.</p>
         </div>
         <div className="actions">
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => {
-              setEditing(null)
-              setModalOpen(true)
-            }}
-          >
-            <svg className="sv" viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Ajouter un service
-          </button>
+          <Can permission="SERVICE_CREATE">
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => {
+                setEditing(null)
+                setModalOpen(true)
+              }}
+            >
+              <svg className="sv" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Ajouter un service
+            </button>
+          </Can>
         </div>
       </header>
 

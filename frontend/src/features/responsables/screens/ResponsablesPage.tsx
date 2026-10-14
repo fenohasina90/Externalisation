@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Can } from '@/components/shared/Can'
 import { ResponsableFormModal } from '../components/ResponsableFormModal'
 import { ResponsablesTable } from '../components/ResponsablesTable'
 import { useResponsablesList } from '../hooks/useResponsablesList'
@@ -7,13 +9,15 @@ import type { Responsable, StatutFilter } from '../types'
 import { responsablesApi } from '../services/responsables.service'
 
 export default function ResponsablesPage() {
+  // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
+  const taillePage = useTaillePagination()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Responsable | null>(null)
   const [showFilters, setShowFilters] = useState(true)
   const [confirmToggle, setConfirmToggle] = useState<{ id: number; actif: boolean } | null>(null)
 
   const { items, total, totalPages, page, loading, error, setPage, search, setSearch, statut, setStatut, reload } =
-    useResponsablesList(8)
+    useResponsablesList(taillePage)
 
   const actifs = items.filter((r) => r.actif).length ?? 0
   const inactifs = total - actifs
@@ -67,12 +71,14 @@ export default function ResponsablesPage() {
           <button type="button" className="btn-ghost" onClick={() => setShowFilters((v) => !v)}>
             {showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}
           </button>
-          <button type="button" className="btn-primary" onClick={openCreate}>
-            <svg className="sv" viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Ajouter un responsable
-          </button>
+          <Can permission="RESPONSABLE_CREATE">
+            <button type="button" className="btn-primary" onClick={openCreate}>
+              <svg className="sv" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Ajouter un responsable
+            </button>
+          </Can>
         </div>
       </header>
 

@@ -1,5 +1,6 @@
 package com.cabex.backend.document.service;
 
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.audit.action.AuditActions;
@@ -48,6 +49,7 @@ public class DocumentGestionService {
     private final UtilisateurRepository utilisateurRepository;
     private final PdfGenerator pdfGenerator;
     private final AuditService auditService;
+    private final ConfigurationService configurationService;
 
     @Value("${app.document.storage-path}")
     private String storagePath;
@@ -61,7 +63,8 @@ public class DocumentGestionService {
                                   ProposPaiementRepository proposRepository,
                                   UtilisateurRepository utilisateurRepository,
                                   PdfGenerator pdfGenerator,
-                                  AuditService auditService) {
+                                  AuditService auditService,
+                                  ConfigurationService configurationService) {
         this.pieceRepository = pieceRepository;
         this.demandeRepository = demandeRepository;
         this.paiementRepository = paiementRepository;
@@ -69,6 +72,16 @@ public class DocumentGestionService {
         this.utilisateurRepository = utilisateurRepository;
         this.pdfGenerator = pdfGenerator;
         this.auditService = auditService;
+        this.configurationService = configurationService;
+    }
+
+    /**
+     * Taille maximale effective : valeur d'administration TAILLE_MAX_FICHIER,
+     * avec repli sur la propriété {@code app.document.max-size}. Toute
+     * modification depuis l'administration s'applique au prochain téléversement.
+     */
+    private long tailleMaxEffective() {
+        return configurationService.lireEntierLong("TAILLE_MAX_FICHIER", maxSize);
     }
 
     @Transactional(readOnly = true)
@@ -92,9 +105,9 @@ public class DocumentGestionService {
                     "Type de fichier non autorisé (." + extension + "). Types acceptés : "
                             + String.join(", ", TYPES_AUTORISES));
         }
-        if (fichier.getSize() > maxSize) {
+        if (fichier.getSize() > tailleMaxEffective()) {
             throw new BusinessException("Le fichier dépasse la taille maximale autorisée ("
-                    + (maxSize / (1024 * 1024)) + " Mo)");
+                    + (tailleMaxEffective() / (1024 * 1024)) + " Mo)");
         }
 
         String nomStockage = UUID.randomUUID() + "." + extension;

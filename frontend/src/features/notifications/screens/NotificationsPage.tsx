@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { NotificationsList } from '../components'
 import { MOCK_NOTIFICATIONS, TYPE_META, type TypeNotification } from '../data/mockNotifications'
 import { useNotificationsListStatic } from '../hooks'
 import type { NotificationUser } from '../types'
 
-const PAGE_SIZE = 8
 
 /**
  * Notifications — étape 1 : interface seule, données statiques.
  * Onglets Toutes / Non lues, filtre par type, marquage local comme lue.
  */
 export function NotificationsPage() {
+  // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
+  const PAGE_SIZE = useTaillePagination()
   const [notifications, setNotifications] = useState<NotificationUser[]>(MOCK_NOTIFICATIONS)
 
   const { items, total, totalPages, page, setPage, onglet, setOnglet, type, setType } =

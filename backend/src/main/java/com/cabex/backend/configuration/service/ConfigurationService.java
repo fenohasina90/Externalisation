@@ -46,6 +46,38 @@ public class ConfigurationService {
         return ConfigurationMapper.toResponse(getEntity(cle));
     }
 
+    /**
+     * Lecture en repli silencieux : renvoie la valeur brute si la clé existe,
+     * sinon {@code defaut}. Utilisé par les traitements internes pour que toute
+     * modification depuis l'administration s'applique sans redémarrage.
+     */
+    @Transactional(readOnly = true)
+    public String lireValeur(String cle, String defaut) {
+        return configurationRepository.findByCle(cle)
+                .map(Configuration::getValeur)
+                .orElse(defaut);
+    }
+
+    /** Lecture d'un entier avec repli sur {@code defaut} si absent ou mal formé. */
+    @Transactional(readOnly = true)
+    public int lireEntier(String cle, int defaut) {
+        try {
+            return Integer.parseInt(lireValeur(cle, String.valueOf(defaut)).trim());
+        } catch (NumberFormatException e) {
+            return defaut;
+        }
+    }
+
+    /** Lecture d'un entier long avec repli sur {@code defaut} si absent ou mal formé. */
+    @Transactional(readOnly = true)
+    public long lireEntierLong(String cle, long defaut) {
+        try {
+            return Long.parseLong(lireValeur(cle, String.valueOf(defaut)).trim());
+        } catch (NumberFormatException e) {
+            return defaut;
+        }
+    }
+
     @Transactional
     public ConfigurationResponse update(String cle, UpdateConfigurationRequest request) {
         Configuration config = getEntity(cle);

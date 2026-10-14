@@ -80,4 +80,28 @@ class ConfigurationServiceTest {
         assertThrows(ResourceNotFoundException.class, () -> configurationService.update(
                 "INCONNUE", new UpdateConfigurationRequest("x")));
     }
+
+    @Test
+    void lireValeurAvecRepli() {
+        when(configurationRepository.findByCle("NOM_APPLICATION"))
+                .thenReturn(Optional.of(Configuration.builder().id(2).cle("NOM_APPLICATION")
+                        .valeur("Mon Cabinet").typeValeur("STRING").build()));
+        when(configurationRepository.findByCle("ABSENTE")).thenReturn(Optional.empty());
+
+        assertEquals("Mon Cabinet", configurationService.lireValeur("NOM_APPLICATION", "Défaut"));
+        assertEquals("Défaut", configurationService.lireValeur("ABSENTE", "Défaut"));
+    }
+
+    @Test
+    void lireEntierAvecRepli() {
+        when(configurationRepository.findByCle("JOURS_AVANCE_ALERTE_ECHEANCE"))
+                .thenReturn(Optional.of(parametre("7", "INTEGER", true)));
+        when(configurationRepository.findByCle("MAL_FORME"))
+                .thenReturn(Optional.of(parametre("abc", "INTEGER", true)));
+        when(configurationRepository.findByCle("ABSENTE")).thenReturn(Optional.empty());
+
+        assertEquals(7, configurationService.lireEntier("JOURS_AVANCE_ALERTE_ECHEANCE", 3));
+        assertEquals(3, configurationService.lireEntier("MAL_FORME", 3));
+        assertEquals(3, configurationService.lireEntier("ABSENTE", 3));
+    }
 }

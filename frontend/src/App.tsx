@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
+import { RequirePermission } from '@/components/layout/RequirePermission'
 import { ForbiddenPage, NotFoundPage } from '@/components/shared/ErrorPage'
 import { ChangePasswordPage, ForgotPasswordPage, LoginPage } from '@/features/auth'
 import {
@@ -31,6 +32,11 @@ import { RecherchePage } from '@/features/recherche'
 import { ResponsablesPage } from '@/features/responsables'
 import { DomainesPage, ServicesPage } from '@/features/services'
 
+const ADMIN: string[] = ['USER_VIEW', 'AUDIT_VIEW', 'CONFIG_VIEW', 'PASSWORD_RESET_MANAGE']
+const DOCUMENTS: string[] = ['DOCUMENT_DEMANDE_VIEW', 'DOCUMENT_PAIEMENT_VIEW']
+const ECHEANCES: string[] = ['DEMANDE_VIEW', 'PAIEMENT_VIEW']
+const RAPPORTS: string[] = ['RAPPORT_DEMANDE_VIEW', 'RAPPORT_PAIEMENT_VIEW']
+
 function App() {
   return (
     <Routes>
@@ -42,33 +48,208 @@ function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/changer-mot-de-passe" element={<ChangePasswordPage />} />
         <Route element={<AppLayout />}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/clients" element={<ClientsPage />} />
-          <Route path="/clients/:id" element={<ClientDetailPage />} />
-          <Route path="/responsables" element={<ResponsablesPage />} />
-          <Route path="/commerciaux" element={<CommerciauxPage />} />
-          <Route path="/services" element={<ServicesPage />} />
-          <Route path="/domaines" element={<DomainesPage />} />
-          <Route path="/demandes" element={<DemandesPage />} />
-          <Route path="/demandes/nouveau" element={<NouvelleDemandePage />} />
-          <Route path="/demandes/:reference" element={<DemandeDetailPage />} />
-          <Route path="/plans-paiement" element={<PlansPaiementPage />} />
-          <Route path="/echeances" element={<EcheancesPage />} />
-          <Route path="/paiements" element={<PaiementsPage />} />
-          <Route path="/paiements/nouveau" element={<NouveauPaiementPage />} />
-          <Route path="/paiements/echeanciers" element={<EcheanciersPage />} />
-          <Route path="/paiements/echeanciers/:reference" element={<EcheancierDetailPage />} />
-          <Route path="/paiements/historique" element={<HistoriquePaiementsPage />} />
-          <Route path="/documents" element={<DocumentsPage />} />
+          <Route
+            path="/"
+            element={
+              <RequirePermission permission="DASHBOARD_VIEW">
+                <DashboardPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/clients"
+            element={
+              <RequirePermission permission="CLIENT_VIEW">
+                <ClientsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/clients/:id"
+            element={
+              <RequirePermission permission="CLIENT_VIEW">
+                <ClientDetailPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/responsables"
+            element={
+              <RequirePermission permission="RESPONSABLE_VIEW">
+                <ResponsablesPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/commerciaux"
+            element={
+              <RequirePermission permission="COMMERCIAL_VIEW">
+                <CommerciauxPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/services"
+            element={
+              <RequirePermission permission="SERVICE_VIEW">
+                <ServicesPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/domaines"
+            element={
+              <RequirePermission permission="DOMAINE_VIEW">
+                <DomainesPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/demandes"
+            element={
+              <RequirePermission permission="DEMANDE_VIEW">
+                <DemandesPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/demandes/nouveau"
+            element={
+              <RequirePermission permission="DEMANDE_CREATE">
+                <NouvelleDemandePage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/demandes/:reference"
+            element={
+              <RequirePermission permission="DEMANDE_VIEW">
+                <DemandeDetailPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/plans-paiement"
+            element={
+              <RequirePermission permission={ECHEANCES}>
+                <PlansPaiementPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/echeances"
+            element={
+              <RequirePermission permission={ECHEANCES}>
+                <EcheancesPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/paiements"
+            element={
+              <RequirePermission permission="PAIEMENT_VIEW">
+                <PaiementsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/paiements/nouveau"
+            element={
+              <RequirePermission permission="PAIEMENT_CREATE">
+                <NouveauPaiementPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/paiements/echeanciers"
+            element={
+              <RequirePermission permission="PAIEMENT_VIEW">
+                <EcheanciersPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/paiements/echeanciers/:reference"
+            element={
+              <RequirePermission permission="PAIEMENT_VIEW">
+                <EcheancierDetailPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/paiements/historique"
+            element={
+              <RequirePermission permission="PAIEMENT_VIEW">
+                <HistoriquePaiementsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/documents"
+            element={
+              <RequirePermission permission={DOCUMENTS}>
+                <DocumentsPage />
+              </RequirePermission>
+            }
+          />
           <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/rapports" element={<RapportsPage />} />
+          <Route
+            path="/rapports"
+            element={
+              <RequirePermission permission={RAPPORTS}>
+                <RapportsPage />
+              </RequirePermission>
+            }
+          />
           <Route path="/recherche" element={<RecherchePage />} />
-          <Route path="/administration" element={<AdministrationPage />} />
-          <Route path="/administration/utilisateurs" element={<UtilisateursPage />} />
-          <Route path="/administration/roles" element={<RolesPermissionsPage />} />
-          <Route path="/administration/audit" element={<AuditPage />} />
-          <Route path="/administration/reinitialisations" element={<ReinitialisationsPage />} />
-          <Route path="/administration/configuration" element={<ConfigurationPage />} />
+          <Route
+            path="/administration"
+            element={
+              <RequirePermission permission={ADMIN}>
+                <AdministrationPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/administration/utilisateurs"
+            element={
+              <RequirePermission permission="USER_VIEW">
+                <UtilisateursPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/administration/roles"
+            element={
+              <RequirePermission permission="USER_VIEW">
+                <RolesPermissionsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/administration/audit"
+            element={
+              <RequirePermission permission="AUDIT_VIEW">
+                <AuditPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/administration/reinitialisations"
+            element={
+              <RequirePermission permission="PASSWORD_RESET_MANAGE">
+                <ReinitialisationsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/administration/configuration"
+            element={
+              <RequirePermission permission="CONFIG_VIEW">
+                <ConfigurationPage />
+              </RequirePermission>
+            }
+          />
         </Route>
         <Route path="*" element={<Navigate to="/404" replace />} />
       </Route>

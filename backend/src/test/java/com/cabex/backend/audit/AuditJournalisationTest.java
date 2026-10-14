@@ -63,6 +63,7 @@ class AuditJournalisationTest {
     @Mock private SocieteRepository societeRepository;
     @Mock private PdfGenerator pdfGenerator;
     @Mock private AuditService auditService;
+    @Mock private com.cabex.backend.configuration.service.ConfigurationService configurationService;
 
     @TempDir
     Path dossierTemporaire;
@@ -156,9 +157,11 @@ class AuditJournalisationTest {
         });
         DocumentGestionService service = new DocumentGestionService(
                 pieceRepository, demandeRepository, paiementRepository, proposRepository,
-                utilisateurRepository, pdfGenerator, auditService);
+                utilisateurRepository, pdfGenerator, auditService, configurationService);
         ReflectionTestUtils.setField(service, "storagePath", dossierTemporaire.toString());
         ReflectionTestUtils.setField(service, "maxSize", 10 * 1024 * 1024L);
+        lenient().when(configurationService.lireEntierLong(anyString(), anyLong()))
+                .thenAnswer(inv -> inv.getArgument(1));
 
         MockMultipartFile fichier = new MockMultipartFile(
                 "fichier", "contrat.pdf", "application/pdf", "contenu".getBytes());

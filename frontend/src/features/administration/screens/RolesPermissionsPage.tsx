@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Role } from '@/features/auth/types'
+import { useAuth } from '@/features/auth/hooks/useAuth'
 import { Alert, Spinner } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
 import { PermissionsMatrix, type PermissionLigne } from '../components'
@@ -42,6 +43,7 @@ function estStandard(code: string): boolean {
  * SUPER_ADMIN : lecture seule.
  */
 export function RolesPermissionsPage() {
+  const { utilisateur, refresh } = useAuth()
   const [choix, setChoix] = useState<number | null>(null)
   const [selection, setSelection] = useState<Set<number>>(new Set())
   const [selectionPour, setSelectionPour] = useState<number | null>(null)
@@ -193,6 +195,11 @@ export function RolesPermissionsPage() {
     setErreur(null)
     try {
       await rolesApi.update(roleId, { permissionIds: [...selection] })
+      // Si le rôle modifié est celui de l'utilisateur connecté, ses droits
+      // affichés (menus, gardes de route) sont rechargés aussitôt, sans reconnexion.
+      if (utilisateur !== null && utilisateur.role.id === roleId) {
+        await refresh()
+      }
       setMessage(`Permissions du rôle ${carte?.nomRole} enregistrées.`)
       rechargerDetail()
     } catch (err) {

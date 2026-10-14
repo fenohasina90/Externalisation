@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
+import { useTaillePagination } from '@/hooks/useTaillePagination'
 import type { Role, Utilisateur } from '@/features/auth/types'
+import { useAuth } from '@/features/auth/hooks/useAuth'
 import { authApi } from '@/features/auth/services/auth.service'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Can } from '@/components/shared/Can'
 import { Alert, Spinner } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
 import { UtilisateurFormModal, UtilisateursTable } from '../components'
 import { reinitialisationsApi, rolesApi, utilisateursApi } from '../services/administration.service'
 import { useUtilisateursList, type StatutUtilisateurFilter } from '../hooks/useUtilisateursList'
 
-const PAGE_SIZE = 8
 
 /**
  * Utilisateurs branchés sur l'API : recherche, filtres rôle/statut,
@@ -17,6 +19,9 @@ const PAGE_SIZE = 8
  * génération du temporaire affiché une seule fois).
  */
 export function UtilisateursPage() {
+  // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
+  const PAGE_SIZE = useTaillePagination()
+  const { utilisateur: connecte, refresh } = useAuth()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Utilisateur | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -69,6 +74,10 @@ export function UtilisateursPage() {
     }
     setModalOpen(false)
     setEditing(null)
+    // Compte modifié = compte connecté : recharge aussitôt la session affichée.
+    if (editing !== null && connecte !== null && editing.id === connecte.id) {
+      await refresh()
+    }
     reload()
   }
 
@@ -127,12 +136,14 @@ export function UtilisateursPage() {
           <p>Gérez les comptes et leurs rôles. Réservé au SUPER_ADMIN.</p>
         </div>
         <div className="actions">
-          <button type="button" className="btn-primary" onClick={openCreate}>
-            <svg className="sv" viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Créer un utilisateur
-          </button>
+          <Can permission="USER_CREATE">
+            <button type="button" className="btn-primary" onClick={openCreate}>
+              <svg className="sv" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Créer un utilisateur
+            </button>
+          </Can>
         </div>
       </header>
 

@@ -122,7 +122,7 @@ function DeroulantEntry({ item, pathname, badges, onNavigate }: NavEntryProps) {
 }
 
 export function Sidebar({ open, onClose, badges = {} }: SidebarProps) {
-  const { utilisateur, logout } = useAuth()
+  const { utilisateur, logout, hasPermission } = useAuth()
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const [confirmLogout, setConfirmLogout] = useState(false)
@@ -139,6 +139,28 @@ export function Sidebar({ open, onClose, badges = {} }: SidebarProps) {
   if (!utilisateur) return null
 
   const role = utilisateur.role.nomRole
+
+  // Entrées filtrées par les permissions effectives : toute modification
+  // des permissions d'un rôle se reflète dans le menu sans reconnexion
+  // (la session étant rechargée à chaque navigation, voir AppLayout).
+  const visible = (permission?: string | string[]): boolean => {
+    if (!permission) return true
+    const codes = Array.isArray(permission) ? permission : [permission]
+    return codes.some((code) => hasPermission(code))
+  }
+
+  const sections = NAVIGATION[role]
+    .map((section) => ({
+      ...section,
+      items: section.items
+        .filter((item) => visible(item.permission))
+        .map((item) => ({
+          ...item,
+          children: item.children?.filter((child) => visible(child.permission)),
+        }))
+        .filter((item) => !item.children || item.children.length > 0),
+    }))
+    .filter((section) => section.items.length > 0)
 
   async function handleLogout(): Promise<void> {
     await logout()
@@ -160,7 +182,7 @@ export function Sidebar({ open, onClose, badges = {} }: SidebarProps) {
       </Link>
 
       <nav className="sidebar__nav" aria-label="Menu principal">
-        {NAVIGATION[role].map((section) => (
+        {sections.map((section) => (
           <div key={section.label} className="sidebar__section">
             <p className="sidebar__section-label">{section.label}</p>
             {section.items.map((item) => (

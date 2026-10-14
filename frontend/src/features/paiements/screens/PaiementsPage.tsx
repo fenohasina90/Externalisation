@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { Link } from 'react-router-dom'
+import { Can } from '@/components/shared/Can'
 import { PlansTable } from '../components'
 import { MOCK_PLANS, PAIEMENT_OPTIONS, formatMGA } from '../data/mockPaiements'
 import { usePlansListStatic } from '../hooks'
 
-const PAGE_SIZE = 8
 
 /** Liste des paiements — étape 1 : interface seule, données statiques. */
 export function PaiementsPage() {
+  // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
+  const PAGE_SIZE = useTaillePagination()
   const [showFilters, setShowFilters] = useState(false)
   const { items, total, totalPages, page, setPage, filtres, setFiltre, resetFiltres, hasActiveFiltres } =
     usePlansListStatic(MOCK_PLANS, PAGE_SIZE)
@@ -64,12 +67,14 @@ export function PaiementsPage() {
             </svg>
             Exporter
           </button>
-          <Link to="/paiements/nouveau" className="btn-primary">
-            <svg className="sv" viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Enregistrer un paiement
-          </Link>
+          <Can permission="PAIEMENT_CREATE">
+            <Link to="/paiements/nouveau" className="btn-primary">
+              <svg className="sv" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Enregistrer un paiement
+            </Link>
+          </Can>
         </div>
       </header>
 

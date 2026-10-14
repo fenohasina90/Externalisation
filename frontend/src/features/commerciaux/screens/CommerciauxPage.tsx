@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
+import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Can } from '@/components/shared/Can'
 import { Alert, Spinner } from '@/components/ui'
 import { CommercialFormModal, CommerciauxTable } from '../components'
 import { useCommerciauxList, type StatutCommercialFilter } from '../hooks/useCommerciauxList'
 import { commerciauxApi } from '../services/commerciaux.service'
 import type { Commercial, CreateCommercialPayload } from '../types'
 
-const PAGE_SIZE = 8
 
 /**
  * Liste des commerciaux branchée sur l'API :
@@ -14,6 +15,8 @@ const PAGE_SIZE = 8
  * immatricule générée côté backend (C001, C002, … unique).
  */
 export function CommerciauxPage() {
+  // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
+  const PAGE_SIZE = useTaillePagination()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Commercial | null>(null)
   const [showFilters, setShowFilters] = useState(true)
@@ -80,12 +83,14 @@ export function CommerciauxPage() {
           <button type="button" className="btn-ghost" onClick={() => setShowFilters((v) => !v)}>
             {showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}
           </button>
-          <button type="button" className="btn-primary" onClick={openCreate}>
-            <svg className="sv" viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Ajouter un commercial
-          </button>
+          <Can permission="COMMERCIAL_CREATE">
+            <button type="button" className="btn-primary" onClick={openCreate}>
+              <svg className="sv" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Ajouter un commercial
+            </button>
+          </Can>
         </div>
       </header>
 

@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { Link } from 'react-router-dom'
+import { Can } from '@/components/shared/Can'
 import { DemandesTable } from '../components'
 import { DEMANDE_OPTIONS, MOCK_DEMANDES } from '../data/mockDemandes'
 import { useDemandesListStatic } from '../hooks'
 
-const PAGE_SIZE = 8
 
 /** Liste des demandes — étape 1 : interface seule, données statiques. */
 export function DemandesPage() {
+  // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
+  const PAGE_SIZE = useTaillePagination()
   const [showFilters, setShowFilters] = useState(false)
   const { items, total, totalPages, page, setPage, filtres, setFiltre, resetFiltres, hasActiveFiltres } =
     useDemandesListStatic(PAGE_SIZE)
@@ -63,12 +66,14 @@ export function DemandesPage() {
             </svg>
             Exporter
           </button>
-          <Link to="/demandes/nouveau" className="btn-primary">
-            <svg className="sv" viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Nouvelle demande
-          </Link>
+          <Can permission="DEMANDE_CREATE">
+            <Link to="/demandes/nouveau" className="btn-primary">
+              <svg className="sv" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Nouvelle demande
+            </Link>
+          </Can>
         </div>
       </header>
 

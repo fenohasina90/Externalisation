@@ -1,5 +1,6 @@
 package com.cabex.backend.configuration.controller;
 
+import com.cabex.backend.configuration.dto.ConfigurationPubliqueResponse;
 import com.cabex.backend.configuration.dto.ConfigurationResponse;
 import com.cabex.backend.configuration.dto.UpdateConfigurationRequest;
 import com.cabex.backend.configuration.service.ConfigurationService;
@@ -35,6 +36,15 @@ public class ConfigurationController {
     @Operation(summary = "Lister tous les paramètres de configuration")
     public ResponseEntity<List<ConfigurationResponse>> getAll() {
         return ResponseEntity.ok(configurationService.getAll());
+    }
+
+    @GetMapping("/publique")
+    @Operation(summary = "Paramètres d'affichage publics (nom de l'application, devise)")
+    public ResponseEntity<ConfigurationPubliqueResponse> getPublique() {
+        return ResponseEntity.ok(new ConfigurationPubliqueResponse(
+                configurationService.lireValeur("NOM_APPLICATION", "Gestion Externalisation"),
+                configurationService.lireValeur("DEVISE", "MGA"),
+                configurationService.lireEntier("PAGINATION_TAILLE_DEFAUT", 20)));
     }
 
     @GetMapping("/{cle}")

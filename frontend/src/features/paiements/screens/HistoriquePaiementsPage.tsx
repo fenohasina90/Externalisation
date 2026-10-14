@@ -1,12 +1,14 @@
 import { useEffect } from 'react'
+import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { HistoriqueTable } from '../components'
 import { MOCK_HISTORIQUE, PAIEMENT_OPTIONS, type ModePaiement } from '../data/mockPaiements'
 import { useHistoriqueListStatic } from '../hooks'
 
-const PAGE_SIZE = 8
 
 /** Historique des paiements — étape 1 : interface seule, données statiques. */
 export function HistoriquePaiementsPage() {
+  // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
+  const PAGE_SIZE = useTaillePagination()
   const { items, total, totalPages, page, setPage, ...f } = useHistoriqueListStatic(
     MOCK_HISTORIQUE,
     PAGE_SIZE,

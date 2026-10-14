@@ -1,5 +1,6 @@
 package com.cabex.backend.notification.service;
 
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
@@ -12,20 +13,24 @@ import java.util.List;
 
 /**
  * Génère quotidiennement des alertes de notifications pour les échéances
- * proches (sous 3 jours) et les échéances en retard.
+ * proches (seuil lu depuis la configuration JOURS_AVANCE_ALERTE_ECHEANCE,
+ * 3 jours par défaut) et les échéances en retard.
  */
 @Component
 public class NotificationScheduler {
 
-    private static final int JOURS_ALERTE = 3;
+    private static final int JOURS_ALERTE_DEFAUT = 3;
 
     private final EcheancePaiementRepository echeanceRepository;
     private final NotificationService notificationService;
+    private final ConfigurationService configurationService;
 
     public NotificationScheduler(EcheancePaiementRepository echeanceRepository,
-                                 NotificationService notificationService) {
+                                 NotificationService notificationService,
+                                 ConfigurationService configurationService) {
         this.echeanceRepository = echeanceRepository;
         this.notificationService = notificationService;
+        this.configurationService = configurationService;
     }
 
     @Scheduled(cron = "0 0 7 * * *")
@@ -40,7 +45,9 @@ public class NotificationScheduler {
         }
 
         List<EcheancePaiement> aVenir = echeanceRepository.findAVenir(aujourdHui);
-        LocalDate limite = aujourdHui.plusDays(JOURS_ALERTE);
+        int joursAlerte = Math.max(configurationService.lireEntier(
+                "JOURS_AVANCE_ALERTE_ECHEANCE", JOURS_ALERTE_DEFAUT), 1);
+        LocalDate limite = aujourdHui.plusDays(joursAlerte);
         for (EcheancePaiement echeance : aVenir) {
             if (!echeance.getDateEcheance().isAfter(limite)) {
                 DemandeService demande = echeance.getProposPaiement().getDemande();

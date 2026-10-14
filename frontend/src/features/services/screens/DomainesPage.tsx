@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react'
+import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Can } from '@/components/shared/Can'
 import { Alert, Spinner } from '@/components/ui'
 import { DomaineFormModal, DomainesTable } from '../components'
 import { useDomainesList, type StatutDomaineFilter } from '../hooks/useDomainesList'
 import { domainesApi } from '../services/services.service'
 import type { Domaine } from '../types'
 
-const PAGE_SIZE = 8
 
 /**
  * Domaines de société branchés sur l'API :
  * recherche, filtre statut, pagination serveur, activation.
  */
 export function DomainesPage() {
+  // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
+  const PAGE_SIZE = useTaillePagination()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Domaine | null>(null)
   const [confirmToggle, setConfirmToggle] = useState<{ id: number; actif: boolean } | null>(null)
@@ -61,19 +64,21 @@ export function DomainesPage() {
           <p>Organisez les sociétés clientes par domaine d&apos;activité.</p>
         </div>
         <div className="actions">
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => {
-              setEditing(null)
-              setModalOpen(true)
-            }}
-          >
-            <svg className="sv" viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Ajouter un domaine
-          </button>
+          <Can permission="DOMAINE_CREATE">
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => {
+                setEditing(null)
+                setModalOpen(true)
+              }}
+            >
+              <svg className="sv" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Ajouter un domaine
+            </button>
+          </Can>
         </div>
       </header>
 

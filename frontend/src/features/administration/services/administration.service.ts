@@ -121,7 +121,18 @@ export const auditApi = {
   },
 }
 
+export interface ConfigurationPublique {
+  nomApplication: string
+  devise: string
+  taillePagination: number
+}
+
 export const configurationApi = {
+  async publique(): Promise<ConfigurationPublique> {
+    const { data } = await http.get<ConfigurationPublique>('/configuration/publique')
+    return data
+  },
+
   async list(): Promise<ApplicationConfiguration[]> {
     const { data } = await http.get<ApplicationConfiguration[]>('/configuration')
     return data

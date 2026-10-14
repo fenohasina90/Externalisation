@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { Alert, Spinner, TablePagination } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
 import type { ApiPage } from '@/types'
@@ -8,10 +9,11 @@ import { ACTIONS_AUDIT, ENTITES_AUDIT, MODULES_AUDIT, getLibelleActionAudit } fr
 import { utilisateursApi } from '../services/administration.service'
 import { useAuditList } from '../hooks/useAuditList'
 
-const PAGE_SIZE = 8
 
 /** Journal d'audit branché sur l'API : filtres serveur, pagination, détail, export CSV. */
 export function AuditPage() {
+  // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
+  const PAGE_SIZE = useTaillePagination()
   const [detailId, setDetailId] = useState<number | null>(null)
 
   const { items, total, totalPages, page, loading, error, setPage, ...filtres } =

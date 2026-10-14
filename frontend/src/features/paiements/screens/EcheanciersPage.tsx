@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { Link } from 'react-router-dom'
 import { StatutPlanPill } from '../components'
 import { MOCK_PLANS, formatMGA } from '../data/mockPaiements'
 
-const PAGE_SIZE = 8
 
 /** Liste des échéanciers par demande (index vers le détail). */
 export function EcheanciersPage() {
+  // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
+  const PAGE_SIZE = useTaillePagination()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
 

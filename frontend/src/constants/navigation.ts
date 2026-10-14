@@ -8,6 +8,11 @@ export interface NavChild {
   to: string
   /** Actif uniquement sur l'URL exacte (sinon sur tout le préfixe). */
   end?: boolean
+  /**
+   * Permission requise pour voir l'entrée (une seule ou liste = l'une suffit).
+   * Absent = visible à tous les connectés (ex. notifications, sans permission dédiée).
+   */
+  permission?: string | string[]
 }
 
 export interface NavItem {
@@ -18,6 +23,11 @@ export interface NavItem {
   badge?: BadgeKey
   hint?: string
   children?: NavChild[]
+  /**
+   * Permission requise pour voir l'entrée (une seule ou liste = l'une suffit).
+   * Absent = visible à tous les connectés (ex. notifications, sans permission dédiée).
+   */
+  permission?: string | string[]
   /**
    * Menu déroulant : le clic déplie/replie le sous-menu au lieu de
    * naviguer (la navigation se fait par les sous-menus).
@@ -30,22 +40,30 @@ export interface NavSection {
   items: NavItem[]
 }
 
-const dashboard: NavItem = { label: 'Tableau de bord', to: '/', icon: 'grid', end: true }
+const dashboard: NavItem = {
+  label: 'Tableau de bord',
+  to: '/',
+  icon: 'grid',
+  end: true,
+  permission: 'DASHBOARD_VIEW',
+}
 
 const clients: NavItem = { label: 'Clients', to: '/clients', icon: 'users' }
 const clientsAvecSousMenus: NavItem = {
   ...clients,
   deroulant: true,
+  permission: 'CLIENT_VIEW',
   children: [
-    { label: 'Liste des clients', to: '/clients', end: true },
-    { label: 'Responsables', to: '/responsables' },
-    { label: 'Domaines', to: '/domaines' },
+    { label: 'Liste des clients', to: '/clients', end: true, permission: 'CLIENT_VIEW' },
+    { label: 'Responsables', to: '/responsables', permission: 'RESPONSABLE_VIEW' },
+    { label: 'Domaines', to: '/domaines', permission: 'DOMAINE_VIEW' },
   ],
 }
 const clientsSimple: NavItem = {
   ...clients,
   deroulant: true,
-  children: [{ label: 'Liste des clients', to: '/clients', end: true }],
+  permission: 'CLIENT_VIEW',
+  children: [{ label: 'Liste des clients', to: '/clients', end: true, permission: 'CLIENT_VIEW' }],
 }
 
 const commerciaux: NavItem = {
@@ -53,7 +71,15 @@ const commerciaux: NavItem = {
   to: '/commerciaux',
   icon: 'briefcase',
   deroulant: true,
-  children: [{ label: 'Liste des commerciaux', to: '/commerciaux', end: true }],
+  permission: 'COMMERCIAL_VIEW',
+  children: [
+    {
+      label: 'Liste des commerciaux',
+      to: '/commerciaux',
+      end: true,
+      permission: 'COMMERCIAL_VIEW',
+    },
+  ],
 }
 
 const services: NavItem = {
@@ -61,7 +87,8 @@ const services: NavItem = {
   to: '/services',
   icon: 'layers',
   deroulant: true,
-  children: [{ label: 'Liste des services', to: '/services', end: true }],
+  permission: 'SERVICE_VIEW',
+  children: [{ label: 'Liste des services', to: '/services', end: true, permission: 'SERVICE_VIEW' }],
 }
 
 const demandes: NavItem = {
@@ -70,7 +97,8 @@ const demandes: NavItem = {
   icon: 'file',
   badge: 'demandes',
   deroulant: true,
-  children: [{ label: 'Liste des demandes', to: '/demandes', end: true }],
+  permission: 'DEMANDE_VIEW',
+  children: [{ label: 'Liste des demandes', to: '/demandes', end: true, permission: 'DEMANDE_VIEW' }],
 }
 const demandesLectureSeule: NavItem = {
   label: 'Demandes de service',
@@ -78,7 +106,8 @@ const demandesLectureSeule: NavItem = {
   icon: 'file',
   hint: 'lecture seule',
   deroulant: true,
-  children: [{ label: 'Liste des demandes', to: '/demandes', end: true }],
+  permission: 'DEMANDE_VIEW',
+  children: [{ label: 'Liste des demandes', to: '/demandes', end: true, permission: 'DEMANDE_VIEW' }],
 }
 
 const paiements: NavItem = {
@@ -86,10 +115,11 @@ const paiements: NavItem = {
   to: '/paiements',
   icon: 'card',
   deroulant: true,
+  permission: 'PAIEMENT_VIEW',
   children: [
-    { label: 'Paiements', to: '/paiements', end: true },
-    { label: 'Échéanciers', to: '/paiements/echeanciers' },
-    { label: 'Historique', to: '/paiements/historique' },
+    { label: 'Paiements', to: '/paiements', end: true, permission: 'PAIEMENT_VIEW' },
+    { label: 'Échéanciers', to: '/paiements/echeanciers', permission: 'PAIEMENT_VIEW' },
+    { label: 'Historique', to: '/paiements/historique', permission: 'PAIEMENT_VIEW' },
   ],
 }
 const notifications: NavItem = {
@@ -99,24 +129,35 @@ const notifications: NavItem = {
   badge: 'notifications',
 }
 
-const rapports: NavItem = { label: 'Rapports', to: '/rapports', icon: 'chart' }
+const rapports: NavItem = {
+  label: 'Rapports',
+  to: '/rapports',
+  icon: 'chart',
+  permission: ['RAPPORT_DEMANDE_VIEW', 'RAPPORT_PAIEMENT_VIEW'],
+}
 const rapportsDemandes: NavItem = {
   label: 'Rapports',
   to: '/rapports',
   icon: 'chart',
   hint: 'demandes',
+  permission: 'RAPPORT_DEMANDE_VIEW',
 }
 
 const administration: NavItem = {
   label: 'Administration',
   to: '/administration',
   icon: 'gear',
+  permission: ['USER_VIEW', 'AUDIT_VIEW', 'CONFIG_VIEW', 'PASSWORD_RESET_MANAGE'],
   children: [
-    { label: 'Utilisateurs', to: '/administration/utilisateurs' },
-    { label: 'Rôles & permissions', to: '/administration/roles' },
-    { label: 'Réinitialisations', to: '/administration/reinitialisations' },
-    { label: 'Audit', to: '/administration/audit' },
-    { label: 'Configuration', to: '/administration/configuration' },
+    { label: 'Utilisateurs', to: '/administration/utilisateurs', permission: 'USER_VIEW' },
+    { label: 'Rôles & permissions', to: '/administration/roles', permission: 'USER_VIEW' },
+    {
+      label: 'Réinitialisations',
+      to: '/administration/reinitialisations',
+      permission: 'PASSWORD_RESET_MANAGE',
+    },
+    { label: 'Audit', to: '/administration/audit', permission: 'AUDIT_VIEW' },
+    { label: 'Configuration', to: '/administration/configuration', permission: 'CONFIG_VIEW' },
   ],
 }
 
