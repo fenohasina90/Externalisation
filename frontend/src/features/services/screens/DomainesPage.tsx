@@ -1,56 +1,49 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Alert, Spinner } from '@/components/ui'
 import { DomaineFormModal, DomainesTable } from '../components'
-import { MOCK_DOMAINES, type StatutDomaineFilter } from '../data/mockDomaines'
-import { useDomainesListStatic } from '../hooks'
+import { useDomainesList, type StatutDomaineFilter } from '../hooks/useDomainesList'
+import { domainesApi } from '../services/services.service'
 import type { Domaine } from '../types'
 
 const PAGE_SIZE = 8
 
 /**
- * Domaines de société — étape 1 : interface seule, données statiques.
- * Même structure que les autres pages liste.
+ * Domaines de société branchés sur l'API :
+ * recherche, filtre statut, pagination serveur, activation.
  */
 export function DomainesPage() {
-  const [domaines, setDomaines] = useState<Domaine[]>(MOCK_DOMAINES)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Domaine | null>(null)
   const [confirmToggle, setConfirmToggle] = useState<{ id: number; actif: boolean } | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
-  const { items, total, totalPages, page, setPage, search, setSearch, statut, setStatut } =
-    useDomainesListStatic({ source: domaines, size: PAGE_SIZE })
+  const { items, total, totalPages, page, loading, error, setPage, search, setSearch, statut, setStatut, reload } =
+    useDomainesList(PAGE_SIZE)
 
-  const kpis = useMemo(() => {
-    const actifs = domaines.filter((d) => d.actif).length
-    const totalCount = domaines.length
-    return {
-      total: totalCount,
-      actifs,
-      pctActifs: totalCount === 0 ? 0 : Math.round((actifs / totalCount) * 100),
-      societes: domaines.reduce((sum, d) => sum + d.nombreSocietes, 0),
-    }
-  }, [domaines])
+  const actifs = items.filter((d) => d.actif).length
+  const pctActifs = total === 0 ? 0 : Math.round((actifs / total) * 100)
+  const societes = items.reduce((sum, d) => sum + (d.nombreSocietes ?? 0), 0)
 
-  const handleSave = (payload: { nomDomaine: string }, id?: number) => {
+  const handleSave = async (payload: { nomDomaine: string }, id?: number) => {
     if (id != null) {
-      // Modification : le statut existant est conservé (géré par l'action Activer/Désactiver).
-      setDomaines((prev) =>
-        prev.map((d) => (d.id === id ? { ...d, nomDomaine: payload.nomDomaine } : d)),
-      )
+      await domainesApi.update(id, payload)
     } else {
-      // Création : domaine actif par défaut.
-      const nextId = Math.max(0, ...domaines.map((d) => d.id)) + 1
-      setDomaines((prev) => [
-        ...prev,
-        { id: nextId, nomDomaine: payload.nomDomaine, description: null, actif: true, nombreSocietes: 0 },
-      ])
+      await domainesApi.create(payload)
     }
     setModalOpen(false)
     setEditing(null)
+    reload()
   }
 
-  const handleToggleActif = (id: number, actif: boolean) => {
-    setDomaines((prev) => prev.map((d) => (d.id === id ? { ...d, actif } : d)))
+  const handleToggleActif = async (id: number, actif: boolean) => {
+    setActionError(null)
+    try {
+      await domainesApi.setActif(id, actif)
+      reload()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Échec du changement de statut')
+    }
   }
 
   useEffect(() => {
@@ -84,6 +77,12 @@ export function DomainesPage() {
         </div>
       </header>
 
+      {actionError && (
+        <div className="alert alert-danger" role="alert">
+          {actionError}
+        </div>
+      )}
+
       <section className="kpi-grid">
         <div className="card kpi-card">
           <span className="kpi-tag">Total</span>
@@ -93,13 +92,13 @@ export function DomainesPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{kpis.total}</div>
+            <div className="kpi-num">{total}</div>
             <div className="kpi-label">Domaines</div>
           </div>
         </div>
 
         <div className="card kpi-card hl">
-          <span className="kpi-tag">{kpis.pctActifs} %</span>
+          <span className="kpi-tag">{pctActifs} %</span>
           <div className="kpi-icon">
             <svg className="sv" viewBox="0 0 24 24">
               <circle cx="12" cy="12" r="9" />
@@ -107,7 +106,7 @@ export function DomainesPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{kpis.actifs}</div>
+            <div className="kpi-num">{actifs}</div>
             <div className="kpi-label">Actifs</div>
           </div>
         </div>
@@ -121,7 +120,7 @@ export function DomainesPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{kpis.societes}</div>
+            <div className="kpi-num">{societes}</div>
             <div className="kpi-label">Sociétés associées</div>
           </div>
         </div>
@@ -153,19 +152,26 @@ export function DomainesPage() {
       </section>
 
       <section className="card">
-        <div className="table-scroll-container no-global-scroll">
-          <div className="table-wrap">
-            <DomainesTable
-              items={items}
-              onEdit={(d) => {
-                setEditing(d)
-                setModalOpen(true)
-              }}
-              onToggleActif={(id, actif) => setConfirmToggle({ id, actif })}
-            />
+        {loading && items.length === 0 ? (
+          <Spinner label="Chargement des domaines…" />
+        ) : error ? (
+          <div className="card-pad">
+            <Alert tone="danger">{error}</Alert>
           </div>
-          {total > 0 && (
-            <div className="table-footer">
+        ) : (
+          <div className="table-scroll-container no-global-scroll">
+            <div className="table-wrap">
+              <DomainesTable
+                items={items}
+                onEdit={(d) => {
+                  setEditing(d)
+                  setModalOpen(true)
+                }}
+                onToggleActif={(id, actif) => setConfirmToggle({ id, actif })}
+              />
+            </div>
+            {total > 0 && (
+              <div className="table-footer">
               <span>
                 Affichage de {page * PAGE_SIZE + 1} à {Math.min((page + 1) * PAGE_SIZE, total)} sur{' '}
                 {total} domaines
@@ -199,8 +205,9 @@ export function DomainesPage() {
                 </button>
               </div>
             </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </section>
 
       <DomaineFormModal
@@ -228,7 +235,7 @@ export function DomainesPage() {
           if (!confirmToggle) return
           const { id, actif } = confirmToggle
           setConfirmToggle(null)
-          handleToggleActif(id, actif)
+          void handleToggleActif(id, actif)
         }}
       />
     </div>

@@ -7,7 +7,7 @@ interface Props {
   domaine: Domaine | null
   onClose: () => void
   /** Création : actif par défaut. Modification : statut conservé (géré par l'action Activer/Désactiver). */
-  onSave: (payload: { nomDomaine: string }, id?: number) => void
+  onSave: (payload: { nomDomaine: string }, id?: number) => Promise<void>
 }
 
 const emptyForm = { nomDomaine: '' }
@@ -18,12 +18,14 @@ type FormState = typeof emptyForm
 export function DomaineFormModal({ open, domaine, onClose, onSave }: Props) {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm(emptyForm)
       setError(null)
+      setSaving(false)
       return
     }
     setForm(domaine ? { nomDomaine: domaine.nomDomaine } : emptyForm)
@@ -37,13 +39,21 @@ export function DomaineFormModal({ open, domaine, onClose, onSave }: Props) {
     setForm((f) => ({ ...f, [name]: value }))
   }
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!form.nomDomaine.trim()) {
       setError('Le nom du domaine est obligatoire')
       return
     }
-    onSave({ nomDomaine: form.nomDomaine.trim() }, domaine?.id)
+    setSaving(true)
+    setError(null)
+    try {
+      await onSave({ nomDomaine: form.nomDomaine.trim() }, domaine?.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Échec de l'enregistrement")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -83,11 +93,11 @@ export function DomaineFormModal({ open, domaine, onClose, onSave }: Props) {
           </div>
 
           <footer className="modal-footer">
-            <button type="button" className="btn-ghost" onClick={onClose}>
+            <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
               Annuler
             </button>
-            <button type="submit" className="btn-primary">
-              Enregistrer
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Enregistrement…' : 'Enregistrer'}
             </button>
           </footer>
         </form>
