@@ -25,6 +25,7 @@ public record CreateDemandeRequest(
         @NotNull(message = "Le service est obligatoire")
         Integer serviceId,
 
+        @NotNull(message = "Le montant total est obligatoire")
         BigDecimal tarif,
 
         String commentaire

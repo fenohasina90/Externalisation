@@ -72,12 +72,12 @@ class DemandeSansSocieteTest {
 
     private Service serviceCreation() {
         return Service.builder().id(11).nomService("Création d'entreprise")
-                .tarifService(new BigDecimal("700000")).actif(true).build();
+                .actif(true).build();
     }
 
     private Service serviceAudit() {
         return Service.builder().id(1).nomService("Audit comptable")
-                .tarifService(new BigDecimal("1500000")).actif(true).build();
+                .actif(true).build();
     }
 
     private CreateDemandeRequest requete(Integer societeId, Integer serviceId, Integer responsableId) {

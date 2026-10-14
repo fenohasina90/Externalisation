@@ -33,7 +33,8 @@ class DossierRepositoryTest {
     private DemandeService demandeSansSociete() {
         Service service = serviceRepository.save(Service.builder()
                 .nomService("Création d'entreprise")
-                .tarifService(new BigDecimal("700000"))
+                .codeService("SRV-0001")
+                
                 .actif(true)
                 .build());
         return demandeRepository.save(DemandeService.builder()

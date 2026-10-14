@@ -52,7 +52,7 @@ class DossierServiceTest {
         Service service = Service.builder()
                 .id(11)
                 .nomService("Création d'entreprise")
-                .tarifService(new BigDecimal("700000"))
+                
                 .actif(true)
                 .build();
         Commercial commercial = Commercial.builder()

@@ -146,14 +146,11 @@ public class DemandeGestionService {
         ClientResponsable responsable = validateResponsable(request.clientResponsableId(), societe);
 
         validateDates(request.debutService(), request.finService());
-        if (request.tarif() != null
-                && request.tarif().signum() < 0) {
+        if (request.tarif().signum() < 0) {
             throw new BusinessException(ErrorMessages.TARIF_POSITIF);
         }
 
-        BigDecimal tarif = request.tarif() != null
-                ? request.tarif()
-                : service.getTarifService();
+        BigDecimal tarif = request.tarif();
 
         DemandeService demande = DemandeService.builder()
                 .referenceDemande(genererReference(LocalDate.now().getYear()))

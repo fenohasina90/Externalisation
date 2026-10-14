@@ -132,7 +132,6 @@ public class SocieteService {
                         list.get(0).getService().getNomService(),
                         societe.getDomaine() != null ? societe.getDomaine().getId() : null,
                         societe.getDomaine() != null ? societe.getDomaine().getNomDomaine() : null,
-                        list.get(0).getService().getTarifService(),
                         list.size()))
                 .toList();
 

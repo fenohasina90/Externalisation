@@ -72,7 +72,7 @@ public class RechercheService {
     }
 
     private RechercheServiceItem toServiceItem(com.cabex.backend.service.entity.Service s) {
-        return new RechercheServiceItem(s.getId(), s.getNomService(), s.getTarifService());
+        return new RechercheServiceItem(s.getId(), s.getNomService(), s.getCodeService());
     }
 
     private RechercheDemandeItem toDemandeItem(DemandeService d) {
