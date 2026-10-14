@@ -18,6 +18,11 @@ export interface NavItem {
   badge?: BadgeKey
   hint?: string
   children?: NavChild[]
+  /**
+   * Menu déroulant : le clic déplie/replie le sous-menu au lieu de
+   * naviguer (la navigation se fait par les sous-menus).
+   */
+  deroulant?: boolean
 }
 
 export interface NavSection {
@@ -28,42 +33,59 @@ export interface NavSection {
 const dashboard: NavItem = { label: 'Tableau de bord', to: '/', icon: 'grid', end: true }
 
 const clients: NavItem = { label: 'Clients', to: '/clients', icon: 'users' }
-const clientsAvecResponsables: NavItem = {
+const clientsAvecSousMenus: NavItem = {
   ...clients,
-  children: [{ label: 'Responsables', to: '/responsables' }],
+  deroulant: true,
+  children: [
+    { label: 'Liste des clients', to: '/clients', end: true },
+    { label: 'Responsables', to: '/responsables' },
+    { label: 'Domaines', to: '/domaines' },
+  ],
+}
+const clientsSimple: NavItem = {
+  ...clients,
+  deroulant: true,
+  children: [{ label: 'Liste des clients', to: '/clients', end: true }],
 }
 
-const commerciaux: NavItem = { label: 'Commerciaux', to: '/commerciaux', icon: 'briefcase' }
+const commerciaux: NavItem = {
+  label: 'Commerciaux',
+  to: '/commerciaux',
+  icon: 'briefcase',
+  deroulant: true,
+  children: [{ label: 'Liste des commerciaux', to: '/commerciaux', end: true }],
+}
 
-const servicesAvecEnfants: NavItem = {
+const services: NavItem = {
   label: 'Services',
   to: '/services',
   icon: 'layers',
-  children: [
-    { label: 'Domaines', to: '/services/domaines' },
-    { label: 'Liste des services', to: '/services', end: true },
-  ],
+  deroulant: true,
+  children: [{ label: 'Liste des services', to: '/services', end: true }],
 }
 
-const servicesSimple: NavItem = { label: 'Services', to: '/services', icon: 'layers' }
-
 const demandes: NavItem = {
-  label: 'Demandes de service',
+  label: 'Demandes',
   to: '/demandes',
   icon: 'file',
   badge: 'demandes',
+  deroulant: true,
+  children: [{ label: 'Liste des demandes', to: '/demandes', end: true }],
 }
 const demandesLectureSeule: NavItem = {
   label: 'Demandes de service',
   to: '/demandes',
   icon: 'file',
   hint: 'lecture seule',
+  deroulant: true,
+  children: [{ label: 'Liste des demandes', to: '/demandes', end: true }],
 }
 
 const paiements: NavItem = {
   label: 'Paiements',
   to: '/paiements',
   icon: 'card',
+  deroulant: true,
   children: [
     { label: 'Paiements', to: '/paiements', end: true },
     { label: 'Échéanciers', to: '/paiements/echeanciers' },
@@ -105,9 +127,9 @@ export const NAVIGATION: Record<NomRole, NavSection[]> = {
       label: 'Activité',
       items: [
         dashboard,
-        clientsAvecResponsables,
+        clientsAvecSousMenus,
         commerciaux,
-        servicesAvecEnfants,
+        services,
         demandes,
         paiements,
       ],
@@ -119,9 +141,9 @@ export const NAVIGATION: Record<NomRole, NavSection[]> = {
       label: 'Activité',
       items: [
         dashboard,
-        clientsAvecResponsables,
+        clientsAvecSousMenus,
         commerciaux,
-        servicesAvecEnfants,
+        services,
         demandes,
         paiements,
       ],
@@ -131,14 +153,14 @@ export const NAVIGATION: Record<NomRole, NavSection[]> = {
   ACCUEIL: [
     {
       label: 'Activité',
-      items: [dashboard, clientsAvecResponsables, commerciaux, servicesSimple, demandes],
+      items: [dashboard, clientsAvecSousMenus, commerciaux, services, demandes],
     },
     { label: 'Pilotage', items: [rapportsDemandes, notifications] },
   ],
   ECONOMAT: [
     {
       label: 'Activité',
-      items: [dashboard, clients, demandesLectureSeule, paiements],
+      items: [dashboard, clientsSimple, demandesLectureSeule, paiements],
     },
     { label: 'Pilotage', items: [rapports, notifications] },
   ],

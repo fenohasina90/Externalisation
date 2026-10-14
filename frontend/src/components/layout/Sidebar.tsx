@@ -53,6 +53,11 @@ function NavEntry({ item, pathname, badges, onNavigate }: NavEntryProps) {
     )
   }
 
+  // Menu déroulant : le clic déplie/replie, la navigation passe par les sous-menus.
+  if (item.deroulant) {
+    return <DeroulantEntry item={item} pathname={pathname} badges={badges} onNavigate={onNavigate} />
+  }
+
   const active = isGroupActive(item, pathname)
   return (
     <div className="nav-group">
@@ -64,24 +69,54 @@ function NavEntry({ item, pathname, badges, onNavigate }: NavEntryProps) {
       >
         {content}
       </Link>
-      {active && (
-        <ul className="nav-sub">
-          {item.children.map((child) => (
-            <li key={child.to}>
-              <NavLink
-                to={child.to}
-                end={child.end}
-                className={({ isActive }) =>
-                  `nav-sub__link${isActive ? ' nav-sub__link--active' : ''}`
-                }
-                onClick={onNavigate}
-              >
-                {child.label}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      )}
+      {active && <SousMenu item={item} onNavigate={onNavigate} />}
+    </div>
+  )
+}
+
+function SousMenu({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
+  return (
+    <ul className="nav-sub">
+      {item.children!.map((child) => (
+        <li key={child.to + child.label}>
+          <NavLink
+            to={child.to}
+            end={child.end}
+            className={({ isActive }) =>
+              `nav-sub__link${isActive ? ' nav-sub__link--active' : ''}`
+            }
+            onClick={onNavigate}
+          >
+            {child.label}
+          </NavLink>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function DeroulantEntry({ item, pathname, badges, onNavigate }: NavEntryProps) {
+  const active = isGroupActive(item, pathname)
+  const [ouvert, setOuvert] = useState(active)
+  const count = item.badge ? badges[item.badge] : undefined
+
+  return (
+    <div className="nav-group">
+      <button
+        type="button"
+        className={`nav nav--bouton${active ? ' nav--active' : ''}`}
+        aria-expanded={ouvert}
+        onClick={() => setOuvert((v) => !v)}
+      >
+        <Icon name={item.icon} />
+        <span className="nav__label">{item.label}</span>
+        {item.hint && <small className="nav__hint">{item.hint}</small>}
+        {count ? <Badge>{count}</Badge> : null}
+        <span className="nav__chevron" aria-hidden="true">
+          {ouvert ? '▾' : '▸'}
+        </span>
+      </button>
+      {ouvert && <SousMenu item={item} onNavigate={onNavigate} />}
     </div>
   )
 }

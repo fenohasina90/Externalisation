@@ -556,6 +556,29 @@ a {
   min-width: 0;
 }
 
+.nav__chevron {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+/* Bouton de menu déroulant (même apparence que les liens .nav) */
+.nav--bouton {
+  width: 100%;
+  background: transparent;
+  border: none;
+  font: inherit;
+  text-align: left;
+}
+
+/* Le parent reste vert quand l'un de ses sous-menus est actif. */
+.nav--bouton.nav--active,
+.nav--bouton.nav--active:hover {
+  background: var(--g);
+  color: #fff;
+}
+
 .nav__hint {
   font-size: 10px;
   text-transform: uppercase;
