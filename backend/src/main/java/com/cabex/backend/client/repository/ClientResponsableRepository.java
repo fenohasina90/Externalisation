@@ -15,6 +15,9 @@ public interface ClientResponsableRepository extends JpaRepository<ClientRespons
 
     List<ClientResponsable> findBySocieteIdAndActifTrue(Integer societeId);
 
+    /** Responsables de plusieurs sociétés en une requête (colonne liste clients). */
+    List<ClientResponsable> findBySocieteIdInOrderByIdAsc(java.util.Collection<Integer> societeIds);
+
     long countBySocieteId(Integer societeId);
 
     @Query("""

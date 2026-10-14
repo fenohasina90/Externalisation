@@ -15,6 +15,7 @@ import com.cabex.backend.client.dto.SocieteDetailResponse;
 import com.cabex.backend.client.dto.SocieteResponse;
 import com.cabex.backend.client.dto.SyntheseClientFiche;
 import com.cabex.backend.client.dto.UpdateSocieteRequest;
+import com.cabex.backend.client.entity.ClientResponsable;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.client.mapper.ResponsableMapper;
 import com.cabex.backend.client.mapper.SocieteMapper;
@@ -89,13 +90,23 @@ public class SocieteService {
     }
 
     @Transactional(readOnly = true)
-    public Page<SocieteResponse> getAll(String recherche, Boolean actif, Integer domaineId, Pageable pageable) {
+    public Page<SocieteResponse> getAll(String recherche, Boolean actif, Integer domaineId,
+                                        Boolean archive, Pageable pageable) {
         Map<Integer, Integer> nbParSociete = new java.util.HashMap<>();
         for (Object[] o : societeRepository.compterDemandesParSociete()) {
             nbParSociete.put((Integer) o[0], ((Number) o[1]).intValue());
         }
-        return societeRepository.rechercher(recherche, actif, domaineId, pageable)
-                .map(s -> SocieteMapper.toResponse(s, nbParSociete.getOrDefault(s.getId(), 0)));
+        Page<Societe> page = societeRepository.rechercher(recherche, actif, domaineId, archive, pageable);
+        Map<Integer, String> responsableParSociete = new java.util.HashMap<>();
+        if (!page.getContent().isEmpty()) {
+            List<Integer> ids = page.getContent().stream().map(Societe::getId).toList();
+            for (ClientResponsable r : responsableRepository.findBySocieteIdInOrderByIdAsc(ids)) {
+                responsableParSociete.putIfAbsent(r.getSociete().getId(), r.getNomClient());
+            }
+        }
+        return page.map(s -> SocieteMapper.toResponse(s,
+                nbParSociete.getOrDefault(s.getId(), 0),
+                responsableParSociete.get(s.getId())));
     }
 
     @Transactional(readOnly = true)
