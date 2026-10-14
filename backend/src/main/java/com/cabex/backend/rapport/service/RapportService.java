@@ -90,15 +90,24 @@ public class RapportService {
     public List<RapportClientLigne> clients(RapportFilter f) {
         Map<Integer, List<DemandeService>> parClient = new LinkedHashMap<>();
         for (DemandeService d : demandesFiltrees(f)) {
-            parClient.computeIfAbsent(d.getSociete().getId(), k -> new ArrayList<>()).add(d);
+            // Demandes de création d'entreprise : pas encore de société liée.
+            Integer cle = d.getSociete() != null ? d.getSociete().getId() : null;
+            parClient.computeIfAbsent(cle, k -> new ArrayList<>()).add(d);
         }
         return parClient.entrySet().stream().map(e -> {
             Integer clientId = e.getKey();
             List<DemandeService> list = e.getValue();
             BigDecimal total = sommeTarif(list);
-            BigDecimal paye = fin(f, clientId);
+            BigDecimal paye = clientId == null
+                    ? list.stream()
+                            .map(d -> toBigDecimal(paiementRepository.sommePayeeParDemande(d.getId())))
+                            .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    : fin(f, clientId);
+            String nom = clientId == null
+                    ? "Création d'entreprise (sans société)"
+                    : list.get(0).getSociete().getNomSociete();
             return new RapportClientLigne(clientId,
-                    list.get(0).getSociete().getNomSociete(),
+                    nom,
                     list.size(), total, paye, total.subtract(paye).max(BigDecimal.ZERO));
         }).sorted(Comparator.comparingLong(RapportClientLigne::nombreDemandes).reversed()).toList();
     }

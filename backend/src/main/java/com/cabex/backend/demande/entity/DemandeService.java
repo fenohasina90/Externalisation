@@ -42,7 +42,7 @@ public class DemandeService {
     private LocalDate finService;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "societe_id", nullable = false)
+    @JoinColumn(name = "societe_id")
     private Societe societe;
 
     @ManyToOne(fetch = FetchType.LAZY)

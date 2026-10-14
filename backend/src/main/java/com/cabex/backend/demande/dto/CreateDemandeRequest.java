@@ -15,7 +15,7 @@ public record CreateDemandeRequest(
         @NotNull(message = "La date de fin est obligatoire")
         LocalDate finService,
 
-        @NotNull(message = "La société est obligatoire")
+        // NULL autorisé : création d'entreprise (société inexistante).
         Integer societeId,
 
         Integer commercialId,

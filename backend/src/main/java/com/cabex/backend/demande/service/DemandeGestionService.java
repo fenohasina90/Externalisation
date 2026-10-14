@@ -118,9 +118,23 @@ public class DemandeGestionService {
 
     @Transactional
     public DemandeResponse create(CreateDemandeRequest request) {
-        Societe societe = societeRepository.findById(request.societeId())
+        Service service = serviceRepository.findById(request.serviceId())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        ErrorMessages.introuvable("Société", request.societeId())));
+                        ErrorMessages.introuvable("Service", request.serviceId())));
+        if (!Boolean.TRUE.equals(service.getActif())) {
+            throw new BusinessException(ErrorMessages.SERVICE_INDISPONIBLE);
+        }
+        boolean creationEntreprise =
+                com.cabex.backend.dossier.DossierRegles.estServiceCreation(service.getNomService());
+
+        Societe societe = null;
+        if (request.societeId() != null) {
+            societe = societeRepository.findById(request.societeId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            ErrorMessages.introuvable("Société", request.societeId())));
+        } else if (!creationEntreprise) {
+            throw new BusinessException(ErrorMessages.DEMANDE_SOCIETE_REQUISE);
+        }
 
         Commercial commercial = null;
         if (request.commercialId() != null) {
@@ -130,13 +144,6 @@ public class DemandeGestionService {
         }
 
         ClientResponsable responsable = validateResponsable(request.clientResponsableId(), societe);
-
-        Service service = serviceRepository.findById(request.serviceId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        ErrorMessages.introuvable("Service", request.serviceId())));
-        if (!Boolean.TRUE.equals(service.getActif())) {
-            throw new BusinessException(ErrorMessages.SERVICE_INDISPONIBLE);
-        }
 
         validateDates(request.debutService(), request.finService());
         if (request.tarif() != null
@@ -254,6 +261,9 @@ public class DemandeGestionService {
     private ClientResponsable validateResponsable(Integer responsableId, Societe societe) {
         if (responsableId == null) {
             return null;
+        }
+        if (societe == null) {
+            throw new BusinessException(ErrorMessages.RESPONSABLE_SANS_SOCIETE);
         }
         ClientResponsable responsable = responsableRepository.findById(responsableId)
                 .orElseThrow(() -> new ResourceNotFoundException(

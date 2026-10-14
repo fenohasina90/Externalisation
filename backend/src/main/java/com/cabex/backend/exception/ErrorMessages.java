@@ -69,6 +69,23 @@ public final class ErrorMessages {
     public static final String SERVICE_NOM_EXISTE = "Un service avec ce nom existe déjà";
     public static final String TARIF_POSITIF = "Le tarif doit être positif ou nul";
 
+    // Demande sans société (création d'entreprise)
+    public static final String DEMANDE_SOCIETE_REQUISE =
+            "La société est obligatoire sauf pour une création d'entreprise";
+    public static final String RESPONSABLE_SANS_SOCIETE =
+            "Un responsable ne peut pas être lié à une demande sans société";
+
+    // Dossier de création d'entreprise ou de société
+    public static final String DOSSIER_DEJA_EXISTANT =
+            "Cette demande possède déjà un dossier de création";
+    public static final String DOSSIER_SERVICE_NON_CREATION =
+            "Un dossier de création ne peut être lié qu'à une demande de création d'entreprise ou de société";
+    public static final String DOSSIER_ASSOCIES_REQUIS =
+            "Une société doit avoir au moins un associé renseigné";
+    public static final String DOSSIER_PRECISION_REQUISE =
+            "La précision de la forme juridique est obligatoire (Autre)";
+    public static final String DOSSIER_FORME_INVALIDE = "La forme juridique fournie est invalide";
+
     // Général
     public static final String ERREUR_INTERNE = "Une erreur interne est survenue. Veuillez réessayer.";
 }
