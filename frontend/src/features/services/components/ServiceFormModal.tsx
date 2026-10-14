@@ -1,34 +1,38 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
-import type { Service } from '../types'
+import type { CreateServicePayload, Service, UpdateServicePayload } from '../types'
 
 interface Props {
   open: boolean
-  /** Service à modifier, null pour une création. */
+  /** Service à modifier, null pour une création (code auto-généré, actif par défaut). */
   service: Service | null
   onClose: () => void
-  /** Création : actif par défaut (sans champ statut). Modification : statut conservé. */
-  onSave: (payload: { nomService: string; description: string | null }, id?: number) => void
+  onSave: (payload: CreateServicePayload | UpdateServicePayload, id?: number) => Promise<void>
 }
 
 const emptyForm = { nomService: '', description: '' }
 
 type FormState = typeof emptyForm
 
-/** Modale Ajouter / Modifier un service (cf. maquette, sans champ statut). */
+/** Modale Ajouter / Modifier un service (sans champ statut ni code). */
 export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm(emptyForm)
       setError(null)
+      setSaving(false)
       return
     }
     setForm(
       service
-        ? { nomService: service.nomService, description: service.description ?? '' }
+        ? {
+            nomService: service.nomService,
+            description: service.description ?? '',
+          }
         : emptyForm,
     )
     setError(null)
@@ -41,16 +45,25 @@ export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
     setForm((f) => ({ ...f, [name]: value }))
   }
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!form.nomService.trim()) {
       setError('Le nom du service est obligatoire')
       return
     }
-    onSave(
-      { nomService: form.nomService.trim(), description: form.description.trim() || null },
-      service?.id,
-    )
+    setSaving(true)
+    setError(null)
+    try {
+      const payload = {
+        nomService: form.nomService.trim(),
+        description: form.description.trim() || null,
+      }
+      await onSave(payload, service?.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Échec de l'enregistrement")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -76,6 +89,13 @@ export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
         <form onSubmit={handleSubmit} className="modal-body">
           {error && <div style={{ color: 'var(--danger)', fontSize: 14 }}>{error}</div>}
 
+          {service?.codeService && (
+            <p className="modal-subtitle">
+              Code : <strong>{service.codeService}</strong> (généré automatiquement,
+              non modifiable)
+            </p>
+          )}
+
           <div className="form-grid">
             <label className="field form-grid__full">
               Service <span className="required">*</span>
@@ -87,6 +107,12 @@ export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
                 required
               />
             </label>
+
+          {!service && (
+            <p className="modal-subtitle form-grid__full" style={{ margin: 0 }}>
+              Le code sera généré automatiquement (SRV-0001, …).
+            </p>
+          )}
 
             <label className="field form-grid__full">
               Description
@@ -102,11 +128,11 @@ export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
           </div>
 
           <footer className="modal-footer">
-            <button type="button" className="btn-ghost" onClick={onClose}>
+            <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
               Annuler
             </button>
-            <button type="submit" className="btn-primary">
-              Enregistrer
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Enregistrement…' : 'Enregistrer'}
             </button>
           </footer>
         </form>

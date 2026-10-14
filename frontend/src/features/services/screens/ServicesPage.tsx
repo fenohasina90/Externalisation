@@ -1,63 +1,57 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Alert, Spinner } from '@/components/ui'
 import { ServiceDetailDrawer, ServiceFormModal, ServicesTable } from '../components'
-import { MOCK_SERVICES, type StatutServiceFilter } from '../data/mockServices'
-import { useServicesListStatic } from '../hooks'
-import type { Service } from '../types'
+import { useServicesList, type StatutServiceFilter } from '../hooks/useServicesList'
+import { servicesApi } from '../services/services.service'
+import type { CreateServicePayload, Service, UpdateServicePayload } from '../types'
 
 const PAGE_SIZE = 8
 
 /**
- * Liste des services — étape 1 : interface seule, données statiques.
- * Tableau + modale Ajouter/Modifier + panneau de détail.
+ * Liste des services branchée sur l'API : recherche (nom ou code),
+ * filtre statut, pagination serveur, code auto-généré (SRV-0001, …).
  */
 export function ServicesPage() {
-  const [services, setServices] = useState<Service[]>(MOCK_SERVICES)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Service | null>(null)
   const [detail, setDetail] = useState<Service | null>(null)
   const [confirmArchive, setConfirmArchive] = useState<Service | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
-  const { items, total, totalPages, page, setPage, search, setSearch, statut, setStatut } =
-    useServicesListStatic({ source: services, size: PAGE_SIZE })
+  const { items, total, totalPages, page, loading, error, setPage, search, setSearch, statut, setStatut, reload } =
+    useServicesList(PAGE_SIZE)
 
-  const kpis = useMemo(() => {
-    const actifs = services.filter((s) => s.actif).length
-    const totalCount = services.length
-    return {
-      total: totalCount,
-      actifs,
-      pctActifs: totalCount === 0 ? 0 : Math.round((actifs / totalCount) * 100),
-      archives: totalCount - actifs,
-    }
-  }, [services])
+  const actifs = items.filter((s) => s.actif).length
+  const archives = items.filter((s) => !s.actif).length
+  const pctActifs = total === 0 ? 0 : Math.round((actifs / total) * 100)
 
-  const handleSave = (payload: { nomService: string; description: string | null }, id?: number) => {
+  const handleSave = async (payload: CreateServicePayload | UpdateServicePayload, id?: number) => {
     if (id != null) {
-      // Modification : le statut existant est conservé (géré par l'action Archiver).
-      setServices((prev) =>
-        prev.map((s) =>
-          s.id === id ? { ...s, nomService: payload.nomService, description: payload.description } : s,
-        ),
-      )
-      setDetail((d) =>
-        d?.id === id ? { ...d, nomService: payload.nomService, description: payload.description } : d,
-      )
+      const maj = await servicesApi.update(id, payload as UpdateServicePayload)
+      setDetail((d) => (d?.id === id ? maj : d))
     } else {
-      // Création : service actif par défaut.
-      const nextId = Math.max(0, ...services.map((s) => s.id)) + 1
-      setServices((prev) => [
-        ...prev,
-        { id: nextId, nomService: payload.nomService, tarifService: 0, description: payload.description, actif: true },
-      ])
+      await servicesApi.create(payload as CreateServicePayload)
     }
     setModalOpen(false)
     setEditing(null)
+    reload()
   }
 
-  const handleArchive = (id: number) => {
-    setServices((prev) => prev.map((s) => (s.id === id ? { ...s, actif: false } : s)))
-    setDetail((d) => (d?.id === id ? { ...d, actif: false } : d))
+  const handleArchive = async (id: number) => {
+    setActionError(null)
+    try {
+      await servicesApi.setArchive(id, true)
+      setDetail((d) => (d?.id === id ? { ...d, actif: false } : d))
+      reload()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Échec de l'archivage")
+    }
+  }
+
+  const demanderArchive = (id: number) => {
+    const cible = items.find((s) => s.id === id) ?? null
+    setConfirmArchive(cible)
   }
 
   const openEdit = (s: Service) => {
@@ -97,6 +91,12 @@ export function ServicesPage() {
         </div>
       </header>
 
+      {actionError && (
+        <div className="alert alert-danger" role="alert">
+          {actionError}
+        </div>
+      )}
+
       <section className="kpi-grid">
         <div className="card kpi-card">
           <span className="kpi-tag">Total</span>
@@ -106,13 +106,13 @@ export function ServicesPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{kpis.total}</div>
+            <div className="kpi-num">{total}</div>
             <div className="kpi-label">Services</div>
           </div>
         </div>
 
         <div className="card kpi-card hl">
-          <span className="kpi-tag">{kpis.pctActifs} %</span>
+          <span className="kpi-tag">{pctActifs} %</span>
           <div className="kpi-icon">
             <svg className="sv" viewBox="0 0 24 24">
               <circle cx="12" cy="12" r="9" />
@@ -120,7 +120,7 @@ export function ServicesPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{kpis.actifs}</div>
+            <div className="kpi-num">{actifs}</div>
             <div className="kpi-label">Actifs</div>
           </div>
         </div>
@@ -134,7 +134,7 @@ export function ServicesPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{kpis.archives}</div>
+            <div className="kpi-num">{archives}</div>
             <div className="kpi-label">Archivés</div>
           </div>
         </div>
@@ -144,12 +144,12 @@ export function ServicesPage() {
         <form onSubmit={(e) => e.preventDefault()} className="filters-inline">
           <label className="field filter-field">
             Recherche
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Nom du service…"
-            />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Nom ou code…"
+              />
           </label>
           <label className="field filter-field">
             Statut
@@ -166,20 +166,24 @@ export function ServicesPage() {
       </section>
 
       <section className="card">
-        <div className="table-scroll-container no-global-scroll">
-          <div className="table-wrap">
-            <ServicesTable
-              items={items}
-              onView={setDetail}
-              onEdit={openEdit}
-              onArchive={(id) => {
-                const cible = services.find((s) => s.id === id) ?? null
-                setConfirmArchive(cible)
-              }}
-            />
+        {loading && items.length === 0 ? (
+          <Spinner label="Chargement des services…" />
+        ) : error ? (
+          <div className="card-pad">
+            <Alert tone="danger">{error}</Alert>
           </div>
-          {total > 0 && (
-            <div className="table-footer">
+        ) : (
+          <div className="table-scroll-container no-global-scroll">
+            <div className="table-wrap">
+              <ServicesTable
+                items={items}
+                onView={setDetail}
+                onEdit={openEdit}
+                onArchive={demanderArchive}
+              />
+            </div>
+            {total > 0 && (
+              <div className="table-footer">
               <span>
                 Affichage de {page * PAGE_SIZE + 1} à {Math.min((page + 1) * PAGE_SIZE, total)} sur{' '}
                 {total} services
@@ -213,8 +217,9 @@ export function ServicesPage() {
                 </button>
               </div>
             </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </section>
 
       <ServiceFormModal
@@ -232,9 +237,8 @@ export function ServicesPage() {
         onClose={() => setDetail(null)}
         onEdit={openEdit}
         onArchive={(id) => {
-          const cible = services.find((s) => s.id === id) ?? null
           setDetail(null)
-          setConfirmArchive(cible)
+          demanderArchive(id)
         }}
       />
 
@@ -249,7 +253,7 @@ export function ServicesPage() {
           if (!confirmArchive) return
           const id = confirmArchive.id
           setConfirmArchive(null)
-          handleArchive(id)
+          void handleArchive(id)
         }}
       />
     </div>

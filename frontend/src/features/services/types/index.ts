@@ -9,15 +9,17 @@ export interface Domaine {
 export interface Service {
   id: number
   nomService: string
-  tarifService: number
+  codeService: string | null
   description: string | null
   actif: boolean
 }
 
-export interface HistoriqueTarif {
-  id: number
-  serviceId: number
-  tarif: number
-  dateDebut: string | null
-  dateFin: string | null
+export interface CreateServicePayload {
+  nomService: string
+  description?: string | null
+}
+
+export type UpdateServicePayload = {
+  nomService: string
+  description?: string | null
 }

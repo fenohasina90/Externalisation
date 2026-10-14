@@ -1,2 +1,2 @@
 export { useDomainesList, type StatutDomaineFilter } from './useDomainesList'
-export { useServicesListStatic } from './useServicesListStatic'
+export { useServicesList, type StatutServiceFilter } from './useServicesList'

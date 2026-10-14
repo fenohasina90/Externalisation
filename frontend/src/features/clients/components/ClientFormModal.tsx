@@ -173,13 +173,13 @@ export function ClientFormModal({ open, client, responsableActuel, domaines, res
                 onTextChange={(texte) => setForm((f) => ({ ...f, domaine: texte }))}
                 onPick={() => undefined}
                 options={domaines.map((d) => ({ id: d.id, label: d.nom }))}
-                // footer={
-                //   form.domaine.trim() !== '' && !domaineExiste ? (
-                //     <span className="autocomplete__hint">
-                //       « {form.domaine.trim()} » sera créé comme nouveau domaine.
-                //     </span>
-                //   ) : undefined
-                // }
+                footer={
+                  form.domaine.trim() !== '' && !domaineExiste ? (
+                    <span className="autocomplete__hint">
+                      « {form.domaine.trim()} » sera créé comme nouveau domaine.
+                    </span>
+                  ) : undefined
+                }
               />
             </div>
 

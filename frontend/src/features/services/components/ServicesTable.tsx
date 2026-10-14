@@ -19,6 +19,7 @@ export function ServicesTable({ items, loading = false, onView, onEdit, onArchiv
       <thead>
         <tr>
           <th>Service</th>
+          <th>Code</th>
           <th>Description</th>
           <th>Statut</th>
           <th>Actions</th>
@@ -28,6 +29,7 @@ export function ServicesTable({ items, loading = false, onView, onEdit, onArchiv
         {items.map((s) => (
           <tr key={s.id}>
             <td className="fw-700">{s.nomService}</td>
+            <td className="text-secondary">{s.codeService ?? '—'}</td>
             <td className="text-secondary" style={{ whiteSpace: 'normal', minWidth: 220 }}>
               {s.description ?? '—'}
             </td>

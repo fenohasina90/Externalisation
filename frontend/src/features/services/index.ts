@@ -1,5 +1,5 @@
 export { ServicesPage } from './screens/ServicesPage'
 export { DomainesPage } from './screens/DomainesPage'
 export { DomainesTable, DomaineFormModal, ServicesTable, ServiceFormModal, ServiceDetailDrawer } from './components'
-export { useDomainesList, type StatutDomaineFilter, useServicesListStatic } from './hooks'
-export type { Domaine, Service, HistoriqueTarif } from './types'
+export { useDomainesList, type StatutDomaineFilter, useServicesList, type StatutServiceFilter } from './hooks'
+export type { CreateServicePayload, Domaine, Service, UpdateServicePayload } from './types'

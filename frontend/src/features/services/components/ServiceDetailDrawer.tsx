@@ -35,6 +35,11 @@ export function ServiceDetailDrawer({ service, onClose, onEdit, onArchive }: Pro
         </div>
 
         <div className="drawer__row">
+          <span className="drawer__label">Code</span>
+          <strong>{service.codeService ?? '—'}</strong>
+        </div>
+
+        <div className="drawer__row">
           <span className="drawer__label">Statut</span>
           <strong>{service.actif ? 'Actif' : 'Archivé'}</strong>
         </div>
