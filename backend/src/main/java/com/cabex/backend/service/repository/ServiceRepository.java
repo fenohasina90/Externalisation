@@ -8,17 +8,27 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ServiceRepository extends JpaRepository<Service, Integer> {
 
     boolean existsByNomService(String nomService);
 
+    Optional<Service> findByCodeService(String codeService);
+
+    boolean existsByCodeService(String codeService);
+
     long countByActifTrue();
+
+    /** Tous les codes, pour le calcul du suivant (SRV-0001, SRV-0002, …). */
+    @Query("SELECT s.codeService FROM Service s")
+    java.util.List<String> findAllCodes();
 
     @Query("""
         SELECT s FROM Service s
         WHERE (:recherche IS NULL
-               OR LOWER(s.nomService) LIKE LOWER(CONCAT('%', :recherche, '%')))
+               OR LOWER(s.nomService) LIKE LOWER(CONCAT('%', :recherche, '%'))
+               OR LOWER(COALESCE(s.codeService, '')) LIKE LOWER(CONCAT('%', :recherche, '%')))
           AND (:actif IS NULL OR s.actif = :actif)
         """)
     Page<Service> rechercher(@Param("recherche") String recherche,

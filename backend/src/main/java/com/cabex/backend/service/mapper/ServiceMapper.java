@@ -15,7 +15,7 @@ public class ServiceMapper {
         return new ServiceResponse(
                 service.getId(),
                 service.getNomService(),
-                service.getTarifService(),
+                service.getCodeService(),
                 service.getDescription(),
                 service.getActif()
         );
