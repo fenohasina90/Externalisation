@@ -316,9 +316,13 @@ public class DemandeGestionService {
         enviereHistorique(demande, STATUT_VALIDATION,
                 "Demande validée par le paiement du premier tranche (échéance n°1)");
         notificationService.notifierChangementStatut(demande, STATUT_VALIDATION);
+        auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
+                Long.valueOf(demande.getId()), STATUT_EN_ATTENTE, STATUT_VALIDATION);
         enviereHistorique(demande, STATUT_EN_COURS,
                 "Service démarré après validation (premier paiement enregistré)");
         notificationService.notifierChangementStatut(demande, STATUT_EN_COURS);
+        auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
+                Long.valueOf(demande.getId()), STATUT_VALIDATION, STATUT_EN_COURS);
     }
 
     private String genererReference(int annee) {

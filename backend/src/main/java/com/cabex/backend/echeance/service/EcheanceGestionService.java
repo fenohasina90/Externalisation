@@ -1,6 +1,8 @@
 package com.cabex.backend.echeance.service;
 
 import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.echeance.dto.CreateEcheanceRequest;
 import com.cabex.backend.echeance.dto.EcheanceResponse;
 import com.cabex.backend.echeance.dto.UpdateEcheanceRequest;
@@ -27,11 +29,14 @@ public class EcheanceGestionService {
 
     private final EcheancePaiementRepository echeanceRepository;
     private final ProposPaiementRepository proposRepository;
+    private final AuditService auditService;
 
     public EcheanceGestionService(EcheancePaiementRepository echeanceRepository,
-                                  ProposPaiementRepository proposRepository) {
+                                  ProposPaiementRepository proposRepository,
+                                  AuditService auditService) {
         this.echeanceRepository = echeanceRepository;
         this.proposRepository = proposRepository;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -66,6 +71,9 @@ public class EcheanceGestionService {
 
         recalculerPlan(propos);
 
+        auditService.log(AuditActions.CREATE, "PAIEMENT", "EcheancePaiement",
+                Long.valueOf(echeance.getId()), null,
+                "plan=" + propos.getId() + ", echeance=" + echeance.getNumeroEcheance());
         return EcheanceMapper.toEcheanceResponse(echeance, LocalDate.now(), JOURS_ALERTE);
     }
 
@@ -87,6 +95,11 @@ public class EcheanceGestionService {
 
         recalculerPlan(echeance.getProposPaiement());
 
+        auditService.log(AuditActions.UPDATE, "PAIEMENT", "EcheancePaiement",
+                Long.valueOf(echeance.getId()),
+                "plan=" + echeance.getProposPaiement().getId(),
+                "plan=" + echeance.getProposPaiement().getId()
+                        + ", echeance=" + echeance.getNumeroEcheance());
         return EcheanceMapper.toEcheanceResponse(echeance, LocalDate.now(), JOURS_ALERTE);
     }
 

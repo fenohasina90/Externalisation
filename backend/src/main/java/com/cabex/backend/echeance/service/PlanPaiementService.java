@@ -4,6 +4,8 @@ import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.HistoriqueDemande;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.echeance.dto.CreatePlanPaiementRequest;
 import com.cabex.backend.echeance.dto.PlanPaiementResponse;
 import com.cabex.backend.echeance.dto.UpdatePlanPaiementRequest;
@@ -38,17 +40,20 @@ public class PlanPaiementService {
     private final DemandeServiceRepository demandeRepository;
     private final HistoriqueDemandeRepository historiqueRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final AuditService auditService;
 
     public PlanPaiementService(ProposPaiementRepository proposRepository,
                                EcheancePaiementRepository echeanceRepository,
                                DemandeServiceRepository demandeRepository,
                                HistoriqueDemandeRepository historiqueRepository,
-                               UtilisateurRepository utilisateurRepository) {
+                               UtilisateurRepository utilisateurRepository,
+                               AuditService auditService) {
         this.proposRepository = proposRepository;
         this.echeanceRepository = echeanceRepository;
         this.demandeRepository = demandeRepository;
         this.historiqueRepository = historiqueRepository;
         this.utilisateurRepository = utilisateurRepository;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -113,6 +118,8 @@ public class PlanPaiementService {
         propos.setEcheances(genererEcheances(propos));
         propos = proposRepository.save(propos);
 
+        auditService.log(AuditActions.CREATE, "PAIEMENT", "PlanPaiement",
+                Long.valueOf(propos.getId()), null, "demande=" + demande.getReferenceDemande());
         return toResponse(propos);
     }
 
@@ -151,7 +158,11 @@ public class PlanPaiementService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         propos.setRestePayer(request.montantTotal().subtract(totalPaye).max(BigDecimal.ZERO));
 
-        return toResponse(proposRepository.save(propos));
+        ProposPaiement saved = proposRepository.save(propos);
+        auditService.log(AuditActions.UPDATE, "PAIEMENT", "PlanPaiement",
+                Long.valueOf(saved.getId()), "demande=" + saved.getDemande().getReferenceDemande(),
+                "demande=" + saved.getDemande().getReferenceDemande());
+        return toResponse(saved);
     }
 
     private Set<EcheancePaiement> genererEcheances(ProposPaiement propos) {

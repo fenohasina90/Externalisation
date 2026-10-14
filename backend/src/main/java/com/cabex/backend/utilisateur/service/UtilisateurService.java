@@ -4,6 +4,8 @@ import com.cabex.backend.exception.BadRequestException;
 import com.cabex.backend.exception.DuplicateResourceException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.security.SecurityUtils;
 import com.cabex.backend.utilisateur.dto.CreateUtilisateurRequest;
 import com.cabex.backend.utilisateur.dto.UpdateUtilisateurRequest;
@@ -27,13 +29,16 @@ public class UtilisateurService {
     private final UtilisateurRepository utilisateurRepository;
     private final RoleUtilisateurRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditService auditService;
 
     public UtilisateurService(UtilisateurRepository utilisateurRepository,
                               RoleUtilisateurRepository roleRepository,
-                              PasswordEncoder passwordEncoder) {
+                              PasswordEncoder passwordEncoder,
+                              AuditService auditService) {
         this.utilisateurRepository = utilisateurRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -69,7 +74,10 @@ public class UtilisateurService {
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
-        return UtilisateurMapper.toResponse(utilisateurRepository.save(utilisateur));
+        Utilisateur saved = utilisateurRepository.save(utilisateur);
+        auditService.log(AuditActions.CREATE, "UTILISATEUR", "Utilisateur",
+                Long.valueOf(saved.getId()), null, "username=" + saved.getUsername());
+        return UtilisateurMapper.toResponse(saved);
     }
 
     @Transactional
@@ -96,7 +104,10 @@ public class UtilisateurService {
             utilisateur.setRole(getRole(request.roleId()));
         }
         utilisateur.setUpdatedAt(LocalDateTime.now());
-        return UtilisateurMapper.toResponse(utilisateurRepository.save(utilisateur));
+        Utilisateur saved = utilisateurRepository.save(utilisateur);
+        auditService.log(AuditActions.UPDATE, "UTILISATEUR", "Utilisateur",
+                Long.valueOf(saved.getId()), null, "username=" + saved.getUsername());
+        return UtilisateurMapper.toResponse(saved);
     }
 
     @Transactional
@@ -105,9 +116,13 @@ public class UtilisateurService {
         if (SecurityUtils.currentUserId().equals(id)) {
             throw new BadRequestException("Vous ne pouvez pas modifier votre propre compte");
         }
+        boolean previousActif = utilisateur.getActif();
         utilisateur.setActif(actif);
         utilisateur.setUpdatedAt(LocalDateTime.now());
-        return UtilisateurMapper.toResponse(utilisateurRepository.save(utilisateur));
+        Utilisateur saved = utilisateurRepository.save(utilisateur);
+        auditService.log(AuditActions.UPDATE, "UTILISATEUR", "Utilisateur",
+                Long.valueOf(saved.getId()), "actif=" + previousActif, "actif=" + actif);
+        return UtilisateurMapper.toResponse(saved);
     }
 
     @Transactional
@@ -116,7 +131,10 @@ public class UtilisateurService {
         if (SecurityUtils.currentUserId().equals(id)) {
             throw new BadRequestException("Vous ne pouvez pas supprimer votre propre compte");
         }
+        String username = utilisateur.getUsername();
         utilisateurRepository.delete(utilisateur);
+        auditService.log(AuditActions.DELETE, "UTILISATEUR", "Utilisateur",
+                Long.valueOf(id), "username=" + username, null);
     }
 
     private Utilisateur getEntity(Integer id) {

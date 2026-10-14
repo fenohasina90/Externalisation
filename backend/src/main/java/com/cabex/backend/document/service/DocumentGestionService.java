@@ -2,6 +2,8 @@ package com.cabex.backend.document.service;
 
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.document.dto.DocumentResponse;
 import com.cabex.backend.document.dto.FichierDocument;
 import com.cabex.backend.document.entity.PieceJointe;
@@ -45,6 +47,7 @@ public class DocumentGestionService {
     private final ProposPaiementRepository proposRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final PdfGenerator pdfGenerator;
+    private final AuditService auditService;
 
     @Value("${app.document.storage-path}")
     private String storagePath;
@@ -57,13 +60,15 @@ public class DocumentGestionService {
                                   PaiementRepository paiementRepository,
                                   ProposPaiementRepository proposRepository,
                                   UtilisateurRepository utilisateurRepository,
-                                  PdfGenerator pdfGenerator) {
+                                  PdfGenerator pdfGenerator,
+                                  AuditService auditService) {
         this.pieceRepository = pieceRepository;
         this.demandeRepository = demandeRepository;
         this.paiementRepository = paiementRepository;
         this.proposRepository = proposRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.pdfGenerator = pdfGenerator;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -109,7 +114,10 @@ public class DocumentGestionService {
                     .description(description)
                     .uploadedBy(currentUtilisateur())
                     .build();
-            return DocumentMapper.toResponse(pieceRepository.save(piece));
+            PieceJointe saved = pieceRepository.save(piece);
+            auditService.log(AuditActions.CREATE, "DOCUMENT", "PieceJointe",
+                    Long.valueOf(saved.getId()), null, "fichier=" + nomOriginal);
+            return DocumentMapper.toResponse(saved);
         } catch (IOException e) {
             throw new BusinessException("Impossible d'enregistrer le fichier : " + e.getMessage());
         }
@@ -131,12 +139,15 @@ public class DocumentGestionService {
     @Transactional
     public void delete(Integer id) {
         PieceJointe piece = getPiece(id);
+        String nom = piece.getNomOriginal();
         try {
             Files.deleteIfExists(Paths.get(piece.getCheminFichier()));
         } catch (IOException ignored) {
             // le fichier peut ne plus exister; on supprime quand même l'enregistrement
         }
         pieceRepository.delete(piece);
+        auditService.log(AuditActions.DELETE, "DOCUMENT", "PieceJointe",
+                Long.valueOf(id), "fichier=" + nom, null);
     }
 
     public byte[] recapitulatifDemande(Integer demandeId) {
@@ -214,7 +225,10 @@ public class DocumentGestionService {
                     .description(description)
                     .uploadedBy(currentUtilisateur())
                     .build();
-            return DocumentMapper.toResponse(pieceRepository.save(piece));
+            PieceJointe saved = pieceRepository.save(piece);
+            auditService.log(AuditActions.CREATE, "DOCUMENT", "PieceJointe",
+                    Long.valueOf(saved.getId()), null, "fichier=" + nomFichier);
+            return DocumentMapper.toResponse(saved);
         } catch (IOException e) {
             throw new BusinessException("Impossible d'enregistrer le document généré : " + e.getMessage());
         }
