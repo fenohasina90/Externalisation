@@ -1,102 +1,115 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { Utilisateur } from '@/features/auth/types'
+import { useEffect, useState } from 'react'
+import type { Role, Utilisateur } from '@/features/auth/types'
+import { authApi } from '@/features/auth/services/auth.service'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Alert, Spinner } from '@/components/ui'
+import { useApi } from '@/hooks/useApi'
 import { UtilisateurFormModal, UtilisateursTable } from '../components'
-import { MOCK_UTILISATEURS, type RoleFilter, type StatutUtilisateurFilter } from '../data/mockUtilisateurs'
-import { useUtilisateursListStatic } from '../hooks'
+import { reinitialisationsApi, rolesApi, utilisateursApi } from '../services/administration.service'
+import { useUtilisateursList, type StatutUtilisateurFilter } from '../hooks/useUtilisateursList'
 
 const PAGE_SIZE = 8
 
 /**
- * Utilisateurs — étape 1 : interface seule, données statiques.
- * Réservé au SUPER_ADMIN (contrôle backend à l'étape 2).
+ * Utilisateurs branchés sur l'API : recherche, filtres rôle/statut,
+ * création (mot de passe initial), activation, réinitialisation du
+ * mot de passe via le circuit des demandes (création → approbation →
+ * génération du temporaire affiché une seule fois).
  */
 export function UtilisateursPage() {
-  const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>(MOCK_UTILISATEURS)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Utilisateur | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [confirmToggle, setConfirmToggle] = useState<{ id: number; actif: boolean } | null>(null)
+  const [resetCible, setResetCible] = useState<Utilisateur | null>(null)
+  const [resetEnCours, setResetEnCours] = useState(false)
+  const [motDePasseTemp, setMotDePasseTemp] = useState<string | null>(null)
 
-  const { items, total, totalPages, page, setPage, search, setSearch, role, setRole, statut, setStatut } =
-    useUtilisateursListStatic({ source: utilisateurs, size: PAGE_SIZE })
+  const { items, total, totalPages, page, loading, error, setPage, search, setSearch, role, setRole, statut, setStatut, reload } =
+    useUtilisateursList(PAGE_SIZE)
 
-  const kpis = useMemo(() => {
-    const actifs = utilisateurs.filter((u) => u.actif).length
-    const totalCount = utilisateurs.length
-    return {
-      total: totalCount,
-      actifs,
-      inactifs: totalCount - actifs,
-      pctActifs: totalCount === 0 ? 0 : Math.round((actifs / totalCount) * 100),
-      connectes: utilisateurs.filter((u) => u.derniereConnexion?.startsWith("Aujourd'hui")).length,
-    }
-  }, [utilisateurs])
+  const { data: roles } = useApi<Role[]>(() => rolesApi.list(), [])
+  const optionsRoles = (roles ?? []).map((r) => ({ id: r.id, nom: r.nomRole }))
+
+  const actifs = items.filter((u) => u.actif).length
+  const inactifs = items.length - actifs
+  const pctActifs = total === 0 ? 0 : Math.round((actifs / total) * 100)
 
   const openCreate = () => {
     setEditing(null)
     setModalOpen(true)
   }
 
-  const handleSave = (payload: {
+  const handleSave = async (payload: {
     nom: string
     prenom: string
     username: string
     email: string
-    role: RoleFilter
+    password?: string
+    roleId: number
   }) => {
     if (editing) {
-      // Modification : le statut existant est conservé (géré par l'action Activer/Désactiver).
-      setUtilisateurs((prev) =>
-        prev.map((u) =>
-          u.id === editing.id
-            ? {
-                ...u,
-                nom: payload.nom,
-                prenom: payload.prenom,
-                username: payload.username,
-                email: payload.email,
-                role:
-                  payload.role === 'tous'
-                    ? u.role
-                    : { ...u.role, nomRole: payload.role as Utilisateur['role']['nomRole'] },
-              }
-            : u,
-        ),
-      )
+      await utilisateursApi.update(editing.id, {
+        nom: payload.nom,
+        prenom: payload.prenom,
+        username: payload.username,
+        email: payload.email,
+        roleId: payload.roleId,
+      })
     } else {
-      // Création : compte actif par défaut.
-      const nextId = Math.max(0, ...utilisateurs.map((u) => u.id)) + 1
-      const nomRole = (payload.role === 'tous' ? 'ACCUEIL' : payload.role) as Utilisateur['role']['nomRole']
-      setUtilisateurs((prev) => [
-        ...prev,
-        {
-          id: nextId,
-          nom: payload.nom,
-          prenom: payload.prenom,
-          username: payload.username,
-          email: payload.email,
-          actif: true,
-          doitChangerMotDePasse: true,
-          derniereConnexion: null,
-          createdAt: '2026-10-04',
-          role: { id: nextId, nomRole, description: null, actif: true },
-          permissions: [],
-        },
-      ])
+      if (!payload.password) throw new Error('Le mot de passe est obligatoire')
+      await utilisateursApi.create({
+        nom: payload.nom,
+        prenom: payload.prenom,
+        username: payload.username,
+        email: payload.email,
+        password: payload.password,
+        roleId: payload.roleId,
+      })
     }
     setModalOpen(false)
     setEditing(null)
+    reload()
   }
 
-  const handleResetPassword = (u: Utilisateur) => {
-    setMessage(
-      `Mot de passe temporaire généré pour ${u.prenom} ${u.nom} : Cbx-${u.id}248 (démonstration, sans backend).`,
-    )
+  const handleToggleActif = async (id: number, actif: boolean) => {
+    setMessage(null)
+    try {
+      await utilisateursApi.toggleActivation(id, actif)
+      reload()
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Échec du changement de statut')
+    }
   }
 
-  const handleToggleActif = (id: number, actif: boolean) => {
-    setUtilisateurs((prev) => prev.map((u) => (u.id === id ? { ...u, actif } : u)))
+  /** Chaîne admin : demande → approbation → mot de passe temporaire affiché une fois. */
+  const handleResetPassword = async (u: Utilisateur) => {
+    setResetCible(u)
+    setResetEnCours(true)
+    setMotDePasseTemp(null)
+    setMessage(null)
+    try {
+      await authApi.forgotPassword({ email: u.email })
+      const pageDemandes = await reinitialisationsApi.list('EN_ATTENTE', {
+        page: 0,
+        size: 50,
+        recherche: null,
+      })
+      const demande = pageDemandes.content.find(
+        (d) => d.email.toLowerCase() === u.email.toLowerCase(),
+      )
+      if (!demande) {
+        throw new Error('Demande de réinitialisation introuvable après création')
+      }
+      await reinitialisationsApi.approuver(demande.id)
+      const resultat = await reinitialisationsApi.reinitialiser(demande.id)
+      setMotDePasseTemp(resultat.motDePasseTemporaire)
+    } catch (err) {
+      setResetCible(null)
+      setMessage(err instanceof Error ? err.message : 'Échec de la réinitialisation')
+    } finally {
+      setResetEnCours(false)
+    }
   }
 
   useEffect(() => {
@@ -124,7 +137,7 @@ export function UtilisateursPage() {
       </header>
 
       {message && (
-        <div className="alert alert-success" role="status">
+        <div className="alert alert-danger" role="alert">
           {message}
         </div>
       )}
@@ -139,13 +152,13 @@ export function UtilisateursPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{kpis.total}</div>
+            <div className="kpi-num">{total}</div>
             <div className="kpi-label">Utilisateurs</div>
           </div>
         </div>
 
         <div className="card kpi-card hl">
-          <span className="kpi-tag">{kpis.pctActifs} %</span>
+          <span className="kpi-tag">{pctActifs} %</span>
           <div className="kpi-icon">
             <svg className="sv" viewBox="0 0 24 24">
               <circle cx="12" cy="12" r="9" />
@@ -153,7 +166,7 @@ export function UtilisateursPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{kpis.actifs}</div>
+            <div className="kpi-num">{actifs}</div>
             <div className="kpi-label">Actifs</div>
           </div>
         </div>
@@ -169,22 +182,8 @@ export function UtilisateursPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{kpis.inactifs}</div>
+            <div className="kpi-num">{inactifs}</div>
             <div className="kpi-label">Inactifs</div>
-          </div>
-        </div>
-
-        <div className="card kpi-card">
-          <span className="kpi-tag">Dernières 24 h</span>
-          <div className="kpi-icon">
-            <svg className="sv" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 7v5l3 3" />
-            </svg>
-          </div>
-          <div>
-            <div className="kpi-num">{kpis.connectes}</div>
-            <div className="kpi-label">Connectés aujourd&apos;hui</div>
           </div>
         </div>
       </section>
@@ -202,11 +201,13 @@ export function UtilisateursPage() {
           </label>
           <label className="field filter-field">
             Rôle
-            <select value={role} onChange={(e) => setRole(e.target.value as RoleFilter)}>
+            <select value={role} onChange={(e) => setRole(e.target.value, optionsRoles)}>
               <option value="tous">Tous les rôles</option>
-              <option value="SUPER_ADMIN">SUPER_ADMIN</option>
-              <option value="ACCUEIL">ACCUEIL</option>
-              <option value="ECONOMAT">ECONOMAT</option>
+              {optionsRoles.map((r) => (
+                <option key={r.id} value={r.nom}>
+                  {r.nom}
+                </option>
+              ))}
             </select>
           </label>
           <label className="field filter-field">
@@ -217,67 +218,76 @@ export function UtilisateursPage() {
               <option value="inactifs">Inactifs</option>
             </select>
           </label>
-          {/* <button type="submit" className="btn-primary">
+          <button type="submit" className="btn-primary">
             Rechercher
-          </button> */}
+          </button>
         </form>
       </section>
 
       <section className="card">
-        <div className="table-scroll-container no-global-scroll">
-          <div className="table-wrap">
-            <UtilisateursTable
-              items={items}
-              onEdit={(u) => {
-                setEditing(u)
-                setModalOpen(true)
-              }}
-              onResetPassword={handleResetPassword}
-              onToggleActif={(id, actif) => setConfirmToggle({ id, actif })}
-            />
+        {loading && items.length === 0 ? (
+          <Spinner label="Chargement des utilisateurs…" />
+        ) : error ? (
+          <div className="card-pad">
+            <Alert tone="danger">{error}</Alert>
           </div>
-          {total > 0 && (
-            <div className="table-footer">
-              <span>
-                Affichage de {page * PAGE_SIZE + 1} à {Math.min((page + 1) * PAGE_SIZE, total)} sur{' '}
-                {total} utilisateurs
-              </span>
-              <div className="pagination">
-                <button
-                  type="button"
-                  className="pagination-item"
-                  onClick={() => setPage(Math.max(0, page - 1))}
-                  disabled={page <= 0}
-                >
-                  ‹
-                </button>
-                {Array.from({ length: totalPages }).map((_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className={`pagination-item ${i === page ? 'active' : ''}`}
-                    onClick={() => setPage(i)}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  className="pagination-item"
-                  onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
-                  disabled={page >= totalPages - 1}
-                >
-                  ›
-                </button>
-              </div>
+        ) : (
+          <div className="table-scroll-container no-global-scroll">
+            <div className="table-wrap">
+              <UtilisateursTable
+                items={items}
+                onEdit={(u) => {
+                  setEditing(u)
+                  setModalOpen(true)
+                }}
+                onResetPassword={(u) => void handleResetPassword(u)}
+                onToggleActif={(id, actif) => setConfirmToggle({ id, actif })}
+              />
             </div>
-          )}
-        </div>
+            {total > 0 && (
+              <div className="table-footer">
+                <span>
+                  Affichage de {page * PAGE_SIZE + 1} à {Math.min((page + 1) * PAGE_SIZE, total)} sur{' '}
+                  {total} utilisateurs
+                </span>
+                <div className="pagination">
+                  <button
+                    type="button"
+                    className="pagination-item"
+                    onClick={() => setPage(Math.max(0, page - 1))}
+                    disabled={page <= 0}
+                  >
+                    ‹
+                  </button>
+                  {Array.from({ length: totalPages }).map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className={`pagination-item ${i === page ? 'active' : ''}`}
+                      onClick={() => setPage(i)}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="pagination-item"
+                    onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+                    disabled={page >= totalPages - 1}
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       <UtilisateurFormModal
         open={modalOpen}
         utilisateur={editing}
+        roles={optionsRoles}
         onClose={() => {
           setModalOpen(false)
           setEditing(null)
@@ -300,9 +310,80 @@ export function UtilisateursPage() {
           if (!confirmToggle) return
           const { id, actif } = confirmToggle
           setConfirmToggle(null)
-          handleToggleActif(id, actif)
+          void handleToggleActif(id, actif)
         }}
       />
+
+      {(resetCible !== null || motDePasseTemp !== null) && (
+        <div
+          className="modal-backdrop"
+          onClick={() => {
+            if (!resetEnCours) {
+              setResetCible(null)
+              setMotDePasseTemp(null)
+            }
+          }}
+        >
+          <div
+            className="modal-card"
+            style={{ maxWidth: 480 }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Mot de passe temporaire"
+          >
+            <header className="modal-header">
+              <h3 className="modal-title">Réinitialisation du mot de passe</h3>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={resetEnCours}
+                onClick={() => {
+                  setResetCible(null)
+                  setMotDePasseTemp(null)
+                }}
+                aria-label="Fermer"
+              >
+                ✕
+              </button>
+            </header>
+            <div className="modal-body">
+              {resetEnCours && <p className="text-muted">Génération en cours…</p>}
+              {!resetEnCours && motDePasseTemp && resetCible && (
+                <>
+                  <p className="section-note">
+                    Transmettez ce mot de passe temporaire à {resetCible.prenom} {resetCible.nom} :
+                    il devra le changer à sa prochaine connexion. Il ne sera plus affiché.
+                  </p>
+                  <div className="mot-de-passe-temp">
+                    <code className="code-inline">{motDePasseTemp}</code>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() => void navigator.clipboard.writeText(motDePasseTemp)}
+                    >
+                      Copier
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            <footer className="modal-footer">
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={resetEnCours}
+                onClick={() => {
+                  setResetCible(null)
+                  setMotDePasseTemp(null)
+                  reload()
+                }}
+              >
+                Fermer
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

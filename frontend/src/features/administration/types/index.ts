@@ -24,8 +24,31 @@ export interface ApplicationConfiguration {
 
 export interface Permission {
   id: number
+  codePermission: string
   nomPermission: string
   description: string | null
+  module: string
+  actif: boolean
+}
+
+export interface RoleDetail {
+  id: number
+  nomRole: string
+  description: string | null
+  actif: boolean
+  permissions: Permission[]
+}
+
+export interface CreateRolePayload {
+  nomRole: string
+  description?: string | null
+  permissionIds: number[]
+}
+
+export interface UpdateRolePayload {
+  description?: string | null
+  actif?: boolean
+  permissionIds: number[]
 }
 
 export interface CreateUtilisateurPayload {

@@ -1,5 +1,5 @@
 export { UtilisateursTable } from './UtilisateursTable'
 export { UtilisateurFormModal } from './UtilisateurFormModal'
-export { PermissionsMatrix } from './PermissionsMatrix'
+export { PermissionsMatrix, type PermissionLigne } from './PermissionsMatrix'
 export { AuditTable } from './AuditTable'
 export { AuditDetailModal } from './AuditDetailModal'

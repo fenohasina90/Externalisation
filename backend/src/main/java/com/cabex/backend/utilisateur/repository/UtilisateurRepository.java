@@ -33,8 +33,13 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, Intege
                    OR LOWER(u.prenom) LIKE LOWER(CONCAT('%', :search, '%'))
                    OR LOWER(u.username) LIKE LOWER(CONCAT('%', :search, '%'))
                    OR LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')))
+              AND (:roleId IS NULL OR u.role.id = :roleId)
+              AND (:actif IS NULL OR u.actif = :actif)
             """)
-    Page<Utilisateur> findWithFilters(@Param("search") String search, Pageable pageable);
+    Page<Utilisateur> findWithFilters(@Param("search") String search,
+                                      @Param("roleId") Integer roleId,
+                                      @Param("actif") Boolean actif,
+                                      Pageable pageable);
 
     @Modifying
     @Query("UPDATE Utilisateur u SET u.derniereConnexion = :date WHERE u.id = :id")

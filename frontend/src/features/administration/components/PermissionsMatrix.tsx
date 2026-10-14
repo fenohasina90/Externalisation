@@ -1,4 +1,12 @@
-import type { PermissionLigne } from '../data/mockRolesPermissions'
+export interface PermissionLigne {
+  module: string
+  voir: boolean
+  creer: boolean
+  modifier: boolean
+  desactiver: boolean
+  /** Actions sans permission correspondante : affichées « — » au lieu d'une case. */
+  indisponibles?: ('voir' | 'creer' | 'modifier' | 'desactiver')[]
+}
 
 interface Props {
   lignes: PermissionLigne[]
@@ -9,6 +17,26 @@ interface Props {
 
 /** Matrice des permissions d'un rôle (cf. maquette Rôles et permissions). */
 export function PermissionsMatrix({ lignes, modifiable, onToggle }: Props) {
+  const cellule = (
+    l: PermissionLigne,
+    champ: 'voir' | 'creer' | 'modifier' | 'desactiver',
+    label: string,
+  ) => {
+    if (l.indisponibles?.includes(champ)) {
+      return <span className="text-muted">—</span>
+    }
+    return (
+      <input
+        type="checkbox"
+        className="perm-check"
+        checked={l[champ]}
+        disabled={!modifiable}
+        onChange={() => onToggle(l.module, champ)}
+        aria-label={`${l.module} : ${label}`}
+      />
+    )
+  }
+
   return (
     <table className="table">
       <thead>
@@ -24,46 +52,10 @@ export function PermissionsMatrix({ lignes, modifiable, onToggle }: Props) {
         {lignes.map((l) => (
           <tr key={l.module}>
             <td className="fw-600">{l.module}</td>
-            <td>
-              <input
-                type="checkbox"
-                className="perm-check"
-                checked={l.voir}
-                disabled={!modifiable}
-                onChange={() => onToggle(l.module, 'voir')}
-                aria-label={`${l.module} : voir`}
-              />
-            </td>
-            <td>
-              <input
-                type="checkbox"
-                className="perm-check"
-                checked={l.creer}
-                disabled={!modifiable}
-                onChange={() => onToggle(l.module, 'creer')}
-                aria-label={`${l.module} : créer`}
-              />
-            </td>
-            <td>
-              <input
-                type="checkbox"
-                className="perm-check"
-                checked={l.modifier}
-                disabled={!modifiable}
-                onChange={() => onToggle(l.module, 'modifier')}
-                aria-label={`${l.module} : modifier`}
-              />
-            </td>
-            <td>
-              <input
-                type="checkbox"
-                className="perm-check"
-                checked={l.desactiver}
-                disabled={!modifiable}
-                onChange={() => onToggle(l.module, 'desactiver')}
-                aria-label={`${l.module} : désactiver`}
-              />
-            </td>
+            <td>{cellule(l, 'voir', 'voir')}</td>
+            <td>{cellule(l, 'creer', 'créer')}</td>
+            <td>{cellule(l, 'modifier', 'modifier')}</td>
+            <td>{cellule(l, 'desactiver', 'désactiver')}</td>
           </tr>
         ))}
       </tbody>

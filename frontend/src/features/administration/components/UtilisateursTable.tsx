@@ -1,4 +1,5 @@
 import type { Utilisateur } from '@/features/auth/types'
+import { formatDateHeure } from '@/utils/format'
 
 interface Props {
   items: Utilisateur[]
@@ -17,6 +18,7 @@ function initials(u: Utilisateur): string {
 function rolePill(nomRole: string): string {
   switch (nomRole) {
     case 'SUPER_ADMIN':
+    case 'ADMIN':
       return 'pill ok'
     case 'ACCUEIL':
       return 'pill info'
@@ -67,7 +69,7 @@ export function UtilisateursTable({ items, loading = false, onEdit, onResetPassw
                 <span className="pill wt">Inactif</span>
               )}
             </td>
-            <td className="text-secondary">{u.derniereConnexion ?? '—'}</td>
+            <td className="text-secondary">{formatDateHeure(u.derniereConnexion)}</td>
             <td>
               <div className="table-actions">
                 <button type="button" className="btn-link" onClick={() => onEdit(u)}>

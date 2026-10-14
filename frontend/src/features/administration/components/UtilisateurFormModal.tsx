@@ -1,19 +1,25 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import type { Utilisateur } from '@/features/auth/types'
-import type { RoleFilter } from '../data/mockUtilisateurs'
+
+export interface RoleOption {
+  id: number
+  nom: string
+}
 
 interface Props {
   open: boolean
-  /** Utilisateur à modifier, null pour une création. */
+  /** Utilisateur à modifier, null pour une création (compte actif par défaut). */
   utilisateur: Utilisateur | null
+  roles: RoleOption[]
   onClose: () => void
   onSave: (payload: {
     nom: string
     prenom: string
     username: string
     email: string
-    role: RoleFilter
-  }) => void
+    password?: string
+    roleId: number
+  }) => Promise<void>
 }
 
 const emptyForm = {
@@ -21,21 +27,24 @@ const emptyForm = {
   prenom: '',
   username: '',
   email: '',
-  role: 'ACCUEIL' as RoleFilter,
+  password: '',
+  roleId: 0,
 }
 
 type FormState = typeof emptyForm
 
-/** Modale Créer / Modifier un utilisateur (cf. maquette). */
-export function UtilisateurFormModal({ open, utilisateur, onClose, onSave }: Props) {
+/** Modale Créer / Modifier un utilisateur (mot de passe exigé à la création). */
+export function UtilisateurFormModal({ open, utilisateur, roles, onClose, onSave }: Props) {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm(emptyForm)
       setError(null)
+      setSaving(false)
       return
     }
     setForm(
@@ -45,21 +54,22 @@ export function UtilisateurFormModal({ open, utilisateur, onClose, onSave }: Pro
             prenom: utilisateur.prenom,
             username: utilisateur.username,
             email: utilisateur.email,
-            role: utilisateur.role.nomRole as RoleFilter,
+            password: '',
+            roleId: utilisateur.role.id,
           }
-        : emptyForm,
+        : { ...emptyForm, roleId: roles[0]?.id ?? 0 },
     )
     setError(null)
-  }, [open, utilisateur])
+  }, [open, utilisateur, roles])
 
   if (!open) return null
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
-    setForm((f) => ({ ...f, [name]: value }))
+    setForm((f) => ({ ...f, [name]: name === 'roleId' ? Number(value) : value }))
   }
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!form.nom.trim() || !form.prenom.trim()) {
       setError('Le nom et le prénom sont obligatoires')
@@ -73,13 +83,30 @@ export function UtilisateurFormModal({ open, utilisateur, onClose, onSave }: Pro
       setError("L'adresse e-mail est obligatoire")
       return
     }
-    onSave({
-      nom: form.nom.trim(),
-      prenom: form.prenom.trim(),
-      username: form.username.trim(),
-      email: form.email.trim(),
-      role: form.role,
-    })
+    if (!utilisateur && form.password.length < 6) {
+      setError('Le mot de passe doit contenir au moins 6 caractères')
+      return
+    }
+    if (!form.roleId) {
+      setError('Le rôle est obligatoire')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      await onSave({
+        nom: form.nom.trim(),
+        prenom: form.prenom.trim(),
+        username: form.username.trim(),
+        email: form.email.trim(),
+        ...(utilisateur ? {} : { password: form.password }),
+        roleId: form.roleId,
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Échec de l'enregistrement")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -154,22 +181,45 @@ export function UtilisateurFormModal({ open, utilisateur, onClose, onSave }: Pro
               />
             </label>
 
-            <label className="field form-grid__full">
+            {!utilisateur && (
+              <label className="field">
+                Mot de passe <span className="required">*</span>
+                <input
+                  type="password"
+                  name="password"
+                  value={form.password}
+                  onChange={handleChange}
+                  placeholder="6 caractères minimum"
+                  required
+                  minLength={6}
+                />
+              </label>
+            )}
+
+            <label className="field">
               Rôle <span className="required">*</span>
-              <select name="role" value={form.role} onChange={handleChange} required>
-                <option value="SUPER_ADMIN">SUPER_ADMIN</option>
-                <option value="ACCUEIL">ACCUEIL</option>
-                <option value="ECONOMAT">ECONOMAT</option>
+              <select
+                name="roleId"
+                value={form.roleId}
+                onChange={handleChange}
+                required
+              >
+                <option value={0}>Sélectionner un rôle</option>
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.nom}
+                  </option>
+                ))}
               </select>
             </label>
           </div>
 
           <footer className="modal-footer">
-            <button type="button" className="btn-ghost" onClick={onClose}>
+            <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
               Annuler
             </button>
-            <button type="submit" className="btn-primary">
-              Enregistrer
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Enregistrement…' : 'Enregistrer'}
             </button>
           </footer>
         </form>

@@ -4,17 +4,32 @@ import type { Role, Utilisateur } from '@/features/auth/types'
 import type {
   ApplicationConfiguration,
   AuditEntry,
+  CreateRolePayload,
   CreateUtilisateurPayload,
   DemandeReinitialisation,
   MotDePasseTemporaire,
   Permission,
+  RoleDetail,
   StatutDemandeReinitialisation,
+  UpdateRolePayload,
 } from '../types'
 
+export interface UtilisateursFiltres {
+  roleId?: number
+  actif?: boolean
+}
+
 export const utilisateursApi = {
-  async list(page?: PageQuery): Promise<ApiPage<Utilisateur>> {
+  async list(
+    page: PageQuery,
+    filters: UtilisateursFiltres = {},
+    search?: string | null,
+  ): Promise<ApiPage<Utilisateur>> {
     const { data } = await http.get<ApiPage<Utilisateur>>('/utilisateurs', {
-      params: buildQuery({}, page),
+      params: buildQuery(
+        { search: search ?? undefined, roleId: filters.roleId, actif: filters.actif },
+        page,
+      ),
     })
     return data
   },
@@ -34,8 +49,8 @@ export const utilisateursApi = {
     return data
   },
 
-  async toggleActivation(id: number): Promise<Utilisateur> {
-    const { data } = await http.patch<Utilisateur>(`/utilisateurs/${id}/activation`)
+  async toggleActivation(id: number, actif: boolean): Promise<Utilisateur> {
+    const { data } = await http.patch<Utilisateur>(`/utilisateurs/${id}/activation`, { actif })
     return data
   },
 
@@ -47,6 +62,21 @@ export const utilisateursApi = {
 export const rolesApi = {
   async list(): Promise<Role[]> {
     const { data } = await http.get<Role[]>('/roles')
+    return data
+  },
+
+  async get(id: number): Promise<RoleDetail> {
+    const { data } = await http.get<RoleDetail>(`/roles/${id}`)
+    return data
+  },
+
+  async create(payload: CreateRolePayload): Promise<RoleDetail> {
+    const { data } = await http.post<RoleDetail>('/roles', payload)
+    return data
+  },
+
+  async update(id: number, payload: UpdateRolePayload): Promise<RoleDetail> {
+    const { data } = await http.put<RoleDetail>(`/roles/${id}`, payload)
     return data
   },
 }

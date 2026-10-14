@@ -2,10 +2,9 @@ import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
 import type { ApiPage } from '@/types'
+import type { Role, Utilisateur } from '@/features/auth/types'
 import type { AuditEntry } from '../types'
-import { MOCK_UTILISATEURS } from '../data/mockUtilisateurs'
-import { ROLES_CARTES } from '../data/mockRolesPermissions'
-import { auditApi } from '../services/administration.service'
+import { auditApi, rolesApi, utilisateursApi } from '../services/administration.service'
 
 const SECTIONS = [
   {
@@ -65,8 +64,17 @@ const SECTIONS = [
 
 /** Accueil de l'administration : chiffres clés + accès aux sections. */
 export function AdministrationPage() {
-  const nbUtilisateurs = MOCK_UTILISATEURS.length
-  const nbActifs = MOCK_UTILISATEURS.filter((u) => u.actif).length
+  const { data: pageTotal } = useApi<ApiPage<Utilisateur>>(
+    () => utilisateursApi.list({ page: 0, size: 1, recherche: null }),
+    [],
+  )
+  const { data: pageActifs } = useApi<ApiPage<Utilisateur>>(
+    () => utilisateursApi.list({ page: 0, size: 1, recherche: null }, { actif: true }),
+    [],
+  )
+  const { data: roles } = useApi<Role[]>(() => rolesApi.list(), [])
+  const nbUtilisateurs = pageTotal?.totalElements ?? 0
+  const nbActifs = pageActifs?.totalElements ?? 0
   const { data: audit } = useApi<ApiPage<AuditEntry>>(
     () => auditApi.list({ page: 0, size: 1, recherche: null }),
     [],
@@ -98,7 +106,7 @@ export function AdministrationPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{ROLES_CARTES.length}</div>
+            <div className="kpi-num">{roles?.length ?? 0}</div>
             <div className="kpi-label">Rôles configurés</div>
           </div>
         </div>

@@ -42,8 +42,9 @@ public class UtilisateurService {
     }
 
     @Transactional(readOnly = true)
-    public Page<UtilisateurResponse> getAll(String search, Pageable pageable) {
-        return utilisateurRepository.findWithFilters(search, pageable)
+    public Page<UtilisateurResponse> getAll(String search, Integer roleId, Boolean actif,
+                                            Pageable pageable) {
+        return utilisateurRepository.findWithFilters(search, roleId, actif, pageable)
                 .map(UtilisateurMapper::toResponse);
     }
 
