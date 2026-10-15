@@ -17,6 +17,7 @@ export type IconName =
   | 'logout'
   | 'menu'
   | 'close'
+  | 'panel'
 
 const PATHS: Record<IconName, ReactNode> = {
   grid: (
@@ -108,6 +109,12 @@ const PATHS: Record<IconName, ReactNode> = {
   ),
   menu: <path d="M3 6h18M3 12h18M3 18h18" />,
   close: <path d="M18 6 6 18M6 6l12 12" />,
+  panel: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9.5 4v16" />
+    </>
+  ),
 }
 
 interface IconProps extends SVGProps<SVGSVGElement> {

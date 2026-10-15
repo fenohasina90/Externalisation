@@ -836,6 +836,64 @@ a {
   padding: 0;
 }
 
+/* --- Sidebar repliée en rail d'icônes (grand écran uniquement) --- */
+
+.topbar__replie {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--c-border);
+  border-radius: 9px;
+  background: var(--c-surface);
+  color: var(--c-text);
+  cursor: pointer;
+}
+
+.topbar__replie:hover {
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+}
+
+@media (min-width: 901px) {
+  .app--sidebar-repliee .sidebar {
+    width: 76px;
+  }
+
+  .app--sidebar-repliee .sidebar__brand {
+    justify-content: center;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .app--sidebar-repliee .sidebar__brand > span:last-child,
+  .app--sidebar-repliee .sidebar__section-label,
+  .app--sidebar-repliee .nav__label,
+  .app--sidebar-repliee .nav__hint,
+  .app--sidebar-repliee .nav__chevron,
+  .app--sidebar-repliee .nav .badge,
+  .app--sidebar-repliee .nav-sub,
+  .app--sidebar-repliee .sidebar__user-link > span:last-child {
+    display: none;
+  }
+
+  .app--sidebar-repliee .sidebar__nav {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .app--sidebar-repliee .nav {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .app--sidebar-repliee .sidebar__user-link {
+    justify-content: center;
+  }
+}
+
 /* --- Responsive : sidebar en tiroir sur mobile --- */
 
 @media (max-width: 900px) {
@@ -864,6 +922,10 @@ a {
 
   .topbar__menu {
     display: inline-flex;
+  }
+
+  .topbar__replie {
+    display: none;
   }
 
   .topbar__brand {

@@ -13,6 +13,10 @@ interface SidebarProps {
   onClose: () => void
   /** Compteurs affichés dans les pastilles (ex. { demandes: 8, notifications: 3 }). */
   badges?: Partial<Record<BadgeKey, number>>
+  /** Repliée en rail d'icônes (grand écran uniquement). */
+  repliee?: boolean
+  /** Déplie la sidebar (appelée au clic sur un parent quand elle est repliée). */
+  onDeplier?: () => void
 }
 
 const isUnder = (pathname: string, to: string) => pathname === to || pathname.startsWith(`${to}/`)
@@ -27,9 +31,11 @@ interface NavEntryProps {
   pathname: string
   badges: Partial<Record<BadgeKey, number>>
   onNavigate: () => void
+  repliee: boolean
+  onDeplier?: () => void
 }
 
-function NavEntry({ item, pathname, badges, onNavigate }: NavEntryProps) {
+function NavEntry({ item, pathname, badges, onNavigate, repliee, onDeplier }: NavEntryProps) {
   const count = item.badge ? badges[item.badge] : undefined
   const content = (
     <>
@@ -45,6 +51,7 @@ function NavEntry({ item, pathname, badges, onNavigate }: NavEntryProps) {
       <NavLink
         to={item.to}
         end={item.end}
+        title={item.label}
         className={({ isActive }) => `nav${isActive ? ' nav--active' : ''}`}
         onClick={onNavigate}
       >
@@ -55,7 +62,16 @@ function NavEntry({ item, pathname, badges, onNavigate }: NavEntryProps) {
 
   // Menu déroulant : le clic déplie/replie, la navigation passe par les sous-menus.
   if (item.deroulant) {
-    return <DeroulantEntry item={item} pathname={pathname} badges={badges} onNavigate={onNavigate} />
+    return (
+      <DeroulantEntry
+        item={item}
+        pathname={pathname}
+        badges={badges}
+        onNavigate={onNavigate}
+        repliee={repliee}
+        onDeplier={onDeplier}
+      />
+    )
   }
 
   const active = isGroupActive(item, pathname)
@@ -95,10 +111,20 @@ function SousMenu({ item, onNavigate }: { item: NavItem; onNavigate: () => void 
   )
 }
 
-function DeroulantEntry({ item, pathname, badges, onNavigate }: NavEntryProps) {
+function DeroulantEntry({ item, pathname, badges, onNavigate, repliee, onDeplier }: NavEntryProps) {
   const active = isGroupActive(item, pathname)
   const [ouvert, setOuvert] = useState(active)
   const count = item.badge ? badges[item.badge] : undefined
+
+  // Sidebar repliée : un clic déplie d'abord pour donner accès aux sous-menus.
+  const handleClick = () => {
+    if (repliee) {
+      onDeplier?.()
+      setOuvert(true)
+    } else {
+      setOuvert((v) => !v)
+    }
+  }
 
   return (
     <div className="nav-group">
@@ -106,7 +132,8 @@ function DeroulantEntry({ item, pathname, badges, onNavigate }: NavEntryProps) {
         type="button"
         className={`nav nav--bouton${active ? ' nav--active' : ''}`}
         aria-expanded={ouvert}
-        onClick={() => setOuvert((v) => !v)}
+        title={item.label}
+        onClick={handleClick}
       >
         <Icon name={item.icon} />
         <span className="nav__label">{item.label}</span>
@@ -121,7 +148,7 @@ function DeroulantEntry({ item, pathname, badges, onNavigate }: NavEntryProps) {
   )
 }
 
-export function Sidebar({ open, onClose, badges = {} }: SidebarProps) {
+export function Sidebar({ open, onClose, badges = {}, repliee = false, onDeplier }: SidebarProps) {
   const { utilisateur, logout, hasPermission } = useAuth()
   const { pathname } = useLocation()
   const navigate = useNavigate()
@@ -168,7 +195,7 @@ export function Sidebar({ open, onClose, badges = {} }: SidebarProps) {
   }
 
   return (
-    <aside className={`sidebar${open ? ' sidebar--open' : ''}`}>
+    <aside className={`sidebar${open ? ' sidebar--open' : ''}${repliee ? ' sidebar--repliee' : ''}`}>
       <Link to="/" className="sidebar__brand" onClick={onClose}>
         <img
           className="sidebar__logo-img"
@@ -192,6 +219,8 @@ export function Sidebar({ open, onClose, badges = {} }: SidebarProps) {
                 pathname={pathname}
                 badges={badges}
                 onNavigate={onClose}
+                repliee={repliee}
+                onDeplier={onDeplier}
               />
             ))}
           </div>

@@ -12,11 +12,15 @@ const dateFormat = new Intl.DateTimeFormat('fr-FR', {
 interface TopbarProps {
   /** Ouvre le menu latéral (visible sur mobile uniquement). */
   onMenu: () => void
+  /** Replie / déplie la sidebar (visible sur grand écran uniquement). */
+  onReplier?: () => void
+  /** Sidebar actuellement repliée. */
+  repliee?: boolean
   /** Nombre de notifications non lues : affiche un point sur la cloche. */
   unreadNotifications?: number
 }
 
-export function Topbar({ onMenu, unreadNotifications = 0 }: TopbarProps) {
+export function Topbar({ onMenu, onReplier, repliee = false, unreadNotifications = 0 }: TopbarProps) {
   const today = new Date()
   const hasUnread = unreadNotifications > 0
 
@@ -25,6 +29,17 @@ export function Topbar({ onMenu, unreadNotifications = 0 }: TopbarProps) {
       <button type="button" className="topbar__menu" onClick={onMenu} aria-label="Ouvrir le menu">
         <Icon name="menu" />
       </button>
+      {onReplier && (
+        <button
+          type="button"
+          className="topbar__replie"
+          onClick={onReplier}
+          aria-label={repliee ? 'Afficher le menu latéral' : 'Cacher le menu latéral'}
+          title={repliee ? 'Afficher le menu latéral' : 'Cacher le menu latéral'}
+        >
+          <Icon name="panel" />
+        </button>
+      )}
 
       <Breadcrumbs />
 
