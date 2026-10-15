@@ -26,6 +26,12 @@ export interface CreateSocietePayload {
   activite?: string | null
   contact?: string | null
   email?: string | null
+  fb?: string | null
+  adresse?: string | null
+  /** Date de création de la société au format AAAA-MM-JJ. */
+  dateCreation?: string | null
+  nombrePersonnel?: number | null
+  chiffreAffaireMensuel?: number | null
   domaineId: number
 }
 

@@ -1972,6 +1972,111 @@ body {
   color: var(--danger);
 }
 
+/* --- Formulaire progressif (FormEtapes, réutilisable) --- */
+
+.form-etapes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-etapes__steps {
+  list-style: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.form-etapes__step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-light);
+  position: relative;
+  padding-top: 2px;
+}
+
+.form-etapes__step::before {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: 34px;
+  right: 6px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.form-etapes__step:last-child::before {
+  display: none;
+}
+
+.form-etapes__pastille {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-light);
+  background: var(--c-bg);
+  border: 2px solid var(--border);
+}
+
+button.form-etapes__pastille {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button.form-etapes__pastille:hover {
+  border-color: var(--c-primary);
+  color: var(--c-primary);
+}
+
+.form-etapes__step--actif {
+  color: var(--c-text);
+}
+
+.form-etapes__step--actif .form-etapes__pastille {
+  color: #fff;
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+}
+
+.form-etapes__step--actif::before {
+  background: var(--border);
+}
+
+.form-etapes__step--terminee {
+  color: var(--c-primary);
+}
+
+.form-etapes__step--terminee .form-etapes__pastille {
+  color: #fff;
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+}
+
+.form-etapes__titre {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.form-etapes__contenu {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 /* Titres de section dans les grands formulaires en modale */
 .form-section {
   margin: 18px 0 12px;

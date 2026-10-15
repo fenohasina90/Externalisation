@@ -290,6 +290,42 @@ export function ClientDetailPage() {
                 <b>{client.email || '—'}</b>
               </div>
               <div className="info-item">
+                <span>Facebook</span>
+                <b>
+                  {client.fb ? (
+                    client.fb.startsWith('http') ? (
+                      <a href={client.fb} target="_blank" rel="noreferrer" className="lk">
+                        {client.fb}
+                      </a>
+                    ) : (
+                      client.fb
+                    )
+                  ) : (
+                    '—'
+                  )}
+                </b>
+              </div>
+              <div className="info-item">
+                <span>Adresse</span>
+                <b>{client.adresse || '—'}</b>
+              </div>
+              <div className="info-item">
+                <span>Date de création</span>
+                <b>{formatDate(client.dateCreation)}</b>
+              </div>
+              <div className="info-item">
+                <span>Nombre de personnel</span>
+                <b>{client.nombrePersonnel ?? '—'}</b>
+              </div>
+              <div className="info-item">
+                <span>Chiffre d&apos;affaires mensuel</span>
+                <b>
+                  {client.chiffreAffaireMensuel === null || client.chiffreAffaireMensuel === undefined
+                    ? '—'
+                    : formatMontantMGA(client.chiffreAffaireMensuel)}
+                </b>
+              </div>
+              <div className="info-item">
                 <span>Domaine</span>
                 <b>{client.nomDomaine || '—'}</b>
               </div>

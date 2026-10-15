@@ -53,3 +53,24 @@ export function dateISO(date: Date): string {
 export function initiales(nom: string, prenom?: string | null): string {
   return `${nom.charAt(0) ?? ''}${prenom?.charAt(0) ?? ''}`.toUpperCase() || '—'
 }
+
+/**
+ * Valeur d'audit en texte propre : les anciennes traces stockaient
+ * `{"valeur":"..."}` — l'enveloppe est retirée à l'affichage.
+ */
+export function formatValeurAudit(valeur: string | null | undefined): string {
+  if (valeur === null || valeur === undefined || valeur === '') return '—'
+  const texte = valeur.trim()
+  if (texte.startsWith('{"valeur":') || texte.startsWith('{"valeur" :')) {
+    try {
+      const parsed: unknown = JSON.parse(texte)
+      if (typeof parsed === 'object' && parsed !== null && 'valeur' in parsed) {
+        const contenu = (parsed as { valeur: unknown }).valeur
+        return contenu === null || contenu === undefined ? '—' : String(contenu)
+      }
+    } catch {
+      // Format inattendu : affiche tel quel.
+    }
+  }
+  return valeur
+}
