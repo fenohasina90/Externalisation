@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { auditApi } from '../services/administration.service'
 import type { AuditEntry } from '../types'
-import { formatDateHeure } from '@/utils/format'
+import { formatDateHeure, formatValeurAudit } from '@/utils/format'
 import { getLibelleActionAudit } from '../constants/labels'
 
 interface Props {
@@ -95,13 +95,13 @@ export function AuditDetailModal({ id, onClose }: Props) {
               <div className="info-item info-item--full">
                 <span>Ancienne valeur</span>
                 <code className="code-inline" style={{ whiteSpace: 'pre-wrap' }}>
-                  {entry.ancienneValeur ?? '—'}
+                  {formatValeurAudit(entry.ancienneValeur)}
                 </code>
               </div>
               <div className="info-item info-item--full">
                 <span>Nouvelle valeur</span>
                 <code className="code-inline" style={{ whiteSpace: 'pre-wrap' }}>
-                  {entry.nouvelleValeur ?? '—'}
+                  {formatValeurAudit(entry.nouvelleValeur)}
                 </code>
               </div>
             </div>

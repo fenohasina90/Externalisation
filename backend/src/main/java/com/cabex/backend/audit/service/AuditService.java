@@ -65,20 +65,12 @@ public class AuditService {
                 .module(module)
                 .entite(entite)
                 .entiteId(entiteId)
-                .ancienneValeur(toJson(ancienneValeur))
-                .nouvelleValeur(toJson(nouvelleValeur))
+                .ancienneValeur(ancienneValeur)
+                .nouvelleValeur(nouvelleValeur)
                 .adresseIp(extractIp())
                 .userAgent(extractUserAgent())
                 .build();
         return auditRepository.save(audit);
-    }
-
-    private String toJson(String value) {
-        if (value == null) {
-            return null;
-        }
-        String escaped = value.replace("\\", "\\\\").replace("\"", "\\\"");
-        return "{\"valeur\":\"" + escaped + "\"}";
     }
 
     private Utilisateur currentUtilisateur() {

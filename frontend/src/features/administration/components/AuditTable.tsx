@@ -1,6 +1,6 @@
 import { getLibelleActionAudit } from '../constants/labels'
 import type { AuditEntry } from '../types'
-import { formatDateHeure } from '@/utils/format'
+import { formatDateHeure, formatValeurAudit } from '@/utils/format'
 
 const PILL_ACTION: Record<string, string> = {
   CREATE: 'pill ok',
@@ -62,11 +62,11 @@ export function AuditTable({ items, onView }: Props) {
             <td>{e.module}</td>
             <td>{e.entite ?? '—'}</td>
             <td className="text-secondary">{e.entiteId ?? '—'}</td>
-            <td className="truncate text-secondary" title={e.ancienneValeur ?? ''}>
-              {e.ancienneValeur ?? '—'}
+            <td className="truncate text-secondary" title={formatValeurAudit(e.ancienneValeur)}>
+              {formatValeurAudit(e.ancienneValeur)}
             </td>
-            <td className="truncate" title={e.nouvelleValeur ?? ''}>
-              {e.nouvelleValeur ?? '—'}
+            <td className="truncate" title={formatValeurAudit(e.nouvelleValeur)}>
+              {formatValeurAudit(e.nouvelleValeur)}
             </td>
             <td className="text-secondary">{e.adresseIp ?? '—'}</td>
           </tr>
