@@ -1,29 +1,37 @@
 import { Link } from 'react-router-dom'
-import { STATUT_LABEL, type SituationPaiement, type StatutDemandeUI } from '../data/mockDemandes'
+import { formatMontantMGA } from '@/utils/format'
+import type { Demande } from '../types'
 
-export function StatutDemandePill({ statut }: { statut: StatutDemandeUI }) {
+export function StatutDemandePill({ statut }: { statut: string }) {
   const classe =
     statut === 'EN_COURS' ? 'pill info'
     : statut === 'TERMINEE' || statut === 'VALIDATION' ? 'pill ok'
     : statut === 'ANNULEE' ? 'pill danger'
     : 'pill wt'
-  return <span className={classe}>● {STATUT_LABEL[statut]}</span>
+  const libelles: Record<string, string> = {
+    EN_ATTENTE: 'En attente',
+    VALIDATION: 'Validation',
+    EN_COURS: 'En cours',
+    TERMINEE: 'Terminée',
+    ANNULEE: 'Annulée',
+  }
+  return <span className={classe}>● {libelles[statut] ?? statut}</span>
 }
 
-export function PaiementPill({ situation }: { situation: SituationPaiement }) {
+export function PaiementPill({ paye, total }: { paye: number; total: number }) {
+  const situation = total <= 0 || paye >= total ? 'Payé' : paye > 0 ? 'Partiel' : 'En attente'
   const classe =
     situation === 'Payé' ? 'pill ok'
     : situation === 'Partiel' ? 'pill warning'
-    : situation === 'En retard' ? 'pill danger'
     : 'pill wt'
   return <span className={classe}>● {situation}</span>
 }
 
 interface Props {
-  items: import('../data/mockDemandes').DemandeResume[]
+  items: Demande[]
 }
 
-/** Tableau des demandes — action Voir vers le détail. */
+/** Tableau des demandes multi-services — action Voir vers le détail. */
 export function DemandesTable({ items }: Props) {
   if (items.length === 0)
     return <div className="card-pad text-muted">Aucune demande trouvée.</div>
@@ -34,38 +42,47 @@ export function DemandesTable({ items }: Props) {
         <tr>
           <th>Référence</th>
           <th>Client</th>
-          <th>Service</th>
-          <th>Date de début</th>
-          <th>Date de fin</th>
+          <th>Services</th>
+          <th>Montant total</th>
+          <th>Payé / Reste</th>
           <th>Statut</th>
           <th>Situation du paiement</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
-        {items.map((d) => (
-          <tr key={d.reference}>
-            <td className="fw-700">{d.reference}</td>
-            <td>{d.client}</td>
-            <td>
-              <span className="fw-600">{d.service}</span>
-              <div className="cell-hint">{d.domaine}</div>
-            </td>
-            <td className="text-secondary">{d.dateDebut}</td>
-            <td className="text-secondary">{d.dateFin}</td>
-            <td>
-              <StatutDemandePill statut={d.statut} />
-            </td>
-            <td>
-              <PaiementPill situation={d.situationPaiement} />
-            </td>
-            <td>
-              <Link to={`/demandes/${d.reference}`} className="lk">
-                Voir ›
-              </Link>
-            </td>
-          </tr>
-        ))}
+        {items.map((d) => {
+          const nbServices = d.lignes?.length ?? 0
+          const noms = (d.lignes ?? [])
+            .map((l) => l.nomService)
+            .filter((n): n is string => n !== null)
+          const premier = noms[0] ?? '—'
+          return (
+            <tr key={d.id}>
+              <td className="fw-700">{d.referenceDemande}</td>
+              <td>{d.nomSociete ?? '—'}</td>
+              <td>
+                <span className="fw-600">{premier}</span>
+                {nbServices > 1 && <div className="cell-hint">+ {nbServices - 1} autre{nbServices > 2 ? 's' : ''}</div>}
+              </td>
+              <td className="fw-600">{formatMontantMGA(d.montantTotal)}</td>
+              <td className="text-secondary">
+                {formatMontantMGA(d.montantPaye)} / {formatMontantMGA(d.resteAPayer)}
+              </td>
+              <td>
+                <StatutDemandePill statut={d.statutActuel} />
+              </td>
+              <td>
+                <PaiementPill paye={d.montantPaye} total={d.montantTotal ?? 0} />
+              </td>
+              <td>
+                <Link to={`/demandes/${d.referenceDemande}`} className="lk">
+                  Voir ›
+                </Link>
+              </td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   )

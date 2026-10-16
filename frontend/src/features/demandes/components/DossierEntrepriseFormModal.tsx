@@ -1,6 +1,6 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { FormEtapes } from '@/components/shared/FormEtapes'
 import {
-  DOSSIER_VIDE,
   FORMES_JURIDIQUES,
   HEBERGEMENTS,
   REGIMES_ACTIVITE,
@@ -31,6 +31,23 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
       setError(null)
     }
   }, [open, dossier])
+
+  // Société (tout sauf Individuelle) : capital et associés concernés, sinon null.
+  const estSociete = form.formeJuridique !== 'INDIVIDUELLE'
+
+  type EtapeId = 'societe' | 'associes' | 'gerance' | 'siege' | 'activite'
+  const etapes: { id: EtapeId; titre: string; description: string }[] = useMemo(
+    () => [
+      { id: 'societe', titre: 'Société', description: 'Forme juridique et dénomination.' },
+      ...(estSociete
+        ? [{ id: 'associes', titre: 'Associés', description: 'Capital social et associés (société).' } as const]
+        : []),
+      { id: 'gerance', titre: 'Gérance', description: 'Gérant et location de gérance.' },
+      { id: 'siege', titre: 'Siège', description: 'Adresse et hébergement du siège.' },
+      { id: 'activite', titre: 'Activité', description: 'Objet social et situation.' },
+    ],
+    [estSociete],
+  )
 
   if (!open) return null
 
@@ -69,25 +86,27 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
     }
   }
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    if (!form.denomination.trim()) {
-      setError('La dénomination est obligatoire')
-      return
+  const handleSubmit = () => {
+    onSave({ ...form, denomination: form.denomination.trim() })
+  }
+
+  const validerEtape = (index: number): string | null => {
+    const id = etapes[index]?.id
+    if (id === 'societe') {
+      if (!form.denomination.trim()) return 'La dénomination est obligatoire'
+      if (form.formeJuridique === 'AUTRE' && !form.formePrecision.trim()) {
+        return 'Précisez la forme juridique (Autre)'
+      }
+      return null
     }
-    if (form.formeJuridique === 'AUTRE' && !form.formePrecision.trim()) {
-      setError('Précisez la forme juridique (Autre)')
-      return
-    }
-    // Société (tout sauf Individuelle) : associés obligatoires.
-    if (form.formeJuridique !== 'INDIVIDUELLE') {
+    if (id === 'associes') {
       const renseignes = form.associes.filter((a) => a.nom.trim() !== '')
       if (renseignes.length === 0) {
-        setError('Une société doit avoir au moins un associé renseigné')
-        return
+        return 'Une société doit avoir au moins un associé renseigné'
       }
+      return null
     }
-    onSave({ ...form, denomination: form.denomination.trim() })
+    return null
   }
 
   const vides = form.associes.length === 0
@@ -113,14 +132,20 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
           </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="modal-body">
-          {error && (
-            <div className="alert alert-danger" role="alert">
-              {error}
-            </div>
-          )}
-
-          <h4 className="form-section">Société</h4>
+        <div className="modal-body">
+          <FormEtapes
+            etapes={etapes}
+            validerEtape={validerEtape}
+            onTerminer={handleSubmit}
+            onAnnuler={onClose}
+            erreur={error}
+            libelleTerminer="Enregistrer"
+          >
+            {(etape) => (
+              <>
+                {etapes[etape]?.id === 'societe' && (
+                  <>
+                    <h4 className="form-section">Société</h4>
           <div className="form-grid form-grid--2">
             <label className="field">
               <span className="field-label">
@@ -157,29 +182,39 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
               Siège social actuel
               <input name="siegeSocialActuel" value={form.siegeSocialActuel} onChange={handleChange} />
             </label>
-            <label className="field">
-              Capital social (MGA)
-              <input
-                type="number"
-                min={0}
-                name="capitalSocial"
-                value={form.capitalSocial ?? ''}
-                onChange={handleChange}
-              />
-            </label>
+            {estSociete && (
+              <label className="field">
+                Capital social (MGA)
+                <input
+                  type="number"
+                  min={0}
+                  name="capitalSocial"
+                  value={form.capitalSocial ?? ''}
+                  onChange={handleChange}
+                />
+              </label>
+            )}
+            {!estSociete && (
+              <p className="form-help form-grid__full">
+                Entreprise individuelle : pas de capital social ni d&apos;associés.
+              </p>
+            )}
           </div>
+                </>
+                )}
+                {etapes[etape]?.id === 'associes' && (
+                  <>
 
           <h4 className="form-section">
             Associés{' '}
-            {form.formeJuridique !== 'INDIVIDUELLE' && <span className="required">*</span>}
+            <span className="required">*</span>
           </h4>
           {form.associes.map((a, i) => (
             <div key={i} className="form-grid form-grid--2" style={{ marginBottom: 12 }}>
               <label className="field">
-              <span className="field-label">
-                Nom des associés{' '}
-                {form.formeJuridique !== 'INDIVIDUELLE' && <span className="required">*</span>}
-              </span>
+                <span className="field-label">
+                  Nom des associés <span className="required">*</span>
+                </span>
                 <input value={a.nom} onChange={(e) => setAssocie(i, 'nom', e.target.value)} />
               </label>
               <label className="field">
@@ -214,10 +249,14 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
               </div>
             </div>
           ))}
-          {vides && <p className="form-help">Aucun associé (entreprise individuelle).</p>}
+          {vides && <p className="form-help">Ajoutez au moins un associé.</p>}
           <button type="button" className="btn-ghost" onClick={ajouterAssocie}>
             + Ajouter un associé
           </button>
+                </>
+                )}
+                {etapes[etape]?.id === 'gerance' && (
+                  <>
 
           <h4 className="form-section">Gérance</h4>
           <div className="form-grid form-grid--2">
@@ -240,6 +279,10 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
               Location de gérance
             </label>
           </div>
+                </>
+                )}
+                {etapes[etape]?.id === 'siege' && (
+                  <>
 
           <h4 className="form-section">Siège et établissement</h4>
           <div className="form-grid form-grid--2">
@@ -309,6 +352,10 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
               <input name="contratBailDetail" value={form.contratBailDetail} onChange={handleChange} />
             </label>
           </div>
+                </>
+                )}
+                {etapes[etape]?.id === 'activite' && (
+                  <>
 
           <h4 className="form-section">Activité et situation</h4>
           <div className="form-grid form-grid--2">
@@ -360,26 +407,12 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
               <textarea name="observations" value={form.observations} onChange={handleChange} rows={2} style={{ height: 64 }} />
             </label>
           </div>
-
-          <footer className="modal-footer">
-            <button type="button" className="btn-ghost" onClick={onClose}>
-              Annuler
-            </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => {
-                setForm(DOSSIER_VIDE)
-                setError(null)
-              }}
-            >
-              Réinitialiser
-            </button>
-            <button type="submit" className="btn-primary">
-              Enregistrer
-            </button>
-          </footer>
-        </form>
+                </>
+                )}
+              </>
+            )}
+          </FormEtapes>
+        </div>
       </div>
     </div>
   )

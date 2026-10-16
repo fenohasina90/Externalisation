@@ -129,7 +129,11 @@ export function Autocomplete({
           {!loading && suggestions.length === 0 && (
             <span className="autocomplete__info">Aucune suggestion</span>
           )}
-          {footer}
+          {footer && (
+            // Empêche le floutage du champ (comme les suggestions) pour que
+            // le clic sur le bouton du pied aboutisse avant toute fermeture.
+            <span onMouseDown={(e) => e.preventDefault()}>{footer}</span>
+          )}
         </span>
       )}
     </span>

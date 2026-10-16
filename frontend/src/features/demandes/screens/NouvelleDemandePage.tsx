@@ -1,36 +1,291 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { DemandeForm } from '../components'
-import type { DemandeFormValues } from '../data/mockDemandes'
-import { DEMANDE_FORM_VIDE, versDateFR } from '../data/mockDemandes'
-import { DEMANDE_OPTIONS, RESPONSABLES_PAR_CLIENT } from '../data/mockDemandes'
+import { FormEtapes } from '@/components/shared/FormEtapes'
+import { Autocomplete } from '@/components/ui'
+import { useApi } from '@/hooks/useApi'
+import type { ApiPage } from '@/types'
+import type { CreateSocietePayload, Societe } from '@/features/clients/types'
+import type { Commercial } from '@/features/commerciaux/types'
+import type { Responsable } from '@/features/responsables/types'
+import type { Domaine, Service } from '@/features/services/types'
+import { clientsApi } from '@/features/clients/services/clients.service'
+import { commerciauxApi } from '@/features/commerciaux/services/commerciaux.service'
+import { responsablesApi } from '@/features/responsables/services/responsables.service'
+import { domainesApi, servicesApi } from '@/features/services/services/services.service'
+import { ClientFormModal } from '@/features/clients/components/ClientFormModal'
+import { ResponsableFormModal } from '@/features/responsables/components/ResponsableFormModal'
+import type { CreateLignePayload, ModeFacturation } from '../types'
+import { demandesApi } from '../services/demandes.service'
+
+const OPTION_CREATION = 'creation'
+const LABEL_CREATION = "Création d'entreprise (sans société)"
+
+interface LigneSaisie {
+  serviceId: number | ''
+  tarif: string
+  debutService: string
+  finService: string
+}
+
+const LIGNE_VIDE: LigneSaisie = { serviceId: '', tarif: '', debutService: '', finService: '' }
 
 /**
- * Nouvelle demande de service — étape 1 : interface seule.
- * Le statut initial est « En attente », le tarif est figé à la création.
- * Présélection du client via ?client=Nom (depuis la fiche client).
+ * Nouvelle demande multi-services branchée sur l'API :
+ * étape 1 (client, responsable, commercial, date, mode de facturation),
+ * étape 2 (une ou plusieurs lignes service + tarif + période).
  */
 export function NouvelleDemandePage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
 
-  const initial = useMemo<DemandeFormValues>(() => {
-    const clientParam = params.get('client')
-    if (clientParam && (DEMANDE_OPTIONS.clients as string[]).includes(clientParam)) {
-      const premiers = RESPONSABLES_PAR_CLIENT[clientParam] ?? []
-      return { ...DEMANDE_FORM_VIDE, client: clientParam, responsable: premiers[0] ?? '' }
+  const [societeId, setSocieteId] = useState<number | null>(
+    params.get('societeId') ? Number(params.get('societeId')) : null,
+  )
+  const [clientTexte, setClientTexte] = useState('')
+  const [creationSansSociete, setCreationSansSociete] = useState(false)
+  const [responsableId, setResponsableId] = useState<number | null>(null)
+  const [responsableTexte, setResponsableTexte] = useState('')
+  const [commercialId, setCommercialId] = useState<number | ''>('')
+  const [dateDemande, setDateDemande] = useState(() => new Date().toISOString().slice(0, 10))
+  const [commentaire, setCommentaire] = useState('')
+  const [mode, setMode] = useState<ModeFacturation>('PAR_SERVICE')
+  const [lignes, setLignes] = useState<LigneSaisie[]>([{ ...LIGNE_VIDE }])
+  const [erreur, setErreur] = useState<string | null>(null)
+  const [enregistrement, setEnregistrement] = useState(false)
+
+  const { data: societes, reload: reloadSocietes } = useApi<ApiPage<Societe>>(
+    () => clientsApi.list({ page: 0, size: 100, recherche: null }, {}, { champ: 'nomSociete', sens: 'asc' }),
+    [],
+  )
+  const { data: commerciaux } = useApi<ApiPage<Commercial>>(
+    () => commerciauxApi.list({ page: 0, size: 100, recherche: null }, { actif: true }),
+    [],
+  )
+  const { data: pageResponsables, reload: reloadResponsables } = useApi<ApiPage<Responsable>>(
+    () => responsablesApi.list({ page: 0, size: 100, recherche: null }, { actif: true }),
+    [],
+  )
+  const { data: pageDomaines, reload: reloadDomaines } = useApi<ApiPage<Domaine>>(
+    () => domainesApi.list({ page: 0, size: 100, recherche: null }, {}),
+    [],
+  )
+  const { data: pageServices } = useApi<ApiPage<Service>>(
+    () => servicesApi.list({ page: 0, size: 100, recherche: null }, { actif: true }),
+    [],
+  )
+
+  const nomsServices = useMemo(
+    () => new Map((pageServices?.content ?? []).map((s) => [s.id, s.nomService])),
+    [pageServices],
+  )
+  const typesServices = useMemo(
+    () => new Map((pageServices?.content ?? []).map((s) => [s.id, s.typeService])),
+    [pageServices],
+  )
+
+  const total = lignes.reduce((somme, l) => somme + (Number(l.tarif) || 0), 0)
+
+  const optionsClients = useMemo(
+    () => [
+      ...(societes?.content ?? []).map((s) => ({ id: s.id, label: s.nomSociete })),
+      { id: OPTION_CREATION, label: LABEL_CREATION },
+    ],
+    [societes],
+  )
+
+  // Pré-remplit le nom du client quand ?societeId est fourni (ajustement pendant
+  // le rendu, pas dans un effet : pas de rendus en cascade).
+  const [texteInit, setTexteInit] = useState(false)
+  if (!texteInit && (societeId === null || (societes?.content ?? []).length > 0)) {
+    setTexteInit(true)
+    if (societeId !== null && clientTexte === '') {
+      const trouve = (societes?.content ?? []).find((s) => s.id === societeId)
+      if (trouve) setClientTexte(trouve.nomSociete)
     }
-    return DEMANDE_FORM_VIDE
-  }, [params])
+  }
+  const optionsResponsables = useMemo(() => {
+    const tous = pageResponsables?.content ?? []
+    const filtres =
+      societeId !== null
+        ? tous.filter((r) => r.societeId === societeId)
+        : creationSansSociete
+          ? tous.filter((r) => r.societeId === null)
+          : tous
+    return filtres.map((r) => ({ id: r.id, label: r.nomClient }))
+  }, [pageResponsables, societeId, creationSansSociete])
+  const optionsDomaines = useMemo(
+    () => (pageDomaines?.content ?? []).map((d) => ({ id: d.id, nom: d.nomDomaine })),
+    [pageDomaines],
+  )
 
-  const [apercu, setApercu] = useState<DemandeFormValues>(initial)
+  const [clientModalOpen, setClientModalOpen] = useState(false)
+  const [responsableModalOpen, setResponsableModalOpen] = useState(false)
 
-  const handleSubmit = (v: DemandeFormValues) => {
-    // Étape 2 : POST /api/demandes puis redirection vers le détail.
-    alert(
-      `Demande créée (démonstration) : ${v.client} — ${v.service}, ${v.montantTotal.toLocaleString('fr-FR')} MGA, statut En attente.`,
-    )
-    navigate('/demandes')
+  const texteClientPropre = clientTexte.trim()
+  const correspondanceClientExacte =
+    texteClientPropre !== '' &&
+    optionsClients.some((o) => o.label.toLowerCase() === texteClientPropre.toLowerCase())
+  const texteResponsablePropre = responsableTexte.trim()
+  const correspondanceResponsableExacte =
+    texteResponsablePropre !== '' &&
+    optionsResponsables.some((o) => o.label.toLowerCase() === texteResponsablePropre.toLowerCase())
+
+  const choisirClient = (id: number | string | null) => {
+    if (id === OPTION_CREATION) {
+      setCreationSansSociete(true)
+      setSocieteId(null)
+      setClientTexte(LABEL_CREATION)
+      setResponsableId(null)
+      setResponsableTexte('')
+    } else if (typeof id === 'number') {
+      const trouve = (societes?.content ?? []).find((s) => s.id === id)
+      setSocieteId(id)
+      setCreationSansSociete(false)
+      setClientTexte(trouve?.nomSociete ?? '')
+    } else {
+      setSocieteId(null)
+      setCreationSansSociete(false)
+    }
+    setErreur(null)
+  }
+
+  const choisirResponsable = (id: number | string | null) => {
+    if (typeof id === 'number') {
+      const trouve = (pageResponsables?.content ?? []).find((r) => r.id === id)
+      setResponsableId(id)
+      setResponsableTexte(trouve?.nomClient ?? '')
+    } else {
+      setResponsableId(null)
+    }
+    setErreur(null)
+  }
+
+  const resolveDomaine = async (nom: string): Promise<number> => {
+    const exact = optionsDomaines.find((d) => d.nom.toLowerCase() === nom.trim().toLowerCase())
+    if (exact) return exact.id
+    const cree = await domainesApi.create({ nomDomaine: nom.trim() })
+    reloadDomaines()
+    return cree.id
+  }
+
+  const handleSaveClient = async (payload: CreateSocietePayload & { responsable: string }) => {
+    const { responsable, ...societe } = payload
+    const cree = await clientsApi.create(societe)
+    const responsableCree = await responsablesApi.create({ societeId: cree.id, nomClient: responsable })
+    reloadSocietes()
+    reloadDomaines()
+    reloadResponsables()
+    setSocieteId(cree.id)
+    setCreationSansSociete(false)
+    setClientTexte(cree.nomSociete)
+    setResponsableId(responsableCree.id)
+    setResponsableTexte(responsableCree.nomClient)
+    setClientModalOpen(false)
+  }
+
+  const handleResponsableCree = async () => {
+    setResponsableModalOpen(false)
+    const cherche = responsableTexte.trim()
+    try {
+      const page = await responsablesApi.list(
+        { page: 0, size: 5, recherche: cherche || null },
+        { actif: true },
+      )
+      const trouve = page.content.find(
+        (r) => r.nomClient.toLowerCase() === cherche.toLowerCase(),
+      )
+      if (trouve) {
+        setResponsableId(trouve.id)
+        setResponsableTexte(trouve.nomClient)
+      }
+    } catch {
+      // La liste sera rechargée ; sélection manuelle sinon.
+    }
+    reloadResponsables()
+  }
+
+  // Services déjà choisis : masqués des autres selects (pas de doublon).
+  const selectionnes = useMemo(
+    () => new Set(lignes.map((l) => l.serviceId).filter((id): id is number => id !== '')),
+    [lignes],
+  )
+  const aujourdhui = useMemo(() => new Date().toISOString().slice(0, 10), [])
+
+  const setLigne = (index: number, patch: Partial<LigneSaisie>) => {
+    setLignes((liste) => liste.map((l, i) => (i === index ? { ...l, ...patch } : l)))
+    setErreur(null)
+  }
+
+  const validerEtape = (index: number): string | null => {
+    if (index === 0) {
+      if (!dateDemande) return 'La date de demande est obligatoire'
+      if (societeId === null && !creationSansSociete) {
+        if (texteClientPropre === '') return null
+        return 'Sélectionnez le client, « Création d’entreprise », ou créez la société'
+      }
+      if (responsableId === null && texteResponsablePropre !== '') {
+        return 'Sélectionnez le responsable ou créez-le'
+      }
+      return null
+    }
+    if (lignes.length === 0) return 'Ajoutez au moins un service'
+    const vus = new Set<number>()
+    const creation = new Set<number>()
+    for (const [i, l] of lignes.entries()) {
+      if (l.serviceId === '') return `Ligne ${i + 1} : service obligatoire`
+      if (vus.has(l.serviceId)) return 'Un service ne peut pas être sélectionné deux fois'
+      vus.add(l.serviceId)
+      if (!l.tarif || Number(l.tarif) < 0 || Number.isNaN(Number(l.tarif))) {
+        return `Ligne ${i + 1} : tarif positif ou nul obligatoire`
+      }
+      if (!l.debutService || !l.finService) return `Ligne ${i + 1} : période obligatoire`
+      if (l.debutService < aujourdhui) {
+        return `Ligne ${i + 1} : le début doit être postérieur ou égal à aujourd'hui`
+      }
+      if (l.finService <= l.debutService) {
+        return `Ligne ${i + 1} : la fin doit être strictement postérieure au début`
+      }
+      const type = typesServices.get(l.serviceId)
+      if (type === 'CREATION') creation.add(l.serviceId as number)
+    }
+    if (creation.size > 0 && lignes.length > 1) {
+      return "Un service de création d'entreprise ne peut pas être combiné avec d'autres services"
+    }
+    return null
+  }
+
+  const handleTerminer = async () => {
+    setEnregistrement(true)
+    setErreur(null)
+    try {
+      const payloadLignes: CreateLignePayload[] = lignes.map((l) => ({
+        serviceId: l.serviceId as number,
+        tarif: Number(l.tarif),
+        debutService: l.debutService,
+        finService: l.finService,
+      }))
+      const creee = await demandesApi.create({
+        societeId,
+        clientResponsableId: responsableId,
+        commercialId: commercialId === '' ? null : commercialId,
+        dateDemande,
+        commentaire: commentaire.trim() || null,
+        lignes: payloadLignes,
+        modeFacturation: mode,
+      })
+      const estCreation = payloadLignes.some(
+        (l) => typesServices.get(l.serviceId) === 'CREATION',
+      )
+      navigate(
+        estCreation
+          ? `/demandes/${creee.referenceDemande}?onglet=dossier`
+          : `/demandes/${creee.referenceDemande}`,
+      )
+    } catch (err) {
+      setErreur(err instanceof Error ? err.message : 'Échec de la création')
+    } finally {
+      setEnregistrement(false)
+    }
   }
 
   return (
@@ -38,43 +293,268 @@ export function NouvelleDemandePage() {
       <header className="page-header page-header-sticky">
         <div>
           <h1>Nouvelle demande de service</h1>
-          <p>Le statut initial de la demande est « En attente ».</p>
+          <p>Le statut initial de la demande est « En attente » ; la facture proforma est générée à la création.</p>
         </div>
       </header>
 
       <div className="split-layout">
         <section className="card card-pad">
-          <DemandeForm
-            key={initial.client}
-            initial={initial}
-            submitLabel="Créer la demande"
-            onCancel={() => navigate('/demandes')}
-            onSubmit={handleSubmit}
-            avecDocuments
-            onChange={setApercu}
-          />
+          <FormEtapes
+            etapes={[
+              { titre: 'Demande', description: 'Client, responsable, commercial et facturation.' },
+              { titre: 'Services', description: 'Un ou plusieurs services, chacun avec tarif et période.' },
+            ]}
+            validerEtape={validerEtape}
+            onTerminer={() => void handleTerminer()}
+            onAnnuler={() => navigate('/demandes')}
+            enregistrement={enregistrement}
+            erreur={erreur}
+            libelleTerminer="Créer la demande"
+          >
+            {(etape) =>
+              etape === 0 ? (
+                <div className="form-grid form-grid--2">
+                <div className="field">
+                  <span className="field-label">Client (société)</span>
+                  <Autocomplete
+                    value={clientTexte}
+                    placeholder="Rechercher une société…"
+                    onTextChange={(texte) => {
+                      setClientTexte(texte)
+                      setSocieteId(null)
+                      setCreationSansSociete(false)
+                      setErreur(null)
+                    }}
+                    onPick={(option) => choisirClient(option ? option.id : null)}
+                    options={optionsClients}
+                    footer={
+                      texteClientPropre !== '' && !correspondanceClientExacte ? (
+                        <button
+                          type="button"
+                          className="btn-link"
+                          onClick={() => setClientModalOpen(true)}
+                        >
+                          Créer « {texteClientPropre} » comme nouvelle société
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                </div>
+
+                <div className="field">
+                  <span className="field-label">Responsable</span>
+                  <Autocomplete
+                    value={responsableTexte}
+                    placeholder={
+                      societeId !== null
+                        ? 'Rechercher un responsable…'
+                        : 'Rechercher ou créer un responsable…'
+                    }
+                    onTextChange={(texte) => {
+                      setResponsableTexte(texte)
+                      setResponsableId(null)
+                      setErreur(null)
+                    }}
+                    onPick={(option) => choisirResponsable(option ? option.id : null)}
+                    options={optionsResponsables}
+                    footer={
+                      texteResponsablePropre !== '' && !correspondanceResponsableExacte ? (
+                        <button
+                          type="button"
+                          className="btn-link"
+                          onClick={() => setResponsableModalOpen(true)}
+                        >
+                          Créer « {texteResponsablePropre} » comme nouveau responsable
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                </div>
+
+                  <label className="field">
+                    Commercial
+                    <select
+                      value={commercialId}
+                      onChange={(e) => {
+                        setCommercialId(e.target.value ? Number(e.target.value) : '')
+                        setErreur(null)
+                      }}
+                    >
+                      <option value="">— Aucun —</option>
+                      {(commerciaux?.content ?? []).map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nomCommercial}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="field">
+                    Date de demande
+                    <input
+                      type="date"
+                      value={dateDemande}
+                      onChange={(e) => setDateDemande(e.target.value)}
+                    />
+                  </label>
+
+                  <div className="field form-grid__full">
+                    <span className="field-label">Mode de facturation</span>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                      <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <input
+                          type="radio"
+                          name="mode"
+                          checked={mode === 'PAR_SERVICE'}
+                          onChange={() => setMode('PAR_SERVICE')}
+                        />
+                        Une facture par service
+                      </label>
+                      <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <input
+                          type="radio"
+                          name="mode"
+                          checked={mode === 'UNIQUE'}
+                          onChange={() => setMode('UNIQUE')}
+                        />
+                        Facture unique
+                      </label>
+                    </div>
+                  </div>
+
+                  <label className="field form-grid__full">
+                    Commentaire
+                    <input
+                      value={commentaire}
+                      onChange={(e) => setCommentaire(e.target.value)}
+                      placeholder="Précisions éventuelles"
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {lignes.map((l, i) => (
+                    <div key={i} className="card card-pad" style={{ background: 'var(--c-bg)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong>Service {i + 1}</strong>
+                        {lignes.length > 1 && (
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            onClick={() => setLignes((liste) => liste.filter((_, j) => j !== i))}
+                          >
+                            Retirer
+                          </button>
+                        )}
+                      </div>
+                      <div className="form-grid form-grid--2" style={{ marginTop: 8 }}>
+                        <label className="field form-grid__full">
+                          Service <span className="required">*</span>
+                          <select
+                            value={l.serviceId}
+                            onChange={(e) => setLigne(i, {
+                              serviceId: e.target.value ? Number(e.target.value) : '',
+                            })}
+                          >
+                            <option value="">— Choisir —</option>
+                            {(pageServices?.content ?? [])
+                              .filter((s) => s.id === l.serviceId || !selectionnes.has(s.id))
+                              .map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.nomService}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        <label className="field">
+                          Tarif (MGA) <span className="required">*</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={l.tarif}
+                            onChange={(e) => setLigne(i, { tarif: e.target.value })}
+                            placeholder="Ex. 2000000"
+                          />
+                        </label>
+                        <span className="field" />
+                        <label className="field">
+                          Début <span className="required">*</span>
+                          <input
+                            type="date"
+                            min={aujourdhui}
+                            value={l.debutService}
+                            onChange={(e) => setLigne(i, { debutService: e.target.value })}
+                          />
+                        </label>
+                        <label className="field">
+                          Fin <span className="required">*</span>
+                          <input
+                            type="date"
+                            min={l.debutService || aujourdhui}
+                            value={l.finService}
+                            onChange={(e) => setLigne(i, { finService: e.target.value })}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{ alignSelf: 'flex-start' }}
+                    onClick={() => setLignes((liste) => [...liste, { ...LIGNE_VIDE }])}
+                  >
+                    + Ajouter un service
+                  </button>
+                </div>
+              )
+            }
+          </FormEtapes>
         </section>
 
         <aside className="card card-pad recap-card">
           <h3>Récapitulatif</h3>
-          <div className="rc">
-            <span>Service</span>
-            <strong>{apercu.service || '—'}</strong>
-          </div>
+          {(lignes.filter((l) => l.serviceId !== ''))?.map((l, i) => (
+            <div className="rc" key={i}>
+              <span>{nomsServices.get(l.serviceId as number) ?? '—'}</span>
+              <strong>{(Number(l.tarif) || 0).toLocaleString('fr-FR')} MGA</strong>
+            </div>
+          ))}
           <div className="rc">
             <span>Montant total</span>
-            <strong>{apercu.montantTotal.toLocaleString('fr-FR')} MGA</strong>
+            <strong>{total.toLocaleString('fr-FR')} MGA</strong>
           </div>
           <div className="nt" style={{ marginTop: 12 }}>
-            <strong>Montant figé</strong> : les échéances, paiements et rapports
-            s&apos;appuient sur ce montant, même si le tarif du service change ensuite.
+            <strong>Montants figés</strong> : les factures proforma sont générées à la
+            création ; les échéances, paiements et rapports s&apos;appuient sur ces montants.
           </div>
-          <p className="form-help" style={{ marginTop: 8 }}>
-            Période : {apercu.debutService ? versDateFR(apercu.debutService) : '—'} →{' '}
-            {apercu.finService ? versDateFR(apercu.finService) : '—'}
-          </p>
         </aside>
       </div>
+
+      <ClientFormModal
+        open={clientModalOpen}
+        client={null}
+        domaines={optionsDomaines}
+        resolveDomaine={resolveDomaine}
+        onClose={() => setClientModalOpen(false)}
+        onSave={handleSaveClient}
+      />
+
+      <ResponsableFormModal
+        open={responsableModalOpen}
+        responsable={null}
+        societeDefaut={
+          societeId !== null
+            ? {
+                id: societeId,
+                nom:
+                  (societes?.content ?? []).find((s) => s.id === societeId)?.nomSociete ?? '',
+              }
+            : null
+        }
+        onClose={() => setResponsableModalOpen(false)}
+        onSaved={() => void handleResponsableCree()}
+      />
     </div>
   )
 }

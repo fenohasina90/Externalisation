@@ -10,7 +10,7 @@ export interface Responsable {
 }
 
 export interface CreateResponsablePayload {
-  societeId: number
+  societeId: number | null
   nomClient: string
   contact?: string | null
   email?: string | null

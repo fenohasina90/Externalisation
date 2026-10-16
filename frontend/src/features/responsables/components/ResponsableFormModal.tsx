@@ -6,6 +6,8 @@ import type { Responsable } from '../types'
 interface Props {
   open: boolean
   responsable: Responsable | null
+  /** Société présélectionnée (ex. depuis une demande) ; vide = sans société. */
+  societeDefaut?: { id: number; nom: string } | null
   onClose: () => void
   onSaved: () => void
 }
@@ -20,7 +22,7 @@ const emptyForm = {
 
 type FormState = typeof emptyForm
 
-export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Props) {
+export function ResponsableFormModal({ open, responsable, societeDefaut, onClose, onSaved }: Props) {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [societes, setSocietes] = useState<{ id: number; nom: string }[]>([])
   const [societeId, setSocieteId] = useState<number | null>(null)
@@ -43,6 +45,10 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
         if (mounted) {
           setSocietes(sList)
           if (responsable?.societeId != null) setSocieteId(responsable.societeId)
+          else if (societeDefaut) {
+            setSocieteId(societeDefaut.id)
+            setForm((f) => ({ ...f, societe: societeDefaut.nom }))
+          }
         }
       } catch (e) {
         console.error(e)
@@ -66,7 +72,7 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
     return () => {
       mounted = false
     }
-  }, [open, responsable])
+  }, [open, responsable, societeDefaut])
 
   if (!open) return null
 
@@ -88,6 +94,8 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
     return societes.find((s) => s.nom.toLowerCase() === cherche)?.id ?? null
   }
 
+  const texteSansSociete = form.societe.trim() === ''
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setSaving(true)
@@ -102,7 +110,9 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
         })
       } else {
         const cibleId = resolveSocieteId()
-        if (cibleId == null) throw new Error('Veuillez sélectionner une société existante')
+        if (!texteSansSociete && cibleId == null) {
+          throw new Error('Veuillez sélectionner une société existante ou laisser vide (sans société)')
+        }
         await responsablesApi.create({
           societeId: cibleId,
           nomClient: form.nomClient,
@@ -150,14 +160,14 @@ export function ResponsableFormModal({ open, responsable, onClose, onSaved }: Pr
           <div className="form-grid">
             <div className="field">
               <span className="field-label">
-                Société <span className="required">*</span>
+                Société
               </span>
               {responsable ? (
                 <input value={form.societe} disabled readOnly aria-label="Société" />
               ) : (
                 <Autocomplete
                   value={form.societe}
-                  placeholder="Nom de la société…"
+                  placeholder="Nom de la société… (vide = sans société)"
                   onTextChange={(texte) => setForm((f) => ({ ...f, societe: texte }))}
                   onPick={(option) => setSocieteId(option ? Number(option.id) : null)}
                   options={societeOptions}

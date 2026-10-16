@@ -17,4 +17,20 @@ export const planPaiementApi = {
     )
     return data
   },
+
+  async getByLigne(ligneId: number): Promise<PlanPaiement | null> {
+    const { data } = await http.get<PlanPaiement>(`/lignes/${ligneId}/plan-paiement`)
+    return data
+  },
+
+  async createForLigne(
+    ligneId: number,
+    payload: CreatePlanPaiementPayload,
+  ): Promise<PlanPaiement> {
+    const { data } = await http.post<PlanPaiement>(
+      `/lignes/${ligneId}/plan-paiement`,
+      payload,
+    )
+    return data
+  },
 }

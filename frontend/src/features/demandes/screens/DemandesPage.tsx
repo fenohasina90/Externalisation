@@ -1,37 +1,64 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { Link } from 'react-router-dom'
 import { Can } from '@/components/shared/Can'
+import { Alert, Spinner } from '@/components/ui'
+import { useApi } from '@/hooks/useApi'
+import type { ApiPage } from '@/types'
+import type { Societe } from '@/features/clients/types'
+import type { Commercial } from '@/features/commerciaux/types'
+import type { Service } from '@/features/services/types'
+import { clientsApi } from '@/features/clients/services/clients.service'
+import { commerciauxApi } from '@/features/commerciaux/services/commerciaux.service'
+import { servicesApi } from '@/features/services/services/services.service'
 import { DemandesTable } from '../components'
-import { DEMANDE_OPTIONS, MOCK_DEMANDES } from '../data/mockDemandes'
-import { useDemandesListStatic } from '../hooks'
+import { useDemandesList } from '../hooks/useDemandesList'
+import { demandesApi } from '../services/demandes.service'
 
-
-/** Liste des demandes — étape 1 : interface seule, données statiques. */
+/** Liste des demandes multi-services branchée sur l'API. */
 export function DemandesPage() {
   // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
   const PAGE_SIZE = useTaillePagination()
   const [showFilters, setShowFilters] = useState(false)
-  const { items, total, totalPages, page, setPage, filtres, setFiltre, resetFiltres, hasActiveFiltres } =
-    useDemandesListStatic(PAGE_SIZE)
+  const { items, total, totalPages, page, setPage, filtres, setFiltre, resetFiltres,
+    hasActiveFiltres, loading, error } = useDemandesList(PAGE_SIZE)
 
-  const kpis = useMemo(() => {
-    const enCours = MOCK_DEMANDES.filter((d) => d.statut === 'EN_COURS').length
-    const enAttente = MOCK_DEMANDES.filter((d) => d.statut === 'EN_ATTENTE').length
-    const retards = MOCK_DEMANDES.filter((d) => d.situationPaiement === 'En retard').length
-    return {
-      total: MOCK_DEMANDES.length,
-      enCours,
-      pctEnCours: Math.round((enCours / MOCK_DEMANDES.length) * 100),
-      enAttente,
-      retards,
-    }
-  }, [])
+  const { data: pageEnCours } = useApi<ApiPage<unknown>>(
+    () => demandesApi.list({ page: 0, size: 1, recherche: null }, { statut: 'EN_COURS' }),
+    [],
+  )
+  const { data: pageEnAttente } = useApi<ApiPage<unknown>>(
+    () => demandesApi.list({ page: 0, size: 1, recherche: null }, { statut: 'EN_ATTENTE' }),
+    [],
+  )
+  const { data: societes } = useApi<ApiPage<Societe>>(
+    () => clientsApi.list({ page: 0, size: 100, recherche: null }, {}, { champ: 'nomSociete', sens: 'asc' }),
+    [],
+  )
+  const { data: services } = useApi<ApiPage<Service>>(
+    () => servicesApi.list({ page: 0, size: 100, recherche: null }, { actif: true }),
+    [],
+  )
+  const { data: commerciaux } = useApi<ApiPage<Commercial>>(
+    () => commerciauxApi.list({ page: 0, size: 100, recherche: null }, { actif: true }),
+    [],
+  )
+
+  const nbEnCours = pageEnCours?.totalElements ?? 0
+  const nbEnAttente = pageEnAttente?.totalElements ?? 0
 
   const exporter = () => {
-    const header = 'Reference;Client;Service;Debut;Fin;Statut;Paiement'
+    const header = 'Reference;Client;Services;Total;Paye;Reste;Statut'
     const rows = items.map((d) =>
-      [d.reference, d.client, d.service, d.dateDebut, d.dateFin, d.statut, d.situationPaiement].join(';'),
+      [
+        d.referenceDemande,
+        d.nomSociete ?? '',
+        (d.lignes ?? []).map((l) => l.nomService ?? '').join(' + '),
+        d.montantTotal ?? 0,
+        d.montantPaye,
+        d.resteAPayer,
+        d.statutActuel,
+      ].join(';'),
     )
     const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -85,13 +112,12 @@ export function DemandesPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{kpis.total}</div>
+            <div className="kpi-num">{total}</div>
             <div className="kpi-label">Demandes totales</div>
           </div>
         </div>
 
         <div className="card kpi-card hl">
-          <span className="kpi-tag">{kpis.pctEnCours} %</span>
           <div className="kpi-icon">
             <svg className="sv" viewBox="0 0 24 24">
               <circle cx="12" cy="12" r="9" />
@@ -99,7 +125,7 @@ export function DemandesPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{kpis.enCours}</div>
+            <div className="kpi-num">{nbEnCours}</div>
             <div className="kpi-label">En cours</div>
           </div>
         </div>
@@ -113,93 +139,69 @@ export function DemandesPage() {
             </svg>
           </div>
           <div>
-            <div className="kpi-num">{kpis.enAttente}</div>
+            <div className="kpi-num">{nbEnAttente}</div>
             <div className="kpi-label">En attente</div>
-          </div>
-        </div>
-
-        <div className="card kpi-card">
-          <span className="kpi-tag">À suivre</span>
-          <div
-            className="kpi-icon"
-            style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}
-          >
-            <svg className="sv" viewBox="0 0 24 24">
-              <path d="M12 3l10 18H2L12 3zM12 10v5M12 18h.01" />
-            </svg>
-          </div>
-          <div>
-            <div className="kpi-num">{kpis.retards}</div>
-            <div className="kpi-label">Retards de paiement</div>
           </div>
         </div>
       </section>
 
       {showFilters && (
-      <section className="card card-pad">
-        <form onSubmit={(e) => e.preventDefault()}>
-          <div className="filters-group filters-group--wide">
-            <p className="filters-group__title">Demande</p>
-            <label className="field">
-              Référence
+        <section className="card card-pad">
+          <form onSubmit={(e) => e.preventDefault()} className="filters-inline">
+            <label className="field filter-field">
+              Recherche
               <input
                 type="text"
-                value={filtres.reference}
-                onChange={(e) => setFiltre('reference', e.target.value)}
-                placeholder="REF-2026-…"
+                value={filtres.recherche}
+                onChange={(e) => setFiltre('recherche', e.target.value)}
+                placeholder="Référence…"
               />
             </label>
-            <label className="field">
+            <label className="field filter-field">
               Client
-              <select value={filtres.client} onChange={(e) => setFiltre('client', e.target.value)}>
-                <option value="tous">Tous les clients</option>
-                {DEMANDE_OPTIONS.clients.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+              <select
+                value={filtres.societeId ?? ''}
+                onChange={(e) => setFiltre('societeId', e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Tous les clients</option>
+                {(societes?.content ?? []).map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nomSociete}
                   </option>
                 ))}
               </select>
             </label>
-            <label className="field">
+            <label className="field filter-field">
               Service
-              <select value={filtres.service} onChange={(e) => setFiltre('service', e.target.value)}>
-                <option value="tous">Tous les services</option>
-                {DEMANDE_OPTIONS.services.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
+              <select
+                value={filtres.serviceId ?? ''}
+                onChange={(e) => setFiltre('serviceId', e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Tous les services</option>
+                {(services?.content ?? []).map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nomService}
                   </option>
                 ))}
               </select>
             </label>
-            <label className="field">
-              Domaine
-              <select value={filtres.domaine} onChange={(e) => setFiltre('domaine', e.target.value)}>
-                <option value="tous">Tous les domaines</option>
-                {DEMANDE_OPTIONS.domaines.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
+            <label className="field filter-field">
               Commercial
-              <select value={filtres.commercial} onChange={(e) => setFiltre('commercial', e.target.value)}>
-                <option value="tous">Tous</option>
-                {DEMANDE_OPTIONS.commerciaux.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+              <select
+                value={filtres.commercialId ?? ''}
+                onChange={(e) => setFiltre('commercialId', e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Tous</option>
+                {(commerciaux?.content ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nomCommercial}
                   </option>
                 ))}
               </select>
             </label>
-          </div>
-
-          <div className="filters-group filters-group--wide">
-            <p className="filters-group__title">Suivi</p>
-            <label className="field">
+            <label className="field filter-field">
               Statut
-              <select value={filtres.statut} onChange={(e) => setFiltre('statut', e.target.value as typeof filtres.statut)}>
+              <select value={filtres.statut} onChange={(e) => setFiltre('statut', e.target.value)}>
                 <option value="tous">Tous</option>
                 <option value="EN_ATTENTE">En attente</option>
                 <option value="VALIDATION">Validation</option>
@@ -208,84 +210,57 @@ export function DemandesPage() {
                 <option value="ANNULEE">Annulée</option>
               </select>
             </label>
-            <label className="field">
-              Paiement
-              <select value={filtres.paiement} onChange={(e) => setFiltre('paiement', e.target.value as typeof filtres.paiement)}>
-                <option value="tous">Tous</option>
-                <option value="Payé">Payé</option>
-                <option value="Partiel">Partiel</option>
-                <option value="En attente">En attente</option>
-                <option value="En retard">En retard</option>
-              </select>
-            </label>
-            <label className="field">
-              Retard
-              <select value={filtres.retard} onChange={(e) => setFiltre('retard', e.target.value as typeof filtres.retard)}>
-                <option value="tous">Tous</option>
-                <option value="oui">En retard</option>
-                <option value="non">À jour</option>
-              </select>
-            </label>
-            <label className="field">
+            <label className="field filter-field">
               Période (début)
-              <input type="date" value={filtres.dateDebut} onChange={(e) => setFiltre('dateDebut', e.target.value)} />
+              <input
+                type="date"
+                value={filtres.dateDebut}
+                onChange={(e) => setFiltre('dateDebut', e.target.value)}
+              />
             </label>
-            <label className="field">
+            <label className="field filter-field">
               Période (fin)
-              <input type="date" value={filtres.dateFin} onChange={(e) => setFiltre('dateFin', e.target.value)} />
+              <input
+                type="date"
+                value={filtres.dateFin}
+                onChange={(e) => setFiltre('dateFin', e.target.value)}
+              />
             </label>
-          </div>
-
-          <div className="filter-actions" style={{ marginTop: 12 }}>
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={resetFiltres}
-              disabled={!hasActiveFiltres}
-            >
+            <button type="button" className="btn-ghost" onClick={resetFiltres} disabled={!hasActiveFiltres}>
               Réinitialiser
             </button>
-            <button type="submit" className="btn-primary">
-              Appliquer
-            </button>
-          </div>
-        </form>
-      </section>
+          </form>
+        </section>
       )}
 
       <section className="card">
-        <div className="table-scroll-container no-global-scroll">
-          <div className="table-wrap">
-            <DemandesTable items={items} />
+        {loading && items.length === 0 ? (
+          <Spinner label="Chargement des demandes…" />
+        ) : error ? (
+          <div className="card-pad">
+            <Alert tone="danger">{error}</Alert>
           </div>
-          {total > 0 && (
-            <div className="table-footer">
-              <span>
-                Affichage de {page * PAGE_SIZE + 1} à {Math.min((page + 1) * PAGE_SIZE, total)} sur{' '}
-                {total} demandes
-              </span>
-              <div className="pagination">
-                <button
-                  type="button"
-                  className="pagination-item"
-                  onClick={() => setPage(Math.max(0, page - 1))}
-                  disabled={page <= 0}
-                >
-                  ‹
-                </button>
-                {Array.from({ length: totalPages }).map((_, i) => {
-                  const show = i === 0 || i === totalPages - 1 || Math.abs(i - page) <= 1
-                  if (!show) {
-                    if (i === 1 || i === totalPages - 2) {
-                      return (
-                        <span key={i} className="pagination-item" style={{ border: 'none', background: 'transparent' }}>
-                          …
-                        </span>
-                      )
-                    }
-                    return null
-                  }
-                  return (
+        ) : (
+          <div className="table-scroll-container no-global-scroll">
+            <div className="table-wrap">
+              <DemandesTable items={items} />
+            </div>
+            {total > 0 && (
+              <div className="table-footer">
+                <span>
+                  Affichage de {page * PAGE_SIZE + 1} à {Math.min((page + 1) * PAGE_SIZE, total)} sur{' '}
+                  {total} demandes
+                </span>
+                <div className="pagination">
+                  <button
+                    type="button"
+                    className="pagination-item"
+                    onClick={() => setPage(Math.max(0, page - 1))}
+                    disabled={page <= 0}
+                  >
+                    ‹
+                  </button>
+                  {Array.from({ length: totalPages }).map((_, i) => (
                     <button
                       key={i}
                       type="button"
@@ -294,20 +269,20 @@ export function DemandesPage() {
                     >
                       {i + 1}
                     </button>
-                  )
-                })}
-                <button
-                  type="button"
-                  className="pagination-item"
-                  onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
-                  disabled={page >= totalPages - 1}
-                >
-                  ›
-                </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="pagination-item"
+                    onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+                    disabled={page >= totalPages - 1}
+                  >
+                    ›
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </section>
     </div>
   )

@@ -1,48 +1,50 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { STATUT_LABEL, TRANSITIONS_MANUELLES, type DemandeResume, type StatutDemandeUI } from '../data/mockDemandes'
 import { StatutDemandePill } from './DemandesTable'
+import { TRANSITIONS_MANUELLES, type StatutDemande } from '../types'
 
-const INDICATION: Record<StatutDemandeUI, string | null> = {
-  EN_ATTENTE: null,
-  VALIDATION: null,
-  EN_COURS: 'Autre option depuis « En cours » : Annulée.',
-  TERMINEE: null,
-  ANNULEE: null,
+const LIBELLES: Record<string, string> = {
+  EN_ATTENTE: 'En attente',
+  VALIDATION: 'Validation',
+  EN_COURS: 'En cours',
+  TERMINEE: 'Terminée',
+  ANNULEE: 'Annulée',
 }
 
 interface Props {
   open: boolean
-  demande: DemandeResume | null
+  statutActuel: string
   onClose: () => void
-  onConfirm: (nouveauStatut: StatutDemandeUI, commentaire: string) => void
+  onConfirm: (nouveau: StatutDemande, commentaire: string) => void
+  enregistrement?: boolean
 }
 
-/** Modale « Changer le statut » (cf. maquette). */
-export function ChangerStatutModal({ open, demande, onClose, onConfirm }: Props) {
-  const cibles = demande ? TRANSITIONS_MANUELLES[demande.statut] : []
-  const [nouveauStatut, setNouveauStatut] = useState<StatutDemandeUI>('TERMINEE')
+/** Changement manuel de statut d'une demande (contrôles backend). */
+export function ChangerStatutModal({ open, statutActuel, onClose, onConfirm, enregistrement = false }: Props) {
+  const cibles = TRANSITIONS_MANUELLES[statutActuel] ?? []
+  const [nouveauStatut, setNouveauStatut] = useState<StatutDemande>('TERMINEE')
   const [commentaire, setCommentaire] = useState('')
 
   useEffect(() => {
-    if (open && demande) {
+    if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setNouveauStatut(TRANSITIONS_MANUELLES[demande.statut][0] ?? 'TERMINEE')
+      setNouveauStatut(cibles[0] ?? 'TERMINEE')
       setCommentaire('')
     }
-  }, [open, demande])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
-  if (!open || !demande) return null
+  if (!open) return null
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    onConfirm(nouveauStatut, commentaire.trim())
+    onConfirm(nouveauStatut, commentaire)
   }
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-card"
-        style={{ maxWidth: 520 }}
+        style={{ maxWidth: 480 }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="Changer le statut"
@@ -50,70 +52,63 @@ export function ChangerStatutModal({ open, demande, onClose, onConfirm }: Props)
         <header className="modal-header">
           <div>
             <h3 className="modal-title">Changer le statut</h3>
+            <p className="modal-subtitle">
+              Statut actuel : <StatutDemandePill statut={statutActuel} />
+            </p>
           </div>
           <button type="button" className="btn-ghost" onClick={onClose} aria-label="Fermer">
             ✕
           </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="modal-body">
-          <p className="section-note">
-            {demande.reference} · statut actuel : <StatutDemandePill statut={demande.statut} />
-          </p>
-
-          {cibles.length === 0 ? (
-            <div className="alert alert-info">
-              Aucune transition manuelle possible depuis « {STATUT_LABEL[demande.statut]} ».
-            </div>
-          ) : (
-            <>
-              <label className="field">
-                Nouveau statut <span className="required">*</span>
-                <select
-                  value={nouveauStatut}
-                  onChange={(e) => setNouveauStatut(e.target.value as StatutDemandeUI)}
-                  required
-                >
-                  {cibles.map((s) => (
-                    <option key={s} value={s}>
-                      {STATUT_LABEL[s]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {INDICATION[demande.statut] && (
-                <p className="form-help">{INDICATION[demande.statut]}</p>
-              )}
-
-              <label className="field">
-                Commentaire
-                <textarea
-                  value={commentaire}
-                  onChange={(e) => setCommentaire(e.target.value)}
-                  placeholder="Motif ou précision (facultatif)"
-                  rows={3}
-                  style={{ height: 92 }}
-                />
-              </label>
-
-              <div className="nt">
-                Utilisateur, date et heure sont enregistrés automatiquement dans
-                l&apos;historique de la demande.
-              </div>
-            </>
-          )}
-
-          <footer className="modal-footer">
-            <button type="button" className="btn-ghost" onClick={onClose}>
-              Annuler
-            </button>
-            {cibles.length > 0 && (
-              <button type="submit" className="btn-primary">
-                Confirmer le changement
+        {cibles.length === 0 ? (
+          <div className="modal-body">
+            <p className="section-note">Aucune transition manuelle possible depuis ce statut.</p>
+            <footer className="modal-footer">
+              <button type="button" className="btn-ghost" onClick={onClose}>
+                Fermer
               </button>
+            </footer>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="modal-body">
+            <label className="field">
+              Nouveau statut <span className="required">*</span>
+              <select
+                value={nouveauStatut}
+                onChange={(e) => setNouveauStatut(e.target.value as StatutDemande)}
+              >
+                {cibles.map((s) => (
+                  <option key={s} value={s}>
+                    {LIBELLES[s] ?? s}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Commentaire
+              <input
+                value={commentaire}
+                onChange={(e) => setCommentaire(e.target.value)}
+                placeholder="Précisions éventuelles"
+              />
+            </label>
+            {statutActuel === 'EN_ATTENTE' && nouveauStatut === 'VALIDATION' && (
+              <p className="section-note">
+                La validation exige : factures validées et plan de paiement établi pour chaque
+                service (contrôlé par le backend).
+              </p>
             )}
-          </footer>
-        </form>
+            <footer className="modal-footer">
+              <button type="button" className="btn-ghost" onClick={onClose} disabled={enregistrement}>
+                Annuler
+              </button>
+              <button type="submit" className="btn-primary" disabled={enregistrement}>
+                {enregistrement ? 'Enregistrement…' : 'Confirmer'}
+              </button>
+            </footer>
+          </form>
+        )}
       </div>
     </div>
   )

@@ -28,25 +28,113 @@ export interface Demande {
   resteAPayer: number
   actif: boolean
   createdAt: string
+  lignes: LigneService[]
+  montantTotal: number | null
+}
+
+export type StatutLigneService =
+  | 'VALIDE'
+  | 'EN_ATTENTE'
+  | 'EN_COURS'
+  | 'TERMINE'
+
+export interface LigneService {
+  id: number
+  demandeId: number
+  referenceDemande: string
+  serviceId: number | null
+  nomService: string | null
+  typeService: string | null
+  tarif: number
+  debutService: string
+  finService: string
+  statut: StatutLigneService | string | null
+  factureId: number | null
+  referenceFacture: string | null
+  montantPaye: number
+  resteAPayer: number
+}
+
+export interface CreateLignePayload {
+  serviceId: number
+  tarif: number
+  debutService: string
+  finService: string
+}
+
+export interface UpdateLignePayload {
+  tarif?: number | null
+  debutService?: string | null
+  finService?: string | null
+}
+
+export interface HistoriqueLigne {
+  id: number
+  ligneServiceId: number
+  statut: string
+  ancienStatut: string | null
+  commentaire: string | null
+  utilisateurId: number | null
+  nomUtilisateur: string | null
+  origine: string
+  createdAt: string
+}
+
+export type ModeFacturation = 'UNIQUE' | 'PAR_SERVICE'
+
+export type StatutFacture = 'PROFORMA' | 'VALIDEE' | 'ANNULEE'
+
+export interface FactureLigne {
+  ligneServiceId: number
+  serviceId: number | null
+  nomService: string | null
+  tarif: number
+  debutService: string
+  finService: string
+  statutLigne: string | null
+}
+
+export interface Facture {
+  id: number
+  referenceFacture: string
+  demandeId: number
+  referenceDemande: string
+  modeFacturation: ModeFacturation | string
+  montant: number
+  statut: StatutFacture | string
+  valideParId: number | null
+  valideParNom: string | null
+  valideLe: string | null
+  lignes: FactureLigne[]
 }
 
 export interface CreateDemandePayload {
-  societeId: number
-  serviceId: number
+  societeId?: number | null
   clientResponsableId?: number | null
   commercialId?: number | null
   dateDemande: string
-  debutService: string
-  finService: string
-  tarif?: number | null
+  commentaire?: string | null
+  lignes: CreateLignePayload[]
+  modeFacturation?: ModeFacturation
+}
+
+export interface UpdateDemandePayload {
+  commercialId?: number | null
   commentaire?: string | null
 }
 
-export type UpdateDemandePayload = Partial<CreateDemandePayload>
-
 export interface ChangeStatutPayload {
-  nouveauStatut: StatutDemande
+  statut: StatutDemande
   commentaire?: string | null
+}
+
+/** Transitions manuelles autorisées (l'annulation n'est possible qu'en EN_ATTENTE). */
+export const TRANSITIONS_MANUELLES: Record<string, StatutDemande[]> = {
+  EN_ATTENTE: ['VALIDATION', 'ANNULEE'],
+  VALIDATION: ['EN_COURS'],
+  EN_COURS: ['TERMINEE'],
+  TERMINEE: [],
+  ANNULEE: [],
 }
 
 export interface HistoriqueDemande {

@@ -1,6 +1,4 @@
-import type { StatutDemandeUI } from '../data/mockDemandes'
-
-const ETAPES: { id: StatutDemandeUI; label: string }[] = [
+const ETAPES: { id: string; label: string }[] = [
   { id: 'EN_ATTENTE', label: 'En attente' },
   { id: 'VALIDATION', label: 'Validation' },
   { id: 'EN_COURS', label: 'En cours' },
@@ -8,7 +6,7 @@ const ETAPES: { id: StatutDemandeUI; label: string }[] = [
 ]
 
 /** Stepper du cycle de vie (cf. maquette du détail demande). */
-export function DemandeStepper({ statut }: { statut: StatutDemandeUI }) {
+export function DemandeStepper({ statut }: { statut: string }) {
   if (statut === 'ANNULEE') {
     return (
       <div className="card card-pad">
