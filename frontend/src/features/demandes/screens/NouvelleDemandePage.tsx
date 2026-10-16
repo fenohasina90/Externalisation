@@ -536,6 +536,7 @@ export function NouvelleDemandePage() {
         client={null}
         domaines={optionsDomaines}
         resolveDomaine={resolveDomaine}
+        onCreerDomaine={resolveDomaine}
         onClose={() => setClientModalOpen(false)}
         onSave={handleSaveClient}
       />

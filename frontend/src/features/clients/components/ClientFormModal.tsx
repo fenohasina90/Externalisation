@@ -17,6 +17,8 @@ interface Props {
   domaines: DomaineOption[]
   /** Résout un nom de domaine (sélection ou création si inexistant). */
   resolveDomaine: (nom: string) => Promise<number>
+  /** Création immédiate depuis le pied de l'autocomplétion (défaut : resolveDomaine). */
+  onCreerDomaine?: (nom: string) => Promise<number>
   onClose: () => void
   onSave: (
     payload: CreateSocietePayload & { responsable: string },
@@ -79,10 +81,12 @@ function formulaireInitial(
  * 2. détails de la société (facebook, adresse, date de création, personnel,
  *    chiffre d'affaires mensuel — tous facultatifs).
  */
-export function ClientFormModal({ open, client, responsableActuel, domaines, resolveDomaine, onClose, onSave }: Props) {
+export function ClientFormModal({ open, client, responsableActuel, domaines, resolveDomaine, onCreerDomaine, onClose, onSave }: Props) {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [domaineCree, setDomaineCree] = useState<string | null>(null)
+  const [creationDomaineEnCours, setCreationDomaineEnCours] = useState(false)
   const [formKey, setFormKey] = useState<string | null>(null)
 
   // `key` remontée à chaque ouverture : réinitialise l'étape et le formulaire.
@@ -95,6 +99,7 @@ export function ClientFormModal({ open, client, responsableActuel, domaines, res
       setForm(formulaireInitial(client, responsableActuel, domaines))
       setError(null)
       setSaving(false)
+      setDomaineCree(null)
     }
   }
 
@@ -106,6 +111,20 @@ export function ClientFormModal({ open, client, responsableActuel, domaines, res
   }
 
   const domaineExiste = correspondExact(form.domaine, domaines) !== null
+  const texteDomainePropre = form.domaine.trim()
+
+  const handleCreerDomaine = async () => {
+    if (texteDomainePropre === '' || domaineExiste) return
+    setCreationDomaineEnCours(true)
+    try {
+      await (onCreerDomaine ?? resolveDomaine)(texteDomainePropre)
+      setDomaineCree(texteDomainePropre)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Échec de la création du domaine')
+    } finally {
+      setCreationDomaineEnCours(false)
+    }
+  }
 
   /** Étape 1 : champs obligatoires de l'identité du client. */
   const validerInformations = (): string | null => {
@@ -241,15 +260,28 @@ export function ClientFormModal({ open, client, responsableActuel, domaines, res
                       placeholder="Ex. Services financiers"
                       onTextChange={(texte) => setForm((f) => ({ ...f, domaine: texte }))}
                       onPick={() => undefined}
-                      options={domaines.map((d) => ({ id: d.id, label: d.nom }))}
-                      footer={
-                        form.domaine.trim() !== '' && !domaineExiste ? (
+                    options={domaines.map((d) => ({ id: d.id, label: d.nom }))}
+                    footer={
+                      texteDomainePropre !== '' && !domaineExiste ? (
+                        domaineCree?.toLowerCase() === texteDomainePropre.toLowerCase() ? (
                           <span className="autocomplete__hint">
-                            « {form.domaine.trim()} » sera créé comme nouveau domaine.
+                            Domaine « {texteDomainePropre} » créé ✓
                           </span>
-                        ) : undefined
-                      }
-                    />
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-link"
+                            disabled={creationDomaineEnCours}
+                            onClick={() => void handleCreerDomaine()}
+                          >
+                            {creationDomaineEnCours
+                              ? 'Création…'
+                              : `Créer « ${texteDomainePropre} » comme nouveau domaine`}
+                          </button>
+                        )
+                      ) : undefined
+                    }
+                  />
                   </div>
 
                   <label className="field">
