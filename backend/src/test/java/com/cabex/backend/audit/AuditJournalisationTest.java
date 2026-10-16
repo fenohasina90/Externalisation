@@ -7,6 +7,7 @@ import com.cabex.backend.client.repository.ClientResponsableRepository;
 import com.cabex.backend.client.repository.SocieteRepository;
 import com.cabex.backend.client.service.ResponsableService;
 import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.document.entity.PieceJointe;
@@ -55,6 +56,8 @@ class AuditJournalisationTest {
     @Mock private EcheancePaiementRepository echeanceRepository;
     @Mock private DemandeServiceRepository demandeRepository;
     @Mock private HistoriqueDemandeRepository historiqueRepository;
+    @Mock private com.cabex.backend.demande.repository.LigneServiceRepository ligneRepository;
+    @Mock private com.cabex.backend.demande.repository.HistoriqueLigneServiceRepository historiqueLigneRepository;
     @Mock private UtilisateurRepository utilisateurRepository;
     @Mock private RoleUtilisateurRepository roleRepository;
     @Mock private PieceJointeRepository pieceRepository;
@@ -64,25 +67,41 @@ class AuditJournalisationTest {
     @Mock private PdfGenerator pdfGenerator;
     @Mock private AuditService auditService;
     @Mock private com.cabex.backend.configuration.service.ConfigurationService configurationService;
+    @Mock private com.cabex.backend.facture.repository.FactureRepository factureRepository;
 
     @TempDir
     Path dossierTemporaire;
 
     private DemandeService demande() {
-        return DemandeService.builder()
+        DemandeService demande = DemandeService.builder()
                 .id(10).referenceDemande("REF-2026-014")
                 .dateDemande(LocalDate.of(2026, 9, 1))
-                .debutService(LocalDate.of(2026, 9, 1))
-                .finService(LocalDate.of(2027, 2, 28))
-                .tarif(new BigDecimal("1000000"))
                 .actif(true)
                 .build();
+        LigneService ligne = LigneService.builder()
+                .id(1).demande(demande)
+                .tarif(new BigDecimal("1000000"))
+                .debutService(LocalDate.of(2026, 9, 1))
+                .finService(LocalDate.of(2027, 2, 28))
+                .facture(com.cabex.backend.facture.entity.Facture.builder()
+                        .id(1).statut("VALIDEE").build())
+                .build();
+        demande.setLignes(new java.util.HashSet<>(java.util.Set.of(ligne)));
+        return demande;
+    }
+
+    private LigneService ligneDe(DemandeService demande) {
+        return demande.getLignes().iterator().next();
     }
 
     @Test
     void creationPlanJournalisee() {
-        when(demandeRepository.findById(10)).thenReturn(Optional.of(demande()));
-        when(proposRepository.existsByDemandeId(10)).thenReturn(false);
+        DemandeService demande = demande();
+        when(ligneRepository.findByDemandeId(10))
+                .thenReturn(java.util.List.of(ligneDe(demande)));
+        lenient().when(ligneRepository.findById(1))
+                .thenReturn(Optional.of(ligneDe(demande)));
+        when(proposRepository.existsByLigneServiceId(1)).thenReturn(false);
         when(proposRepository.save(any())).thenAnswer(inv -> {
             ProposPaiement p = inv.getArgument(0);
             p.setId(1);
@@ -90,11 +109,12 @@ class AuditJournalisationTest {
         });
         PlanPaiementService service = new PlanPaiementService(
                 proposRepository, echeanceRepository, demandeRepository,
-                historiqueRepository, utilisateurRepository, auditService);
+                historiqueRepository, ligneRepository, historiqueLigneRepository,
+                utilisateurRepository, auditService);
 
         service.create(10, new CreatePlanPaiementRequest(
                 LocalDate.of(2026, 9, 1), LocalDate.of(2026, 11, 30),
-                new BigDecimal("1000000"), 3, null));
+                new BigDecimal("1000000"), 3, null, null));
 
         verify(auditService).log(eq("CREATE"), eq("PAIEMENT"), eq("PlanPaiement"),
                 eq(1L), isNull(), contains("REF-2026-014"));
@@ -104,7 +124,7 @@ class AuditJournalisationTest {
     void modificationPlanJournalisee() {
         DemandeService demande = demande();
         ProposPaiement propos = ProposPaiement.builder()
-                .id(1).demande(demande)
+                .id(1).demande(demande).ligneService(ligneDe(demande))
                 .dateDebut(LocalDate.of(2026, 9, 1)).dateFin(LocalDate.of(2026, 11, 30))
                 .montantTotal(new BigDecimal("1000000")).restePayer(new BigDecimal("300000"))
                 .nombreEcheances(3).statut("ACTIF").build();
@@ -112,7 +132,8 @@ class AuditJournalisationTest {
         when(proposRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         PlanPaiementService service = new PlanPaiementService(
                 proposRepository, echeanceRepository, demandeRepository,
-                historiqueRepository, utilisateurRepository, auditService);
+                historiqueRepository, ligneRepository, historiqueLigneRepository,
+                utilisateurRepository, auditService);
 
         service.update(1, new com.cabex.backend.echeance.dto.UpdatePlanPaiementRequest(
                 LocalDate.of(2026, 9, 1), LocalDate.of(2026, 11, 30),
@@ -157,7 +178,8 @@ class AuditJournalisationTest {
         });
         DocumentGestionService service = new DocumentGestionService(
                 pieceRepository, demandeRepository, paiementRepository, proposRepository,
-                utilisateurRepository, pdfGenerator, auditService, configurationService);
+                utilisateurRepository, pdfGenerator, auditService, configurationService,
+                factureRepository);
         ReflectionTestUtils.setField(service, "storagePath", dossierTemporaire.toString());
         ReflectionTestUtils.setField(service, "maxSize", 10 * 1024 * 1024L);
         lenient().when(configurationService.lireEntierLong(anyString(), anyLong()))

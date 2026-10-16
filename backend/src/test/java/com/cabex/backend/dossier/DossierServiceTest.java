@@ -3,6 +3,7 @@ package com.cabex.backend.dossier;
 import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.commercial.entity.Commercial;
 import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.dossier.dto.AssocieRequest;
 import com.cabex.backend.dossier.dto.CreateDossierRequest;
@@ -66,13 +67,17 @@ class DossierServiceTest {
                 .id(126)
                 .referenceDemande("REF-2026-126")
                 .dateDemande(LocalDate.of(2026, 9, 1))
-                .debutService(LocalDate.of(2026, 9, 1))
-                .finService(LocalDate.of(2027, 2, 28))
                 .societe(null)
                 .commercial(commercial)
-                .service(service)
-                .tarif(new BigDecimal("700000"))
                 .actif(true)
+                .lignes(new java.util.HashSet<>(java.util.Set.of(
+                        LigneService.builder()
+                                .id(1)
+                                .service(service)
+                                .tarif(new BigDecimal("700000"))
+                                .debutService(LocalDate.of(2026, 9, 1))
+                                .finService(LocalDate.of(2027, 2, 28))
+                                .build())))
                 .build();
     }
 
@@ -138,8 +143,9 @@ class DossierServiceTest {
     @Test
     void createServiceNonCreation400() {
         DemandeService demande = demandeCreation();
-        demande.getService().setNomService("Audit comptable");
-        demande.getService().setTypeService("STANDARD");
+        LigneService ligne = demande.getLignes().iterator().next();
+        ligne.getService().setNomService("Audit comptable");
+        ligne.getService().setTypeService("STANDARD");
         when(demandeRepository.findById(126)).thenReturn(Optional.of(demande));
 
         var ex = assertThrows(BusinessException.class,

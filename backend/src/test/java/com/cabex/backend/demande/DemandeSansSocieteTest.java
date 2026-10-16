@@ -6,6 +6,7 @@ import com.cabex.backend.client.repository.ClientResponsableRepository;
 import com.cabex.backend.client.repository.SocieteRepository;
 import com.cabex.backend.commercial.repository.CommercialRepository;
 import com.cabex.backend.demande.dto.CreateDemandeRequest;
+import com.cabex.backend.demande.dto.CreateLigneRequest;
 import com.cabex.backend.demande.entity.StatutDemande;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
@@ -49,6 +50,10 @@ class DemandeSansSocieteTest {
     @Mock private UtilisateurRepository utilisateurRepository;
     @Mock private NotificationService notificationService;
     @Mock private AuditService auditService;
+    @Mock private com.cabex.backend.demande.service.LigneServiceService ligneServiceService;
+    @Mock private com.cabex.backend.facture.service.FactureService factureService;
+    @Mock private com.cabex.backend.demande.repository.LigneServiceRepository ligneRepository;
+    @Mock private com.cabex.backend.echeance.repository.ProposPaiementRepository proposRepository;
 
     private DemandeGestionService service;
 
@@ -58,7 +63,8 @@ class DemandeSansSocieteTest {
                 demandeRepository, societeRepository, responsableRepository,
                 commercialRepository, serviceRepository, historiqueRepository,
                 statutRepository, paiementRepository, utilisateurRepository,
-                notificationService, auditService);
+                notificationService, auditService, ligneServiceService,
+                factureService, ligneRepository, proposRepository);
         lenient().when(statutRepository.findByStatut("EN_ATTENTE"))
                 .thenReturn(Optional.of(StatutDemande.builder().id(1).statut("EN_ATTENTE").build()));
         lenient().when(demandeRepository.countByReferenceDemandeStartingWith(anyString())).thenReturn(0L);
@@ -68,6 +74,9 @@ class DemandeSansSocieteTest {
             d.setId(1);
             return d;
         });
+        lenient().when(ligneRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(ligneServiceService.montantTotalDemande(any()))
+                .thenReturn(new BigDecimal("700000"));
     }
 
     private Service serviceCreation() {
@@ -84,8 +93,12 @@ class DemandeSansSocieteTest {
 
     private CreateDemandeRequest requete(Integer societeId, Integer serviceId, Integer responsableId) {
         return new CreateDemandeRequest(
-                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 1), LocalDate.of(2027, 2, 28),
-                societeId, null, responsableId, serviceId, new BigDecimal("700000"), null);
+                LocalDate.of(2026, 9, 1), null, null,
+                societeId, null, responsableId, null, null, null,
+                java.util.List.of(new CreateLigneRequest(
+                        serviceId, new BigDecimal("700000"),
+                        LocalDate.of(2026, 9, 1), LocalDate.of(2027, 2, 28))),
+                "PAR_SERVICE");
     }
 
     @Test
@@ -110,13 +123,34 @@ class DemandeSansSocieteTest {
     }
 
     @Test
-    void responsableSansSociete400() {
-        when(serviceRepository.findById(11)).thenReturn(Optional.of(serviceCreation()));
+    void responsableRattacheRefuseSansSociete400() {
+        lenient().when(serviceRepository.findById(11)).thenReturn(Optional.of(serviceCreation()));
+        com.cabex.backend.client.entity.ClientResponsable rattache =
+                com.cabex.backend.client.entity.ClientResponsable.builder()
+                        .id(5).nomClient("Amina Neme")
+                        .societe(com.cabex.backend.client.entity.Societe.builder()
+                                .id(9).nomSociete("Autre").build())
+                        .build();
+        when(responsableRepository.findById(5)).thenReturn(Optional.of(rattache));
 
         var ex = assertThrows(BusinessException.class,
                 () -> service.create(requete(null, 11, 5)));
-        assertEquals(ErrorMessages.RESPONSABLE_SANS_SOCIETE, ex.getMessage());
+        assertEquals("Le responsable n'appartient pas à la société sélectionnée", ex.getMessage());
         verify(demandeRepository, never()).save(any());
+    }
+
+    @Test
+    void responsableLibreAccepteSansSociete() {
+        when(serviceRepository.findById(11)).thenReturn(Optional.of(serviceCreation()));
+        com.cabex.backend.client.entity.ClientResponsable libre =
+                com.cabex.backend.client.entity.ClientResponsable.builder()
+                        .id(6).nomClient("Contact libre").societe(null).build();
+        when(responsableRepository.findById(6)).thenReturn(Optional.of(libre));
+
+        var reponse = service.create(requete(null, 11, 6));
+
+        assertNotNull(reponse.referenceDemande());
+        verify(demandeRepository).save(any());
     }
 
     @Test

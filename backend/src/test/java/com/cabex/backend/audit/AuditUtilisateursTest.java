@@ -6,6 +6,7 @@ import com.cabex.backend.client.repository.SocieteRepository;
 import com.cabex.backend.commercial.repository.CommercialRepository;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.HistoriqueDemande;
+import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.entity.StatutDemande;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
@@ -63,6 +64,10 @@ class AuditUtilisateursTest {
     @Mock private StatutDemandeRepository statutRepository;
     @Mock private PaiementRepository paiementRepository;
     @Mock private NotificationService notificationService;
+    @Mock private com.cabex.backend.demande.service.LigneServiceService ligneServiceService;
+    @Mock private com.cabex.backend.facture.service.FactureService factureService;
+    @Mock private com.cabex.backend.demande.repository.LigneServiceRepository ligneRepository;
+    @Mock private com.cabex.backend.echeance.repository.ProposPaiementRepository proposRepository;
 
     @AfterEach
     void nettoyerContexte() {
@@ -137,9 +142,10 @@ class AuditUtilisateursTest {
         DemandeService demande = DemandeService.builder()
                 .id(10).referenceDemande("REF-2026-014")
                 .dateDemande(LocalDate.of(2026, 9, 1))
-                .debutService(LocalDate.of(2026, 9, 1))
-                .finService(LocalDate.of(2027, 2, 28))
-                .tarif(new BigDecimal("1000000")).actif(true).build();
+                .actif(true).build();
+        LigneService ligne = LigneService.builder()
+                .id(1).demande(demande).statut("EN_ATTENTE")
+                .tarif(new BigDecimal("1000000")).build();
         HistoriqueDemande historique = HistoriqueDemande.builder()
                 .id(1).demande(demande)
                 .statut(StatutDemande.builder().id(1).statut("EN_ATTENTE").build()).build();
@@ -149,12 +155,16 @@ class AuditUtilisateursTest {
                 .thenReturn(Optional.of(StatutDemande.builder().id(2).statut("VALIDATION").build()));
         when(statutRepository.findByStatut("EN_COURS"))
                 .thenReturn(Optional.of(StatutDemande.builder().id(3).statut("EN_COURS").build()));
+        lenient().when(ligneRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ligneServiceService.avancerStatut(any(), eq("EN_COURS"), any(), eq("AUTO")))
+                .thenReturn(true);
         DemandeGestionService service = new DemandeGestionService(
                 demandeRepository, societeRepository, responsableRepository, commercialRepository,
                 serviceRepository, historiqueRepository, statutRepository, paiementRepository,
-                utilisateurRepository, notificationService, auditService);
+                utilisateurRepository, notificationService, auditService,
+                ligneServiceService, factureService, ligneRepository, proposRepository);
 
-        service.validerParPremierPaiement(demande, 1);
+        service.promouvoirEnCoursParLigne(ligne, "paiement PAY-2026-00001 (échéance n°1)");
 
         verify(auditService).log(eq("STATUS_CHANGE"), eq("DEMANDE"), eq("DemandeService"),
                 eq(10L), eq("EN_ATTENTE"), eq("VALIDATION"));

@@ -40,11 +40,7 @@ class DossierRepositoryTest {
         return demandeRepository.save(DemandeService.builder()
                 .referenceDemande("REF-2026-126")
                 .dateDemande(LocalDate.of(2026, 9, 1))
-                .debutService(LocalDate.of(2026, 9, 1))
-                .finService(LocalDate.of(2027, 2, 28))
                 .societe(null)
-                .service(service)
-                .tarif(new BigDecimal("700000"))
                 .actif(true)
                 .build());
     }
