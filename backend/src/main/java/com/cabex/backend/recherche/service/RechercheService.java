@@ -80,8 +80,14 @@ public class RechercheService {
                 .map(h -> h.getStatut().getStatut()).orElse(null);
         return new RechercheDemandeItem(d.getId(), d.getReferenceDemande(),
                 d.getSociete() != null ? d.getSociete().getNomSociete() : null,
-                d.getService() != null ? d.getService().getNomService() : null,
-                statut, d.getDateDemande(), d.getTarif());
+                d.getLignes() != null ? d.getLignes().stream()
+                        .map(l -> l.getService() != null ? l.getService().getNomService() : null)
+                        .filter(java.util.Objects::nonNull).distinct()
+                        .collect(java.util.stream.Collectors.joining(", ")) : null,
+                statut, d.getDateDemande(),
+                d.getLignes() != null ? d.getLignes().stream()
+                        .map(l -> l.getTarif() != null ? l.getTarif() : java.math.BigDecimal.ZERO)
+                        .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add) : null);
     }
 
     private RecherchePaiementItem toPaiementItem(Paiement p) {

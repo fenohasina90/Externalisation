@@ -3,9 +3,11 @@ package com.cabex.backend.rapport.service;
 import com.cabex.backend.client.repository.SocieteRepository;
 import com.cabex.backend.demande.dto.DemandeResponse;
 import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.mapper.DemandeMapper;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
+import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.cabex.backend.paiement.repository.PaiementRepository;
@@ -38,19 +40,22 @@ public class RapportService {
     private final EcheancePaiementRepository echeanceRepository;
     private final SocieteRepository societeRepository;
     private final ServiceRepository serviceRepository;
+    private final LigneServiceService ligneService;
 
     public RapportService(DemandeServiceRepository demandeRepository,
                           HistoriqueDemandeRepository historiqueRepository,
                           PaiementRepository paiementRepository,
                           EcheancePaiementRepository echeanceRepository,
                           SocieteRepository societeRepository,
-                          ServiceRepository serviceRepository) {
+                          ServiceRepository serviceRepository,
+                          LigneServiceService ligneService) {
         this.demandeRepository = demandeRepository;
         this.historiqueRepository = historiqueRepository;
         this.paiementRepository = paiementRepository;
         this.echeanceRepository = echeanceRepository;
         this.societeRepository = societeRepository;
         this.serviceRepository = serviceRepository;
+        this.ligneService = ligneService;
     }
 
     @Transactional(readOnly = true)
@@ -114,18 +119,26 @@ public class RapportService {
 
     @Transactional(readOnly = true)
     public List<RapportServiceLigne> services(RapportFilter f) {
-        Map<Integer, List<DemandeService>> parService = new LinkedHashMap<>();
+        Map<Integer, List<LigneService>> parService = new LinkedHashMap<>();
         for (DemandeService d : demandesFiltrees(f)) {
-            parService.computeIfAbsent(d.getService().getId(), k -> new ArrayList<>()).add(d);
+            if (d.getLignes() == null) {
+                continue;
+            }
+            for (LigneService l : d.getLignes()) {
+                if (l.getService() == null) {
+                    continue;
+                }
+                parService.computeIfAbsent(l.getService().getId(), k -> new ArrayList<>()).add(l);
+            }
         }
         return parService.entrySet().stream().map(e -> {
             Integer serviceId = e.getKey();
-            List<DemandeService> list = e.getValue();
+            List<LigneService> list = e.getValue();
             return new RapportServiceLigne(serviceId,
                     list.get(0).getService().getNomService(),
-                    list.get(0).getSociete() != null && list.get(0).getSociete().getDomaine() != null
-                            ? list.get(0).getSociete().getDomaine().getNomDomaine() : null,
-                    list.size(), sommeTarif(list));
+                    null,
+                    (int) list.stream().map(l -> l.getDemande().getId()).distinct().count(),
+                    sommeTarifLignes(list));
         }).sorted(Comparator.comparing(RapportServiceLigne::revenu).reversed()).toList();
     }
 
@@ -262,7 +275,18 @@ public class RapportService {
     }
 
     private BigDecimal sommeTarif(List<DemandeService> list) {
-        return list.stream().map(DemandeService::getTarif).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return list.stream()
+                .flatMap(d -> d.getLignes() != null
+                        ? d.getLignes().stream()
+                        : java.util.stream.Stream.empty())
+                .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal sommeTarifLignes(List<LigneService> list) {
+        return list.stream()
+                .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private DemandeResponse toDemandeResponse(DemandeService d) {
@@ -270,8 +294,10 @@ public class RapportService {
                 .map(h -> h.getStatut().getStatut()).orElse(null);
         BigDecimal paye = paiementRepository.sommePayeeParDemande(d.getId());
         if (paye == null) paye = BigDecimal.ZERO;
-        BigDecimal reste = d.getTarif().subtract(paye).max(BigDecimal.ZERO);
-        return DemandeMapper.toResponse(d, statut, paye, reste);
+        BigDecimal total = sommeTarif(java.util.List.of(d));
+        BigDecimal reste = total.subtract(paye).max(BigDecimal.ZERO);
+        return DemandeMapper.toResponse(d, statut, paye, reste,
+                ligneService.listerParDemande(d.getId()), total);
     }
 
     private RapportPaiementLigne toPaiementLigne(Paiement p) {
