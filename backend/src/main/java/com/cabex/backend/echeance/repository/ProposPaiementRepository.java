@@ -13,4 +13,11 @@ public interface ProposPaiementRepository extends JpaRepository<ProposPaiement, 
     Optional<ProposPaiement> findFirstByDemandeIdAndStatutOrderByCreatedAtDesc(Integer demandeId, String statut);
 
     boolean existsByDemandeId(Integer demandeId);
+
+    List<ProposPaiement> findByLigneServiceId(Integer ligneServiceId);
+
+    Optional<ProposPaiement> findFirstByLigneServiceIdAndStatutOrderByCreatedAtDesc(
+            Integer ligneServiceId, String statut);
+
+    boolean existsByLigneServiceId(Integer ligneServiceId);
 }

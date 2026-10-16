@@ -76,12 +76,15 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
 
     @Query("""
         SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p
+        LEFT JOIN p.demande.societe s LEFT JOIN s.domaine dom
         WHERE p.actif = true
           AND (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
           AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
-          AND (:societeId IS NULL OR p.demande.societe.id = :societeId)
-          AND (:serviceId IS NULL OR p.demande.service.id = :serviceId)
-          AND (:domaineId IS NULL OR p.demande.societe.domaine.id = :domaineId)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = p.demande AND l.service.id = :serviceId))
+              AND (:domaineId IS NULL OR dom.id = :domaineId)
         """)
     BigDecimal sommePayee(@Param("dateDebut") LocalDate dateDebut,
                           @Param("dateFin") LocalDate dateFin,
@@ -92,12 +95,15 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
     @Query("""
         SELECT p.modePaiement.libelle, COALESCE(SUM(p.montantPaye), 0)
         FROM Paiement p
+        LEFT JOIN p.demande.societe s LEFT JOIN s.domaine dom
         WHERE p.actif = true
           AND (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
           AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
-          AND (:societeId IS NULL OR p.demande.societe.id = :societeId)
-          AND (:serviceId IS NULL OR p.demande.service.id = :serviceId)
-          AND (:domaineId IS NULL OR p.demande.societe.domaine.id = :domaineId)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = p.demande AND l.service.id = :serviceId))
+          AND (:domaineId IS NULL OR dom.id = :domaineId)
         GROUP BY p.modePaiement.libelle
         """)
     List<Object[]> sommeParMode(@Param("dateDebut") LocalDate dateDebut,
@@ -117,13 +123,16 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
 
     @Query("""
         SELECT p FROM Paiement p
+        LEFT JOIN p.demande.societe s LEFT JOIN s.domaine dom LEFT JOIN p.demande.commercial c
         WHERE p.actif = true
           AND (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
           AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
-          AND (:societeId IS NULL OR p.demande.societe.id = :societeId)
-          AND (:serviceId IS NULL OR p.demande.service.id = :serviceId)
-          AND (:domaineId IS NULL OR p.demande.societe.domaine.id = :domaineId)
-          AND (:commercialId IS NULL OR p.demande.commercial.id = :commercialId)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = p.demande AND l.service.id = :serviceId))
+          AND (:domaineId IS NULL OR dom.id = :domaineId)
+          AND (:commercialId IS NULL OR c.id = :commercialId)
         ORDER BY p.datePaiement DESC
         """)
     List<Paiement> rechercherRapport(@Param("dateDebut") LocalDate dateDebut,

@@ -11,6 +11,7 @@ public record CreatePaiementRequest(
         @NotNull(message = "La demande est obligatoire")
         Integer demandeId,
 
+        @NotNull(message = "L'échéance est obligatoire")
         Integer echeanceId,
 
         @NotNull(message = "Le mode de paiement est obligatoire")

@@ -49,11 +49,14 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
 
     @Query("""
             SELECT COALESCE(SUM(e.montantAttendu - e.montantPaye), 0) FROM EcheancePaiement e
+            LEFT JOIN e.proposPaiement.demande.societe s LEFT JOIN s.domaine dom
             WHERE e.dateEcheance < :jour
               AND e.montantPaye < e.montantAttendu
-              AND (:societeId IS NULL OR e.proposPaiement.demande.societe.id = :societeId)
-              AND (:serviceId IS NULL OR e.proposPaiement.demande.service.id = :serviceId)
-              AND (:domaineId IS NULL OR e.proposPaiement.demande.societe.domaine.id = :domaineId)
+              AND (:societeId IS NULL OR s.id = :societeId)
+              AND (:serviceId IS NULL OR EXISTS (
+                    SELECT 1 FROM LigneService l
+                    WHERE l.demande = e.proposPaiement.demande AND l.service.id = :serviceId))
+              AND (:domaineId IS NULL OR dom.id = :domaineId)
             """)
     BigDecimal sommeEnRetardFiltree(@Param("jour") LocalDate jour,
                                     @Param("societeId") Integer societeId,

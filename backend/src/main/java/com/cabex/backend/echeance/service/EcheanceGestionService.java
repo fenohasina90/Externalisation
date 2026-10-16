@@ -116,12 +116,14 @@ public class EcheanceGestionService {
     }
 
     private void validerDateDansIntervalle(ProposPaiement propos, LocalDate date) {
-        DemandeService demande = propos.getDemande();
-        if (demande != null && demande.getDebutService() != null && demande.getFinService() != null
-                && (date.isBefore(demande.getDebutService()) || date.isAfter(demande.getFinService()))) {
+        com.cabex.backend.demande.entity.LigneService ligne = propos.getLigneService();
+        LocalDate debut = ligne != null ? ligne.getDebutService() : null;
+        LocalDate fin = ligne != null ? ligne.getFinService() : null;
+        if (date != null && debut != null && fin != null
+                && (date.isBefore(debut) || date.isAfter(fin))) {
             throw new BusinessException(
                     "L'échéance doit être comprise entre le début et la fin du service ("
-                            + demande.getDebutService() + " → " + demande.getFinService() + ")");
+                            + debut + " → " + fin + ")");
         }
     }
 

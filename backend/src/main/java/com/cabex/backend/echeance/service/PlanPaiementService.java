@@ -2,8 +2,13 @@ package com.cabex.backend.echeance.service;
 
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.HistoriqueDemande;
+import com.cabex.backend.demande.entity.HistoriqueLigneService;
+import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
+import com.cabex.backend.demande.repository.HistoriqueLigneServiceRepository;
+import com.cabex.backend.demande.repository.LigneServiceRepository;
+import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.audit.action.AuditActions;
 import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.echeance.dto.CreatePlanPaiementRequest;
@@ -28,6 +33,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @org.springframework.stereotype.Service
@@ -39,6 +45,8 @@ public class PlanPaiementService {
     private final EcheancePaiementRepository echeanceRepository;
     private final DemandeServiceRepository demandeRepository;
     private final HistoriqueDemandeRepository historiqueRepository;
+    private final LigneServiceRepository ligneRepository;
+    private final HistoriqueLigneServiceRepository historiqueLigneRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final AuditService auditService;
 
@@ -46,12 +54,16 @@ public class PlanPaiementService {
                                EcheancePaiementRepository echeanceRepository,
                                DemandeServiceRepository demandeRepository,
                                HistoriqueDemandeRepository historiqueRepository,
+                               LigneServiceRepository ligneRepository,
+                               HistoriqueLigneServiceRepository historiqueLigneRepository,
                                UtilisateurRepository utilisateurRepository,
                                AuditService auditService) {
         this.proposRepository = proposRepository;
         this.echeanceRepository = echeanceRepository;
         this.demandeRepository = demandeRepository;
         this.historiqueRepository = historiqueRepository;
+        this.ligneRepository = ligneRepository;
+        this.historiqueLigneRepository = historiqueLigneRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.auditService = auditService;
     }
@@ -72,13 +84,49 @@ public class PlanPaiementService {
 
     @Transactional
     public PlanPaiementResponse create(Integer demandeId, CreatePlanPaiementRequest request) {
-        DemandeService demande = getDemande(demandeId);
+        List<LigneService> lignes = ligneRepository.findByDemandeId(demandeId);
+        if (lignes.size() != 1) {
+            throw new BusinessException(
+                    "Demande multi-services : créez le plan depuis la ligne de service concernée");
+        }
+        return createForLigne(lignes.get(0).getId(), request);
+    }
 
-        if (proposRepository.existsByDemandeId(demandeId)) {
-            throw new BusinessException("Un plan de paiement existe déjà pour cette demande");
+    @Transactional(readOnly = true)
+    public PlanPaiementResponse getByLigne(Integer ligneId) {
+        LigneService ligne = getLigne(ligneId);
+        ProposPaiement propos = proposRepository.findByLigneServiceId(ligne.getId()).stream()
+                .filter(p -> "ACTIF".equals(p.getStatut()))
+                .findFirst()
+                .orElseGet(() -> proposRepository.findByLigneServiceId(ligne.getId()).stream()
+                        .findFirst().orElse(null));
+        if (propos == null) {
+            throw new ResourceNotFoundException(
+                    "Aucun plan de paiement pour la ligne de service " + ligne.getId());
+        }
+        return toResponse(propos);
+    }
+
+    /**
+     * Établit le plan de paiement d'une ligne : la ligne passe EN_ATTENTE
+     * (en attente du premier paiement).
+     */
+    @Transactional
+    public PlanPaiementResponse createForLigne(Integer ligneId, CreatePlanPaiementRequest request) {
+        LigneService ligne = getLigne(ligneId);
+        DemandeService demande = ligne.getDemande();
+
+        if (ligne.getFacture() == null
+                || !"VALIDEE".equals(ligne.getFacture().getStatut())) {
+            throw new BusinessException(
+                    "La facture du service doit être validée avant d'établir son plan de paiement");
         }
 
-        String statutActuel = statutActuel(demandeId);
+        if (proposRepository.existsByLigneServiceId(ligneId)) {
+            throw new BusinessException("Un plan de paiement existe déjà pour ce service");
+        }
+
+        String statutActuel = statutActuel(demande.getId());
         if ("TERMINEE".equals(statutActuel) || "ANNULEE".equals(statutActuel)) {
             throw new BusinessException(
                     "Le plan de paiement ne peut pas être créé pour une demande terminée ou annulée");
@@ -89,21 +137,22 @@ public class PlanPaiementService {
             throw new BusinessException(ErrorMessages.DATE_FIN_AVANT_DEBUT);
         }
 
-        if (request.dateDebut() != null && demande.getDebutService() != null
-                && request.dateDebut().isBefore(demande.getDebutService())) {
+        if (request.dateDebut() != null && ligne.getDebutService() != null
+                && request.dateDebut().isBefore(ligne.getDebutService())) {
             throw new BusinessException(
                     "Le plan de paiement doit commencer après le début du service ("
-                            + demande.getDebutService() + ")");
+                            + ligne.getDebutService() + ")");
         }
-        if (request.dateFin() != null && demande.getFinService() != null
-                && request.dateFin().isAfter(demande.getFinService())) {
+        if (request.dateFin() != null && ligne.getFinService() != null
+                && request.dateFin().isAfter(ligne.getFinService())) {
             throw new BusinessException(
                     "Le plan de paiement doit se terminer avant la fin du service ("
-                            + demande.getFinService() + ")");
+                            + ligne.getFinService() + ")");
         }
 
         ProposPaiement propos = ProposPaiement.builder()
                 .demande(demande)
+                .ligneService(ligne)
                 .dateDebut(request.dateDebut())
                 .dateFin(request.dateFin())
                 .montantTotal(request.montantTotal())
@@ -115,11 +164,14 @@ public class PlanPaiementService {
                 .build();
         propos = proposRepository.save(propos);
 
-        propos.setEcheances(genererEcheances(propos));
+        propos.setEcheances(construireEcheances(propos, ligne, request));
         propos = proposRepository.save(propos);
 
+        marquerPlanEtabli(ligne);
+
         auditService.log(AuditActions.CREATE, "PAIEMENT", "PlanPaiement",
-                Long.valueOf(propos.getId()), null, "demande=" + demande.getReferenceDemande());
+                Long.valueOf(propos.getId()), null,
+                "demande=" + demande.getReferenceDemande() + ", ligne=" + ligne.getId());
         return toResponse(propos);
     }
 
@@ -135,17 +187,20 @@ public class PlanPaiementService {
         }
 
         DemandeService demandeCourante = propos.getDemande();
-        if (request.dateDebut() != null && demandeCourante.getDebutService() != null
-                && request.dateDebut().isBefore(demandeCourante.getDebutService())) {
+        LigneService ligneCourante = propos.getLigneService();
+        LocalDate debutService = ligneCourante != null ? ligneCourante.getDebutService() : null;
+        LocalDate finService = ligneCourante != null ? ligneCourante.getFinService() : null;
+        if (request.dateDebut() != null && debutService != null
+                && request.dateDebut().isBefore(debutService)) {
             throw new BusinessException(
                     "Le plan de paiement doit commencer après le début du service ("
-                            + demandeCourante.getDebutService() + ")");
+                            + debutService + ")");
         }
-        if (request.dateFin() != null && demandeCourante.getFinService() != null
-                && request.dateFin().isAfter(demandeCourante.getFinService())) {
+        if (request.dateFin() != null && finService != null
+                && request.dateFin().isAfter(finService)) {
             throw new BusinessException(
                     "Le plan de paiement doit se terminer avant la fin du service ("
-                            + demandeCourante.getFinService() + ")");
+                            + finService + ")");
         }
 
         propos.setDateDebut(request.dateDebut());
@@ -163,6 +218,51 @@ public class PlanPaiementService {
                 Long.valueOf(saved.getId()), "demande=" + saved.getDemande().getReferenceDemande(),
                 "demande=" + saved.getDemande().getReferenceDemande());
         return toResponse(saved);
+    }
+
+    /**
+     * Échéances manuelles (date + montant saisies) ou répartition automatique.
+     * En manuel : la taille doit égaler nombreEcheances et la somme montantTotal.
+     */
+    private Set<EcheancePaiement> construireEcheances(ProposPaiement propos, LigneService ligne,
+                                                      CreatePlanPaiementRequest request) {
+        if (request.echeances() == null || request.echeances().isEmpty()) {
+            return genererEcheances(propos);
+        }
+        if (request.echeances().size() != propos.getNombreEcheances()) {
+            throw new BusinessException(
+                    "Le nombre d'échéances saisies doit égaler le nombre d'échéances du plan");
+        }
+        BigDecimal somme = request.echeances().stream()
+                .map(com.cabex.backend.echeance.dto.EcheancePlanRequest::montantAttendu)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (somme.compareTo(propos.getMontantTotal()) != 0) {
+            throw new BusinessException(
+                    "La somme des échéances (" + somme + ") doit égaler le montant total ("
+                            + propos.getMontantTotal() + ")");
+        }
+        Set<EcheancePaiement> echeances = new HashSet<>();
+        int numero = 1;
+        for (com.cabex.backend.echeance.dto.EcheancePlanRequest saisie : request.echeances()) {
+            validerDateEcheance(ligne, saisie.dateEcheance());
+            echeances.add(EcheancePaiement.builder()
+                    .proposPaiement(propos)
+                    .numeroEcheance(numero++)
+                    .dateEcheance(saisie.dateEcheance())
+                    .montantAttendu(saisie.montantAttendu())
+                    .montantPaye(BigDecimal.ZERO)
+                    .build());
+        }
+        return echeances;
+    }
+
+    private void validerDateEcheance(LigneService ligne, LocalDate date) {
+        if (date != null && ligne.getDebutService() != null && ligne.getFinService() != null
+                && (date.isBefore(ligne.getDebutService()) || date.isAfter(ligne.getFinService()))) {
+            throw new BusinessException(
+                    "L'échéance doit être comprise entre le début et la fin du service ("
+                            + ligne.getDebutService() + " → " + ligne.getFinService() + ")");
+        }
     }
 
     private Set<EcheancePaiement> genererEcheances(ProposPaiement propos) {
@@ -211,6 +311,31 @@ public class PlanPaiementService {
         return demandeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Demande", id)));
+    }
+
+    private LigneService getLigne(Integer id) {
+        return ligneRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Ligne de service", id)));
+    }
+
+    /** La ligne passe EN_ATTENTE à l'établissement de son plan (jamais de régression). */
+    private void marquerPlanEtabli(LigneService ligne) {
+        String statut = ligne.getStatut();
+        if (LigneServiceService.LIGNE_EN_COURS.equals(statut)
+                || LigneServiceService.LIGNE_TERMINE.equals(statut)
+                || LigneServiceService.LIGNE_EN_ATTENTE.equals(statut)) {
+            return;
+        }
+        ligne.setStatut(LigneServiceService.LIGNE_EN_ATTENTE);
+        ligneRepository.save(ligne);
+        historiqueLigneRepository.save(HistoriqueLigneService.builder()
+                .ligneService(ligne)
+                .statut(LigneServiceService.LIGNE_EN_ATTENTE)
+                .commentaire("Plan de paiement établi (en attente du premier paiement)")
+                .utilisateur(currentUtilisateur())
+                .origine("MANUEL")
+                .build());
     }
 
     private Utilisateur currentUtilisateur() {
