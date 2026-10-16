@@ -73,8 +73,11 @@ public class DossierService {
         DemandeService demande = demandeRepository.findById(demandeId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Demande", demandeId)));
-        String typeService = demande.getService() != null ? demande.getService().getTypeService() : null;
-        if (!DossierRegles.estTypeCreation(typeService)) {
+        // Mix interdit : la demande de création porte une ligne unique de type CREATION.
+        boolean creation = demande.getLignes() != null && !demande.getLignes().isEmpty()
+                && demande.getLignes().stream().allMatch(l -> l.getService() != null
+                        && DossierRegles.estTypeCreation(l.getService().getTypeService()));
+        if (!creation) {
             throw new BusinessException(ErrorMessages.DOSSIER_SERVICE_NON_CREATION);
         }
         return demande;

@@ -50,6 +50,7 @@ public class DocumentGestionService {
     private final PdfGenerator pdfGenerator;
     private final AuditService auditService;
     private final ConfigurationService configurationService;
+    private final com.cabex.backend.facture.repository.FactureRepository factureRepository;
 
     @Value("${app.document.storage-path}")
     private String storagePath;
@@ -64,7 +65,8 @@ public class DocumentGestionService {
                                   UtilisateurRepository utilisateurRepository,
                                   PdfGenerator pdfGenerator,
                                   AuditService auditService,
-                                  ConfigurationService configurationService) {
+                                  ConfigurationService configurationService,
+                                  com.cabex.backend.facture.repository.FactureRepository factureRepository) {
         this.pieceRepository = pieceRepository;
         this.demandeRepository = demandeRepository;
         this.paiementRepository = paiementRepository;
@@ -73,6 +75,7 @@ public class DocumentGestionService {
         this.pdfGenerator = pdfGenerator;
         this.auditService = auditService;
         this.configurationService = configurationService;
+        this.factureRepository = factureRepository;
     }
 
     /**
@@ -183,6 +186,13 @@ public class DocumentGestionService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Aucun plan de paiement actif pour la demande " + demandeId));
         return pdfGenerator.planPaiement(propos);
+    }
+
+    public byte[] factureProforma(Integer factureId) {
+        com.cabex.backend.facture.entity.Facture facture = factureRepository.findById(factureId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Facture", factureId)));
+        return pdfGenerator.factureProforma(facture);
     }
 
     @Transactional

@@ -50,12 +50,28 @@ public class PdfGenerator {
                     {"Contact client", valeur(d.getSociete() != null ? d.getSociete().getContact() : null)},
                     {"Responsable", valeur(d.getClientResponsable() != null ? d.getClientResponsable().getNomClient() : null)},
                     {"Commercial", valeur(d.getCommercial() != null ? d.getCommercial().getNomCommercial() : null)},
-                    {"Service", valeur(d.getService() != null ? d.getService().getNomService() : null)},
                     {"Date de demande", valeurDate(d.getDateDemande())},
-                    {"Début de service", valeurDate(d.getDebutService())},
-                    {"Fin de service", valeurDate(d.getFinService())},
-                    {"Tarif appliqué", formatArgent(d.getTarif())}
+                    {"Nombre de services", d.getLignes() != null ? String.valueOf(d.getLignes().size()) : "-"}
             });
+
+            label(doc, "Services");
+            PdfPTable table = new PdfPTable(4);
+            table.setWidthPercentage(100);
+            table.setWidths(new float[]{4f, 3f, 3f, 3f});
+            table.setHeaderRows(1);
+            enteteCellule(table, "Service");
+            enteteCellule(table, "Période");
+            enteteCellule(table, "Tarif");
+            enteteCellule(table, "Statut");
+            if (d.getLignes() != null) {
+                for (com.cabex.backend.demande.entity.LigneService l : d.getLignes()) {
+                    cellule(table, valeur(l.getService() != null ? l.getService().getNomService() : null));
+                    cellule(table, valeurDate(l.getDebutService()) + " → " + valeurDate(l.getFinService()));
+                    cellule(table, formatArgent(l.getTarif()));
+                    cellule(table, valeur(l.getStatut()));
+                }
+            }
+            doc.add(table);
 
             label(doc, "Informations de la demande");
             Paragraph p = new Paragraph(valeurNeOuVide(d.getCommentaire()), NORMAL);
@@ -140,6 +156,58 @@ public class PdfGenerator {
             doc.close();
         } catch (Exception e) {
             throw new IllegalStateException("Erreur de génération du plan de paiement", e);
+        }
+        return out.toByteArray();
+    }
+
+    public byte[] factureProforma(com.cabex.backend.facture.entity.Facture f) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        Document doc = new Document(PageSize.A4);
+        try {
+            PdfWriter.getInstance(doc, out);
+            doc.open();
+
+            titre(doc, "Facture proforma");
+            sousTitre(doc, "Référence : " + valeur(f.getReferenceFacture()));
+
+            com.cabex.backend.demande.entity.DemandeService demande = f.getDemande();
+            infoTable(doc, new String[][]{
+                    {"Client", valeur(demande != null && demande.getSociete() != null
+                            ? demande.getSociete().getNomSociete() : null)},
+                    {"Demande", valeur(demande != null ? demande.getReferenceDemande() : null)},
+                    {"Mode de facturation", valeur(
+                            "UNIQUE".equals(f.getModeFacturation()) ? "Unique (toute la demande)" : "Par service")},
+                    {"Montant total", formatArgent(f.getMontant())},
+                    {"Statut", valeur(f.getStatut())},
+                    {"Validée par", valeur(f.getValidePar() != null
+                            ? f.getValidePar().getPrenom() + " " + f.getValidePar().getNom() : null)},
+                    {"Validée le", f.getValideLe() != null
+                            ? f.getValideLe().format(
+                                    java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) : "-"}
+            });
+
+            label(doc, "Services facturés");
+            PdfPTable table = new PdfPTable(4);
+            table.setWidthPercentage(100);
+            table.setWidths(new float[]{4f, 3f, 3f, 3f});
+            table.setHeaderRows(1);
+            enteteCellule(table, "Service");
+            enteteCellule(table, "Période");
+            enteteCellule(table, "Tarif");
+            enteteCellule(table, "Statut");
+            if (f.getLignes() != null) {
+                for (com.cabex.backend.demande.entity.LigneService l : f.getLignes()) {
+                    cellule(table, valeur(l.getService() != null ? l.getService().getNomService() : null));
+                    cellule(table, valeurDate(l.getDebutService()) + " → " + valeurDate(l.getFinService()));
+                    cellule(table, formatArgent(l.getTarif()));
+                    cellule(table, valeur(l.getStatut()));
+                }
+            }
+            doc.add(table);
+
+            doc.close();
+        } catch (Exception e) {
+            throw new IllegalStateException("Erreur de génération de la facture proforma", e);
         }
         return out.toByteArray();
     }
