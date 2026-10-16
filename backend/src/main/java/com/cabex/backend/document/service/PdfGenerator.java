@@ -148,76 +148,115 @@ public class PdfGenerator {
                 doc -> {
                     Societe s = d.getSociete();
 
-                    titreDocument(doc, "Récapitulatif de demande",
-                            "Référence : " + valeur(d.getReferenceDemande()));
+                    // Badge EXTERNALISATION
+                    PdfPTable badge = new PdfPTable(1);
+                    badge.setWidthPercentage(62);
+                    badge.setHorizontalAlignment(Element.ALIGN_CENTER);
+                    PdfPCell badgeCell = new PdfPCell(new Phrase("EXTERNALISATION",
+                            font(17, Font.BOLD, Color.WHITE)));
+                    badgeCell.setBackgroundColor(new Color(31, 41, 55));
+                    badgeCell.setBorder(Rectangle.NO_BORDER);
+                    badgeCell.setPadding(7);
+                    badgeCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                    badge.addCell(badgeCell);
+                    doc.add(badge);
 
-                    PdfPCell client = carte("Client", new String[][]{
-                            {"Société", valeur(s != null ? s.getNomSociete() : null)},
-                            {"Adresse", valeur(s != null ? s.getAdresse() : null)},
-                            {"Contact", valeur(s != null ? s.getContact() : null)},
-                            {"Responsable", valeur(d.getClientResponsable() != null
-                                    ? d.getClientResponsable().getNomClient() : null)}
-                    });
-                    PdfPCell demande = carte("Demande", new String[][]{
-                            {"Référence", valeur(d.getReferenceDemande())},
-                            {"Date de demande", valeurDate(d.getDateDemande())},
-                            {"Commercial", valeur(d.getCommercial() != null
-                                    ? d.getCommercial().getNomCommercial() : null)},
-                            {"Nombre de services", d.getLignes() != null
-                                    ? String.valueOf(d.getLignes().size()) : "-"}
-                    });
-                    rangee(doc, 0.5f, client, demande);
+                    Paragraph commercial = new Paragraph(
+                            "Nom du commercial : " + valeur(d.getCommercial() != null
+                                    ? d.getCommercial().getNomCommercial() : null),
+                            F_VALEUR);
+                    commercial.setAlignment(Element.ALIGN_RIGHT);
+                    commercial.setSpacingBefore(6);
+                    commercial.setSpacingAfter(4);
+                    doc.add(commercial);
 
-                    section(doc, "Services demandés");
-                    PdfPTable table = new PdfPTable(4);
-                    table.setWidthPercentage(100);
-                    table.setWidths(new float[]{4.2f, 3.4f, 2.6f, 2f});
-                    table.setHeaderRows(1);
-                    entete(table, "SERVICE", Element.ALIGN_LEFT);
-                    entete(table, "PÉRIODE", Element.ALIGN_LEFT);
-                    entete(table, "TARIF", Element.ALIGN_RIGHT);
-                    entete(table, "STATUT", Element.ALIGN_LEFT);
+                    String im = d.getCommercial() != null
+                            ? d.getCommercial().getImmatricule() : null;
+                    ficheStdChamp(doc, "NOM DE L'ENTREPRISE OU DE LA SOCIETE",
+                            valeur(s != null ? s.getNomSociete() : null)
+                                    + "      N° IM : " + valeur(im));
+                    ficheStdChamp(doc, "NOM DU CLIENT/RESPONSABLE",
+                            valeur(d.getClientResponsable() != null
+                                    ? d.getClientResponsable().getNomClient() : null));
+                    ficheStdChamp(doc, "ACTIVITES",
+                            valeur(s != null ? s.getActivite() : null));
+                    ficheStdChamp(doc, "CONTACT",
+                            valeur(s != null ? s.getContact() : null));
+                    ficheStdChamp(doc, "MAIL et Fb",
+                            valeur(s != null ? s.getEmail() : null)
+                                    + (s != null && s.getFb() != null && !s.getFb().isBlank()
+                                    ? " / " + s.getFb() : ""));
+                    ficheStdChamp(doc, "ADRESSE",
+                            valeur(s != null ? s.getAdresse() : null));
+                    ficheStdChamp(doc, "DUREE D'EXISTENCE",
+                            dureeExistence(s)
+                                    + "      Nombre du PERSONNEL : "
+                                    + (s != null && s.getNombrePersonnel() != null
+                                    ? s.getNombrePersonnel().toString() : ""));
+                    ficheStdChamp(doc, "CHIFFRE D'AFFAIRE MENSUEL",
+                            s != null && s.getChiffreAffaireMensuel() != null
+                                    ? formatArgent(s.getChiffreAffaireMensuel()) : "");
 
-                    BigDecimal total = BigDecimal.ZERO;
-                    int i = 0;
+                    section(doc, "DOMAINE");
+                    String domaine = s != null && s.getDomaine() != null
+                            ? s.getDomaine().getNomDomaine() : "";
+                    doc.add(ficheStdCases(domaine, "Comptabilité", "Fiscale", "Audit interne"));
+
+                    section(doc, "SERVICES SOUHAITES");
                     if (d.getLignes() != null && !d.getLignes().isEmpty()) {
                         for (LigneService l : d.getLignes()) {
-                            boolean zebra = i++ % 2 == 1;
-                            corps(table, new Phrase(valeur(l.getService() != null
-                                    ? l.getService().getNomService() : null), F_TD_GRAS),
-                                    Element.ALIGN_LEFT, zebra);
-                            corps(table, valeurDate(l.getDebutService()) + " – "
-                                    + valeurDate(l.getFinService()), Element.ALIGN_LEFT, zebra);
-                            corps(table, formatArgent(l.getTarif()), Element.ALIGN_RIGHT, zebra);
-                            corps(table, valeur(l.getStatut()), Element.ALIGN_LEFT, zebra);
-                            total = total.add(montantOuZero(l.getTarif()));
+                            Paragraph ligne = new Paragraph();
+                            ligne.setSpacingBefore(2);
+                            ligne.add(new Chunk("[X] ", F_VALEUR_GRAS));
+                            ligne.add(new Chunk(valeur(l.getService() != null
+                                    ? l.getService().getNomService() : null)
+                                    + "  (" + valeurDate(l.getDebutService())
+                                    + " → " + valeurDate(l.getFinService()) + ")",
+                                    F_VALEUR));
+                            doc.add(ligne);
                         }
-                        celluleTotal(table, "TOTAL", Element.ALIGN_RIGHT, 2);
-                        celluleTotal(table, formatArgent(total), Element.ALIGN_RIGHT, 1);
-                        celluleTotal(table, "", Element.ALIGN_LEFT, 1);
                     } else {
-                        PdfPCell vide = base(new Phrase("Aucun service enregistré", F_PETIT_ITALIQUE),
-                                Element.ALIGN_CENTER);
-                        vide.setColspan(4);
-                        vide.setBorder(Rectangle.BOTTOM);
-                        vide.setBorderColor(GRIS_BORDURE);
-                        table.addCell(vide);
+                        Paragraph aucun = new Paragraph("—", F_VALEUR);
+                        aucun.setSpacingBefore(2);
+                        doc.add(aucun);
                     }
-                    doc.add(table);
 
-                    section(doc, "Informations de la demande");
+                    Paragraph delai = new Paragraph("Délai d'exécution souhaité par le client : ",
+                            F_VALEUR_GRAS);
+                    delai.setSpacingBefore(10);
+                    doc.add(delai);
+
+                    Paragraph observation = new Paragraph("OBSERVATION :", F_NOTE);
+                    observation.setSpacingBefore(8);
+                    doc.add(observation);
                     String commentaire = d.getCommentaire();
-                    PdfPCell note = new PdfPCell(commentaire == null || commentaire.isBlank()
-                            ? new Phrase("Aucune information complémentaire.", F_PETIT_ITALIQUE)
-                            : new Phrase(commentaire, F_VALEUR));
-                    note.setBorderColor(GRIS_BORDURE);
-                    note.setBorderWidth(0.5f);
-                    note.setPadding(10);
-                    note.setMinimumHeight(60);
-                    PdfPTable boite = new PdfPTable(1);
-                    boite.setWidthPercentage(100);
-                    boite.addCell(note);
-                    doc.add(boite);
+                    Paragraph obsTexte = new Paragraph(
+                            commentaire == null || commentaire.isBlank() ? "" : commentaire,
+                            F_VALEUR);
+                    obsTexte.setSpacingBefore(2);
+                    obsTexte.setSpacingAfter(2);
+                    doc.add(obsTexte);
+
+                    PdfPTable signatures = new PdfPTable(4);
+                    signatures.setWidthPercentage(100);
+                    signatures.setSpacingBefore(10);
+                    signatures.setKeepTogether(true);
+                    for (String qui : new String[]{"Le Client", "Le Commercial",
+                            "Le Responsable du dossier", "Manager"}) {
+                        PdfPCell nom = new PdfPCell(new Phrase(qui, F_VALEUR_GRAS));
+                        nom.setBorder(Rectangle.NO_BORDER);
+                        nom.setPaddingBottom(2);
+                        signatures.addCell(nom);
+                    }
+                    for (int k = 0; k < 4; k++) {
+                        PdfPCell vide = new PdfPCell(new Phrase(" ", F_VALEUR));
+                        vide.setBorder(Rectangle.NO_BORDER);
+                        vide.setBorderWidthBottom(0.5f);
+                        vide.setBorderColorBottom(GRIS_BORDURE);
+                        vide.setFixedHeight(52);
+                        signatures.addCell(vide);
+                    }
+                    doc.add(signatures);
                 },
                 "Erreur de génération du récapitulatif de demande");
     }
@@ -897,6 +936,43 @@ public class PdfGenerator {
             c.setBackgroundColor(ZEBRA);
         }
         table.addCell(c);
+    }
+
+
+    /** Ligne « LIBELLÉ : valeur » de la fiche standard (façon fiche papier). */
+    private void ficheStdChamp(Document doc, String libelle, String valeur) {
+        Paragraph p = new Paragraph();
+        p.setSpacingBefore(3);
+        p.add(new Chunk(libelle + " : ", F_VALEUR_GRAS));
+        p.add(new Chunk(valeur == null || valeur.isEmpty() ? "" : valeur, F_VALEUR));
+        doc.add(p);
+    }
+
+    /** Cases [X]/[ ] cochées si le domaine contient le libellé (insensible à la casse). */
+    private Paragraph ficheStdCases(String domaine, String... libelles) {
+        String norme = domaine != null ? domaine.toLowerCase(Locale.FRANCE) : "";
+        Paragraph p = new Paragraph();
+        p.setSpacingBefore(3);
+        p.setLeading(F_VALEUR.getSize() * 1.6f);
+        for (int i = 0; i < libelles.length; i++) {
+            if (i > 0) {
+                p.add(new Chunk("      ", F_VALEUR));
+            }
+            boolean coche = !norme.isEmpty()
+                    && norme.contains(libelles[i].toLowerCase(Locale.FRANCE));
+            p.add(new Chunk(coche ? "[X]  " + libelles[i] : "[ ]  " + libelles[i], F_VALEUR));
+        }
+        return p;
+    }
+
+    /** Durée d'existence calculée depuis la date de création de la société. */
+    private String dureeExistence(Societe s) {
+        if (s == null || s.getDateCreation() == null) {
+            return "";
+        }
+        int ans = java.time.Period.between(s.getDateCreation(), LocalDate.now()).getYears();
+        return ans + (ans > 1 ? " ans" : " an")
+                + " (depuis le " + s.getDateCreation().format(DATE_FMT) + ")";
     }
 
 

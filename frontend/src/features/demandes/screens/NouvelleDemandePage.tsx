@@ -14,11 +14,13 @@ import { responsablesApi } from '@/features/responsables/services/responsables.s
 import { domainesApi, servicesApi } from '@/features/services/services/services.service'
 import { ClientFormModal } from '@/features/clients/components/ClientFormModal'
 import { ResponsableFormModal } from '@/features/responsables/components/ResponsableFormModal'
+import { ServiceFormModal } from '@/features/services/components/ServiceFormModal'
 import type { CreateLignePayload, ModeFacturation } from '../types'
 import { demandesApi } from '../services/demandes.service'
 
 const OPTION_CREATION = 'creation'
 const LABEL_CREATION = "Création d'entreprise (sans société)"
+const OPTION_SERVICE_AUTRE = 'autre'
 
 interface LigneSaisie {
   serviceId: number | ''
@@ -69,7 +71,7 @@ export function NouvelleDemandePage() {
     () => domainesApi.list({ page: 0, size: 100, recherche: null }, {}),
     [],
   )
-  const { data: pageServices } = useApi<ApiPage<Service>>(
+  const { data: pageServices, reload: reloadServices } = useApi<ApiPage<Service>>(
     () => servicesApi.list({ page: 0, size: 100, recherche: null }, { actif: true }),
     [],
   )
@@ -120,6 +122,16 @@ export function NouvelleDemandePage() {
 
   const [clientModalOpen, setClientModalOpen] = useState(false)
   const [responsableModalOpen, setResponsableModalOpen] = useState(false)
+  const [serviceModalLigne, setServiceModalLigne] = useState<number | null>(null)
+
+  const handleSaveService = async (payload: { nomService: string }) => {
+    const cree = await servicesApi.create({ nomService: payload.nomService, typeService: 'STANDARD' })
+    reloadServices()
+    if (serviceModalLigne !== null) {
+      setLigne(serviceModalLigne, { serviceId: cree.id })
+    }
+    setServiceModalLigne(null)
+  }
 
   const texteClientPropre = clientTexte.trim()
   const correspondanceClientExacte =
@@ -452,9 +464,15 @@ export function NouvelleDemandePage() {
                           Service <span className="required">*</span>
                           <select
                             value={l.serviceId}
-                            onChange={(e) => setLigne(i, {
-                              serviceId: e.target.value ? Number(e.target.value) : '',
-                            })}
+                            onChange={(e) => {
+                              if (e.target.value === OPTION_SERVICE_AUTRE) {
+                                setServiceModalLigne(i)
+                                return
+                              }
+                              setLigne(i, {
+                                serviceId: e.target.value ? Number(e.target.value) : '',
+                              })
+                            }}
                           >
                             <option value="">— Choisir —</option>
                             {(pageServices?.content ?? [])
@@ -464,6 +482,7 @@ export function NouvelleDemandePage() {
                                   {s.nomService}
                                 </option>
                               ))}
+                            <option value={OPTION_SERVICE_AUTRE}>Autre (créer un service)</option>
                           </select>
                         </label>
                         <label className="field">
@@ -555,6 +574,13 @@ export function NouvelleDemandePage() {
         }
         onClose={() => setResponsableModalOpen(false)}
         onSaved={() => void handleResponsableCree()}
+      />
+
+      <ServiceFormModal
+        open={serviceModalLigne !== null}
+        service={null}
+        onClose={() => setServiceModalLigne(null)}
+        onSave={(payload) => handleSaveService(payload as { nomService: string })}
       />
     </div>
   )

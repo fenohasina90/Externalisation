@@ -59,4 +59,26 @@ class FicheCreationPdfTest {
         assertTrue(pdf.length > 1000);
         assertEquals("%PDF", new String(pdf, 0, 4, StandardCharsets.US_ASCII));
     }
+
+    @Test
+    void pdfRecapitulatifStandardGenere() {
+        com.cabex.backend.client.entity.Societe societe =
+                com.cabex.backend.client.entity.Societe.builder().id(1)
+                        .nomSociete("Atlas Conseil").build();
+        DemandeService demande = DemandeService.builder().id(17)
+                .referenceDemande("DEM-2026-00017")
+                .dateDemande(LocalDate.of(2026, 10, 18)).societe(societe).build();
+        LigneService ligne = LigneService.builder().id(1).demande(demande)
+                .service(Service.builder().id(1).nomService("Audit comptable").build())
+                .tarif(new BigDecimal("2000000"))
+                .debutService(LocalDate.of(2026, 10, 18))
+                .finService(LocalDate.of(2026, 12, 16)).build();
+        demande.setLignes(Set.of(ligne));
+
+        byte[] pdf = new PdfGenerator(configurationService).recapitulatifDemande(demande);
+
+        assertNotNull(pdf);
+        assertTrue(pdf.length > 1000);
+        assertEquals("%PDF", new String(pdf, 0, 4, StandardCharsets.US_ASCII));
+    }
 }

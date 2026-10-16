@@ -15,6 +15,7 @@ import type { PlanPaiement } from '@/features/plan-paiement/types'
 import { planPaiementApi } from '@/features/plan-paiement/services/plan-paiement.service'
 import type { Echeance } from '@/features/echeances/types'
 import { echeancesApi } from '@/features/echeances/services/echeances.service'
+import { ServiceFormModal } from '@/features/services/components/ServiceFormModal'
 import { ChangerStatutModal, DemandeStepper, DossierEntrepriseDetail,
   DossierEntrepriseFormModal, StatutDemandePill } from '../components'
 import { DOSSIER_VIDE, type DossierEntreprise } from '../data/mockDossierEntreprise'
@@ -830,8 +831,9 @@ function LigneFormModal({
   const [fin, setFin] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
   const [enregistrement, setEnregistrement] = useState(false)
+  const [serviceModalOpen, setServiceModalOpen] = useState(false)
   const aujourdhui = new Date().toISOString().slice(0, 10)
-  const { data: pageServices } = useApi(
+  const { data: pageServices, reload: reloadServices } = useApi(
     () => servicesApi.list({ page: 0, size: 100, recherche: null }, { actif: true }),
     [open],
   )
@@ -851,6 +853,13 @@ function LigneFormModal({
   }
 
   if (!open) return null
+
+  const handleSaveService = async (payload: { nomService: string }) => {
+    const cree = await servicesApi.create({ nomService: payload.nomService, typeService: 'STANDARD' })
+    reloadServices()
+    setServiceId(cree.id)
+    setServiceModalOpen(false)
+  }
 
   const handleSubmit = async () => {
     if (serviceId === '' && !ligne) {
@@ -931,7 +940,13 @@ function LigneFormModal({
                 Service <span className="required">*</span>
                 <select
                   value={serviceId}
-                  onChange={(e) => setServiceId(e.target.value ? Number(e.target.value) : '')}
+                  onChange={(e) => {
+                    if (e.target.value === 'autre') {
+                      setServiceModalOpen(true)
+                      return
+                    }
+                    setServiceId(e.target.value ? Number(e.target.value) : '')
+                  }}
                 >
                   <option value="">— Choisir —</option>
                   {(pageServices?.content ?? [])
@@ -941,6 +956,7 @@ function LigneFormModal({
                         {s.nomService}
                       </option>
                     ))}
+                  <option value="autre">Autre (créer un service)</option>
                 </select>
               </label>
             )}
@@ -973,6 +989,12 @@ function LigneFormModal({
           </footer>
         </div>
       </div>
+      <ServiceFormModal
+        open={serviceModalOpen}
+        service={null}
+        onClose={() => setServiceModalOpen(false)}
+        onSave={(payload) => handleSaveService(payload as { nomService: string })}
+      />
     </div>
   )
 }
