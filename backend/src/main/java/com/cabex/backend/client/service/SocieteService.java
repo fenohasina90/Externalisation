@@ -125,7 +125,11 @@ public class SocieteService {
                 .toList();
 
         List<ServiceUtiliseResponse> services = demandes.stream()
-                .collect(java.util.stream.Collectors.groupingBy(d -> d.getService().getId()))
+                .flatMap(d -> d.getLignes() != null
+                        ? d.getLignes().stream()
+                        : java.util.stream.Stream.empty())
+                .filter(l -> l.getService() != null)
+                .collect(java.util.stream.Collectors.groupingBy(l -> l.getService().getId()))
                 .values().stream()
                 .map(list -> new ServiceUtiliseResponse(
                         list.get(0).getService().getId(),
@@ -219,7 +223,10 @@ public class SocieteService {
                                                  List<EcheanceFicheResponse> echeances,
                                                  Integer societeId) {
         BigDecimal montantTotal = demandes.stream()
-                .map(d -> d.getTarif() == null ? BigDecimal.ZERO : d.getTarif())
+                .flatMap(d -> d.getLignes() != null
+                        ? d.getLignes().stream()
+                        : java.util.stream.Stream.empty())
+                .map(l -> l.getTarif() == null ? BigDecimal.ZERO : l.getTarif())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal montantPaye = paiements.stream()
                 .map(PaiementFicheResponse::montantPaye)
@@ -289,15 +296,26 @@ public class SocieteService {
 
     private DemandeFicheResponse toDemandeFiche(DemandeService d) {
         BigDecimal montantPaye = paiementRepository.sommePayeeParDemande(d.getId());
-        BigDecimal reste = d.getTarif().subtract(montantPaye);
+        java.util.List<com.cabex.backend.demande.entity.LigneService> lignes =
+                d.getLignes() != null ? new java.util.ArrayList<>(d.getLignes()) : java.util.List.of();
+        BigDecimal total = lignes.stream()
+                .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal reste = total.subtract(montantPaye != null ? montantPaye : BigDecimal.ZERO);
         String statut = deriverStatut(d.getId());
         return new DemandeFicheResponse(
                 d.getId(),
                 d.getReferenceDemande(),
                 d.getDateDemande(),
-                d.getDebutService(),
-                d.getFinService(),
-                d.getService() != null ? d.getService().getNomService() : null,
+                lignes.stream().map(com.cabex.backend.demande.entity.LigneService::getDebutService)
+                        .filter(java.util.Objects::nonNull)
+                        .min(java.time.LocalDate::compareTo).orElse(null),
+                lignes.stream().map(com.cabex.backend.demande.entity.LigneService::getFinService)
+                        .filter(java.util.Objects::nonNull)
+                        .max(java.time.LocalDate::compareTo).orElse(null),
+                lignes.stream().map(l -> l.getService() != null ? l.getService().getNomService() : null)
+                        .filter(java.util.Objects::nonNull).distinct()
+                        .collect(java.util.stream.Collectors.joining(", ")),
                 statut,
                 montantPaye,
                 reste,
