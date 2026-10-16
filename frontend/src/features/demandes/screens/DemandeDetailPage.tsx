@@ -130,8 +130,24 @@ export function DemandeDetailPage() {
     }
   }
 
-  const telechargerProforma = async (facture: Facture) => {
+  const telechargerRecapitulatif = async () => {
     setErreur(null)
+    try {
+      const { data } = await http.get<Blob>(`/demandes/${demande.id}/documents/recapitulatif`, {
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `recapitulatif-${demande.referenceDemande}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setErreur('Téléchargement du récapitulatif impossible')
+    }
+  }
+
+  const telechargerProforma = async (facture: Facture) => {    setErreur(null)
     try {
       const { data } = await http.get<Blob>(`/factures/${facture.id}/document/proforma`, {
         responseType: 'blob',
@@ -171,6 +187,9 @@ export function DemandeDetailPage() {
           <Link to="/demandes" className="btn-ghost">
             Retour
           </Link>
+          <button type="button" className="btn-ghost" onClick={() => void telechargerRecapitulatif()}>
+            Récapitulatif PDF
+          </button>
           {modifiable && (
             <Can permission="DEMANDE_UPDATE">
               <button type="button" className="btn-ghost" onClick={() => setEditOpen(true)}>

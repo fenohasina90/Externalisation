@@ -51,6 +51,7 @@ public class DocumentGestionService {
     private final AuditService auditService;
     private final ConfigurationService configurationService;
     private final com.cabex.backend.facture.repository.FactureRepository factureRepository;
+    private final com.cabex.backend.dossier.repository.DossierCreationRepository dossierRepository;
 
     @Value("${app.document.storage-path}")
     private String storagePath;
@@ -66,7 +67,8 @@ public class DocumentGestionService {
                                   PdfGenerator pdfGenerator,
                                   AuditService auditService,
                                   ConfigurationService configurationService,
-                                  com.cabex.backend.facture.repository.FactureRepository factureRepository) {
+                                  com.cabex.backend.facture.repository.FactureRepository factureRepository,
+                                  com.cabex.backend.dossier.repository.DossierCreationRepository dossierRepository) {
         this.pieceRepository = pieceRepository;
         this.demandeRepository = demandeRepository;
         this.paiementRepository = paiementRepository;
@@ -76,6 +78,7 @@ public class DocumentGestionService {
         this.auditService = auditService;
         this.configurationService = configurationService;
         this.factureRepository = factureRepository;
+        this.dossierRepository = dossierRepository;
     }
 
     /**
@@ -170,7 +173,10 @@ public class DocumentGestionService {
         DemandeService demande = demandeRepository.findById(demandeId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Demande", demandeId)));
-        return pdfGenerator.recapitulatifDemande(demande);
+        // Demande de création avec dossier saisi : fiche de création au format papier.
+        return dossierRepository.findByDemandeId(demandeId)
+                .map(dossier -> pdfGenerator.ficheCreation(demande, dossier))
+                .orElseGet(() -> pdfGenerator.recapitulatifDemande(demande));
     }
 
     public byte[] recuPaiement(Integer paiementId) {
@@ -199,9 +205,14 @@ public class DocumentGestionService {
     public DocumentResponse sauvegarderRecapitulatif(Integer demandeId) {
         verifierDemande(demandeId);
         DemandeService demande = demandeRepository.findById(demandeId).orElseThrow();
-        byte[] contenu = pdfGenerator.recapitulatifDemande(demande);
-        return enregistrerFichier(demande, "recapitulatif-demande-" + demande.getReferenceDemande() + ".pdf",
-                "Récapitulatif de demande généré automatiquement", contenu);
+        boolean fiche = dossierRepository.findByDemandeId(demandeId).isPresent();
+        byte[] contenu = recapitulatifDemande(demandeId);
+        return enregistrerFichier(demande,
+                (fiche ? "fiche-creation-" : "recapitulatif-demande-")
+                        + demande.getReferenceDemande() + ".pdf",
+                (fiche ? "Fiche de création générée automatiquement"
+                        : "Récapitulatif de demande généré automatiquement"),
+                contenu);
     }
 
     @Transactional

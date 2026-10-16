@@ -19,7 +19,7 @@ import { demandesApi } from '../services/demandes.service'
 export function DemandesPage() {
   // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
   const PAGE_SIZE = useTaillePagination()
-  const [showFilters, setShowFilters] = useState(false)
+  const [showFilters, setShowFilters] = useState(true)
   const { items, total, totalPages, page, setPage, filtres, setFiltre, resetFiltres,
     hasActiveFiltres, loading, error } = useDemandesList(PAGE_SIZE)
 

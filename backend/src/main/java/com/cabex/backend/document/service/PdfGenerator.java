@@ -619,6 +619,286 @@ public class PdfGenerator {
         return out.toByteArray();
     }
 
+    private byte[] genererFiche(String titreMeta, Contenu contenu, String messageErreur) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        Document ficheDoc = new Document(PageSize.A4, MARGE_FACTURE, MARGE_FACTURE, 26, 40);
+        try {
+            PdfWriter writer = PdfWriter.getInstance(ficheDoc, out);
+            writer.setPageEvent(new Decor(false, "Fiche de création", false, true));
+            ficheDoc.addTitle(titreMeta);
+            ficheDoc.addAuthor(NOM_CABINET);
+            ficheDoc.addCreator(NOM_CABINET);
+            ficheDoc.open();
+            contenu.ecrire(ficheDoc);
+            ficheDoc.close();
+        } catch (Exception e) {
+            throw new IllegalStateException(messageErreur, e);
+        }
+        return out.toByteArray();
+    }
+
+
+    // ==================================================================
+    //  FICHE DE CRÉATION D'ENTREPRISE OU DE SOCIÉTÉ
+    //  (reprend la fiche papier, design aligné sur la facture proforma)
+    // ==================================================================
+
+    public byte[] ficheCreation(DemandeService d,
+                               com.cabex.backend.dossier.entity.DossierCreation dossier) {
+        return genererFiche("Fiche de création " + valeur(d.getReferenceDemande()),
+                doc -> construireFiche(doc, d, dossier, new StyleFacture(1f)),
+                "Erreur de génération de la fiche de création");
+    }
+
+    private void construireFiche(Document doc, DemandeService d,
+                                 com.cabex.backend.dossier.entity.DossierCreation dossier,
+                                 StyleFacture st) {
+        // ---- En-tête : logo + identité + titre ----
+        PdfPTable t = new PdfPTable(3);
+        t.setWidthPercentage(100);
+        t.setWidths(new float[]{1.1f, 3.4f, 3f});
+        t.addCell(celluleLogo(st.logo));
+        PdfPCell identite = new PdfPCell();
+        identite.setBorder(Rectangle.NO_BORDER);
+        identite.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        identite.setPaddingLeft(6);
+        identite.addElement(new Paragraph(marque(18f * st.tailleMeta / 11f)));
+        Paragraph act = new Paragraph(ACTIVITE.toUpperCase(Locale.FRANCE), st.mention);
+        act.setSpacingBefore(2);
+        identite.addElement(act);
+        t.addCell(identite);
+        PdfPCell titre = new PdfPCell();
+        titre.setBorder(Rectangle.NO_BORDER);
+        titre.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        Paragraph pt = new Paragraph("FICHE DE CRÉATION", st.titre);
+        pt.setAlignment(Element.ALIGN_RIGHT);
+        titre.addElement(pt);
+        Paragraph sous = new Paragraph("ENTREPRISE OU SOCIÉTÉ", st.sousTitre);
+        sous.setAlignment(Element.ALIGN_RIGHT);
+        titre.addElement(sous);
+        t.addCell(titre);
+        doc.add(t);
+        doc.add(filet(3, st.ecart * 0.7f));
+
+        // ---- Bandeau références ----
+        PdfPTable meta = new PdfPTable(3);
+        meta.setWidthPercentage(100);
+        meta.setSpacingAfter(st.ecart * 0.8f);
+        meta.addCell(faMeta(st, "DEMANDE", valeur(d.getReferenceDemande()), ROUGE));
+        meta.addCell(faMeta(st, "DATE", valeurDate(d.getDateDemande()), PRIMAIRE));
+        String commercial = "-";
+        if (d.getCommercial() != null) {
+            commercial = d.getCommercial().getNomCommercial()
+                    + " — N° IM : " + valeur(d.getCommercial().getImmatricule());
+        }
+        meta.addCell(faMeta(st, "COMMERCIAL", commercial, PRIMAIRE));
+        doc.add(meta);
+
+        String forme = code(dossier.getFormeJuridique());
+
+        // ---- 1. Forme juridique ----
+        PdfPCell b1 = faBoite(st);
+        b1.addElement(new Paragraph("1. FORME JURIDIQUE", st.carteTitre));
+        b1.addElement(ficheCases(st, new String[][]{
+                {"INDIVIDUELLE", "Individuelle"},
+                {"SARL", "SARL"},
+                {"SARLU", "SARLU"},
+                {"SA", "SA"},
+                {"AUTRE", "Autre à préciser : " + valeurTexte(dossier.getFormeJuridiquePrecision())}
+        }, forme));
+        b1.addElement(ficheLigne(st, "Dénomination", valeurTexte(dossier.getDenomination())));
+        b1.addElement(ficheLigne(st, "Siège social actuel",
+                valeurTexte(dossier.getSiegeSocialActuel())));
+        doc.add(boiteFiche(b1));
+
+        // ---- 2. Associés (si société) ----
+        PdfPCell b2 = faBoite(st);
+        b2.addElement(new Paragraph("2. SI SOCIÉTÉ", st.carteTitre));
+        b2.addElement(ficheLigne(st, "Capital social",
+                formatMontant(dossier.getCapitalSocial()) + " Ariary"));
+        b2.addElement(ficheLigne(st, "Nombre d'associés",
+                valeurNombre(dossier.getNombreAssociesDeclare())));
+        if (dossier.getAssocies() != null && !dossier.getAssocies().isEmpty()) {
+            PdfPTable associes = new PdfPTable(4);
+            associes.setWidthPercentage(100);
+            associes.setSpacingBefore(4);
+            ficheMiniTh(associes, st, "NOM DES ASSOCIÉS");
+            ficheMiniTh(associes, st, "PART SOCIALE");
+            ficheMiniTh(associes, st, "ADRESSE MAIL");
+            ficheMiniTh(associes, st, "CONTACT");
+            boolean zebra = false;
+            for (com.cabex.backend.dossier.entity.DossierAssocie a : dossier.getAssocies()) {
+                ficheMiniTd(associes, st, valeurTexte(a.getNom()), zebra);
+                ficheMiniTd(associes, st, valeurTexte(a.getPartSociale()), zebra);
+                ficheMiniTd(associes, st, valeurTexte(a.getEmail()), zebra);
+                ficheMiniTd(associes, st, valeurTexte(a.getContact()), zebra);
+                zebra = !zebra;
+            }
+            b2.addElement(associes);
+        }
+        b2.addElement(ficheLigne(st, "Nom du gérant", valeurTexte(dossier.getNomGerant())));
+        b2.addElement(ficheLigne(st, "Fonction", valeurTexte(dossier.getFonctionGerant())));
+        b2.addElement(ficheLigne(st, "",
+                ficheCase(st, Boolean.TRUE.equals(dossier.getLocationGerance()))
+                        + "  Location de gérance"));
+        doc.add(boiteFiche(b2));
+
+        // ---- 3. Secteur d'activité ----
+        PdfPCell b3 = faBoite(st);
+        b3.addElement(new Paragraph("3. SECTEUR D'ACTIVITÉ", st.carteTitre));
+        b3.addElement(ficheLigne(st, "Secteur", valeurTexte(dossier.getSecteurActivite())));
+        b3.addElement(ficheLigne(st, "Autorisation spéciale",
+                valeurTexte(dossier.getAutorisationSpeciale())));
+        doc.add(boiteFiche(b3));
+
+        // ---- 4. Adresse du siège ----
+        PdfPCell b4 = faBoite(st);
+        b4.addElement(new Paragraph("4. ADRESSE DU SIÈGE ET DE L'ÉTABLISSEMENT", st.carteTitre));
+        b4.addElement(ficheLigne(st, "Adresse", valeurTexte(dossier.getAdresseSiege())));
+        b4.addElement(ficheLigne(st, "Ville", valeurTexte(dossier.getVille())));
+        b4.addElement(ficheLigne(st, "Commune", valeurTexte(dossier.getCommune())));
+        b4.addElement(ficheLigne(st, "District", valeurTexte(dossier.getDistrict())));
+        b4.addElement(ficheLigne(st, "Région", valeurTexte(dossier.getRegion())));
+        String hebergement = code(dossier.getTypeHebergement());
+        b4.addElement(ficheLigne(st, "",
+                ficheCase(st, estValeur(hebergement, "DOMICILE_GERANT"))
+                        + "  Au domicile du gérant ou du propriétaire"
+                        + "      " + ficheCase(st, estValeur(hebergement, "LOCATION_CABINET"))
+                        + "  Location de siège au Cabinet Nakay"));
+        b4.addElement(ficheLigne(st, "Autres", estValeur(hebergement, "AUTRE")
+                ? valeurTexte(dossier.getHebergementPrecision()) : ""));
+        b4.addElement(ficheLigne(st, "",
+                ficheCase(st, dossier.getContratBail() != null)
+                        + "  Possédez-vous un contrat de bail ?"
+                        + (dossier.getContratBail() != null
+                        ? (Boolean.TRUE.equals(dossier.getContratBail()) ? "  Oui" : "  Non") : "")
+                        + (dossier.getContratBailDetail() != null
+                        && !dossier.getContratBailDetail().isBlank()
+                        ? " — " + dossier.getContratBailDetail() : "")));
+        doc.add(boiteFiche(b4));
+
+        // ---- 5. Objet social ----
+        PdfPCell b5 = faBoite(st);
+        b5.addElement(new Paragraph("5. PRINCIPALES ACTIVITÉS DE L'OBJET SOCIAL", st.carteTitre));
+        b5.addElement(ficheLigne(st, "", valeurTexte(dossier.getObjetSocial())));
+        b5.addElement(new Paragraph("DATE SOUHAITÉE POUR LE DÉBUT DE L'ACTIVITÉ", st.carteTitre));
+        b5.addElement(ficheLigne(st, "Date", valeurDate(dossier.getDateSouhaiteeDebut())));
+        String regime = code(dossier.getRegimeActivite());
+        b5.addElement(ficheLigne(st, "",
+                "Permanente " + ficheCase(st, estValeur(regime, "PERMANENTE"))
+                        + "      Saisonnière " + ficheCase(st, estValeur(regime, "SAISONNIERE"))
+                        + "      Ambulant " + ficheCase(st, estValeur(regime, "AMBULANT"))));
+        b5.addElement(ficheLigne(st, "Activités exercées dans l'établissement ou succursale ou filiale",
+                valeurTexte(dossier.getActivitesEtablissement())));
+        doc.add(boiteFiche(b5));
+
+        // ---- 6. Situation ----
+        PdfPCell b6 = faBoite(st);
+        b6.addElement(new Paragraph("6. OBSERVATIONS", st.carteTitre));
+        b6.addElement(ficheLigne(st, "", valeurTexte(dossier.getObservations())));
+        b6.addElement(ficheLigne(st, "Assujettissement à la TVA",
+                valeurTexte(dossier.getAssujettissementTva())));
+        b6.addElement(ficheLigne(st, "Avez-vous d'autre société ?",
+                valeurTexte(dossier.getAutreSociete())));
+        b6.addElement(ficheLigne(st, "Situation matrimoniale",
+                valeurTexte(dossier.getSituationMatrimoniale())));
+        b6.addElement(ficheLigne(st, "Régime d'imposition",
+                valeurTexte(dossier.getRegimeImposition())));
+        doc.add(boiteFiche(b6));
+
+        // ---- Signatures ----
+        PdfPTable signatures = new PdfPTable(4);
+        signatures.setWidthPercentage(100);
+        signatures.setSpacingBefore(st.ecart);
+        signatures.setKeepTogether(true);
+        signatures.addCell(faSignature(st, "Le Client", null));
+        signatures.addCell(faSignature(st, "Le Commercial", null));
+        signatures.addCell(faSignature(st, "Le Responsable du dossier", null));
+        signatures.addCell(faSignature(st, "Manager", null));
+        for (int k = 0; k < 4; k++) {
+            PdfPCell vide = new PdfPCell(new Phrase(" ", st.petit));
+            vide.setBorderColor(GRIS_BORDURE);
+            vide.setBorderWidth(0.5f);
+            vide.setFixedHeight(st.hSignature);
+            signatures.addCell(vide);
+        }
+        doc.add(signatures);
+    }
+
+    /** Enveloppe une carte dans un tableau mono-colonne (seul moyen de dessiner une cellule). */
+    private PdfPTable boiteFiche(PdfPCell carte) {
+        PdfPTable enveloppe = new PdfPTable(1);
+        enveloppe.setWidthPercentage(100);
+        enveloppe.setSpacingBefore(7);
+        enveloppe.addCell(carte);
+        return enveloppe;
+    }
+
+    /** Case cochée (✓) ou vide (○) façon fiche papier, design proforma. */
+    private String ficheCase(StyleFacture st, boolean coche) {
+        return coche ? "[X]" : "[ ]";
+    }
+
+    private Paragraph ficheLigne(StyleFacture st, String libelle, String valeur) {
+        Paragraph p = new Paragraph();
+        p.setLeading(st.petit.getSize() * 1.45f);
+        p.setSpacingBefore(1.5f);
+        if (libelle != null && !libelle.isEmpty()) {
+            p.add(new Chunk(libelle + " : ", st.petitGras));
+        }
+        p.add(new Chunk(valeur == null || valeur.isEmpty() ? "—" : valeur, st.petit));
+        return p;
+    }
+
+    private Paragraph ficheCases(StyleFacture st, String[][] options, String selection) {
+        Paragraph p = new Paragraph();
+        p.setLeading(st.petit.getSize() * 1.6f);
+        p.setSpacingBefore(2);
+        for (int i = 0; i < options.length; i++) {
+            if (i > 0) {
+                p.add(new Chunk("      ", st.petit));
+            }
+            p.add(new Chunk(ficheCase(st, estValeur(selection, options[i][0])) + "  "
+                    + options[i][1], st.petit));
+        }
+        return p;
+    }
+
+    private boolean estValeur(String selection, String code) {
+        return selection != null && selection.equals(code);
+    }
+
+    private String code(String valeur) {
+        return valeur != null ? valeur.trim().toUpperCase(Locale.FRANCE) : "";
+    }
+
+    private String valeurNombre(Integer n) {
+        return n != null ? n.toString() : "";
+    }
+
+    private String valeurNombre(BigDecimal montant) {
+        return montant != null ? formatMontant(montant) : "";
+    }
+
+    private void ficheMiniTh(PdfPTable table, StyleFacture st, String texte) {
+        PdfPCell c = new PdfPCell(new Phrase(texte, st.th));
+        c.setBackgroundColor(PRIMAIRE);
+        c.setPadding(4);
+        table.addCell(c);
+    }
+
+    private void ficheMiniTd(PdfPTable table, StyleFacture st, String texte, boolean zebra) {
+        PdfPCell c = new PdfPCell(new Phrase(texte.isEmpty() ? "—" : texte, st.petit));
+        c.setPadding(4);
+        c.setBorder(Rectangle.BOTTOM);
+        c.setBorderColor(GRIS_BORDURE);
+        c.setBorderWidth(0.5f);
+        if (zebra) {
+            c.setBackgroundColor(ZEBRA);
+        }
+        table.addCell(c);
+    }
+
 
     // ==================================================================
     //  SOCLE : création du document, en-tête / pied de page
@@ -668,14 +948,21 @@ public class PdfGenerator {
         private final String libelleDocument;
         /** Mode facture : pied ancré en bas (groupe, contacts, mentions légales), sans pagination. */
         private final boolean pied;
+        /** Mode discret (fiche de création) : aucun pied de page dessiné. */
+        private final boolean discret;
         private PdfTemplate total;
         private BaseFont bf;
         private Image logo;
 
         Decor(boolean avecEntete, String libelleDocument, boolean pied) {
+            this(avecEntete, libelleDocument, pied, false);
+        }
+
+        Decor(boolean avecEntete, String libelleDocument, boolean pied, boolean discret) {
             this.avecEntete = avecEntete;
             this.libelleDocument = libelleDocument;
             this.pied = pied;
+            this.discret = discret;
         }
 
         @Override
@@ -689,6 +976,9 @@ public class PdfGenerator {
 
         @Override
         public void onEndPage(PdfWriter writer, Document document) {
+            if (discret) {
+                return;
+            }
             PdfContentByte cb = writer.getDirectContent();
             Rectangle page = document.getPageSize();
             float gauche = document.leftMargin();
