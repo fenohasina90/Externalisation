@@ -22,7 +22,8 @@ public interface ClientResponsableRepository extends JpaRepository<ClientRespons
 
     @Query("""
             SELECT r FROM ClientResponsable r
-            WHERE (:societeId IS NULL OR r.societe.id = :societeId)
+            LEFT JOIN r.societe s
+            WHERE (:societeId IS NULL OR s.id = :societeId)
               AND (:actif IS NULL OR r.actif = :actif)
               AND (:recherche IS NULL OR :recherche = ''
                    OR LOWER(r.nomClient) LIKE LOWER(CONCAT('%', :recherche, '%'))

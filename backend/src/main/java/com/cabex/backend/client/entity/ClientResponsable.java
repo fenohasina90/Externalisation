@@ -21,7 +21,7 @@ public class ClientResponsable {
     private Integer id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "societe_id", nullable = false)
+    @JoinColumn(name = "societe_id")
     private Societe societe;
 
     @Column(name = "nom_client", nullable = false, length = 150)

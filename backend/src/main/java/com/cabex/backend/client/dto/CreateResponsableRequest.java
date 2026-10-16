@@ -2,11 +2,10 @@ package com.cabex.backend.client.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record CreateResponsableRequest(
-        @NotNull(message = "La société est obligatoire")
+        // NULL autorisé : responsable libre (contexte création d'entreprise).
         Integer societeId,
 
         @NotBlank(message = "Le nom du responsable est obligatoire")

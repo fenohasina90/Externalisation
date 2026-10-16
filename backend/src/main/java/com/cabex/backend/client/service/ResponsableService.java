@@ -55,9 +55,12 @@ public class ResponsableService {
 
     @Transactional
     public ResponsableResponse create(CreateResponsableRequest request) {
-        Societe societe = societeRepository.findById(request.societeId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        ErrorMessages.introuvable("Société", request.societeId())));
+        Societe societe = null;
+        if (request.societeId() != null) {
+            societe = societeRepository.findById(request.societeId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            ErrorMessages.introuvable("Société", request.societeId())));
+        }
         ClientResponsable responsable = ClientResponsable.builder()
                 .societe(societe)
                 .nomClient(request.nomClient().trim())
