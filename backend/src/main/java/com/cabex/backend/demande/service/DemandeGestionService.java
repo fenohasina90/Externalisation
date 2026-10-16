@@ -10,20 +10,25 @@ import com.cabex.backend.commercial.entity.Commercial;
 import com.cabex.backend.commercial.repository.CommercialRepository;
 import com.cabex.backend.demande.dto.ChangeStatutRequest;
 import com.cabex.backend.demande.dto.CreateDemandeRequest;
+import com.cabex.backend.demande.dto.CreateLigneRequest;
 import com.cabex.backend.demande.dto.DemandeResponse;
 import com.cabex.backend.demande.dto.HistoriqueDemandeResponse;
 import com.cabex.backend.demande.dto.StatutResponse;
 import com.cabex.backend.demande.dto.UpdateDemandeRequest;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.HistoriqueDemande;
+import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.entity.StatutDemande;
 import com.cabex.backend.demande.mapper.DemandeMapper;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
+import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.repository.StatutDemandeRepository;
+import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
+import com.cabex.backend.facture.service.FactureService;
 import com.cabex.backend.notification.service.NotificationService;
 import com.cabex.backend.paiement.repository.PaiementRepository;
 import com.cabex.backend.security.SecurityUtils;
@@ -61,6 +66,10 @@ public class DemandeGestionService {
     private final UtilisateurRepository utilisateurRepository;
     private final NotificationService notificationService;
     private final AuditService auditService;
+    private final LigneServiceService ligneServiceService;
+    private final FactureService factureService;
+    private final LigneServiceRepository ligneRepository;
+    private final ProposPaiementRepository proposRepository;
 
     public DemandeGestionService(DemandeServiceRepository demandeRepository,
                                  SocieteRepository societeRepository,
@@ -72,7 +81,11 @@ public class DemandeGestionService {
                                  PaiementRepository paiementRepository,
                                  UtilisateurRepository utilisateurRepository,
                                  NotificationService notificationService,
-                                 AuditService auditService) {
+                                 AuditService auditService,
+                                 LigneServiceService ligneServiceService,
+                                 FactureService factureService,
+                                 LigneServiceRepository ligneRepository,
+                                 ProposPaiementRepository proposRepository) {
         this.demandeRepository = demandeRepository;
         this.societeRepository = societeRepository;
         this.responsableRepository = responsableRepository;
@@ -84,6 +97,10 @@ public class DemandeGestionService {
         this.utilisateurRepository = utilisateurRepository;
         this.notificationService = notificationService;
         this.auditService = auditService;
+        this.ligneServiceService = ligneServiceService;
+        this.factureService = factureService;
+        this.ligneRepository = ligneRepository;
+        this.proposRepository = proposRepository;
     }
 
     @Transactional(readOnly = true)
@@ -99,6 +116,13 @@ public class DemandeGestionService {
     @Transactional(readOnly = true)
     public DemandeResponse getById(Integer id) {
         return toResponse(getEntity(id));
+    }
+
+    @Transactional(readOnly = true)
+    public DemandeResponse getByReference(String reference) {
+        return toResponse(demandeRepository.findByReferenceDemande(reference)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Demande", reference))));
     }
 
     @Transactional(readOnly = true)
@@ -118,22 +142,11 @@ public class DemandeGestionService {
 
     @Transactional
     public DemandeResponse create(CreateDemandeRequest request) {
-        Service service = serviceRepository.findById(request.serviceId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        ErrorMessages.introuvable("Service", request.serviceId())));
-        if (!Boolean.TRUE.equals(service.getActif())) {
-            throw new BusinessException(ErrorMessages.SERVICE_INDISPONIBLE);
-        }
-        boolean creationEntreprise =
-                com.cabex.backend.dossier.DossierRegles.estTypeCreation(service.getTypeService());
-
         Societe societe = null;
         if (request.societeId() != null) {
             societe = societeRepository.findById(request.societeId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             ErrorMessages.introuvable("Société", request.societeId())));
-        } else if (!creationEntreprise) {
-            throw new BusinessException(ErrorMessages.DEMANDE_SOCIETE_REQUISE);
         }
 
         Commercial commercial = null;
@@ -145,25 +158,57 @@ public class DemandeGestionService {
 
         ClientResponsable responsable = validateResponsable(request.clientResponsableId(), societe);
 
-        validateDates(request.debutService(), request.finService());
-        if (request.tarif().signum() < 0) {
-            throw new BusinessException(ErrorMessages.TARIF_POSITIF);
+        List<CreateLigneRequest> lignesDemandees = request.lignes() != null
+                ? request.lignes().stream().filter(java.util.Objects::nonNull).toList()
+                : List.of();
+        if (lignesDemandees.isEmpty()) {
+            if (request.serviceId() == null || request.tarif() == null
+                    || request.debutService() == null || request.finService() == null) {
+                throw new BusinessException(ErrorMessages.DONNEES_OBLIGATOIRES);
+            }
+            lignesDemandees = List.of(new CreateLigneRequest(
+                    request.serviceId(), request.tarif(),
+                    request.debutService(), request.finService()));
         }
 
-        BigDecimal tarif = request.tarif();
+        long nbCreation = lignesDemandees.stream()
+                .map(l -> serviceRepository.findById(l.serviceId())
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                ErrorMessages.introuvable("Service", l.serviceId()))))
+                .filter(s -> {
+                    if (!Boolean.TRUE.equals(s.getActif())) {
+                        throw new BusinessException(ErrorMessages.SERVICE_INDISPONIBLE);
+                    }
+                    return com.cabex.backend.dossier.DossierRegles
+                            .estTypeCreation(s.getTypeService());
+                })
+                .count();
+        if (nbCreation > 0 && lignesDemandees.size() > 1) {
+            throw new BusinessException(
+                    "Un service de création d'entreprise ne peut pas être combiné avec d'autres services");
+        }
+        if (societe == null && nbCreation == 0) {
+            throw new BusinessException(ErrorMessages.DEMANDE_SOCIETE_REQUISE);
+        }
+        for (CreateLigneRequest ligne : lignesDemandees) {
+            validateDates(ligne.debutService(), ligne.finService());
+            if (ligne.tarif().signum() < 0) {
+                throw new BusinessException(ErrorMessages.TARIF_POSITIF);
+            }
+        }
+        long distincts = lignesDemandees.stream().map(CreateLigneRequest::serviceId).distinct().count();
+        if (distincts < lignesDemandees.size()) {
+            throw new BusinessException("Un service ne peut pas être sélectionné deux fois dans une demande");
+        }
 
         DemandeService demande = DemandeService.builder()
                 .referenceDemande(genererReference(LocalDate.now().getYear()))
                 .dateDemande(request.dateDemande() != null
                         ? request.dateDemande()
                         : LocalDate.now())
-                .debutService(request.debutService())
-                .finService(request.finService())
                 .societe(societe)
                 .commercial(commercial)
                 .clientResponsable(responsable)
-                .service(service)
-                .tarif(tarif)
                 .commentaire(request.commentaire())
                 .createdBy(currentUtilisateur())
                 .actif(true)
@@ -172,6 +217,25 @@ public class DemandeGestionService {
 
         enviereHistorique(demande, STATUT_EN_ATTENTE,
                 "Demande créée" + (request.commentaire() != null ? " : " + request.commentaire() : null));
+
+        for (CreateLigneRequest ligne : lignesDemandees) {
+            Service service = serviceRepository.findById(ligne.serviceId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            ErrorMessages.introuvable("Service", ligne.serviceId())));
+            LigneService creee = LigneService.builder()
+                    .demande(demande)
+                    .service(service)
+                    .tarif(ligne.tarif())
+                    .debutService(ligne.debutService())
+                    .finService(ligne.finService())
+                    .build();
+            creee = ligneRepository.save(creee);
+            ligneServiceService.ajouterHistoriqueCreation(creee,
+                    "Service ajouté à la création : " + service.getNomService());
+        }
+
+        factureService.genererPourDemande(demande.getId(),
+                request.modeFacturation() != null ? request.modeFacturation() : "PAR_SERVICE");
 
         notificationService.notifierNouvelleDemande(demande);
 
@@ -185,14 +249,11 @@ public class DemandeGestionService {
     public DemandeResponse update(Integer id, UpdateDemandeRequest request) {
         DemandeService demande = getEntity(id);
         String statutActuel = statutActuel(demande.getId());
-        if (STATUT_TERMINEE.equals(statutActuel) || STATUT_ANNULEE.equals(statutActuel)) {
-            throw new BusinessException(ErrorMessages.TRANSITION_STATUT_INTERDITE);
+        if (!STATUT_EN_ATTENTE.equals(statutActuel)) {
+            throw new BusinessException(
+                    "La demande ne peut être modifiée que quand elle est EN_ATTENTE");
         }
 
-        validateDates(request.debutService(), request.finService());
-
-        demande.setDebutService(request.debutService());
-        demande.setFinService(request.finService());
         demande.setCommentaire(request.commentaire());
 
         if (request.commercialId() != null) {
@@ -205,9 +266,7 @@ public class DemandeGestionService {
         demande = demandeRepository.save(demande);
 
         auditService.log(AuditActions.UPDATE, "DEMANDE", "DemandeService",
-                Long.valueOf(demande.getId()),
-                (request.debutService() != null ? "début=" + request.debutService() : "") +
-                        (request.finService() != null ? ", fin=" + request.finService() : ""),
+                Long.valueOf(demande.getId()), null,
                 toResponse(demande).referenceDemande());
 
         return toResponse(demande);
@@ -223,6 +282,9 @@ public class DemandeGestionService {
         String actuel = statutActuel(demande.getId());
         if (!transitionAutorisee(actuel, nouveau)) {
             throw new BusinessException(ErrorMessages.TRANSITION_STATUT_INTERDITE);
+        }
+        if (STATUT_VALIDATION.equals(nouveau)) {
+            verifierPassageValidation(demande);
         }
 
         enviereHistorique(demande, nouveau, request.commentaire());
@@ -259,13 +321,19 @@ public class DemandeGestionService {
         if (responsableId == null) {
             return null;
         }
-        if (societe == null) {
-            throw new BusinessException(ErrorMessages.RESPONSABLE_SANS_SOCIETE);
-        }
         ClientResponsable responsable = responsableRepository.findById(responsableId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Responsable", responsableId)));
-        if (!responsable.getSociete().getId().equals(societe.getId())) {
+        if (societe == null) {
+            // Création d'entreprise : responsable libre (sans société) exigé.
+            if (responsable.getSociete() != null) {
+                throw new BusinessException(
+                        "Le responsable n'appartient pas à la société sélectionnée");
+            }
+            return responsable;
+        }
+        if (responsable.getSociete() == null
+                || !responsable.getSociete().getId().equals(societe.getId())) {
             throw new BusinessException(
                     "Le responsable n'appartient pas à la société sélectionnée");
         }
@@ -295,31 +363,91 @@ public class DemandeGestionService {
             return STATUT_EN_ATTENTE.equals(nouveau);
         }
         return switch (actuel) {
-            case "EN_ATTENTE" -> STATUT_ANNULEE.equals(nouveau);
-            case "VALIDATION" -> STATUT_EN_COURS.equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
-            case "EN_COURS" -> STATUT_TERMINEE.equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
+            // Annulation ordinaire uniquement depuis EN_ATTENTE (§3.2).
+            case "EN_ATTENTE" -> STATUT_VALIDATION.equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
+            case "VALIDATION" -> STATUT_EN_COURS.equals(nouveau);
+            case "EN_COURS" -> STATUT_TERMINEE.equals(nouveau);
             default -> false;
         };
     }
 
+    /**
+     * Garde du passage à VALIDATION : toutes les factures validées et
+     * un plan de paiement établi pour chaque ligne (contrôle backend).
+     */
+    private void verifierPassageValidation(DemandeService demande) {
+        List<LigneService> lignes = ligneRepository.findByDemandeId(demande.getId());
+        if (lignes.isEmpty()) {
+            throw new BusinessException("Une demande contient au moins un service");
+        }
+        if (!factureService.toutesValidees(demande.getId())) {
+            throw new BusinessException(
+                    "Toutes les factures de la demande doivent être validées avant le passage à VALIDATION");
+        }
+        for (LigneService ligne : lignes) {
+            if (!proposRepository.existsByLigneServiceId(ligne.getId())) {
+                throw new BusinessException(
+                        "Chaque service doit disposer de son plan de paiement avant le passage à VALIDATION");
+            }
+        }
+    }
+
+    /**
+     * Promotion automatique : une ligne passe EN_COURS à son premier paiement ;
+     * la demande passe EN_COURS dès qu'au moins une ligne a démarré.
+     */
     @Transactional
-    public void validerParPremierPaiement(DemandeService demande, Integer numeroEcheance) {
-        if (numeroEcheance == null || numeroEcheance != 1) {
+    public void promouvoirEnCoursParLigne(LigneService ligne, String commentairePaiement) {
+        boolean ligneDemarree = ligneServiceService.avancerStatut(ligne,
+                LigneServiceService.LIGNE_EN_COURS,
+                "Service démarré : " + commentairePaiement, "AUTO");
+        if (!ligneDemarree) {
             return;
         }
-        if (!STATUT_EN_ATTENTE.equals(statutActuel(demande.getId()))) {
-            return;
+        DemandeService demande = ligne.getDemande();
+        String actuel = statutActuel(demande.getId());
+        if (STATUT_EN_ATTENTE.equals(actuel)) {
+            enviereHistorique(demande, STATUT_VALIDATION,
+                    "Demande validée par le premier paiement (service démarré)");
+            auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
+                    Long.valueOf(demande.getId()), STATUT_EN_ATTENTE, STATUT_VALIDATION);
+            actuel = STATUT_VALIDATION;
         }
-        enviereHistorique(demande, STATUT_VALIDATION,
-                "Demande validée par le paiement du premier tranche (échéance n°1)");
-        notificationService.notifierChangementStatut(demande, STATUT_VALIDATION);
+        if (STATUT_VALIDATION.equals(actuel)) {
+            enviereHistorique(demande, STATUT_EN_COURS,
+                    "Service démarré après validation (premier paiement enregistré)");
+            notificationService.notifierChangementStatut(demande, STATUT_EN_COURS);
+            auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
+                    Long.valueOf(demande.getId()), STATUT_VALIDATION, STATUT_EN_COURS);
+        }
+    }
+
+    /**
+     * Clôture automatique : la demande passe TERMINEE quand toutes ses lignes
+     * ont atteint leur date de fin (soldes éventuels conservés).
+     */
+    @Transactional
+    public boolean cloturerSiTerminee(Integer demandeId) {
+        DemandeService demande = getEntity(demandeId);
+        String actuel = statutActuel(demandeId);
+        if (!STATUT_EN_COURS.equals(actuel) && !STATUT_VALIDATION.equals(actuel)) {
+            return false;
+        }
+        List<LigneService> lignes = ligneRepository.findByDemandeId(demandeId);
+        if (lignes.isEmpty()) {
+            return false;
+        }
+        boolean toutesTerminees = lignes.stream()
+                .allMatch(l -> LigneServiceService.LIGNE_TERMINE.equals(l.getStatut()));
+        if (!toutesTerminees) {
+            return false;
+        }
+        enviereHistorique(demande, STATUT_TERMINEE,
+                "Tous les services ont atteint leur date de fin (clôture automatique)");
+        notificationService.notifierChangementStatut(demande, STATUT_TERMINEE);
         auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
-                Long.valueOf(demande.getId()), STATUT_EN_ATTENTE, STATUT_VALIDATION);
-        enviereHistorique(demande, STATUT_EN_COURS,
-                "Service démarré après validation (premier paiement enregistré)");
-        notificationService.notifierChangementStatut(demande, STATUT_EN_COURS);
-        auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
-                Long.valueOf(demande.getId()), STATUT_VALIDATION, STATUT_EN_COURS);
+                Long.valueOf(demande.getId()), actuel, STATUT_TERMINEE);
+        return true;
     }
 
     private String genererReference(int annee) {
@@ -344,9 +472,11 @@ public class DemandeGestionService {
         if (montantPaye == null) {
             montantPaye = BigDecimal.ZERO;
         }
-        BigDecimal reste = demande.getTarif().subtract(montantPaye);
+        BigDecimal montantTotal = ligneServiceService.montantTotalDemande(demande.getId());
+        BigDecimal reste = montantTotal.subtract(montantPaye);
         String statut = statutActuel(demande.getId());
-        return DemandeMapper.toResponse(demande, statut, montantPaye, reste.max(BigDecimal.ZERO));
+        return DemandeMapper.toResponse(demande, statut, montantPaye, reste.max(BigDecimal.ZERO),
+                ligneServiceService.listerParDemande(demande.getId()), montantTotal);
     }
 
     private Utilisateur currentUtilisateur() {

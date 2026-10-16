@@ -114,6 +114,13 @@ public class DocumentController {
         return pdfResponse(documentService.planPaiement(id), "plan-paiement-demande-" + id + ".pdf");
     }
 
+    @GetMapping("/factures/{id}/document/proforma")
+    @PreAuthorize("hasAuthority('FACTURE_VIEW')")
+    @Operation(summary = "Générer la facture proforma (PDF)")
+    public ResponseEntity<byte[]> factureProforma(@PathVariable Integer id) {
+        return pdfResponse(documentService.factureProforma(id), "facture-proforma-" + id + ".pdf");
+    }
+
     private ResponseEntity<byte[]> pdfResponse(byte[] contenu, String nomFichier) {
         String contentDisposition = "inline; filename*=UTF-8''"
                 + URLEncoder.encode(nomFichier, StandardCharsets.UTF_8);

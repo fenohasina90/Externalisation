@@ -4,16 +4,15 @@ import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public record CreateDemandeRequest(
         @NotNull(message = "La date de demande est obligatoire")
         LocalDate dateDemande,
 
-        @NotNull(message = "La date de début est obligatoire")
-        LocalDate debutService,
+                LocalDate debutService,
 
-        @NotNull(message = "La date de fin est obligatoire")
-        LocalDate finService,
+                LocalDate finService,
 
         // NULL autorisé : création d'entreprise (société inexistante).
         Integer societeId,
@@ -22,12 +21,22 @@ public record CreateDemandeRequest(
 
         Integer clientResponsableId,
 
-        @NotNull(message = "Le service est obligatoire")
-        Integer serviceId,
+                Integer serviceId,
 
-        @NotNull(message = "Le montant total est obligatoire")
-        BigDecimal tarif,
+                BigDecimal tarif,
 
-        String commentaire
+        String commentaire,
+
+        /**
+         * Lignes de service (multi-services). Au moins une ligne requise,
+         * directement ou via les champs historiques.
+         */
+        List<CreateLigneRequest> lignes,
+
+        /**
+         * Mode de facturation : UNIQUE (une proforma pour la demande) ou
+         * PAR_SERVICE (une proforma par ligne). Défaut PAR_SERVICE.
+         */
+        String modeFacturation
 ) {
 }

@@ -29,13 +29,20 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
 
     @Query("""
         SELECT d FROM DemandeService d
+        LEFT JOIN d.societe s LEFT JOIN s.domaine dom LEFT JOIN d.commercial c
         WHERE (:recherche IS NULL OR LOWER(d.referenceDemande) LIKE LOWER(CONCAT('%', :recherche, '%')))
-          AND (:societeId IS NULL OR d.societe.id = :societeId)
-          AND (:serviceId IS NULL OR d.service.id = :serviceId)
-          AND (:domaineId IS NULL OR d.societe.domaine.id = :domaineId)
-          AND (:commercialId IS NULL OR d.commercial.id = :commercialId)
-          AND (:dateDebut IS NULL OR d.debutService >= :dateDebut)
-          AND (:dateFin IS NULL OR d.finService <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = d AND l.service.id = :serviceId))
+          AND (:domaineId IS NULL OR dom.id = :domaineId)
+          AND (:commercialId IS NULL OR c.id = :commercialId)
+          AND (:dateDebut IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = d AND l.debutService >= :dateDebut))
+          AND (:dateFin IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = d AND l.finService <= :dateFin))
           AND (:actif IS NULL OR d.actif = :actif)
           AND (:statut IS NULL OR EXISTS (
                 SELECT 1 FROM HistoriqueDemande h
@@ -59,13 +66,14 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
             LocalDate dateDebut, LocalDate dateFin);
 
     @Query("""
-        SELECT COALESCE(SUM(d.tarif), 0) FROM DemandeService d
-        WHERE (:dateDebut IS NULL OR d.debutService >= :dateDebut)
-          AND (:dateFin IS NULL OR d.finService <= :dateFin)
-          AND (:societeId IS NULL OR d.societe.id = :societeId)
-          AND (:serviceId IS NULL OR d.service.id = :serviceId)
-          AND (:domaineId IS NULL OR d.societe.domaine.id = :domaineId)
-          AND (:commercialId IS NULL OR d.commercial.id = :commercialId)
+        SELECT COALESCE(SUM(l.tarif), 0) FROM DemandeService d JOIN d.lignes l
+        LEFT JOIN d.societe s LEFT JOIN s.domaine dom LEFT JOIN d.commercial c
+        WHERE (:dateDebut IS NULL OR l.debutService >= :dateDebut)
+          AND (:dateFin IS NULL OR l.finService <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR l.service.id = :serviceId)
+          AND (:domaineId IS NULL OR dom.id = :domaineId)
+          AND (:commercialId IS NULL OR c.id = :commercialId)
         """)
     BigDecimal sommeTarifTotal(@Param("dateDebut") LocalDate dateDebut,
                                @Param("dateFin") LocalDate dateFin,
@@ -83,17 +91,18 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
     List<Object[]> compterParStatut();
 
     @Query("""
-        SELECT d.service.id, d.service.nomService, COUNT(DISTINCT d.id), COALESCE(SUM(d.tarif), 0)
-        FROM DemandeService d
-        GROUP BY d.service.id, d.service.nomService
-        ORDER BY COALESCE(SUM(d.tarif), 0) DESC
+        SELECT l.service.id, l.service.nomService, COUNT(DISTINCT l.demande.id), COALESCE(SUM(l.tarif), 0)
+        FROM LigneService l
+        GROUP BY l.service.id, l.service.nomService
+        ORDER BY COALESCE(SUM(l.tarif), 0) DESC
         """)
     List<Object[]> revenuParService();
 
     @Query("""
-        SELECT d.societe.id, d.societe.nomSociete, COUNT(DISTINCT d.id), COALESCE(SUM(d.tarif), 0)
-        FROM DemandeService d
-        GROUP BY d.societe.id, d.societe.nomSociete
+        SELECT s.id, s.nomSociete, COUNT(DISTINCT d.id), COALESCE(SUM(l.tarif), 0)
+        FROM DemandeService d LEFT JOIN d.lignes l
+        LEFT JOIN d.societe s
+        GROUP BY s.id, s.nomSociete
         ORDER BY COUNT(DISTINCT d.id) DESC
         """)
     List<Object[]> demandesParSociete();
@@ -108,10 +117,13 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
 
     @Query("""
         SELECT d FROM DemandeService d
+        LEFT JOIN d.societe s LEFT JOIN d.commercial c
         WHERE LOWER(d.referenceDemande) LIKE LOWER(CONCAT('%', :q, '%'))
-           OR LOWER(d.societe.nomSociete) LIKE LOWER(CONCAT('%', :q, '%'))
-           OR LOWER(d.service.nomService) LIKE LOWER(CONCAT('%', :q, '%'))
-           OR (d.commercial IS NOT NULL AND LOWER(d.commercial.nomCommercial) LIKE LOWER(CONCAT('%', :q, '%')))
+           OR (s IS NOT NULL AND LOWER(s.nomSociete) LIKE LOWER(CONCAT('%', :q, '%')))
+           OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = d AND LOWER(l.service.nomService) LIKE LOWER(CONCAT('%', :q, '%')))
+           OR (c IS NOT NULL AND LOWER(c.nomCommercial) LIKE LOWER(CONCAT('%', :q, '%')))
            OR LOWER(COALESCE(d.commentaire, '')) LIKE LOWER(CONCAT('%', :q, '%'))
         ORDER BY d.dateDemande DESC
         """)
@@ -127,10 +139,10 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
     List<Object[]> compterParCommercial();
 
     @Query("""
-        SELECT d.service.id, d.service.nomService, COUNT(DISTINCT d.id)
-        FROM DemandeService d
-        GROUP BY d.service.id, d.service.nomService
-        ORDER BY COUNT(DISTINCT d.id) DESC
+        SELECT l.service.id, l.service.nomService, COUNT(DISTINCT l.demande.id)
+        FROM LigneService l
+        GROUP BY l.service.id, l.service.nomService
+        ORDER BY COUNT(DISTINCT l.demande.id) DESC
         """)
     List<Object[]> compterParService();
 }

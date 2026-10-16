@@ -3,6 +3,7 @@ package com.cabex.backend.demande.dto;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record DemandeResponse(
         Integer id,
@@ -26,6 +27,8 @@ public record DemandeResponse(
         BigDecimal montantPaye,
         BigDecimal resteAPayer,
         Boolean actif,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        List<LigneServiceResponse> lignes,
+        BigDecimal montantTotal
 ) {
 }

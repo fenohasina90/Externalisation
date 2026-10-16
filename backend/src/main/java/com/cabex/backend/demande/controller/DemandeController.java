@@ -70,6 +70,13 @@ public class DemandeController {
         return ResponseEntity.ok(demandeService.getById(id));
     }
 
+    @GetMapping("/reference/{reference}")
+    @PreAuthorize("hasAuthority('DEMANDE_VIEW')")
+    @Operation(summary = "Consulter le détail d'une demande par sa référence (ex. DEM-2026-00017)")
+    public ResponseEntity<DemandeResponse> getByReference(@PathVariable String reference) {
+        return ResponseEntity.ok(demandeService.getByReference(reference));
+    }
+
     @GetMapping("/{id}/historique")
     @PreAuthorize("hasAuthority('DEMANDE_VIEW')")
     @Operation(summary = "Consulter l'historique / timeline d'une demande",
@@ -88,7 +95,7 @@ public class DemandeController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('DEMANDE_UPDATE')")
-    @Operation(summary = "Modifier une demande", description = "Autorisé tant que la demande n'est pas TERMINEE ou ANNULEE")
+    @Operation(summary = "Modifier une demande", description = "Autorisé tant que la demande est EN_ATTENTE (commercial et commentaire ; les services se modifient via les lignes)")
     public ResponseEntity<DemandeResponse> update(@PathVariable Integer id,
                                                   @Valid @RequestBody UpdateDemandeRequest request) {
         return ResponseEntity.ok(demandeService.update(id, request));
@@ -97,7 +104,7 @@ public class DemandeController {
     @PatchMapping("/{id}/statut")
     @PreAuthorize("hasAuthority('DEMANDE_STATUS_UPDATE')")
     @Operation(summary = "Changer le statut d'une demande",
-            description = "Cycle EN_ATTENTE → VALIDATION (auto, paiement du 1er tranche) → EN_COURS (auto) → TERMINEE, ou → ANNULEE ; chaque changement est historié")
+            description = "EN_ATTENTE → VALIDATION (contrôlée : factures validées + plans établis) → EN_COURS ; EN_COURS → TERMINEE (manuelle ou automatique) ; ANNULEE depuis EN_ATTENTE uniquement ; chaque changement est historié")
     public ResponseEntity<DemandeResponse> changeStatut(@PathVariable Integer id,
                                                         @Valid @RequestBody ChangeStatutRequest request) {
         return ResponseEntity.ok(demandeService.changeStatut(id, request));

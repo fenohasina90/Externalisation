@@ -1,16 +1,10 @@
 package com.cabex.backend.demande.dto;
 
-import jakarta.validation.constraints.NotNull;
-
-import java.time.LocalDate;
-
+/**
+ * Modification d'une demande EN_ATTENTE : commercial et commentaire.
+ * Les services (tarifs, périodes) se modifient via les lignes de service.
+ */
 public record UpdateDemandeRequest(
-        @NotNull(message = "La date de début est obligatoire")
-        LocalDate debutService,
-
-        @NotNull(message = "La date de fin est obligatoire")
-        LocalDate finService,
-
         Integer commercialId,
 
         String commentaire
