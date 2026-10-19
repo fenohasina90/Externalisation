@@ -1,5 +1,6 @@
 import type { JSX } from 'react'
-import { CATEGORIES_RAPPORT, type CategorieRapport } from '../data/mockRapports'
+import { CATEGORIES_RAPPORT, type CategorieMeta } from '../constants'
+import type { CategorieRapport } from '../types'
 
 const ICONES: Record<CategorieRapport, JSX.Element> = {
   general: (
@@ -40,13 +41,19 @@ const ICONES: Record<CategorieRapport, JSX.Element> = {
 interface Props {
   selection: CategorieRapport
   onSelect: (c: CategorieRapport) => void
+  /** Catégories autorisées pour l'utilisateur connecté. */
+  categories?: CategorieMeta[]
 }
 
 /** Cartes de sélection de la catégorie de rapport. */
-export function CategoriesRapports({ selection, onSelect }: Props) {
+export function CategoriesRapports({
+  selection,
+  onSelect,
+  categories = CATEGORIES_RAPPORT,
+}: Props) {
   return (
     <div className="cat-grid" role="tablist" aria-label="Catégorie de rapport">
-      {CATEGORIES_RAPPORT.map((c) => (
+      {categories.map((c) => (
         <button
           key={c.id}
           type="button"

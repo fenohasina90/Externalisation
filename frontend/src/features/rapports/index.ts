@@ -1,2 +1,3 @@
 export { RapportsPage } from './screens/RapportsPage'
-export { CategoriesRapports, RapportDomaineTable, DemandesParStatut } from './components'
+export { CategoriesRapports, DemandesParStatut } from './components'
+export * from './types'

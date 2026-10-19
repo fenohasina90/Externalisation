@@ -158,7 +158,7 @@ public class RapportService {
 
     public RapportData table(String type, RapportFilter f) {
         return switch (type) {
-            case "general" -> tableGeneral();
+            case "general" -> tableGeneral(f);
             case "financier" -> tableFinancier(f);
             case "clients" -> tableClients(f);
             case "services" -> tableServices(f);
@@ -168,20 +168,19 @@ public class RapportService {
         };
     }
 
-    private RapportData tableGeneral() {
+    private RapportData tableGeneral(RapportFilter f) {
+        RapportGeneralResponse r = general(f);
         return new RapportData("Rapport général", List.of("Indicateur", "Valeur"),
                 List.of(
-                        List.of("Nombre de clients", societeRepository.countByActifTrue()),
-                        List.of("Nombre de demandes actives", demandeRepository.countByActifTrue()),
-                        List.of("Nombre de services actifs", serviceRepository.countByActifTrue()),
-                        List.of("Montant total prévu", format(paiementRepository.sommeTotalePayee() == null ? BigDecimal.ZERO : demandeMontantTotal())),
-                        List.of("Montant encaissé", format(paiementRepository.sommeTotalePayee())),
-                        List.of("Échéances en retard", echeanceRepository.countEnRetard(LocalDate.now()))
+                        List.of("Nombre de clients", r.nombreClients()),
+                        List.of("Nombre de demandes actives", r.nombreDemandes()),
+                        List.of("Nombre de services actifs", r.nombreServices()),
+                        List.of("Montant total prévu", format(r.montantTotalPrevu())),
+                        List.of("Montant encaissé", format(r.montantEncaisse())),
+                        List.of("Reste à payer", format(r.resteAPayer())),
+                        List.of("Montant en retard", format(r.montantEnRetard())),
+                        List.of("Échéances en retard", r.echeancesEnRetard())
                 ));
-    }
-
-    private BigDecimal demandeMontantTotal() {
-        return demandeRepository.sommeTarifTotal(null, null, null, null, null, null);
     }
 
     private RapportData tableFinancier(RapportFilter f) {
