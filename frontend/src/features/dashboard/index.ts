@@ -1,2 +1,3 @@
 export { DashboardPage } from './screens/DashboardPage'
-export { useDashboardSummary } from './hooks'
+export { useDashboardData, useDashboardSummary } from './hooks'
+export type { VueDashboard } from './hooks'

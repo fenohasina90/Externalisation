@@ -7,6 +7,7 @@ import com.cabex.backend.dashboard.dto.EcheanceDashboardResponse;
 import com.cabex.backend.dashboard.dto.PaiementDashboardResponse;
 import com.cabex.backend.dashboard.dto.PerformanceIndicateursResponse;
 import com.cabex.backend.dashboard.dto.ServiceRevenuResponse;
+import com.cabex.backend.dashboard.dto.ServiceTopResponse;
 import com.cabex.backend.dashboard.dto.StatutCountResponse;
 import com.cabex.backend.dashboard.service.DashboardService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -58,6 +59,13 @@ public class DashboardController {
     @Operation(summary = "Nombre de demandes par mois — SUPER_ADMIN + ACCUEIL")
     public ResponseEntity<List<DemandeMoisResponse>> demandesParMois() {
         return ResponseEntity.ok(dashboardService.demandesParMois());
+    }
+
+    @GetMapping("/demandes/services")
+    @PreAuthorize("hasAuthority('DASHBOARD_DEMANDE_VIEW')")
+    @Operation(summary = "Demandes par service (sans données financières) — SUPER_ADMIN + ACCUEIL")
+    public ResponseEntity<List<ServiceTopResponse>> demandesParService() {
+        return ResponseEntity.ok(dashboardService.demandesParService());
     }
 
     @GetMapping("/paiements")

@@ -281,6 +281,13 @@ public class DashboardService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<ServiceTopResponse> demandesParService() {
+        return demandeRepository.compterParService().stream()
+                .map(o -> new ServiceTopResponse((Integer) o[0], (String) o[1], (long) o[2]))
+                .toList();
+    }
+
     private Map<String, Long> groupStatuts() {
         Map<String, Long> map = new LinkedHashMap<>();
         for (Object[] o : demandeRepository.compterParStatut()) {

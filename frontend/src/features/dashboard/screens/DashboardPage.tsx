@@ -1,6 +1,8 @@
 import type { JSX } from 'react'
 import { Link } from 'react-router-dom'
+import { Spinner } from '@/components/ui'
 import { useAuth } from '@/features/auth/hooks/useAuth'
+import { formatMontantMGA } from '@/utils/format'
 import {
   BarresPaiementsMensuels,
   CartesAlertes,
@@ -10,11 +12,8 @@ import {
   TopServices,
   TranchesRetard,
 } from '../components/charts'
-import {
-  ALERTES_ACCUEIL,
-  ALERTES_ECONOMAT,
-  ALERTES_SUPER_ADMIN,
-} from '../data/mockDashboard'
+import { useDashboardData, type VueDashboard } from '../hooks'
+import type { AlerteDashboard, DashboardSummary } from '../types'
 
 function KpiDemandes({
   icon,
@@ -77,15 +76,61 @@ function KpiDemandes({
   )
 }
 
-/**
- * Tableau de bord personnalisé selon le rôle (données statiques).
- * ACCUEIL : demandes · ECONOMAT : paiements · SUPER_ADMIN/ADMIN : ensemble.
- */
+function construireAlertes(vue: VueDashboard, summary: DashboardSummary, montantEnRetard: number) {
+  const alertes: AlerteDashboard[] = []
+  const enRetard = summary.echeancesEnRetard ?? 0
+  const proches = summary.echeancesProches ?? 0
+  const enAttente = summary.demandesEnAttente ?? 0
+
+  if (vue !== 'ACCUEIL') {
+    if (proches > 0) {
+      alertes.push({
+        ton: 'orange',
+        etiquette: 'Échéances proches',
+        titre: `${proches} échéance${proches > 1 ? 's' : ''} sous 3 jours`,
+        detail: 'Relancez les clients concernés',
+        lien: '/paiements/echeanciers',
+      })
+    }
+    if (enRetard > 0) {
+      alertes.push({
+        ton: 'rouge',
+        etiquette: 'Paiements en retard',
+        titre: `${enRetard} échéance${enRetard > 1 ? 's' : ''} dépassée${enRetard > 1 ? 's' : ''}`,
+        detail: montantEnRetard > 0 ? `${formatMontantMGA(montantEnRetard)} concernés` : 'À relancer',
+        lien: '/paiements',
+      })
+    }
+    if ((summary.resteAPayer ?? 0) > 0) {
+      alertes.push({
+        ton: 'vert',
+        etiquette: 'Montants restant à payer',
+        titre: formatMontantMGA(summary.resteAPayer),
+        detail: `sur ${formatMontantMGA(summary.montantTotal)} au total`,
+        lien: '/paiements',
+      })
+    }
+  }
+
+  if (vue !== 'ECONOMAT' && enAttente > 0) {
+    alertes.push({
+      ton: 'gris',
+      etiquette: 'Demandes en attente',
+      titre: `${enAttente} demande${enAttente > 1 ? 's' : ''} à traiter`,
+      detail: 'En attente de validation ou de premier paiement',
+      lien: '/demandes',
+    })
+  }
+
+  return alertes
+}
+
+/** Tableau de bord personnalisé et branché sur `/api/dashboard/*`. */
 export function DashboardPage() {
   const { utilisateur } = useAuth()
   const role = utilisateur?.role.nomRole ?? 'ACCUEIL'
 
-  const vue =
+  const vue: VueDashboard =
     role === 'ECONOMAT' ? 'ECONOMAT' : role === 'ACCUEIL' ? 'ACCUEIL' : 'SUPER_ADMIN'
 
   const sousTitre =
@@ -94,6 +139,15 @@ export function DashboardPage() {
       : vue === 'ECONOMAT'
         ? 'Suivi des paiements, des échéances et des montants à encaisser.'
         : 'Vue d’ensemble de vos clients, demandes et paiements d’externalisation.'
+
+  const { data, loading, error } = useDashboardData(vue)
+  const summary = data?.summary
+  const montantEnRetard =
+    data?.echeances?.enRetard.reduce((total, e) => total + e.reste, 0) ?? 0
+  const pourcentagePaye =
+    summary && (summary.montantTotal ?? 0) > 0
+      ? Math.min(100, Math.round(((summary.montantPaye ?? 0) / (summary.montantTotal ?? 1)) * 100))
+      : 0
 
   return (
     <div className="app-page responsables-page">
@@ -113,113 +167,148 @@ export function DashboardPage() {
         </div>
       </header>
 
-      {vue === 'ACCUEIL' && (
-        <>
-          <section className="kpi-grid">
-            <KpiDemandes icon="users" tag="+ 12 ce mois" valeur="248" label="Nombre de clients" />
-            <KpiDemandes icon="doc" tag="+ 33 ce mois" valeur="126" label="Nombre de demandes" highlight />
-            <KpiDemandes icon="layers" tag="21 actifs" valeur="22" label="Nombre de services" />
-          </section>
+      {loading && !data && <Spinner label="Chargement du tableau de bord…" />}
 
-          <div className="dash-grid">
-            <section className="card card-pad">
-              <h3>Évolution des demandes</h3>
-              <CourbeEvolution />
-            </section>
-            <section className="card card-pad">
-              <h3>Demandes par statut</h3>
-              <DonutStatuts />
-            </section>
-            <section className="card card-pad">
-              <h3>Services les plus demandés</h3>
-              <TopServices />
-            </section>
-          </div>
-
-          <section className="card card-pad">
-            <h3>Alertes</h3>
-            <CartesAlertes alertes={ALERTES_ACCUEIL} />
-          </section>
-        </>
+      {error && (
+        <div className="alert alert-danger" role="alert">
+          {error}
+        </div>
       )}
 
-      {vue === 'ECONOMAT' && (
+      {data && summary && (
         <>
-          <section className="kpi-grid">
-            <KpiDemandes icon="card" valeur="84 500 000 MGA" label="Montant total à payer" />
-            <KpiDemandes icon="check" tag="62 %" valeur="52 300 000 MGA" label="Montant total payé" highlight />
-            <KpiDemandes icon="clock" tag="38 %" valeur="32 200 000 MGA" label="Montant restant à payer" />
-          </section>
+          {vue === 'ACCUEIL' && (
+            <section className="kpi-grid">
+              <KpiDemandes
+                icon="users"
+                valeur={(summary.nombreClients ?? 0).toLocaleString('fr-FR')}
+                label="Nombre de clients"
+              />
+              <KpiDemandes
+                icon="doc"
+                tag={`${summary.demandesEnAttente ?? 0} en attente`}
+                valeur={(summary.nombreDemandes ?? 0).toLocaleString('fr-FR')}
+                label="Nombre de demandes"
+                highlight
+              />
+              <KpiDemandes
+                icon="layers"
+                valeur={(summary.nombreServices ?? 0).toLocaleString('fr-FR')}
+                label="Nombre de services"
+              />
+            </section>
+          )}
+
+          {vue === 'ECONOMAT' && (
+            <section className="kpi-grid">
+              <KpiDemandes
+                icon="card"
+                valeur={formatMontantMGA(summary.montantTotal)}
+                label="Montant total à payer"
+              />
+              <KpiDemandes
+                icon="check"
+                tag={`${pourcentagePaye} %`}
+                valeur={formatMontantMGA(summary.montantPaye)}
+                label="Montant total payé"
+                highlight
+              />
+              <KpiDemandes
+                icon="clock"
+                tag={`${100 - pourcentagePaye} %`}
+                valeur={formatMontantMGA(summary.resteAPayer)}
+                label="Montant restant à payer"
+              />
+            </section>
+          )}
+
+          {vue === 'SUPER_ADMIN' && (
+            <section className="kpi-grid kpi-grid--5">
+              <KpiDemandes
+                icon="users"
+                valeur={(summary.nombreClients ?? 0).toLocaleString('fr-FR')}
+                label="Nombre de clients"
+              />
+              <KpiDemandes
+                icon="doc"
+                tag={`${summary.demandesEnAttente ?? 0} en attente`}
+                valeur={(summary.nombreDemandes ?? 0).toLocaleString('fr-FR')}
+                label="Nombre de demandes"
+                highlight
+              />
+              <KpiDemandes
+                icon="layers"
+                valeur={(summary.nombreServices ?? 0).toLocaleString('fr-FR')}
+                label="Nombre de services"
+              />
+              <KpiDemandes
+                icon="card"
+                valeur={formatMontantMGA(summary.montantTotal)}
+                label="Montant total à payer"
+              />
+              <KpiDemandes
+                icon="check"
+                tag={`${pourcentagePaye} %`}
+                valeur={formatMontantMGA(summary.montantPaye)}
+                label="Montant total payé"
+                highlight
+              />
+              <KpiDemandes
+                icon="clock"
+                tag={`${100 - pourcentagePaye} %`}
+                valeur={formatMontantMGA(summary.resteAPayer)}
+                label="Montant restant à payer"
+              />
+            </section>
+          )}
 
           <div className="dash-grid">
-            <section className="card card-pad">
-              <h3>Paiements par mois</h3>
-              <BarresPaiementsMensuels />
-            </section>
-            <section className="card card-pad">
-              <div className="dash-card-head">
-                <h3>Échéances en retard</h3>
-                <Link to="/paiements" className="lk">Voir les retards ›</Link>
-              </div>
-              <TranchesRetard />
-            </section>
-            <section className="card card-pad">
-              <h3>Montant des services</h3>
-              <MontantServices />
-            </section>
+            {vue !== 'ECONOMAT' && (
+              <section className="card card-pad">
+                <h3>Évolution des demandes</h3>
+                <CourbeEvolution donnees={data.demandesMois} />
+              </section>
+            )}
+            {vue !== 'ECONOMAT' && (
+              <section className="card card-pad">
+                <h3>Demandes par statut</h3>
+                <DonutStatuts donnees={data.statuts} />
+              </section>
+            )}
+            {vue !== 'ACCUEIL' && (
+              <section className="card card-pad">
+                <h3>Montant des services</h3>
+                <MontantServices donnees={data.servicesRevenu} />
+              </section>
+            )}
+            {vue !== 'ACCUEIL' && (
+              <section className="card card-pad">
+                <h3>Paiements par mois</h3>
+                <BarresPaiementsMensuels donnees={data.paiements?.parMois ?? []} />
+              </section>
+            )}
+            {vue !== 'ACCUEIL' && (
+              <section className="card card-pad">
+                <div className="dash-card-head">
+                  <h3>Échéances en retard</h3>
+                  <Link to="/paiements" className="lk">
+                    Voir les retards ›
+                  </Link>
+                </div>
+                <TranchesRetard echeances={data.echeances?.enRetard ?? []} />
+              </section>
+            )}
+            {vue !== 'ECONOMAT' && (
+              <section className="card card-pad">
+                <h3>Services les plus demandés</h3>
+                <TopServices donnees={data.servicesTop} />
+              </section>
+            )}
           </div>
 
           <section className="card card-pad">
             <h3>Alertes</h3>
-            <CartesAlertes alertes={ALERTES_ECONOMAT} />
-          </section>
-        </>
-      )}
-
-      {vue === 'SUPER_ADMIN' && (
-        <>
-          <section className="kpi-grid kpi-grid--5">
-            <KpiDemandes icon="users" tag="+ 12 ce mois" valeur="248" label="Nombre de clients" />
-            <KpiDemandes icon="doc" tag="+ 33 ce mois" valeur="126" label="Nombre de demandes" highlight />
-            <KpiDemandes icon="layers" tag="21 actifs" valeur="22" label="Nombre de services" />
-            <KpiDemandes icon="card" valeur="84 500 000 MGA" label="Montant total à payer" />
-            <KpiDemandes icon="check" tag="62 %" valeur="52 300 000 MGA" label="Montant total payé" highlight />
-            <KpiDemandes icon="clock" tag="38 %" valeur="32 200 000 MGA" label="Montant restant à payer" />
-          </section>
-
-          <div className="dash-grid">
-            <section className="card card-pad">
-              <h3>Évolution des demandes</h3>
-              <CourbeEvolution />
-            </section>
-            <section className="card card-pad">
-              <h3>Demandes par statut</h3>
-              <DonutStatuts />
-            </section>
-            <section className="card card-pad">
-              <h3>Montant des services</h3>
-              <MontantServices />
-            </section>
-            <section className="card card-pad">
-              <h3>Paiements par mois</h3>
-              <BarresPaiementsMensuels />
-            </section>
-            <section className="card card-pad">
-              <div className="dash-card-head">
-                <h3>Échéances en retard</h3>
-                <Link to="/paiements" className="lk">Voir les retards ›</Link>
-              </div>
-              <TranchesRetard />
-            </section>
-            <section className="card card-pad">
-              <h3>Services les plus demandés</h3>
-              <TopServices />
-            </section>
-          </div>
-
-          <section className="card card-pad">
-            <h3>Alertes</h3>
-            <CartesAlertes alertes={ALERTES_SUPER_ADMIN} />
+            <CartesAlertes alertes={construireAlertes(vue, summary, montantEnRetard)} />
           </section>
         </>
       )}
