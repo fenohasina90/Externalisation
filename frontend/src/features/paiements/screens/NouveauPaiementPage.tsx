@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Alert, Autocomplete, Spinner } from '@/components/ui'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { messageErreur } from '@/constants/messages'
@@ -25,7 +25,8 @@ interface GroupeService {
 
 /**
  * Enregistrer un paiement — POST /api/paiements.
- * Présélection via ?demandeId=ID&echeanceId=ID depuis l'échéancier.
+ * Présélection via `?demande=DEM-2026-00017` depuis l'échéancier ; l'échéance
+ * concernée est transmise en état de navigation, jamais exposée en identifiant.
  *
  * Les règles contrôlées par le backend (montant ≤ reste, échéance obligatoire,
  * date dans la période de service, référence de virement) sont aussi vérifiées
@@ -36,13 +37,13 @@ export function NouveauPaiementPage() {
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
   const [params] = useSearchParams()
-  const demandeIdParam = Number(params.get('demandeId'))
-  const echeanceIdParam = Number(params.get('echeanceId'))
+  const location = useLocation()
+  const referenceParam = params.get('demande')
+  const echeanceIdParam =
+    (location.state as { echeanceId?: number } | null)?.echeanceId ?? NaN
 
   const { data: demandes, loading: loadingDemandes, error: errorDemandes } = useDemandesReglables()
-  const [demandeId, setDemandeId] = useState<number | null>(
-    Number.isFinite(demandeIdParam) && demandeIdParam > 0 ? demandeIdParam : null,
-  )
+  const [demandeId, setDemandeId] = useState<number | null>(null)
   const [demandeTexte, setDemandeTexte] = useState('')
 
   const {
@@ -54,7 +55,9 @@ export function NouveauPaiementPage() {
   const { data: modes } = useModesPaiement()
 
   const echeances = useMemo(() => reglatable?.echeances ?? [], [reglatable])
-  const [echeanceChoisie, setEcheanceChoisie] = useState<number | null>(echeanceIdParam)
+  const [echeanceChoisie, setEcheanceChoisie] = useState<number | null>(
+    Number.isFinite(echeanceIdParam) ? echeanceIdParam : null,
+  )
   const [datePaiement, setDatePaiement] = useState(aujourdhui)
   const [modeId, setModeId] = useState<number | null>(null)
   const [refVirement, setRefVirement] = useState('')
@@ -79,12 +82,15 @@ export function NouveauPaiementPage() {
     [listeDemandes],
   )
 
-  // Pré-remplit le libellé de la demande quand elle arrive via l'URL.
-  const [texteInitialise, setTexteInitialise] = useState(false)
-  if (!texteInitialise && demandeId !== null && listeDemandes.length > 0) {
-    setTexteInitialise(true)
-    const trouve = listeDemandes.find((d) => d.id === demandeId)
-    if (trouve) setDemandeTexte(`${trouve.referenceDemande} — ${trouve.nomSociete ?? 'Sans société'}`)
+  // Résout la référence de l'URL en demande dès que la liste est chargée.
+  const [referenceTraitee, setReferenceTraitee] = useState(false)
+  if (!referenceTraitee && referenceParam && listeDemandes.length > 0) {
+    setReferenceTraitee(true)
+    const trouve = listeDemandes.find((d) => d.referenceDemande === referenceParam)
+    if (trouve) {
+      setDemandeId(trouve.id)
+      setDemandeTexte(`${trouve.referenceDemande} — ${trouve.nomSociete ?? 'Sans société'}`)
+    }
   }
 
   // Échéance effective : présélection depuis l'URL, sinon première à régler.

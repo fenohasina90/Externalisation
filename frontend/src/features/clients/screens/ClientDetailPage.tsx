@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Alert, Spinner } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
@@ -14,7 +14,7 @@ import { domainesApi } from '@/features/services/services/services.service'
 import type { Domaine } from '@/features/services/types'
 import type { ApiPage } from '@/types'
 import type { CreateSocietePayload, Societe, SocieteDetail } from '../types'
-import { codeSociete, statutSociete } from '../types'
+import { codeSociete, idDepuisCodeSociete, statutSociete } from '../types'
 
 type Onglet = 'informations' | 'demandes' | 'paiements' | 'documents' | 'historique'
 
@@ -38,10 +38,20 @@ function statutPill(statut: string, fallback = 'pill wt'): string {
   return fallback
 }
 
-/** Fiche client 360° branchée sur GET /api/clients/{id}. */
+/** Identifiant client accepté dans l'URL : code CLI-0248 ou ancien identifiant numérique. */
+function resoudreIdClient(reference: string | undefined): number | null {
+  if (!reference) return null
+  const parCode = idDepuisCodeSociete(reference)
+  if (parCode !== null) return parCode
+  const numerique = Number(reference)
+  return Number.isInteger(numerique) && numerique > 0 ? numerique : null
+}
+
+/** Fiche client 360° branchée sur GET /api/clients/{id}, URL canonique /clients/CLI-0248. */
 export function ClientDetailPage() {
-  const { id } = useParams<{ id: string }>()
-  const societeId = Number(id)
+  const { reference } = useParams<{ reference: string }>()
+  const navigate = useNavigate()
+  const societeId = resoudreIdClient(reference)
   const [onglet, setOnglet] = useState<Onglet>('informations')
   const [editOpen, setEditOpen] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
@@ -53,7 +63,10 @@ export function ClientDetailPage() {
     loading,
     error,
     reload,
-  } = useApi<SocieteDetail>(() => clientsApi.getDetail(societeId), [societeId])
+  } = useApi<SocieteDetail>(() => {
+    if (societeId === null) return Promise.reject(new Error('Référence client invalide.'))
+    return clientsApi.getDetail(societeId)
+  }, [societeId])
 
   const { data: domaines, reload: reloadDomaines } = useApi<ApiPage<Domaine>>(
     () => domainesApi.list({ page: 0, size: 100, recherche: null }, {}),
@@ -61,6 +74,14 @@ export function ClientDetailPage() {
   )
 
   const client: Societe | null = detail?.societe ?? null
+
+  // URL canonique : la fiche est toujours consultée par sa référence (CLI-0248).
+  useEffect(() => {
+    if (client && reference !== codeSociete(client.id)) {
+      navigate(`/clients/${codeSociete(client.id)}`, { replace: true })
+    }
+  }, [client, reference, navigate])
+
   const statut = client ? statutSociete(client) : 'Actif'
   const synthese = detail?.synthese ?? null
   const demandes = detail?.demandes ?? []

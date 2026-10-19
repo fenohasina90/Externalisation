@@ -69,7 +69,7 @@ export function EcheancierDetailPage() {
           </Link>
           <Can permission="PAIEMENT_CREATE">
             <Link
-              to={`/paiements/nouveau?demandeId=${demande.id}`}
+              to={`/paiements/nouveau?demande=${encodeURIComponent(demande.referenceDemande)}`}
               className="btn-primary"
             >
               <svg className="sv" viewBox="0 0 24 24">
@@ -174,7 +174,8 @@ export function EcheancierDetailPage() {
                           {e.reste > 0 ? (
                             <Can permission="PAIEMENT_CREATE">
                               <Link
-                                to={`/paiements/nouveau?demandeId=${demande.id}&echeanceId=${e.id}`}
+                                to={`/paiements/nouveau?demande=${encodeURIComponent(demande.referenceDemande)}`}
+                                state={{ echeanceId: e.id }}
                                 className="btn-link success"
                               >
                                 Enregistrer un paiement

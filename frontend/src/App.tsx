@@ -65,7 +65,7 @@ function App() {
             }
           />
           <Route
-            path="/clients/:id"
+            path="/clients/:reference"
             element={
               <RequirePermission permission="CLIENT_VIEW">
                 <ClientDetailPage />

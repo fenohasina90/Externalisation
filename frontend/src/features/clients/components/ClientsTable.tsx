@@ -67,7 +67,7 @@ export function ClientsTable({ items, onEdit, onArchiver }: Props) {
               </td>
               <td>
                 <div className="table-actions">
-                  <Link to={`/clients/${c.id}`} className="btn-link">
+                  <Link to={`/clients/${codeSociete(c.id)}`} className="btn-link">
                     Consulter
                   </Link>
                   <button type="button" className="btn-link" onClick={() => onEdit(c)}>

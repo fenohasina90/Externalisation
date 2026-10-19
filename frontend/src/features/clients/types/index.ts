@@ -42,6 +42,14 @@ export function codeSociete(id: number): string {
   return `CLI-${String(id).padStart(4, '0')}`
 }
 
+/** Identifiant numérique déduit du code client (CLI-0248 → 248), sinon null. */
+export function idDepuisCodeSociete(code: string): number | null {
+  const correspondance = /^CLI-(\d+)$/i.exec(code.trim())
+  if (!correspondance) return null
+  const id = Number(correspondance[1])
+  return Number.isInteger(id) && id > 0 ? id : null
+}
+
 /** Statut d'affichage : archivé prime, sinon actif/inactif. */
 export function statutSociete(societe: Pick<Societe, 'actif' | 'archive'>): StatutClient {
   if (societe.archive) return 'Archivé'
