@@ -26,14 +26,26 @@ export function registerUnauthorizedHandler(handler: () => void): () => void {
 
 http.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<{ message?: string }>) => {
+  async (error: AxiosError<{ message?: string }>) => {
     if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
       clearSession()
       unauthorizedHandler?.()
     }
+    let message = error.response?.data?.message ?? error.message
+    // Réponses binaires (téléchargements) : le message d'erreur est un Blob JSON.
+    const donnees: unknown = error.response?.data
+    if (donnees instanceof Blob) {
+      try {
+        const texte = await donnees.text()
+        const parsed = JSON.parse(texte) as { message?: string }
+        if (parsed.message) message = parsed.message
+      } catch {
+        // Corps non JSON : on conserve le message générique.
+      }
+    }
     const apiError: ApiError = {
       status: error.response?.status ?? 0,
-      message: error.response?.data?.message ?? error.message,
+      message,
     }
     return Promise.reject(apiError)
   },

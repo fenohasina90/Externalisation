@@ -147,7 +147,7 @@ const administration: NavItem = {
   label: 'Administration',
   to: '/administration',
   icon: 'gear',
-  permission: ['USER_VIEW', 'AUDIT_VIEW', 'CONFIG_VIEW', 'PASSWORD_RESET_MANAGE'],
+  permission: ['USER_VIEW', 'AUDIT_VIEW', 'CONFIG_VIEW', 'PASSWORD_RESET_MANAGE', 'BACKUP_VIEW'],
   children: [
     { label: 'Utilisateurs', to: '/administration/utilisateurs', permission: 'USER_VIEW' },
     { label: 'Rôles & permissions', to: '/administration/roles', permission: 'USER_VIEW' },
@@ -158,6 +158,7 @@ const administration: NavItem = {
     },
     { label: 'Audit', to: '/administration/audit', permission: 'AUDIT_VIEW' },
     { label: 'Configuration', to: '/administration/configuration', permission: 'CONFIG_VIEW' },
+    { label: 'Sauvegardes', to: '/administration/sauvegardes', permission: 'BACKUP_VIEW' },
   ],
 }
 

@@ -15,6 +15,11 @@ public final class AuditActions {
     public static final String RESET_SEND = "RESET_SEND";
     public static final String RESET_REJECT = "RESET_REJECT";
     public static final String RESET_DONE = "RESET_DONE";
+    public static final String BACKUP_CREATE = "BACKUP_CREATE";
+    public static final String BACKUP_AUTO = "BACKUP_AUTO";
+    public static final String BACKUP_DOWNLOAD = "BACKUP_DOWNLOAD";
+    public static final String BACKUP_DELETE = "BACKUP_DELETE";
+    public static final String BACKUP_RESTORE = "BACKUP_RESTORE";
 
     private AuditActions() {
     }

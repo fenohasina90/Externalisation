@@ -60,6 +60,17 @@ const SECTIONS = [
       </svg>
     ),
   },
+  {
+    to: '/administration/sauvegardes',
+    titre: 'Sauvegardes',
+    description: 'Sauvegardez, téléchargez et restaurez la base de données, localement ou chiffrée.',
+    icone: (
+      <svg className="sv" viewBox="0 0 24 24">
+        <ellipse cx="12" cy="5" rx="8" ry="3" />
+        <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+      </svg>
+    ),
+  },
 ]
 
 /** Accueil de l'administration : chiffres clés + accès aux sections. */

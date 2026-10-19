@@ -12,6 +12,7 @@ import {
   RolesPermissionsPage,
   UtilisateursPage,
 } from '@/features/administration'
+import { SauvegardesPage } from '@/features/backup'
 import { ClientDetailPage, ClientsPage } from '@/features/clients'
 import { CommerciauxPage } from '@/features/commerciaux'
 import { DashboardPage } from '@/features/dashboard'
@@ -247,6 +248,14 @@ function App() {
             element={
               <RequirePermission permission="CONFIG_VIEW">
                 <ConfigurationPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/administration/sauvegardes"
+            element={
+              <RequirePermission permission="BACKUP_VIEW">
+                <SauvegardesPage />
               </RequirePermission>
             }
           />

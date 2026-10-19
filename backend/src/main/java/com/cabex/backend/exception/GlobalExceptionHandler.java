@@ -131,6 +131,11 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, "Conflit de données : cette référence est probablement déjà utilisée", request);
     }
 
+    @ExceptionHandler(BackupException.class)
+    public ResponseEntity<ApiError> handleBackup(BackupException ex, WebRequest request) {
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGeneric(Exception ex, WebRequest request) {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Une erreur interne est survenue. Veuillez réessayer.", request);
