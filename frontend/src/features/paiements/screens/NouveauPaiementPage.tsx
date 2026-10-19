@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Alert, Autocomplete, Spinner } from '@/components/ui'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { messageErreur } from '@/constants/messages'
 import { formatDate, formatMontantMGA } from '@/utils/format'
 import { VIREMENT } from '../constants/labels'
@@ -57,6 +58,8 @@ export function NouveauPaiementPage() {
   const [commentaire, setCommentaire] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [confirmation, setConfirmation] = useState(false)
+  const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null)
   // Montant saisi, rattaché à l'échéance concernée : le pré-remplissage suit
   // l'échéance choisie sans effet de bord.
   const [montantSaisi, setMontantSaisi] = useState<{ echeanceId: number; montant: number } | null>(
@@ -135,9 +138,10 @@ export function NouveauPaiementPage() {
     !dateHorsPeriode &&
     (!estVirement || refVirement.trim().length > 0)
 
-  async function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    setErreurEnregistrement(null)
 
     if (!demandeId) {
       setError('Sélectionnez une demande.')
@@ -174,6 +178,12 @@ export function NouveauPaiementPage() {
       return
     }
 
+    setConfirmation(true)
+  }
+
+  async function confirmerEnregistrement() {
+    if (!choisie || !modeChoisi || !demandeId) return
+
     setSubmitting(true)
     try {
       await paiementsApi.create({
@@ -187,7 +197,7 @@ export function NouveauPaiementPage() {
       })
       navigate(`/paiements/echeanciers/${choisie.referenceDemande}`)
     } catch (err) {
-      setError(messageErreur(err))
+      setErreurEnregistrement(messageErreur(err))
       setSubmitting(false)
     }
   }
@@ -531,6 +541,75 @@ export function NouveauPaiementPage() {
           )}
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={confirmation}
+        titre="Confirmer l'enregistrement du paiement"
+        message={
+          choisie
+            ? `Ce règlement sera imputé sur l'échéance n° ${choisie.echeance.numeroEcheance} du service « ${choisie.ligneLabel} » de la demande ${choisie.referenceDemande}. L'opération est définitive : le reçu PDF pourra être téléchargé depuis l'historique.`
+            : ''
+        }
+        confirmer="Valider le paiement"
+        ton="success"
+        enCours={submitting}
+        erreur={erreurEnregistrement}
+        onAnnuler={() => {
+          if (submitting) return
+          setConfirmation(false)
+          setErreurEnregistrement(null)
+        }}
+        onConfirmer={() => void confirmerEnregistrement()}
+        details={
+          choisie ? (
+            <div style={{ marginTop: 14 }}>
+              <div className="rc">
+                <span>Demande</span>
+                <strong>{choisie.referenceDemande}</strong>
+              </div>
+              <div className="rc">
+                <span>Client</span>
+                <strong>{choisie.nomSociete ?? '—'}</strong>
+              </div>
+              <div className="rc">
+                <span>Service</span>
+                <strong>{choisie.ligneLabel}</strong>
+              </div>
+              <div className="rc">
+                <span>Échéance</span>
+                <strong>
+                  N° {choisie.echeance.numeroEcheance} —{' '}
+                  {formatDate(choisie.echeance.dateEcheance)}
+                </strong>
+              </div>
+              <div className="rc">
+                <span>Montant</span>
+                <strong style={{ color: 'var(--success)' }}>
+                  {formatMontantMGA(montant)}
+                </strong>
+              </div>
+              <div className="rc">
+                <span>Mode</span>
+                <strong>{modeChoisi?.libelle ?? '—'}</strong>
+              </div>
+              {estVirement && (
+                <div className="rc">
+                  <span>Réf. virement</span>
+                  <strong>{refVirement.trim() || '—'}</strong>
+                </div>
+              )}
+              <div className="rc">
+                <span>Date</span>
+                <strong>{datePaiement ? formatDate(datePaiement) : '—'}</strong>
+              </div>
+              <div className="rc">
+                <span>Reste après validation</span>
+                <strong>{formatMontantMGA(Math.max(apresPaiement, 0))}</strong>
+              </div>
+            </div>
+          ) : null
+        }
+      />
     </div>
   )
 }

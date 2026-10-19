@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom'
+import type { ReactNode } from 'react'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -8,13 +9,19 @@ interface ConfirmDialogProps {
   confirmer?: string
   /** Couleur du bouton de confirmation. */
   ton?: 'danger' | 'success' | 'primary'
+  /** Contenu additionnel sous le message (récapitulatif, avertissement…). */
+  details?: ReactNode
+  /** Message d'erreur survenue pendant l'action confirmée. */
+  erreur?: string | null
+  /** Action en cours : désactive la fermeture et le bouton de confirmation. */
+  enCours?: boolean
   onAnnuler: () => void
   onConfirmer: () => void
 }
 
 /**
  * Modale de confirmation réutilisable : activation / désactivation,
- * archivage / restauration, déconnexion.
+ * archivage / restauration, déconnexion, validation d'un paiement.
  */
 export function ConfirmDialog({
   open,
@@ -22,6 +29,9 @@ export function ConfirmDialog({
   message,
   confirmer = 'Confirmer',
   ton = 'danger',
+  details,
+  erreur = null,
+  enCours = false,
   onAnnuler,
   onConfirmer,
 }: ConfirmDialogProps) {
@@ -33,7 +43,10 @@ export function ConfirmDialog({
   // Portail vers <body> : la modale recouvre tout l'écran quel que soit
   // l'endroit où elle est déclarée (ex. à l'intérieur de la sidebar).
   return createPortal(
-    <div className="modal-backdrop modal-backdrop--center" onClick={onAnnuler}>
+    <div
+      className="modal-backdrop modal-backdrop--center"
+      onClick={enCours ? undefined : onAnnuler}
+    >
       <div
         className="modal-card"
         style={{ maxWidth: 440 }}
@@ -44,7 +57,13 @@ export function ConfirmDialog({
       >
         <header className="modal-header">
           <h3 className="modal-title">{titre}</h3>
-          <button type="button" className="btn-ghost" onClick={onAnnuler} aria-label="Fermer">
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={onAnnuler}
+            aria-label="Fermer"
+            disabled={enCours}
+          >
             ✕
           </button>
         </header>
@@ -53,14 +72,26 @@ export function ConfirmDialog({
           <p className="section-note" style={{ fontSize: 15 }}>
             {message}
           </p>
+          {details}
+          {erreur && (
+            <div className="alert alert-danger" role="alert" style={{ marginTop: 12 }}>
+              {erreur}
+            </div>
+          )}
         </div>
 
         <footer className="modal-footer">
-          <button type="button" className="btn-ghost" onClick={onAnnuler}>
+          <button type="button" className="btn-ghost" onClick={onAnnuler} disabled={enCours}>
             Annuler
           </button>
-          <button type="button" className={classeBouton} onClick={onConfirmer} autoFocus>
-            {confirmer}
+          <button
+            type="button"
+            className={classeBouton}
+            onClick={onConfirmer}
+            autoFocus
+            disabled={enCours}
+          >
+            {enCours ? 'Enregistrement…' : confirmer}
           </button>
         </footer>
       </div>
