@@ -1,9 +1,10 @@
 import type { JSX } from 'react'
-import { TYPE_META, type TypeNotification } from '../data/mockNotifications'
-import type { NotificationUser } from '../types'
+import { formatDateHeure } from '@/utils/format'
+import { TYPE_META } from '../constants'
+import type { NotificationUser, TypeNotification } from '../types'
 
 function Icone({ type }: { type: string }) {
-  const tone = (TYPE_META[type as TypeNotification]?.tone ?? 'gray') as string
+  const tone = TYPE_META[type as TypeNotification]?.tone ?? 'gray'
   const paths: Record<string, JSX.Element> = {
     red: (
       <svg className="sv" viewBox="0 0 24 24">
@@ -38,7 +39,7 @@ function Icone({ type }: { type: string }) {
 
 interface Props {
   items: NotificationUser[]
-  onConsulter: (id: number) => void
+  onConsulter: (notification: NotificationUser) => void
   onMarquerLue: (id: number) => void
 }
 
@@ -59,9 +60,9 @@ export function NotificationsList({ items, onConsulter, onMarquerLue }: Props) {
             <p className="notif-title">{n.titre}</p>
             <p className="notif-text">{n.message}</p>
           </div>
-          <span className="notif-time">{n.dateCreation}</span>
+          <span className="notif-time">{formatDateHeure(n.dateCreation)}</span>
           <div className="notif-actions">
-            <button type="button" className="btn-link" onClick={() => onConsulter(n.id)}>
+            <button type="button" className="btn-link" onClick={() => onConsulter(n)}>
               Consulter
             </button>
             {!n.lu && (

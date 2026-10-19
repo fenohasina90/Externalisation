@@ -3,7 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { useAuth } from '@/features/auth/hooks/useAuth'
-import { useNotificationsBadgeStatic } from '@/features/notifications'
+import { useNotificationsBadge } from '@/features/notifications'
 
 /** Structure des pages connectées : sidebar + topbar + contenu de la route. */
 export function AppLayout() {
@@ -34,8 +34,8 @@ export function AppLayout() {
     void refresh().catch(() => undefined)
   }, [pathname, refresh])
 
-  // Étape 1 : compteurs statiques (branchés sur les API à l'étape suivante).
-  const { nonLues } = useNotificationsBadgeStatic()
+  // Compteur de notifications non lues, rafraîchi périodiquement et après lecture.
+  const { nonLues } = useNotificationsBadge()
   const badges = { notifications: nonLues, demandes: 8 }
 
   return (

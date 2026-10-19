@@ -1,9 +1,7 @@
 package com.cabex.backend.notification;
 
 import com.cabex.backend.configuration.service.ConfigurationService;
-import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
-import com.cabex.backend.echeance.entity.ProposPaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import com.cabex.backend.notification.service.NotificationScheduler;
 import com.cabex.backend.notification.service.NotificationService;
@@ -38,11 +36,7 @@ class NotificationSchedulerTest {
 
     private EcheancePaiement echeanceDans(int jours) {
         EcheancePaiement echeance = mock(EcheancePaiement.class);
-        ProposPaiement propos = mock(ProposPaiement.class);
-        DemandeService demande = mock(DemandeService.class);
-        when(echeance.getDateEcheance()).thenReturn(LocalDate.now().plusDays(jours));
-        lenient().when(echeance.getProposPaiement()).thenReturn(propos);
-        lenient().when(propos.getDemande()).thenReturn(demande);
+        lenient().when(echeance.getDateEcheance()).thenReturn(LocalDate.now().plusDays(jours));
         return echeance;
     }
 
@@ -55,7 +49,19 @@ class NotificationSchedulerTest {
 
         scheduler.verifierEcheances();
 
-        verify(notificationService).notifierEcheanceProche(any(), eq(5));
+        verify(notificationService).notifierEcheanceProche(any(EcheancePaiement.class), eq(5));
+    }
+
+    @Test
+    void echeanceEnRetardNotifie() {
+        EcheancePaiement echeance = echeanceDans(-2);
+        when(echeanceRepository.findEnRetard(any())).thenReturn(List.of(echeance));
+        when(echeanceRepository.findAVenir(any())).thenReturn(List.of());
+
+        scheduler.verifierEcheances();
+
+        verify(notificationService).notifierEcheanceEnRetard(echeance);
+        verify(notificationService, never()).notifierEcheanceProche(any(EcheancePaiement.class), anyInt());
     }
 
     @Test
@@ -67,6 +73,6 @@ class NotificationSchedulerTest {
 
         scheduler.verifierEcheances();
 
-        verify(notificationService, never()).notifierEcheanceProche(any(), anyInt());
+        verify(notificationService, never()).notifierEcheanceProche(any(EcheancePaiement.class), anyInt());
     }
 }

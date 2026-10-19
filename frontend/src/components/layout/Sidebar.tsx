@@ -42,7 +42,7 @@ function NavEntry({ item, pathname, badges, onNavigate, repliee, onDeplier }: Na
       <Icon name={item.icon} />
       <span className="nav__label">{item.label}</span>
       {item.hint && <small className="nav__hint">{item.hint}</small>}
-      {count ? <Badge>{count}</Badge> : null}
+      {count ? <Badge tone={item.badge === 'notifications' ? 'danger' : 'neutral'}>{count}</Badge> : null}
     </>
   )
 
@@ -138,7 +138,7 @@ function DeroulantEntry({ item, pathname, badges, onNavigate, repliee, onDeplier
         <Icon name={item.icon} />
         <span className="nav__label">{item.label}</span>
         {item.hint && <small className="nav__hint">{item.hint}</small>}
-        {count ? <Badge>{count}</Badge> : null}
+        {count ? <Badge tone={item.badge === 'notifications' ? 'danger' : 'neutral'}>{count}</Badge> : null}
         <span className="nav__chevron" aria-hidden="true">
           {ouvert ? '▾' : '▸'}
         </span>

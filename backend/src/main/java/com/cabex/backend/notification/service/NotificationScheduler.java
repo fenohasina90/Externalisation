@@ -1,7 +1,6 @@
 package com.cabex.backend.notification.service;
 
 import com.cabex.backend.configuration.service.ConfigurationService;
-import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -38,10 +37,7 @@ public class NotificationScheduler {
         LocalDate aujourdHui = LocalDate.now();
 
         for (EcheancePaiement echeance : echeanceRepository.findEnRetard(aujourdHui)) {
-            DemandeService demande = echeance.getProposPaiement().getDemande();
-            if (demande != null) {
-                notificationService.notifierEcheanceEnRetard(demande);
-            }
+            notificationService.notifierEcheanceEnRetard(echeance);
         }
 
         List<EcheancePaiement> aVenir = echeanceRepository.findAVenir(aujourdHui);
@@ -50,11 +46,8 @@ public class NotificationScheduler {
         LocalDate limite = aujourdHui.plusDays(joursAlerte);
         for (EcheancePaiement echeance : aVenir) {
             if (!echeance.getDateEcheance().isAfter(limite)) {
-                DemandeService demande = echeance.getProposPaiement().getDemande();
-                if (demande != null) {
-                    int jours = (int) ChronoUnit.DAYS.between(aujourdHui, echeance.getDateEcheance());
-                    notificationService.notifierEcheanceProche(demande, Math.max(jours, 1));
-                }
+                int jours = (int) ChronoUnit.DAYS.between(aujourdHui, echeance.getDateEcheance());
+                notificationService.notifierEcheanceProche(echeance, Math.max(jours, 1));
             }
         }
     }

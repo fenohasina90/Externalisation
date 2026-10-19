@@ -1,17 +1,25 @@
 import { buildQuery, http } from '@/api/http'
 import type { ApiPage, PageQuery } from '@/types'
-import type { NotificationUser } from '../types'
+import type { NotificationUser, NotificationsNonLues } from '../types'
+
+export interface NotificationFiltres {
+  type?: string
+  nonLues?: boolean
+}
 
 export const notificationsApi = {
-  async list(page?: PageQuery): Promise<ApiPage<NotificationUser>> {
+  async list(
+    page?: PageQuery,
+    filtres: NotificationFiltres = {},
+  ): Promise<ApiPage<NotificationUser>> {
     const { data } = await http.get<ApiPage<NotificationUser>>('/notifications', {
-      params: buildQuery({}, page),
+      params: buildQuery({ ...filtres }, page),
     })
     return data
   },
 
-  async listNonLues(): Promise<NotificationUser[]> {
-    const { data } = await http.get<NotificationUser[]>('/notifications/non-lues')
+  async listNonLues(): Promise<NotificationsNonLues> {
+    const { data } = await http.get<NotificationsNonLues>('/notifications/non-lues')
     return data
   },
 
@@ -20,8 +28,9 @@ export const notificationsApi = {
     return data
   },
 
-  async toutLire(): Promise<void> {
-    await http.patch('/notifications/tout-lire')
+  async toutLire(): Promise<number> {
+    const { data } = await http.patch<{ misAJour: number }>('/notifications/tout-lire')
+    return data.misAJour
   },
 
   async supprimer(id: number): Promise<void> {

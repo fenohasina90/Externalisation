@@ -1,4 +1,4 @@
 export { NotificationsPage } from './screens/NotificationsPage'
 export { NotificationsList } from './components'
-export { useNotificationsListStatic, useNotificationsBadgeStatic } from './hooks'
-export type { NotificationUser } from './types'
+export { useNotificationsBadge, useNotificationsList } from './hooks'
+export type { NotificationUser, NotificationsNonLues, TypeNotification } from './types'

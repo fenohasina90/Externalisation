@@ -1,2 +1,2 @@
-export { useNotificationsListStatic } from './useNotificationsListStatic'
-export { useNotificationsBadgeStatic } from './useNotificationsBadgeStatic'
+export { useNotificationsBadge } from './useNotificationsBadge'
+export { useNotificationsList } from './useNotificationsList'

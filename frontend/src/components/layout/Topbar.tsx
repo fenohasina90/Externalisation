@@ -16,7 +16,7 @@ interface TopbarProps {
   onReplier?: () => void
   /** Sidebar actuellement repliée. */
   repliee?: boolean
-  /** Nombre de notifications non lues : affiche un point sur la cloche. */
+  /** Nombre de notifications non lues : affiche une pastille sur la cloche. */
   unreadNotifications?: number
 }
 
@@ -51,7 +51,11 @@ export function Topbar({ onMenu, onReplier, repliee = false, unreadNotifications
         aria-label={hasUnread ? `Notifications (${unreadNotifications} non lues)` : 'Notifications'}
       >
         <Icon name="bell" />
-        {hasUnread && <span className="topbar__dot" aria-hidden="true" />}
+        {hasUnread && (
+          <span className="topbar__badge" aria-hidden="true">
+            {unreadNotifications > 99 ? '99+' : unreadNotifications}
+          </span>
+        )}
       </Link>
 
       <time className="topbar__date" dateTime={today.toISOString().slice(0, 10)}>

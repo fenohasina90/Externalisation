@@ -1,6 +1,7 @@
 package com.cabex.backend.notification.service;
 
 import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.notification.dto.NotificationResponse;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @org.springframework.stereotype.Service
 public class NotificationService {
@@ -32,7 +34,9 @@ public class NotificationService {
             "NOUVELLE_DEMANDE", "CHANGEMENT_STATUT");
 
     private static final List<String> TYPES_PAIEMENT = List.of(
-            "PAIEMENT_ENREGISTRE", "ECHEANCE_PROCHE", "ECHEANCE_RETARD");
+            "PAIEMENT_ENREGISTRE", "ECHEANCE_PROCHE", "PAIEMENT_RETARD");
+
+    public static final String TYPE_ALERTE_SYSTEME = "ALERTE_SYSTEME";
 
     private final NotificationRepository notificationRepository;
     private final UtilisateurRepository utilisateurRepository;
@@ -44,13 +48,20 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
-    public Page<NotificationResponse> list(Pageable pageable) {
-        List<String> types = typesAutorises();
-        return (types == null
-                ? notificationRepository.findByUtilisateurIdOrderByDateCreationDesc(
-                        SecurityUtils.currentUserId(), pageable)
-                : notificationRepository.findByUtilisateurIdAndTypeNotificationInOrderByDateCreationDesc(
-                        SecurityUtils.currentUserId(), types, pageable))
+    public Page<NotificationResponse> list(Pageable pageable, String type, Boolean nonLues) {
+        Integer userId = SecurityUtils.currentUserId();
+        List<String> autorises = typesAutorises();
+        if (autorises != null && autorises.isEmpty()) {
+            return Page.empty(pageable);
+        }
+        String typeFiltre = type == null || type.isBlank() ? null : type;
+        if (typeFiltre != null && autorises != null && !autorises.contains(typeFiltre)) {
+            return Page.empty(pageable);
+        }
+        boolean tousTypes = autorises == null;
+        return notificationRepository.rechercher(userId, typeFiltre,
+                        Boolean.TRUE.equals(nonLues), tousTypes,
+                        tousTypes ? List.of() : autorises, pageable)
                 .map(NotificationMapper::toResponse);
     }
 
@@ -58,6 +69,9 @@ public class NotificationService {
     public NotificationsNonLuesResponse nonLues() {
         Integer userId = SecurityUtils.currentUserId();
         List<String> types = typesAutorises();
+        if (types != null && types.isEmpty()) {
+            return new NotificationsNonLuesResponse(List.of(), 0, Map.of());
+        }
         List<NotificationResponse> notifications = (types == null
                 ? notificationRepository.findByUtilisateurIdAndLuFalseOrderByDateCreationDesc(
                         userId, PageRequest.of(0, 50))
@@ -70,7 +84,14 @@ public class NotificationService {
         long total = types == null
                 ? notificationRepository.countByUtilisateurIdAndLuFalse(userId)
                 : notificationRepository.countByUtilisateurIdAndLuFalseAndTypeNotificationIn(userId, types);
-        return new NotificationsNonLuesResponse(notifications, total);
+        Map<String, Long> parType = new java.util.LinkedHashMap<>();
+        for (Object[] ligne : notificationRepository.compterNonLuesParType(userId)) {
+            String type = (String) ligne[0];
+            if (types == null || types.contains(type)) {
+                parType.put(type, ((Number) ligne[1]).longValue());
+            }
+        }
+        return new NotificationsNonLuesResponse(notifications, total, parType);
     }
 
     @Transactional
@@ -150,25 +171,47 @@ public class NotificationService {
                 ROLE_SUPER_ADMIN, ROLE_ECONOMAT);
     }
 
-    public void notifierEcheanceProche(DemandeService demande, int jours) {
+    public void notifierEcheanceProche(EcheancePaiement echeance, int jours) {
+        DemandeService demande = echeance.getProposPaiement().getDemande();
+        if (demande == null) {
+            return;
+        }
         String societe = demande.getSociete() != null ? demande.getSociete().getNomSociete() : "client";
-        creerPourRoles(
+        creerPourRoles(true,
                 "ECHEANCE_PROCHE",
                 "Échéance proche",
-                "⚠️ L'échéance de la société " + societe
-                        + " arrive à échéance dans " + jours + " jour" + (jours > 1 ? "s" : "") + ".",
-                "DEMANDE", demande.getId() != null ? demande.getId().longValue() : null,
+                "⚠️ L'échéance n°" + echeance.getNumeroEcheance() + " de la société " + societe
+                        + " (" + montant(echeance.getMontantAttendu()) + ") arrive à échéance dans "
+                        + jours + " jour" + (jours > 1 ? "s" : "") + ".",
+                "ECHEANCE", echeance.getId() != null ? echeance.getId().longValue() : null,
                 ROLE_SUPER_ADMIN, ROLE_ECONOMAT);
     }
 
-    public void notifierEcheanceEnRetard(DemandeService demande) {
+    public void notifierEcheanceEnRetard(EcheancePaiement echeance) {
+        DemandeService demande = echeance.getProposPaiement().getDemande();
+        if (demande == null) {
+            return;
+        }
         String societe = demande.getSociete() != null ? demande.getSociete().getNomSociete() : "client";
-        creerPourRoles(
-                "ECHEANCE_RETARD",
+        creerPourRoles(true,
+                "PAIEMENT_RETARD",
                 "Paiement en retard",
-                "⛔ L'échéance de la société " + societe + " est en retard.",
-                "DEMANDE", demande.getId() != null ? demande.getId().longValue() : null,
+                "⛔ L'échéance n°" + echeance.getNumeroEcheance() + " de la société " + societe
+                        + " (" + montant(echeance.getMontantAttendu()) + ") est en retard depuis le "
+                        + echeance.getDateEcheance() + ".",
+                "ECHEANCE", echeance.getId() != null ? echeance.getId().longValue() : null,
                 ROLE_SUPER_ADMIN, ROLE_ECONOMAT);
+    }
+
+    /** Alerte d'exploitation destinée aux administrateurs (sauvegarde, système). */
+    public void notifierAlerteSysteme(String titre, String message,
+                                      String referenceType, Long referenceId) {
+        creerPourRoles(
+                TYPE_ALERTE_SYSTEME,
+                titre,
+                message,
+                referenceType, referenceId,
+                ROLE_SUPER_ADMIN, ROLE_ADMIN);
     }
 
     public void notifierDemandeReinitialisation(Utilisateur utilisateur, Long demandeId) {
@@ -199,10 +242,21 @@ public class NotificationService {
 
     private void creerPourRoles(String typeNotification, String titre, String message,
                                 String referenceType, Long referenceId, String... roles) {
+        creerPourRoles(false, typeNotification, titre, message, referenceType, referenceId, roles);
+    }
+
+    private void creerPourRoles(boolean eviterDoublon, String typeNotification, String titre,
+                                String message, String referenceType, Long referenceId,
+                                String... roles) {
         for (String role : roles) {
             List<Utilisateur> cibles = utilisateurRepository
                     .findByRoleNomRoleAndActifTrue(role);
             for (Utilisateur utilisateur : cibles) {
+                if (eviterDoublon && referenceId != null
+                        && notificationRepository.existsByUtilisateurIdAndTypeNotificationAndReferenceId(
+                                utilisateur.getId(), typeNotification, referenceId)) {
+                    continue;
+                }
                 creer(utilisateur, typeNotification, titre, message, referenceType, referenceId);
             }
         }
