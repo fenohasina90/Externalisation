@@ -262,7 +262,8 @@ public class RapportService {
 
     private List<DemandeService> demandesFiltrees(RapportFilter f) {
         return demandeRepository.rechercher(null, f.clientId(), f.serviceId(), f.domaineId(),
-                        f.commercialId(), f.statut(), f.dateDebut(), f.dateFin(), null, Pageable.unpaged())
+                        f.commercialId(), f.statut(), f.dateDebut(), f.dateFin(), null, null, null,
+                Pageable.unpaged())
                 .getContent();
     }
 

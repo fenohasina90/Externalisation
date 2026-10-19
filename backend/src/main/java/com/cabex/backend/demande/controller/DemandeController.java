@@ -53,13 +53,14 @@ public class DemandeController {
             @RequestParam(required = false) Integer serviceId,
             @RequestParam(required = false) Integer domaineId,
             @RequestParam(required = false) Integer commercialId,
-            @RequestParam(required = false) String statut,
+@RequestParam(required = false) String statut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(required = false) Boolean actif,
+            @RequestParam(required = false) String situation,
             Pageable pageable) {
-        return ResponseEntity.ok(demandeService.getAll(recherche, societeId, serviceId,
-                domaineId, commercialId, statut, dateDebut, dateFin, actif, pageable));
+        return ResponseEntity.ok(demandeService.getAll(recherche, societeId, serviceId, domaineId,
+                commercialId, statut, dateDebut, dateFin, actif, situation, pageable));
     }
 
     @GetMapping("/{id}")

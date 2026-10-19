@@ -45,6 +45,9 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @org.springframework.stereotype.Service
 public class DemandeGestionService {
@@ -107,10 +110,31 @@ public class DemandeGestionService {
     public Page<DemandeResponse> getAll(String recherche, Integer societeId, Integer serviceId,
                                         Integer domaineId, Integer commercialId, String statut,
                                         LocalDate dateDebut, LocalDate dateFin,
-                                        Boolean actif, Pageable pageable) {
-        return demandeRepository.rechercher(recherche, societeId, serviceId, domaineId, commercialId,
-                        statut, dateDebut, dateFin, actif, pageable)
-                .map(d -> toResponse(d));
+                                        Boolean actif, String situation, Pageable pageable) {
+        Page<DemandeService> page = demandeRepository.rechercher(recherche, societeId, serviceId,
+                domaineId, commercialId, statut, dateDebut, dateFin, actif, situation,
+                LocalDate.now(), pageable);
+        Map<Integer, InfoSituation> situations = situations(page.getContent());
+        return page.map(d -> toResponse(d, situations));
+    }
+
+    private DemandeResponse toResponse(DemandeService demande, Map<Integer, InfoSituation> situations) {
+        InfoSituation info = situations.getOrDefault(demande.getId(), InfoSituation.NON_PLANIFIE);
+        return DemandeMapper.toResponse(demande, statutActuel(demande.getId()),
+                montantPaye(demande.getId()), reste(demande.getId()),
+                ligneServiceService.listerParDemande(demande.getId()),
+                ligneServiceService.montantTotalDemande(demande.getId()),
+                info.situation(), info.nombreEcheances());
+    }
+
+    private BigDecimal montantPaye(Integer demandeId) {
+        BigDecimal paye = paiementRepository.sommePayeeParDemande(demandeId);
+        return paye == null ? BigDecimal.ZERO : paye;
+    }
+
+    private BigDecimal reste(Integer demandeId) {
+        BigDecimal total = ligneServiceService.montantTotalDemande(demandeId);
+        return total.subtract(montantPaye(demandeId)).max(BigDecimal.ZERO);
     }
 
     @Transactional(readOnly = true)
@@ -475,8 +499,48 @@ public class DemandeGestionService {
         BigDecimal montantTotal = ligneServiceService.montantTotalDemande(demande.getId());
         BigDecimal reste = montantTotal.subtract(montantPaye);
         String statut = statutActuel(demande.getId());
+        InfoSituation info = situation(demande.getId());
         return DemandeMapper.toResponse(demande, statut, montantPaye, reste.max(BigDecimal.ZERO),
-                ligneServiceService.listerParDemande(demande.getId()), montantTotal);
+                ligneServiceService.listerParDemande(demande.getId()), montantTotal,
+                info.situation(), info.nombreEcheances());
+    }
+
+    /** Situation de règlement et nombre d'échéances d'une demande isolée. */
+    private InfoSituation situation(Integer demandeId) {
+        List<Object[]> lignes = demandeRepository.situations(List.of(demandeId), LocalDate.now());
+        if (lignes.isEmpty()) {
+            return InfoSituation.NON_PLANIFIE;
+        }
+        return new InfoSituation(SituationPaiement.classer(lignes.get(0)),
+                ((Number) lignes.get(0)[2]).longValue());
+    }
+
+    /**
+     * Situations de toute une page, en une seule requête. La valeur renvoyée
+     * alimente la colonne « Situation » des listes : elle est calculée par la
+     * même classification que le filtre {@code situation}, pour que les deux
+     * ne puissent pas diverger.
+     */
+    private Map<Integer, InfoSituation> situations(List<DemandeService> demandes) {
+        List<Integer> ids = demandes.stream()
+                .map(DemandeService::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return demandeRepository.situations(ids, LocalDate.now()).stream()
+                .collect(Collectors.toMap(
+                        ligne -> ((Number) ligne[0]).intValue(),
+                        ligne -> new InfoSituation(
+                                SituationPaiement.classer(ligne),
+                                ((Number) ligne[2]).longValue())));
+    }
+
+    /** Situation de règlement d'une demande et nombre total d'échéances. */
+    private record InfoSituation(String situation, Long nombreEcheances) {
+        static final InfoSituation NON_PLANIFIE =
+                new InfoSituation(SituationPaiement.NON_PLANIFIE, 0L);
     }
 
     private Utilisateur currentUtilisateur() {

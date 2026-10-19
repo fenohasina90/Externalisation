@@ -1,46 +1,70 @@
+import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ModePill, StatutEcheancePill } from '../components'
-import { MOCK_HISTORIQUE, MOCK_PLANS, formatMGA } from '../data/mockPaiements'
+import { Spinner } from '@/components/ui'
+import { Can } from '@/components/shared/Can'
+import { formatDate, formatMontantMGA } from '@/utils/format'
+import { EcheancePill, ModePill, SituationPlanPill, StatutDemandePill } from '../components'
+import { useEcheancierDemande } from '../hooks'
+import { situationPlan } from '../utils/situation'
 
-/** Échéancier d'une demande : résumé, échéances et paiements enregistrés. */
+/** Échéancier d'une demande : résumé, échéances par service et paiements enregistrés. */
 export function EcheancierDetailPage() {
   const { reference } = useParams<{ reference: string }>()
-  const plan = MOCK_PLANS.find((p) => p.demandeRef === reference)
-  const paiements = MOCK_HISTORIQUE.filter((h) => h.demandeRef === reference)
+  const { data, loading, error } = useEcheancierDemande(reference)
 
-  if (!plan) {
+  useEffect(() => {
+    document.body.classList.add('page-responsables')
+    return () => {
+      document.body.classList.remove('page-responsables')
+    }
+  }, [])
+
+  if (loading && !data) {
     return (
       <div className="app-page responsables-page">
-        <div className="alert alert-danger">Échéancier introuvable.</div>
-        <Link to="/paiements" className="btn-ghost" style={{ alignSelf: 'flex-start' }}>
+        <Spinner label="Chargement de l'échéancier…" />
+      </div>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <div className="app-page responsables-page">
+        <div className="alert alert-danger">{error ?? 'Échéancier introuvable.'}</div>
+        <Link to="/paiements/echeanciers" className="btn-ghost" style={{ alignSelf: 'flex-start' }}>
           Retour à la liste
         </Link>
       </div>
     )
   }
 
-  const reste = plan.montantTotal - plan.montantPaye
-  const progression = plan.montantTotal === 0 ? 0 : Math.round((plan.montantPaye / plan.montantTotal) * 100)
+  const { demande, plansParLigne, paiements } = data
+  const reste = demande.resteAPayer ?? 0
+  const montantTotal = demande.montantTotal ?? 0
+  const progression = montantTotal === 0 ? 0 : Math.round(((demande.montantPaye / montantTotal) * 100) * 100) / 100
 
   return (
     <div className="app-page responsables-page">
       <header className="page-header page-header-sticky">
         <div>
-          <h1>Échéancier · {plan.demandeRef}</h1>
-          <p>
-            {plan.client} — suivi des échéances de la demande.
-          </p>
+          <h1>Échéancier · {demande.referenceDemande}</h1>
+          <p>{demande.nomSociete ?? 'Sans société'} — suivi des échéances de la demande.</p>
         </div>
         <div className="actions">
-          <Link to="/paiements" className="btn-ghost">
+          <Link to="/paiements/echeanciers" className="btn-ghost">
             Retour à la liste
           </Link>
-          <Link to={`/paiements/nouveau?demande=${plan.demandeRef}`} className="btn-primary">
-            <svg className="sv" viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Enregistrer un paiement
-          </Link>
+          <Can permission="PAIEMENT_CREATE">
+            <Link
+              to={`/paiements/nouveau?demandeId=${demande.id}`}
+              className="btn-primary"
+            >
+              <svg className="sv" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Enregistrer un paiement
+            </Link>
+          </Can>
         </div>
       </header>
 
@@ -48,86 +72,118 @@ export function EcheancierDetailPage() {
         <div className="info-grid info-grid--5">
           <div className="info-item">
             <span>Client</span>
-            <b>{plan.client}</b>
+            <b>{demande.nomSociete ?? '—'}</b>
           </div>
           <div className="info-item">
             <span>Demande</span>
-            <b>{plan.demandeRef}</b>
+            <b>{demande.referenceDemande}</b>
+          </div>
+          <div className="info-item">
+            <span>Statut</span>
+            <b>
+              <StatutDemandePill statut={demande.statutActuel ?? '—'} />
+            </b>
           </div>
           <div className="info-item">
             <span>Montant total</span>
-            <b>{formatMGA(plan.montantTotal)}</b>
+            <b>{formatMontantMGA(montantTotal)}</b>
           </div>
           <div className="info-item">
             <span>Montant payé</span>
-            <b style={{ color: 'var(--success)' }}>{formatMGA(plan.montantPaye)}</b>
+            <b style={{ color: 'var(--success)' }}>{formatMontantMGA(demande.montantPaye)}</b>
           </div>
           <div className="info-item">
             <span>Reste à payer</span>
-            <b style={{ color: 'var(--danger)' }}>{formatMGA(reste)}</b>
+            <b style={{ color: 'var(--danger)' }}>{formatMontantMGA(reste)}</b>
           </div>
         </div>
         <div className="progression">
-          <div className="trk" role="progressbar" aria-valuenow={progression} aria-valuemin={0} aria-valuemax={100}>
-            <i style={{ width: `${progression}%` }} />
+          <div
+            className="trk"
+            role="progressbar"
+            aria-valuenow={progression}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <i style={{ width: `${Math.min(progression, 100)}%` }} />
           </div>
         </div>
       </section>
 
-      <section className="card">
-        <div className="card-pad" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0 }}>Échéances</h3>
-        </div>
-        <div className="table-scroll-container no-global-scroll">
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>N°</th>
-                  <th>Date d&apos;échéance</th>
-                  <th>Montant attendu</th>
-                  <th>Montant payé</th>
-                  <th>Reste</th>
-                  <th>Statut</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {plan.echeances.map((e) => {
-                  const resteEch = e.montantAttendu - e.montantPaye
-                  return (
-                    <tr key={e.numero}>
-                      <td>{e.numero}</td>
-                      <td className="text-secondary">{e.dateEcheance}</td>
-                      <td className="cell-number">{formatMGA(e.montantAttendu)}</td>
-                      <td className="cell-number">{formatMGA(e.montantPaye)}</td>
-                      <td className="cell-number">{formatMGA(resteEch)}</td>
-                      <td>
-                        <StatutEcheancePill attendu={e.montantAttendu} paye={e.montantPaye} />
-                      </td>
-                      <td>
-                        {resteEch > 0 ? (
-                          <Link
-                            to={`/paiements/nouveau?demande=${plan.demandeRef}&echeance=${e.numero}`}
-                            className="btn-link success"
-                          >
-                            Enregistrer un paiement
-                          </Link>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
-                      </td>
+      {plansParLigne.map((ligne) => (
+        <section className="card" key={ligne.ligneId}>
+          <div
+            className="card-pad"
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+          >
+            <h3 style={{ margin: 0 }}>{ligne.ligneLabel}</h3>
+            {ligne.plan ? (
+              <span className="text-secondary">
+                Plan du {formatDate(ligne.plan.dateDebut)} au {formatDate(ligne.plan.dateFin)}
+              </span>
+            ) : (
+              <span className="text-muted">Aucun plan de paiement</span>
+            )}
+          </div>
+          {ligne.plan ? (
+            <div className="table-scroll-container no-global-scroll">
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>N°</th>
+                      <th>Date d&apos;échéance</th>
+                      <th>Montant attendu</th>
+                      <th>Montant payé</th>
+                      <th>Reste</th>
+                      <th>Statut</th>
+                      <th>Actions</th>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="table-footer">
-            <span>Une échéance peut être réglée en plusieurs paiements.</span>
-          </div>
-        </div>
-      </section>
+                  </thead>
+                  <tbody>
+                    {(ligne.plan.echeances ?? []).map((e) => (
+                      <tr key={e.id}>
+                        <td>{e.numeroEcheance}</td>
+                        <td className="text-secondary">{formatDate(e.dateEcheance)}</td>
+                        <td className="cell-number">{formatMontantMGA(e.montantAttendu)}</td>
+                        <td className="cell-number">{formatMontantMGA(e.montantPaye)}</td>
+                        <td className="cell-number">{formatMontantMGA(e.reste)}</td>
+                        <td>
+                          <EcheancePill statut={e.statut} />
+                        </td>
+                        <td>
+                          {e.reste > 0 ? (
+                            <Can permission="PAIEMENT_CREATE">
+                              <Link
+                                to={`/paiements/nouveau?demandeId=${demande.id}&echeanceId=${e.id}`}
+                                className="btn-link success"
+                              >
+                                Enregistrer un paiement
+                              </Link>
+                            </Can>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="table-footer">
+                <span>
+                  Situation du service :{' '}
+                  <SituationPlanPill situation={situationPlan(ligne.plan.echeances ?? [])} />
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="card-pad text-muted">
+              Le plan de paiement de ce service n&apos;est pas encore établi.
+            </div>
+          )}
+        </section>
+      ))}
 
       <section className="card">
         <div className="card-pad" style={{ paddingBottom: 0 }}>
@@ -139,7 +195,7 @@ export function EcheancierDetailPage() {
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Échéance</th>
+                  <th>Référence</th>
                   <th>Montant</th>
                   <th>Mode</th>
                   <th>Réf. virement</th>
@@ -148,15 +204,15 @@ export function EcheancierDetailPage() {
               </thead>
               <tbody>
                 {paiements.map((p) => (
-                  <tr key={p.reference}>
-                    <td className="text-secondary">{p.date}</td>
-                    <td>N° {p.echeance}</td>
-                    <td className="cell-number">{formatMGA(p.montant)}</td>
+                  <tr key={p.id}>
+                    <td className="text-secondary">{formatDate(p.datePaiement)}</td>
+                    <td>{p.referencePaiement}</td>
+                    <td className="cell-number">{formatMontantMGA(p.montantPaye)}</td>
                     <td>
-                      <ModePill mode={p.mode} />
+                      <ModePill code={p.libelleMode} />
                     </td>
-                    <td className="text-secondary">{p.refVirement ?? '—'}</td>
-                    <td>{p.utilisateur}</td>
+                    <td className="text-secondary">{p.referenceVirement ?? '—'}</td>
+                    <td>{p.createdByName ?? '—'}</td>
                   </tr>
                 ))}
                 {paiements.length === 0 && (

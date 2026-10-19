@@ -18,6 +18,8 @@ import type { Dossier, DossierPayload } from '../types/dossier'
 
 export interface DemandeFiltres {
   statut?: string
+  /** Situation de règlement, calculée par le backend sur l'ensemble des résultats. */
+  situation?: string
   societeId?: number
   serviceId?: number
   commercialId?: number

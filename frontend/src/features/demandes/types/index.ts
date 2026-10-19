@@ -30,7 +30,18 @@ export interface Demande {
   createdAt: string
   lignes: LigneService[]
   montantTotal: number | null
+  /** Situation de règlement calculée par le backend (toutes lignes confondues). */
+  situationPaiement: SituationPaiement | string | null
+  /** Nombre total d'échéances, tous plans de paiement confondus. */
+  nombreEcheances: number | null
 }
+
+export type SituationPaiement =
+  | 'PAYE'
+  | 'PARTIEL'
+  | 'EN_RETARD'
+  | 'EN_ATTENTE'
+  | 'NON_PLANIFIE'
 
 export type StatutLigneService =
   | 'VALIDE'

@@ -1,242 +1,532 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { MOCK_PLANS, formatMGA, type ModePaiement } from '../data/mockPaiements'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Alert, Autocomplete, Spinner } from '@/components/ui'
+import { messageErreur } from '@/constants/messages'
+import { formatDate, formatMontantMGA } from '@/utils/format'
+import { VIREMENT } from '../constants/labels'
+import { EcheancePill } from '../components'
+import { useDemandesReglables, useEcheancesReglables, useModesPaiement } from '../hooks'
+import { paiementsApi } from '../services/paiements.service'
+import type { EcheanceReglable } from '../types'
+
+const LIMITE_COMMENTAIRE = 500
+
+function aujourdhui(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+interface GroupeService {
+  label: string
+  lignes: EcheanceReglable[]
+}
 
 /**
- * Enregistrer un paiement — étape 1 : interface seule.
- * Présélection via ?demande=REF&echeance=N depuis l'échéancier.
+ * Enregistrer un paiement — POST /api/paiements.
+ * Présélection via ?demandeId=ID&echeanceId=ID depuis l'échéancier.
+ *
+ * Les règles contrôlées par le backend (montant ≤ reste, échéance obligatoire,
+ * date dans la période de service, référence de virement) sont aussi vérifiées
+ * ici pour un retour immédiat, sans jamais les remplacer : un 409 reste affiché
+ * tel quel via `messageErreur`.
  */
 export function NouveauPaiementPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const plansOuverts = useMemo(() => MOCK_PLANS.filter((p) => p.montantTotal - p.montantPaye > 0), [])
+  const demandeIdParam = Number(params.get('demandeId'))
+  const echeanceIdParam = Number(params.get('echeanceId'))
 
-  const [demandeRef, setDemandeRef] = useState(
-    () => params.get('demande') ?? plansOuverts[0]?.demandeRef ?? '',
+  const { data: demandes, loading: loadingDemandes, error: errorDemandes } = useDemandesReglables()
+  const [demandeId, setDemandeId] = useState<number | null>(
+    Number.isFinite(demandeIdParam) && demandeIdParam > 0 ? demandeIdParam : null,
   )
-  const plan = plansOuverts.find((p) => p.demandeRef === demandeRef) ?? plansOuverts[0]
-  const echeancesOuvertes = useMemo(
-    () => (plan ? plan.echeances.filter((e) => e.montantAttendu - e.montantPaye > 0) : []),
-    [plan],
-  )
+  const [demandeTexte, setDemandeTexte] = useState('')
 
-  const [echeance, setEcheance] = useState(() => {
-    const n = Number(params.get('echeance'))
-    return Number.isFinite(n) && n > 0 ? n : 0
-  })
-  const [datePaiement, setDatePaiement] = useState('2026-10-04')
-  const [montant, setMontant] = useState(100000)
-  const [mode, setMode] = useState<ModePaiement>('Virement')
+  const {
+    data: reglatable,
+    loading: loadingEcheances,
+    error: errorEcheances,
+  } = useEcheancesReglables(demandeId)
+
+  const { data: modes } = useModesPaiement()
+
+  const echeances = useMemo(() => reglatable?.echeances ?? [], [reglatable])
+  const [echeanceChoisie, setEcheanceChoisie] = useState<number | null>(echeanceIdParam)
+  const [datePaiement, setDatePaiement] = useState(aujourdhui)
+  const [modeId, setModeId] = useState<number | null>(null)
   const [refVirement, setRefVirement] = useState('')
   const [commentaire, setCommentaire] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  // Montant saisi, rattaché à l'échéance concernée : le pré-remplissage suit
+  // l'échéance choisie sans effet de bord.
+  const [montantSaisi, setMontantSaisi] = useState<{ echeanceId: number; montant: number } | null>(
+    null,
+  )
 
-  const echeanceChoisie =
-    echeancesOuvertes.find((e) => e.numero === echeance) ?? echeancesOuvertes[0] ?? null
-  const attendu = echeanceChoisie?.montantAttendu ?? 0
-  const dejaPaye = echeanceChoisie?.montantPaye ?? 0
-  const reste = attendu - dejaPaye
-  const apresPaiement = reste - montant
+  const listeDemandes = useMemo(() => demandes?.content ?? [], [demandes])
+  const optionsDemandes = useMemo(
+    () =>
+      listeDemandes.map((d) => ({
+        id: d.id,
+        label: `${d.referenceDemande} — ${d.nomSociete ?? 'Sans société'}`,
+      })),
+    [listeDemandes],
+  )
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    if (!plan || !echeanceChoisie) {
-      setError('Sélectionnez une demande et une échéance à régler')
-      return
-    }
-    if (montant <= 0) {
-      setError('Le montant doit être positif')
-      return
-    }
-    if (montant > reste) {
-      setError(`Le montant ne doit pas dépasser le montant restant (${formatMGA(reste)})`)
-      return
-    }
-    if (mode === 'Virement' && !refVirement.trim()) {
-      setError('La référence du virement est obligatoire pour un virement')
-      return
-    }
-    alert(
-      `Paiement enregistré (démonstration) : ${formatMGA(montant)} pour ${plan.demandeRef}, échéance n° ${echeanceChoisie.numero} (${mode}).`,
-    )
-    navigate('/paiements')
+  // Pré-remplit le libellé de la demande quand elle arrive via l'URL.
+  const [texteInitialise, setTexteInitialise] = useState(false)
+  if (!texteInitialise && demandeId !== null && listeDemandes.length > 0) {
+    setTexteInitialise(true)
+    const trouve = listeDemandes.find((d) => d.id === demandeId)
+    if (trouve) setDemandeTexte(`${trouve.referenceDemande} — ${trouve.nomSociete ?? 'Sans société'}`)
   }
+
+  // Échéance effective : présélection depuis l'URL, sinon première à régler.
+  const echeanceId = useMemo(() => {
+    if (echeanceChoisie && echeances.some((e) => e.echeance.id === echeanceChoisie)) {
+      return echeanceChoisie
+    }
+    return echeances[0]?.echeance.id ?? 0
+  }, [echeanceChoisie, echeances])
+
+  const choisie = useMemo(
+    () => echeances.find((e) => e.echeance.id === echeanceId) ?? null,
+    [echeances, echeanceId],
+  )
+
+  // Échéances groupées par service : l'utilisateur règle service par service.
+  const groupes = useMemo(() => {
+    const map = new Map<string, EcheanceReglable[]>()
+    echeances.forEach((e) => {
+      const liste = map.get(e.ligneLabel) ?? []
+      liste.push(e)
+      map.set(e.ligneLabel, liste)
+    })
+    return Array.from(map, ([label, lignes]): GroupeService => ({ label, lignes }))
+  }, [echeances])
+
+  const montant =
+    montantSaisi && montantSaisi.echeanceId === echeanceId
+      ? montantSaisi.montant
+      : (choisie?.echeance.reste ?? 0)
+
+  // Mode effectif : le premier disponible tant que l'utilisateur n'a pas choisi.
+  const modeChoisi = modes?.find((m) => m.id === modeId) ?? modes?.[0] ?? null
+  const estVirement = modeChoisi?.code?.toUpperCase() === VIREMENT
+
+  const attendu = choisie?.echeance.montantAttendu ?? 0
+  const dejaPaye = choisie?.echeance.montantPaye ?? 0
+  const reste = choisie?.echeance.reste ?? 0
+  const apresPaiement = reste - montant
+  const tauxEcheance = attendu > 0 ? Math.min(100, Math.round((dejaPaye / attendu) * 100)) : 0
+
+  const montantDepasse = montant > reste
+  const dateHorsPeriode =
+    Boolean(choisie) &&
+    Boolean(datePaiement) &&
+    ((choisie!.debutService !== null && datePaiement < choisie!.debutService) ||
+      (choisie!.finService !== null && datePaiement > choisie!.finService))
+  const champValide =
+    Boolean(choisie) &&
+    Boolean(modeChoisi) &&
+    Boolean(datePaiement) &&
+    montant > 0 &&
+    !montantDepasse &&
+    !dateHorsPeriode &&
+    (!estVirement || refVirement.trim().length > 0)
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+
+    if (!demandeId) {
+      setError('Sélectionnez une demande.')
+      return
+    }
+    if (!choisie) {
+      setError('Sélectionnez une échéance à régler.')
+      return
+    }
+    if (!modeChoisi) {
+      setError('Sélectionnez un mode de paiement.')
+      return
+    }
+    if (!datePaiement) {
+      setError('La date du paiement est obligatoire.')
+      return
+    }
+    if (!Number.isFinite(montant) || montant <= 0) {
+      setError('Le montant doit être supérieur à 0.')
+      return
+    }
+    if (montantDepasse) {
+      setError(`Le montant ne doit pas dépasser le montant restant (${formatMontantMGA(reste)}).`)
+      return
+    }
+    if (dateHorsPeriode) {
+      setError(
+        `Le paiement doit être effectué entre le début et la fin du service (${formatDate(choisie!.debutService)} – ${formatDate(choisie!.finService)}).`,
+      )
+      return
+    }
+    if (estVirement && !refVirement.trim()) {
+      setError('La référence du virement est obligatoire pour un virement.')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      await paiementsApi.create({
+        demandeId,
+        echeanceId: choisie.echeance.id,
+        modePaiementId: modeChoisi.id,
+        datePaiement,
+        montantPaye: montant,
+        referenceVirement: estVirement ? refVirement.trim() : null,
+        commentaire: commentaire.trim() || null,
+      })
+      navigate(`/paiements/echeanciers/${choisie.referenceDemande}`)
+    } catch (err) {
+      setError(messageErreur(err))
+      setSubmitting(false)
+    }
+  }
+
+  const chargement = loadingDemandes || loadingEcheances
 
   return (
     <div className="app-page responsables-page">
       <header className="page-header page-header-sticky">
         <div>
           <h1>Enregistrer un paiement</h1>
-          <p>Saisissez un règlement pour une échéance d&apos;une demande.</p>
+          <p>Saisissez un règlement pour une échéance d&apos;une demande de service.</p>
         </div>
       </header>
 
       <div className="split-layout">
         <section className="card card-pad">
-          <form onSubmit={handleSubmit}>
-            {error && (
-              <div className="alert alert-danger" role="alert">
-                {error}
+          {chargement ? (
+            <Spinner label="Chargement des échéances…" />
+          ) : (
+            <form onSubmit={handleSubmit} noValidate>
+              {error && (
+                <div className="alert alert-danger" role="alert" style={{ marginBottom: 16 }}>
+                  {error}
+                </div>
+              )}
+              {errorDemandes && (
+                <div className="alert alert-danger" role="alert" style={{ marginBottom: 16 }}>
+                  {errorDemandes}
+                </div>
+              )}
+              {errorEcheances && (
+                <div className="alert alert-danger" role="alert" style={{ marginBottom: 16 }}>
+                  {errorEcheances}
+                </div>
+              )}
+
+              <h3>1 · Demande et échéance</h3>
+              <div className="form-grid">
+                <label className="field form-grid__full">
+                  Demande <span className="required">*</span>
+                  <Autocomplete
+                    value={demandeTexte}
+                    onTextChange={(texte) => {
+                      setDemandeTexte(texte)
+                      // Toute frappe remet la sélection à zéro : la demande
+                      // affichée doit toujours correspondre à la saisie.
+                      setDemandeId(null)
+                      setEcheanceChoisie(null)
+                      setError(null)
+                    }}
+                    onPick={(option) => {
+                      if (!option) return
+                      setDemandeId(Number(option.id))
+                      setEcheanceChoisie(null)
+                      setError(null)
+                    }}
+                    options={optionsDemandes}
+                    placeholder="Rechercher une demande (référence ou client)…"
+                    loading={loadingDemandes}
+                    name="demande"
+                  />
+                  <span className="form-help">
+                    Saisissez la référence (ex. DEM-2026-00017) ou le nom du client.
+                  </span>
+                </label>
+
+                <label className="field form-grid__full">
+                  Échéance <span className="required">*</span>
+                  <select
+                    value={echeanceId || ''}
+                    onChange={(e) => setEcheanceChoisie(Number(e.target.value))}
+                    required
+                    disabled={echeances.length === 0}
+                  >
+                    {echeances.length === 0 && (
+                      <option value="">Aucune échéance à régler</option>
+                    )}
+                    {groupes.map((groupe) => (
+                      <optgroup key={groupe.label} label={groupe.label}>
+                        {groupe.lignes.map((reglable) => (
+                          <option key={reglable.echeance.id} value={reglable.echeance.id}>
+                            N° {reglable.echeance.numeroEcheance} ·{' '}
+                            {formatDate(reglable.echeance.dateEcheance)} — reste{' '}
+                            {formatMontantMGA(reglable.echeance.reste)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <span className="form-help">
+                    Une échéance peut être réglée en plusieurs paiements ; seules celles qui
+                    restent dues sont listées.
+                  </span>
+                </label>
               </div>
-            )}
 
-            <div className="form-grid">
-              <label className="field">
-                Demande <span className="required">*</span>
-                <select
-                  value={plan?.demandeRef ?? ''}
-                  onChange={(e) => {
-                    setDemandeRef(e.target.value)
-                    setEcheance(0)
-                  }}
-                  required
-                >
-                  {plansOuverts.map((p) => (
-                    <option key={p.demandeRef} value={p.demandeRef}>
-                      {p.demandeRef} — {p.client}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {demandeId && !chargement && echeances.length === 0 && (
+                <Alert tone="warning">
+                  Cette demande n&apos;a aucune échéance non soldée. Un plan de paiement doit être
+                  établi — et sa facture validée — avant tout règlement.
+                </Alert>
+              )}
 
-              <label className="field">
-                Échéance <span className="required">*</span>
-                <select
-                  value={echeanceChoisie?.numero ?? 0}
-                  onChange={(e) => setEcheance(Number(e.target.value))}
-                  required
-                >
-                  {echeancesOuvertes.map((ech) => (
-                    <option key={ech.numero} value={ech.numero}>
-                      N° {ech.numero} – {ech.dateEcheance}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="field">
-                Date du paiement <span className="required">*</span>
-                <input
-                  type="date"
-                  value={datePaiement}
-                  onChange={(e) => setDatePaiement(e.target.value)}
-                  required
-                />
-              </label>
-
-              <label className="field">
-                Montant (MGA) <span className="required">*</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={montant}
-                  onChange={(e) => setMontant(Number(e.target.value))}
-                  required
-                />
-                <span className="form-help">
-                  Le montant ne doit pas dépasser le montant restant ({formatMGA(reste)}).
-                </span>
-              </label>
-
-              <div className="field">
-                <span className="field-label">
-                  Mode de paiement <span className="required">*</span>
-                </span>
-                <div className="rd-group" role="radiogroup" aria-label="Mode de paiement">
-                  {(['Espèces', 'Virement'] as ModePaiement[]).map((m) => (
-                    <label key={m} className={`rd${mode === m ? ' on' : ''}`}>
+              {choisie && (
+                <>
+                  <h3 style={{ marginTop: 24 }}>2 · Règlement</h3>
+                  <div className="form-grid">
+                    <label className="field">
+                      Date du paiement 
+                      {/* <span className="required">*</span> */}
                       <input
-                        type="radio"
-                        name="mode"
-                        value={m}
-                        checked={mode === m}
-                        onChange={() => setMode(m)}
+                        type="date"
+                        value={datePaiement}
+                        min={choisie.debutService ?? undefined}
+                        max={choisie.finService ?? undefined}
+                        onChange={(e) => setDatePaiement(e.target.value)}
+                        required
                       />
-                      {m}
+                      <span className="form-help">
+                        {choisie.debutService || choisie.finService
+                          ? `Période du service : ${formatDate(choisie.debutService)} – ${formatDate(choisie.finService)}.`
+                          : 'La date doit être comprise dans la période du service.'}
+                      </span>
                     </label>
-                  ))}
-                </div>
-              </div>
 
-              <label className="field">
-                Référence du virement {mode === 'Virement' && <span className="required">*</span>}
-                <input
-                  value={refVirement}
-                  onChange={(e) => setRefVirement(e.target.value)}
-                  placeholder="Ex. VIR-2026-1004"
-                  required={mode === 'Virement'}
-                />
-                <span className="form-help">Obligatoire pour un virement.</span>
-              </label>
+                    <div className="field">
+                      <span className="field-label">
+                        Montant (MGA) <span className="required">*</span>
+                      </span>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+                        <input
+                          type="number"
+                          min={1}
+                          step="1"
+                          value={Number.isFinite(montant) ? montant : 0}
+                          onChange={(e) =>
+                            setMontantSaisi({ echeanceId, montant: Number(e.target.value) })
+                          }
+                          style={{ flex: 1, minWidth: 0 }}
+                          required
+                        />
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          onClick={() => setMontantSaisi({ echeanceId, montant: reste })}
+                          disabled={reste <= 0}
+                        >
+                          Solder
+                        </button>
+                      </div>
+                      <span className="form-help">
+                        Reste à payer sur l&apos;échéance : {formatMontantMGA(reste)}.
+                      </span>
+                    </div>
 
-              <div className="field form-grid__full">
-                <span className="field-label">Justificatif</span>
-                <div className="dz" role="button" tabIndex={0} aria-label="Ajouter un justificatif">
-                  <div>↑</div>
-                  <div>
-                    <strong className="lk">Parcourir</strong> ou glisser un fichier ici
+                    <div className="field form-grid__full">
+                      <span className="field-label">
+                        Mode de paiement <span className="required">*</span>
+                      </span>
+                      <div className="rd-group" role="radiogroup" aria-label="Mode de paiement">
+                        {(modes ?? []).map((m) => (
+                          <label
+                            key={m.id}
+                            className={`rd${modeChoisi?.id === m.id ? ' on' : ''}`}
+                          >
+                            <input
+                              type="radio"
+                              name="mode"
+                              value={m.id}
+                              checked={modeChoisi?.id === m.id}
+                              onChange={() => {
+                                setModeId(m.id)
+                                if (m.code?.toUpperCase() !== VIREMENT) setRefVirement('')
+                              }}
+                            />
+                            {m.libelle}
+                            <span style={{ marginLeft: 6, opacity: 0.65, fontWeight: 500 }}>
+                              {m.code}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {estVirement && (
+                      <label className="field form-grid__full">
+                        Référence du virement <span className="required">*</span>
+                        <input
+                          value={refVirement}
+                          onChange={(e) => setRefVirement(e.target.value)}
+                          placeholder="Ex. VIR-2026-1004"
+                          maxLength={150}
+                          required
+                        />
+                        <span className="form-help">
+                          Obligatoire pour un règlement par virement (150 caractères maximum).
+                        </span>
+                      </label>
+                    )}
                   </div>
-                  <small>PDF, JPG ou PNG</small>
-                </div>
+                </>
+              )}
+
+              <h3 style={{ marginTop: 24 }}>3 · Informations complémentaires</h3>
+              <div className="form-grid">
+                <label className="field form-grid__full">
+                  Commentaire
+                  <textarea
+                    value={commentaire}
+                    onChange={(e) => setCommentaire(e.target.value)}
+                    placeholder="Information complémentaire (facultatif)"
+                    maxLength={LIMITE_COMMENTAIRE}
+                    rows={3}
+                    style={{ height: 92 }}
+                  />
+                  <span className="form-help">
+                    {commentaire.length} / {LIMITE_COMMENTAIRE} caractères
+                  </span>
+                </label>
               </div>
 
-              <label className="field form-grid__full">
-                Commentaire
-                <textarea
-                  value={commentaire}
-                  onChange={(e) => setCommentaire(e.target.value)}
-                  placeholder="Information complémentaire (facultatif)"
-                  rows={3}
-                  style={{ height: 92 }}
-                />
-              </label>
-            </div>
-
-            <footer className="modal-footer" style={{ borderTop: 'none', padding: '16px 0 0' }}>
-              <button type="button" className="btn-ghost" onClick={() => navigate('/paiements')}>
-                Annuler
-              </button>
-              <button type="submit" className="btn-primary">
-                Enregistrer le paiement
-              </button>
-            </footer>
-          </form>
+              <footer className="modal-footer" style={{ marginTop: 20 }}>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => navigate('/paiements')}
+                  disabled={submitting}
+                >
+                  Annuler
+                </button>
+                <button type="submit" className="btn-primary" disabled={submitting || !champValide}>
+                  {submitting ? 'Enregistrement…' : 'Enregistrer le paiement'}
+                </button>
+              </footer>
+            </form>
+          )}
         </section>
 
         <aside className="card card-pad recap-card">
           <h3>Récapitulatif</h3>
           <div className="rc">
             <span>Client</span>
-            <strong>{plan?.client ?? '—'}</strong>
+            <strong>{choisie?.nomSociete ?? '—'}</strong>
           </div>
           <div className="rc">
             <span>Demande</span>
-            <strong>{plan?.demandeRef ?? '—'}</strong>
+            <strong>{choisie?.referenceDemande ?? '—'}</strong>
+          </div>
+          <div className="rc">
+            <span>Service</span>
+            <strong>{choisie?.ligneLabel ?? '—'}</strong>
           </div>
           <div className="rc">
             <span>Échéance</span>
             <strong>
-              {echeanceChoisie ? `N° ${echeanceChoisie.numero} - ${echeanceChoisie.dateEcheance}` : '—'}
+              {choisie
+                ? `N° ${choisie.echeance.numeroEcheance} - ${formatDate(choisie.echeance.dateEcheance)}`
+                : '—'}
             </strong>
           </div>
+          {choisie && (
+            <div style={{ margin: '4px 0 8px' }}>
+              <EcheancePill statut={choisie.echeance.statut} />
+            </div>
+          )}
+
           <div className="rc">
             <span>Montant attendu</span>
-            <strong>{formatMGA(attendu)}</strong>
+            <strong>{formatMontantMGA(attendu)}</strong>
           </div>
           <div className="rc">
             <span>Déjà payé</span>
-            <strong style={{ color: 'var(--success)' }}>{formatMGA(dejaPaye)}</strong>
+            <strong style={{ color: 'var(--success)' }}>{formatMontantMGA(dejaPaye)}</strong>
           </div>
           <div className="rc">
             <span>Reste à payer</span>
-            <strong style={{ color: 'var(--danger)' }}>{formatMGA(reste)}</strong>
+            <strong style={{ color: 'var(--danger)' }}>{formatMontantMGA(reste)}</strong>
           </div>
-          {echeanceChoisie && (
-            <div className="nt" style={{ marginTop: 12 }}>
-              <strong>Après ce paiement</strong> :{' '}
-              {apresPaiement <= 0
-                ? `échéance n° ${echeanceChoisie.numero} soldée (0 MGA).`
-                : `reste ${formatMGA(apresPaiement)} sur l'échéance n° ${echeanceChoisie.numero}.`}
+
+          {choisie && (
+            <div className="progression" style={{ marginTop: 4 }}>
+              <div className="progression__label" style={{ marginBottom: 0 }}>
+                <span>Échéance réglée</span>
+                <strong>{tauxEcheance} %</strong>
+              </div>
+              <div
+                className="trk"
+                role="progressbar"
+                aria-valuenow={tauxEcheance}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <i style={{ width: `${tauxEcheance}%` }} />
+              </div>
+            </div>
+          )}
+
+          <div className="nt" style={{ marginTop: 12 }}>
+            <strong>Après ce paiement</strong> :{' '}
+            {montant <= 0
+              ? 'saisissez un montant supérieur à 0.'
+              : apresPaiement <= 0
+                ? `échéance n° ${choisie?.echeance.numeroEcheance} soldée (0 MGA).`
+                : `reste ${formatMontantMGA(apresPaiement)} sur l'échéance n° ${choisie?.echeance.numeroEcheance}.`}
+          </div>
+
+          {(montantDepasse || dateHorsPeriode) && (
+            <div style={{ marginTop: 12 }}>
+              <Alert tone="danger">
+                {montantDepasse
+                  ? `Le montant dépasse le reste à payer de ${formatMontantMGA(montant - reste)} MGA.`
+                  : 'La date du paiement est hors de la période du service.'}
+              </Alert>
+            </div>
+          )}
+
+          {choisie && (
+            <div style={{ marginTop: 14 }}>
+              <div className="rc">
+                <span>Mode</span>
+                <strong>{modeChoisi?.libelle ?? '—'}</strong>
+              </div>
+              {estVirement && (
+                <div className="rc">
+                  <span>Réf. virement</span>
+                  <strong>{refVirement.trim() || '—'}</strong>
+                </div>
+              )}
+              <div className="rc">
+                <span>Date</span>
+                <strong>{datePaiement ? formatDate(datePaiement) : '—'}</strong>
+              </div>
+              <Link
+                to={`/paiements/echeanciers/${choisie.referenceDemande}`}
+                className="btn-link success"
+              >
+                Voir l&apos;échéancier ›
+              </Link>
             </div>
           )}
         </aside>

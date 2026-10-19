@@ -1,8 +1,11 @@
-import { formatMGA, type PaiementHistorique } from '../data/mockPaiements'
+import { formatDate, formatMontantMGA } from '@/utils/format'
+import { Can } from '@/components/shared/Can'
+import { paiementsApi } from '../services/paiements.service'
+import type { Paiement } from '../types'
 import { ModePill } from './PaiementsTable'
 
-/** Tableau de l'historique des règlements. */
-export function HistoriqueTable({ items }: { items: PaiementHistorique[] }) {
+/** Historique des règlements enregistrés. */
+export function HistoriqueTable({ items }: { items:Paiement[] }) {
   if (items.length === 0)
     return <div className="card-pad text-muted">Aucun paiement trouvé.</div>
 
@@ -18,21 +21,34 @@ export function HistoriqueTable({ items }: { items: PaiementHistorique[] }) {
           <th>Mode de paiement</th>
           <th>Utilisateur</th>
           <th>Réf. virement</th>
+          <th>Reçu</th>
         </tr>
       </thead>
       <tbody>
         {items.map((p) => (
-          <tr key={p.reference}>
-            <td className="fw-700">{p.reference}</td>
-            <td className="text-secondary">{p.demandeRef}</td>
-            <td>{p.client}</td>
-            <td className="text-secondary">{p.date}</td>
-            <td className="cell-number fw-700">{formatMGA(p.montant)}</td>
+          <tr key={p.id}>
+            <td className="fw-700">{p.referencePaiement}</td>
+            <td className="text-secondary">{p.referenceDemande}</td>
+            <td>{p.nomSociete ?? '—'}</td>
+            <td className="text-secondary">{formatDate(p.datePaiement)}</td>
+            <td className="cell-number fw-700">{formatMontantMGA(p.montantPaye)}</td>
             <td>
-              <ModePill mode={p.mode} />
+              <ModePill code={p.libelleMode} />
             </td>
-            <td>{p.utilisateur}</td>
-            <td className="text-secondary">{p.refVirement ?? '—'}</td>
+            <td>{p.createdByName ?? '—'}</td>
+            <td className="text-secondary">{p.referenceVirement ?? '—'}</td>
+            <td>
+              <Can permission="DOCUMENT_PAIEMENT_VIEW">
+                <a
+                  className="btn-link success"
+                  href={paiementsApi.recepisseUrl(p.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  PDF ›
+                </a>
+              </Can>
+            </td>
           </tr>
         ))}
       </tbody>

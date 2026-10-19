@@ -6,6 +6,7 @@ import com.cabex.backend.demande.dto.HistoriqueLigneResponse;
 import com.cabex.backend.demande.dto.LigneServiceResponse;
 import com.cabex.backend.demande.dto.StatutResponse;
 import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.demande.service.SituationPaiement;
 import com.cabex.backend.demande.entity.HistoriqueDemande;
 import com.cabex.backend.demande.entity.HistoriqueLigneService;
 import com.cabex.backend.demande.entity.LigneService;
@@ -62,6 +63,14 @@ public class DemandeMapper {
     public static DemandeResponse toResponse(DemandeService d, String statutActuel,
                                              BigDecimal montantPaye, BigDecimal resteAPayer,
                                              List<LigneServiceResponse> lignes, BigDecimal montantTotal) {
+        return toResponse(d, statutActuel, montantPaye, resteAPayer, lignes, montantTotal,
+                SituationPaiement.NON_PLANIFIE, 0L);
+    }
+
+    public static DemandeResponse toResponse(DemandeService d, String statutActuel,
+                                             BigDecimal montantPaye, BigDecimal resteAPayer,
+                                             List<LigneServiceResponse> lignes, BigDecimal montantTotal,
+                                             String situationPaiement, Long nombreEcheances) {
         if (d == null) {
             return null;
         }
@@ -100,7 +109,9 @@ public class DemandeMapper {
                 d.getActif(),
                 d.getCreatedAt(),
                 lignes,
-                montantTotal
+                montantTotal,
+                situationPaiement,
+                nombreEcheances
         );
     }
 

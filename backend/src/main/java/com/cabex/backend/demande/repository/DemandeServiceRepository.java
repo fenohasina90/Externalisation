@@ -27,10 +27,32 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
     @Query("SELECT COUNT(d) FROM DemandeService d WHERE d.dateDemande = CURRENT_DATE")
     long countDemandesAujourdhui();
 
+    /**
+     * Filtre de la liste des demandes : la recherche porte sur la référence de
+     * la demande et sur le nom du client. La jointure sur la société est
+     * externe pour ne pas perdre les demandes de création d'entreprise
+     * (`societe_id` NULL).
+     *
+     * <p>Filtre `situation` — situation de règlement déduite des échéances,
+     * dans l'ordre de précédence de {@code LigneServiceService} :
+     * <ul>
+     *   <li>{@code PAYE} : au moins une échéance et toutes soldées ;</li>
+     *   <li>{@code EN_RETARD} : au moins une échéance dépassée avec un reste ;</li>
+     *   <li>{@code PARTIEL} : reste dû, aucune échéance en retard, mais un
+     *       paiement déjà enregistré ;</li>
+     *   <li>{@code EN_ATTENTE} : reste dû, aucune échéance en retard, aucun
+     *       paiement ;</li>
+     *   <li>{@code NON_PLANIFIE} : aucun plan de paiement établi.</li>
+     * </ul>
+     * Les prédicats sont mutuellement exclusifs par construction.
+     */
     @Query("""
         SELECT d FROM DemandeService d
         LEFT JOIN d.societe s LEFT JOIN s.domaine dom LEFT JOIN d.commercial c
-        WHERE (:recherche IS NULL OR LOWER(d.referenceDemande) LIKE LOWER(CONCAT('%', :recherche, '%')))
+        WHERE (:recherche IS NULL OR (
+                LOWER(d.referenceDemande) LIKE LOWER(CONCAT('%', :recherche, '%'))
+             OR (s IS NOT NULL AND LOWER(s.nomSociete) LIKE LOWER(CONCAT('%', :recherche, '%')))
+          ))
           AND (:societeId IS NULL OR s.id = :societeId)
           AND (:serviceId IS NULL OR EXISTS (
                 SELECT 1 FROM LigneService l
@@ -50,6 +72,49 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                   AND h.statut.statut = :statut
                   AND h.id = (SELECT MAX(h2.id) FROM HistoriqueDemande h2 WHERE h2.demande = d)
               ))
+          AND (
+            :situation IS NULL
+            OR (:situation = 'PAYE'
+                AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                                WHERE e.proposPaiement.demande = d
+                                  AND e.montantPaye < e.montantAttendu)
+                AND EXISTS (SELECT 1 FROM EcheancePaiement e
+                            WHERE e.proposPaiement.demande = d))
+            OR (:situation = 'EN_RETARD'
+                AND EXISTS (SELECT 1 FROM EcheancePaiement e
+                            WHERE e.proposPaiement.demande = d
+                              AND e.dateEcheance < :aujourdhui
+                              AND e.montantPaye < e.montantAttendu))
+            OR (:situation = 'PARTIEL'
+                AND EXISTS (SELECT 1 FROM EcheancePaiement e
+                            WHERE e.proposPaiement.demande = d
+                              AND e.montantPaye < e.montantAttendu)
+                AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                                WHERE e.proposPaiement.demande = d
+                                  AND e.dateEcheance < :aujourdhui
+                                  AND e.montantPaye < e.montantAttendu)
+                AND EXISTS (SELECT 1 FROM EcheancePaiement e
+                            WHERE e.proposPaiement.demande = d AND e.montantPaye > 0))
+            OR (:situation = 'EN_ATTENTE'
+                AND EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d)
+                AND (
+                  NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                              WHERE e.proposPaiement.demande = d)
+                  OR (
+                    EXISTS (SELECT 1 FROM EcheancePaiement e
+                            WHERE e.proposPaiement.demande = d
+                              AND e.montantPaye < e.montantAttendu)
+                    AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                                    WHERE e.proposPaiement.demande = d
+                                      AND e.dateEcheance < :aujourdhui
+                                      AND e.montantPaye < e.montantAttendu)
+                    AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                                    WHERE e.proposPaiement.demande = d AND e.montantPaye > 0)
+                  )
+                ))
+            OR (:situation = 'NON_PLANIFIE'
+                AND NOT EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d))
+          )
         """)
     Page<DemandeService> rechercher(@Param("recherche") String recherche,
                                     @Param("societeId") Integer societeId,
@@ -60,7 +125,32 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                                     @Param("dateDebut") LocalDate dateDebut,
                                     @Param("dateFin") LocalDate dateFin,
                                     @Param("actif") Boolean actif,
+                                    @Param("situation") String situation,
+                                    @Param("aujourdhui") LocalDate aujourdhui,
                                     Pageable pageable);
+
+    /**
+     * Situation de règlement et nombre d'échéances pour un lot de demandes,
+     * en une seule requête (évite un aller-retour par ligne de liste).
+     * Colonnes : id, nb plans, nb échéances, nb avec reste, nb en retard,
+     * nb payées — agrégats interpreétés par {@code SituationPaiement.classer}.
+     */
+    @Query("""
+        SELECT d.id,
+               COUNT(DISTINCT p.id),
+               COUNT(e.id),
+               SUM(CASE WHEN e.montantPaye < e.montantAttendu THEN 1 ELSE 0 END),
+               SUM(CASE WHEN e.dateEcheance < :aujourdhui AND e.montantPaye < e.montantAttendu
+                        THEN 1 ELSE 0 END),
+               SUM(CASE WHEN e.montantPaye > 0 THEN 1 ELSE 0 END)
+        FROM DemandeService d
+        LEFT JOIN LigneService l ON l.demande = d
+        LEFT JOIN ProposPaiement p ON p.ligneService = l
+        LEFT JOIN EcheancePaiement e ON e.proposPaiement = p
+        WHERE d.id IN :ids
+        GROUP BY d.id
+        """)
+    List<Object[]> situations(@Param("ids") List<Integer> ids, @Param("aujourdhui") LocalDate aujourdhui);
 
     List<DemandeService> findByDateDemandeGreaterThanEqualAndDateDemandeLessThanEqual(
             LocalDate dateDebut, LocalDate dateFin);

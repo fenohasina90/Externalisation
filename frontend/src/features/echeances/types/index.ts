@@ -1,4 +1,5 @@
-export type EtatEcheance = 'A_JOUR' | 'PROCHE' | 'EN_RETARD' | string
+/** État d'une échéance (valeurs produites par EcheanceMapper.calculerStatutEcheance). */
+export type EtatEcheance = 'PAYEE' | 'EN_RETARD' | 'PROCHE' | 'PARTIELLE' | 'A_VENIR'
 
 export interface Echeance {
   id: number
@@ -8,12 +9,18 @@ export interface Echeance {
   montantAttendu: number
   montantPaye: number
   reste: number
-  statut: EtatEcheance
+  statut: EtatEcheance | string
   commentaire: string | null
 }
 
 export interface CreateEcheancePayload {
   numeroEcheance: number
+  dateEcheance: string
+  montantAttendu: number
+  commentaire?: string | null
+}
+
+export interface UpdateEcheancePayload {
   dateEcheance: string
   montantAttendu: number
   commentaire?: string | null

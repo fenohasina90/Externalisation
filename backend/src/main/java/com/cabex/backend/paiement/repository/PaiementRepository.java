@@ -58,10 +58,25 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
         """)
     long compterPaiementsSurEcheanceATemps();
 
+    /**
+     * Filtre de l'historique des paiements : la recherche porte sur la
+     * référence du paiement, celle de la demande, le client, le mode et la
+     * référence de virement. La jointure sur la société est externe : une
+     * demande de création d'entreprise n'a pas de société (`societe_id` NULL)
+     * et ses paiements doivent rester trouvables.
+     */
     @Query("""
         SELECT p FROM Paiement p
+        LEFT JOIN p.demande.societe s
         WHERE p.actif = true
-          AND (:recherche IS NULL OR LOWER(p.referencePaiement) LIKE LOWER(CONCAT('%', :recherche, '%')))
+          AND (:recherche IS NULL OR (
+                LOWER(p.referencePaiement) LIKE LOWER(CONCAT('%', :recherche, '%'))
+             OR LOWER(p.demande.referenceDemande) LIKE LOWER(CONCAT('%', :recherche, '%'))
+             OR (s IS NOT NULL AND LOWER(s.nomSociete) LIKE LOWER(CONCAT('%', :recherche, '%')))
+             OR (p.modePaiement IS NOT NULL
+                 AND LOWER(p.modePaiement.libelle) LIKE LOWER(CONCAT('%', :recherche, '%')))
+             OR LOWER(COALESCE(p.referenceVirement, '')) LIKE LOWER(CONCAT('%', :recherche, '%'))
+          ))
           AND (:demandeId IS NULL OR p.demande.id = :demandeId)
           AND (:modeId IS NULL OR p.modePaiement.id = :modeId)
           AND (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
@@ -142,13 +157,23 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
                                      @Param("domaineId") Integer domaineId,
                                      @Param("commercialId") Integer commercialId);
 
+    /**
+     * Recherche globale : `actif = true` s'applique à toutes les branches
+     * (règle R12 — les paiements archivés sont exclus de la recherche), et la
+     * société est jointe en externe pour ne pas perdre les demandes de
+     * création d'entreprise.
+     */
     @Query("""
         SELECT p FROM Paiement p
+        LEFT JOIN p.demande.societe s
         WHERE p.actif = true
-          AND (LOWER(p.referencePaiement) LIKE LOWER(CONCAT('%', :q, '%')))
-           OR (p.demande IS NOT NULL AND LOWER(p.demande.referenceDemande) LIKE LOWER(CONCAT('%', :q, '%')))
-           OR (p.demande IS NOT NULL AND LOWER(p.demande.societe.nomSociete) LIKE LOWER(CONCAT('%', :q, '%')))
-           OR (p.modePaiement IS NOT NULL AND LOWER(p.modePaiement.libelle) LIKE LOWER(CONCAT('%', :q, '%')))
+          AND (
+                LOWER(p.referencePaiement) LIKE LOWER(CONCAT('%', :q, '%'))
+             OR LOWER(p.demande.referenceDemande) LIKE LOWER(CONCAT('%', :q, '%'))
+             OR (s IS NOT NULL AND LOWER(s.nomSociete) LIKE LOWER(CONCAT('%', :q, '%')))
+             OR (p.modePaiement IS NOT NULL
+                 AND LOWER(p.modePaiement.libelle) LIKE LOWER(CONCAT('%', :q, '%')))
+          )
         ORDER BY p.datePaiement DESC
         """)
     List<Paiement> rechercherGlobale(@Param("q") String q, Pageable pageable);

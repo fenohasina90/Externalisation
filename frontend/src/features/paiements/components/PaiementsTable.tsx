@@ -1,30 +1,35 @@
 import { Link } from 'react-router-dom'
-import { formatMGA, type ModePaiement, type PlanPaiement, type StatutPlan } from '../data/mockPaiements'
+import { formatMontantMGA } from '@/utils/format'
+import { classeEtatEcheance, getLibelleEtatEcheance } from '@/features/echeances/constants/labels'
+import { StatutDemandePill } from '@/features/demandes/components'
+import type { Demande } from '@/features/demandes/types'
+import { classeMode, classeSituation, LIBELLES_SITUATION } from '../constants/labels'
+import type { SituationPlan } from '../types'
 
-export function StatutPlanPill({ statut }: { statut: StatutPlan }) {
-  const classe =
-    statut === 'Payé' ? 'pill ok'
-    : statut === 'Partiel' ? 'pill warning'
-    : statut === 'En retard' ? 'pill danger'
-    : 'pill wt'
-  return <span className={classe}>● {statut}</span>
+export { StatutDemandePill }
+
+export function SituationPlanPill({ situation }: { situation: SituationPlan }) {
+  return <span className={classeSituation(situation)}>● {LIBELLES_SITUATION[situation]}</span>
 }
 
-export function ModePill({ mode }: { mode: ModePaiement }) {
-  return <span className={mode === 'Virement' ? 'pill info' : 'pill wt'}>● {mode}</span>
+export function ModePill({ code }: { code: string | null | undefined }) {
+  return <span className={classeMode(code)}>● {code ?? '—'}</span>
 }
 
-export function StatutEcheancePill({ attendu, paye }: { attendu: number; paye: number }) {
-  const reste = attendu - paye
-  if (reste === 0) return <span className="pill ok">● Payée</span>
-  if (paye > 0) return <span className="pill warning">● Partielle</span>
-  return <span className="pill wt">● À venir</span>
+export function EcheancePill({ statut }: { statut: string }) {
+  return (
+    <span className={classeEtatEcheance(statut)}>● {getLibelleEtatEcheance(statut)}</span>
+  )
 }
 
-/** Tableau des plans de paiement — action vers l'échéancier. */
-export function PlansTable({ items }: { items: PlanPaiement[] }) {
+interface Props {
+  items: Demande[]
+}
+
+/** Suivi financier par demande — montants agrégés par le backend. */
+export function SuiviTable({ items }: Props) {
   if (items.length === 0)
-    return <div className="card-pad text-muted">Aucun paiement trouvé.</div>
+    return <div className="card-pad text-muted">Aucune demande à afficher.</div>
 
   return (
     <table className="table">
@@ -32,7 +37,7 @@ export function PlansTable({ items }: { items: PlanPaiement[] }) {
         <tr>
           <th>Référence</th>
           <th>Client</th>
-          <th>Demande</th>
+          <th>Services</th>
           <th>Montant total</th>
           <th>Montant payé</th>
           <th>Reste à payer</th>
@@ -41,24 +46,41 @@ export function PlansTable({ items }: { items: PlanPaiement[] }) {
         </tr>
       </thead>
       <tbody>
-        {items.map((p) => (
-          <tr key={p.reference}>
-            <td className="fw-700">{p.reference}</td>
-            <td>{p.client}</td>
-            <td className="text-secondary">{p.demandeRef}</td>
-            <td className="cell-number">{formatMGA(p.montantTotal)}</td>
-            <td className="cell-number">{formatMGA(p.montantPaye)}</td>
-            <td className="cell-number fw-700">{formatMGA(p.montantTotal - p.montantPaye)}</td>
-            <td>
-              <StatutPlanPill statut={p.statut} />
-            </td>
-            <td>
-              <Link to={`/paiements/echeanciers/${p.demandeRef}`} className="btn-link success">
-                Échéancier ›
-              </Link>
-            </td>
-          </tr>
-        ))}
+        {items.map((d) => {
+          const nbServices = d.lignes?.length ?? 0
+          const noms = (d.lignes ?? [])
+            .map((l) => l.nomService)
+            .filter((n): n is string => n !== null)
+          const premier = noms[0] ?? '—'
+          return (
+            <tr key={d.id}>
+              <td className="fw-700">{d.referenceDemande}</td>
+              <td>{d.nomSociete ?? '—'}</td>
+              <td>
+                <span className="fw-600">{premier}</span>
+                {nbServices > 1 && (
+                  <div className="cell-hint">
+                    + {nbServices - 1} autre{nbServices > 2 ? 's' : ''}
+                  </div>
+                )}
+              </td>
+              <td className="cell-number">{formatMontantMGA(d.montantTotal ?? 0)}</td>
+              <td className="cell-number">{formatMontantMGA(d.montantPaye)}</td>
+              <td className="cell-number fw-700">{formatMontantMGA(d.resteAPayer)}</td>
+              <td>
+                <StatutDemandePill statut={d.statutActuel ?? '—'} />
+              </td>
+              <td>
+                <Link
+                  to={`/paiements/echeanciers/${d.referenceDemande}`}
+                  className="btn-link success"
+                >
+                  Échéancier ›
+                </Link>
+              </td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   )

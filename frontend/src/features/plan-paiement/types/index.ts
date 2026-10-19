@@ -1,3 +1,5 @@
+import type { Echeance } from '@/features/echeances/types'
+
 export interface PlanPaiement {
   id: number
   demandeId: number
@@ -7,9 +9,10 @@ export interface PlanPaiement {
   montantTotal: number
   restePayer: number
   nombreEcheances: number
-  nombreEcheancesPayees: number
-  statut: string
   commentaire: string | null
+  statut: string
+  /** Échéances du plan, déjà triées par numéro et avec leur état calculé. */
+  echeances: Echeance[]
 }
 
 export interface EcheancePlanSaisie {
@@ -25,4 +28,11 @@ export interface CreatePlanPaiementPayload {
   commentaire?: string | null
   /** Échéances manuelles (date + montant) ; sinon répartition automatique. */
   echeances?: EcheancePlanSaisie[] | null
+}
+
+export interface UpdatePlanPaiementPayload {
+  dateDebut: string
+  dateFin: string
+  montantTotal: number
+  commentaire?: string | null
 }

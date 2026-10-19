@@ -29,6 +29,8 @@ public record DemandeResponse(
         Boolean actif,
         LocalDateTime createdAt,
         List<LigneServiceResponse> lignes,
-        BigDecimal montantTotal
+        BigDecimal montantTotal,
+        String situationPaiement,
+        Long nombreEcheances
 ) {
 }
