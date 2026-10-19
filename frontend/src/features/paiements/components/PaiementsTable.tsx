@@ -1,15 +1,16 @@
 import { Link } from 'react-router-dom'
 import { formatMontantMGA } from '@/utils/format'
 import { classeEtatEcheance, getLibelleEtatEcheance } from '@/features/echeances/constants/labels'
-import { StatutDemandePill } from '@/features/demandes/components'
+import { SituationPaiementPill, StatutDemandePill } from '@/features/demandes/components'
 import type { Demande } from '@/features/demandes/types'
-import { classeMode, classeSituation, LIBELLES_SITUATION } from '../constants/labels'
+import { classeMode } from '../constants/labels'
 import type { SituationPlan } from '../types'
 
-export { StatutDemandePill }
+export { StatutDemandePill, SituationPaiementPill }
 
+/** La situation de règlement est calculée par le backend. */
 export function SituationPlanPill({ situation }: { situation: SituationPlan }) {
-  return <span className={classeSituation(situation)}>● {LIBELLES_SITUATION[situation]}</span>
+  return <SituationPaiementPill situation={situation} />
 }
 
 export function ModePill({ code }: { code: string | null | undefined }) {

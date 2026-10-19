@@ -211,6 +211,22 @@ export function DemandesPage() {
               </select>
             </label>
             <label className="field filter-field">
+              Situation de paiement
+              <select
+                value={filtres.situation}
+                onChange={(e) =>
+                  setFiltre('situation', e.target.value as typeof filtres.situation)
+                }
+              >
+                <option value="tous">Toutes</option>
+                <option value="PAYE">Payé</option>
+                <option value="PARTIEL">Partiel</option>
+                <option value="EN_RETARD">En retard</option>
+                <option value="EN_ATTENTE">En attente</option>
+                <option value="NON_PLANIFIE">Non planifié</option>
+              </select>
+            </label>
+            <label className="field filter-field">
               Période (début)
               <input
                 type="date"

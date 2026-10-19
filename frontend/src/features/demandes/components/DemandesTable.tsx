@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom'
 import { formatMontantMGA } from '@/utils/format'
-import type { Demande } from '../types'
+import type { Demande, SituationPaiement } from '../types'
+import {
+  classeSituationPaiement,
+  getLibelleSituationPaiement,
+} from '../constants/labels'
 
 export function StatutDemandePill({ statut }: { statut: string }) {
   const classe =
@@ -25,6 +29,16 @@ export function PaiementPill({ paye, total }: { paye: number; total: number }) {
     : situation === 'Partiel' ? 'pill warning'
     : 'pill wt'
   return <span className={classe}>● {situation}</span>
+}
+
+/** Situation de règlement calculée par le backend (toutes lignes confondues). */
+export function SituationPaiementPill({ situation }: { situation: string }) {
+  const valeur = situation as SituationPaiement
+  return (
+    <span className={classeSituationPaiement(valeur)}>
+      ● {getLibelleSituationPaiement(situation)}
+    </span>
+  )
 }
 
 interface Props {
@@ -73,7 +87,11 @@ export function DemandesTable({ items }: Props) {
                 <StatutDemandePill statut={d.statutActuel} />
               </td>
               <td>
-                <PaiementPill paye={d.montantPaye} total={d.montantTotal ?? 0} />
+                {d.situationPaiement ? (
+                  <SituationPaiementPill situation={d.situationPaiement} />
+                ) : (
+                  <PaiementPill paye={d.montantPaye} total={d.montantTotal ?? 0} />
+                )}
               </td>
               <td>
                 <Link to={`/demandes/${d.referenceDemande}`} className="lk">

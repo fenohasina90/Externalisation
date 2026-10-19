@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { useApi } from '@/hooks/useApi'
 import { useDebounce } from '@/hooks/useDebounce'
 import type { ApiPage } from '@/types'
-import type { Demande } from '../types'
+import type { Demande, SituationPaiement } from '../types'
 import { demandesApi, type DemandeFiltres } from '../services/demandes.service'
 
 export interface DemandesFiltresUI {
   recherche: string
   statut: string
+  /** Situation de règlement, filtrée par le serveur. */
+  situation: SituationPaiement | 'tous'
   societeId: number | null
   serviceId: number | null
   commercialId: number | null
@@ -18,6 +20,7 @@ export interface DemandesFiltresUI {
 export const FILTRES_DEMANDES_DEFAUT: DemandesFiltresUI = {
   recherche: '',
   statut: 'tous',
+  situation: 'tous',
   societeId: null,
   serviceId: null,
   commercialId: null,
@@ -33,6 +36,7 @@ export function useDemandesList(size = 8) {
 
   const apiFiltres: DemandeFiltres = {
     statut: filtres.statut === 'tous' ? undefined : filtres.statut,
+    situation: filtres.situation === 'tous' ? undefined : filtres.situation,
     societeId: filtres.societeId ?? undefined,
     serviceId: filtres.serviceId ?? undefined,
     commercialId: filtres.commercialId ?? undefined,
@@ -46,8 +50,8 @@ export function useDemandesList(size = 8) {
         { page, size, recherche: terme.trim() || null },
         apiFiltres,
       ),
-    [page, size, terme, filtres.statut, filtres.societeId, filtres.serviceId,
-      filtres.commercialId, filtres.dateDebut, filtres.dateFin],
+    [page, size, terme, filtres.statut, filtres.situation, filtres.societeId,
+      filtres.serviceId, filtres.commercialId, filtres.dateDebut, filtres.dateFin],
   )
 
   function setFiltre<K extends keyof DemandesFiltresUI>(cle: K, valeur: DemandesFiltresUI[K]): void {
@@ -63,6 +67,7 @@ export function useDemandesList(size = 8) {
   const hasActiveFiltres =
     filtres.recherche.trim() !== '' ||
     filtres.statut !== 'tous' ||
+    filtres.situation !== 'tous' ||
     filtres.societeId !== null ||
     filtres.serviceId !== null ||
     filtres.commercialId !== null ||

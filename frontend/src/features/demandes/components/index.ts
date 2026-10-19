@@ -1,4 +1,4 @@
-export { DemandesTable, StatutDemandePill, PaiementPill } from './DemandesTable'
+export { DemandesTable, StatutDemandePill, PaiementPill, SituationPaiementPill } from './DemandesTable'
 export { DemandeStepper } from './DemandeStepper'
 export { ChangerStatutModal } from './ChangerStatutModal'
 export { DossierEntrepriseDetail } from './DossierEntrepriseDetail'

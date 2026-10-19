@@ -1,25 +1,16 @@
-import type { SituationPlan } from '../types'
+import {
+  LIBELLES_SITUATION_PAIEMENT,
+  classeSituationPaiement,
+} from '@/features/demandes/constants/labels'
 
-export const LIBELLES_SITUATION: Record<SituationPlan, string> = {
-  PAYE: 'Payé',
-  PARTIEL: 'Partiel',
-  EN_RETARD: 'En retard',
-  EN_ATTENTE: 'En attente',
-  NON_PLANIFIE: 'Non planifié',
-}
+/**
+ * Source unique des libellés de situation de règlement : calculés par le
+ * backend et utilisés à la fois comme filtre (`GET /demandes?situation=`) et
+ * comme pastille affichée dans les listes de demandes et d'échéanciers.
+ */
+export const LIBELLES_SITUATION = LIBELLES_SITUATION_PAIEMENT
 
-export const classeSituation = (situation: SituationPlan): string => {
-  switch (situation) {
-    case 'PAYE':
-      return 'pill ok'
-    case 'PARTIEL':
-      return 'pill warning'
-    case 'EN_RETARD':
-      return 'pill danger'
-    default:
-      return 'pill wt'
-  }
-}
+export const classeSituation = classeSituationPaiement
 
 /** Le virement impose une référence (règle métier R3). */
 export const VIREMENT = 'VIREMENT'
