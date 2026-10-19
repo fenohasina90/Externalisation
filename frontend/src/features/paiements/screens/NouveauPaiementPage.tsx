@@ -4,6 +4,7 @@ import { Alert, Autocomplete, Spinner } from '@/components/ui'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { messageErreur } from '@/constants/messages'
 import { useAuth } from '@/features/auth/hooks/useAuth'
+import { SelectionFichiers, documentsApi } from '@/features/documents'
 import { formatDate, formatMontantMGA } from '@/utils/format'
 import { telechargerBlob } from '@/utils/telechargement'
 import { VIREMENT } from '../constants/labels'
@@ -66,6 +67,8 @@ export function NouveauPaiementPage() {
   const [submitting, setSubmitting] = useState(false)
   const [confirmation, setConfirmation] = useState(false)
   const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null)
+  const [fichiers, setFichiers] = useState<File[]>([])
+  const [paiementCree, setPaiementCree] = useState<{ id: number; reference: string } | null>(null)
   // Montant saisi, rattaché à l'échéance concernée : le pré-remplissage suit
   // l'échéance choisie sans effet de bord.
   const [montantSaisi, setMontantSaisi] = useState<{ echeanceId: number; montant: number } | null>(
@@ -195,19 +198,28 @@ export function NouveauPaiementPage() {
 
     setSubmitting(true)
     try {
-      const paiement = await paiementsApi.create({
-        demandeId,
-        echeanceId: choisie.echeance.id,
-        modePaiementId: modeChoisi.id,
-        datePaiement,
-        montantPaye: montant,
-        referenceVirement: estVirement ? refVirement.trim() : null,
-        commentaire: commentaire.trim() || null,
-      })
+      let paiement = paiementCree
+      if (!paiement) {
+        const cree = await paiementsApi.create({
+          demandeId,
+          echeanceId: choisie.echeance.id,
+          modePaiementId: modeChoisi.id,
+          datePaiement,
+          montantPaye: montant,
+          referenceVirement: estVirement ? refVirement.trim() : null,
+          commentaire: commentaire.trim() || null,
+        })
+        paiement = { id: cree.id, reference: cree.referencePaiement }
+        setPaiementCree(paiement)
 
-      if (hasPermission('DOCUMENT_PAIEMENT_VIEW')) {
-        const recu = await paiementsApi.telechargerRecu(paiement.id).catch(() => null)
-        if (recu) telechargerBlob(recu, `recu-${paiement.referencePaiement}.pdf`)
+        if (hasPermission('DOCUMENT_PAIEMENT_VIEW')) {
+          const recu = await paiementsApi.telechargerRecu(cree.id).catch(() => null)
+          if (recu) telechargerBlob(recu, `recu-${cree.referencePaiement}.pdf`)
+        }
+      }
+
+      for (const fichier of fichiers) {
+        await documentsApi.uploadPaiement(paiement.id, fichier, null)
       }
 
       navigate(`/paiements/echeanciers/${choisie.referenceDemande}`)
@@ -433,6 +445,12 @@ export function NouveauPaiementPage() {
                     {commentaire.length} / {LIMITE_COMMENTAIRE} caractères
                   </span>
                 </label>
+
+                <SelectionFichiers
+                  fichiers={fichiers}
+                  onChange={setFichiers}
+                  desactive={submitting}
+                />
               </div>
 
               <footer className="modal-footer" style={{ marginTop: 20 }}>
@@ -573,6 +591,7 @@ export function NouveauPaiementPage() {
           if (submitting) return
           setConfirmation(false)
           setErreurEnregistrement(null)
+          setPaiementCree(null)
         }}
         onConfirmer={() => void confirmerEnregistrement()}
         details={

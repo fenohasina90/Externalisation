@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Spinner } from '@/components/ui'
 import { Can } from '@/components/shared/Can'
+import { PiecesJointes } from '@/features/documents'
+import type { Paiement } from '../types'
 import { formatDate, formatMontantMGA } from '@/utils/format'
 import { telechargerBlob } from '@/utils/telechargement'
 import { EcheancePill, ModePill, SituationPlanPill, StatutDemandePill } from '../components'
@@ -14,6 +16,7 @@ export function EcheancierDetailPage() {
   const { reference } = useParams<{ reference: string }>()
   const { data, loading, error } = useEcheancierDemande(reference)
   const [erreurRecu, setErreurRecu] = useState<string | null>(null)
+  const [paiementDocuments, setPaiementDocuments] = useState<Paiement | null>(null)
 
   const telechargerRecu = async (id: number, referencePaiement: string) => {
     setErreurRecu(null)
@@ -220,6 +223,7 @@ export function EcheancierDetailPage() {
                   <th>Mode</th>
                   <th>Réf. virement</th>
                   <th>Utilisateur</th>
+                  <th>Pièces</th>
                   <th>Reçu</th>
                 </tr>
               </thead>
@@ -238,6 +242,17 @@ export function EcheancierDetailPage() {
                       <Can permission="DOCUMENT_PAIEMENT_VIEW">
                         <button
                           type="button"
+                          className="btn-link"
+                          onClick={() => setPaiementDocuments(p)}
+                        >
+                          Pièces jointes
+                        </button>
+                      </Can>
+                    </td>
+                    <td>
+                      <Can permission="DOCUMENT_PAIEMENT_VIEW">
+                        <button
+                          type="button"
                           className="btn-link success"
                           onClick={() => void telechargerRecu(p.id, p.referencePaiement)}
                         >
@@ -249,7 +264,7 @@ export function EcheancierDetailPage() {
                 ))}
                 {paiements.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-muted">
+                    <td colSpan={8} className="text-muted">
                       Aucun paiement enregistré pour cette demande.
                     </td>
                   </tr>
@@ -259,6 +274,39 @@ export function EcheancierDetailPage() {
           </div>
         </div>
       </section>
+
+      {paiementDocuments && (
+        <div className="modal-backdrop" onClick={() => setPaiementDocuments(null)}>
+          <div
+            className="modal-card"
+            style={{ maxWidth: 760 }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Pièces jointes du paiement"
+          >
+            <header className="modal-header">
+              <h3 className="modal-title">
+                Paiement {paiementDocuments.referencePaiement}
+              </h3>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setPaiementDocuments(null)}
+                aria-label="Fermer"
+              >
+                ✕
+              </button>
+            </header>
+            <div className="modal-body">
+              <PiecesJointes
+                cible="paiement"
+                id={paiementDocuments.id}
+                titre="Pièces jointes du paiement"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

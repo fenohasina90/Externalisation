@@ -15,7 +15,8 @@ import { domainesApi, servicesApi } from '@/features/services/services/services.
 import { ClientFormModal } from '@/features/clients/components/ClientFormModal'
 import { ResponsableFormModal } from '@/features/responsables/components/ResponsableFormModal'
 import { ServiceFormModal } from '@/features/services/components/ServiceFormModal'
-import type { CreateLignePayload, ModeFacturation } from '../types'
+import { SelectionFichiers, documentsApi } from '@/features/documents'
+import type { ModeFacturation } from '../types'
 import { demandesApi } from '../services/demandes.service'
 
 const OPTION_CREATION = 'creation'
@@ -54,6 +55,8 @@ export function NouvelleDemandePage() {
   const [lignes, setLignes] = useState<LigneSaisie[]>([{ ...LIGNE_VIDE }])
   const [erreur, setErreur] = useState<string | null>(null)
   const [enregistrement, setEnregistrement] = useState(false)
+  const [fichiers, setFichiers] = useState<File[]>([])
+  const [demandeCreee, setDemandeCreee] = useState<{ id: number; reference: string } | null>(null)
 
   const { data: societes, reload: reloadSocietes } = useApi<ApiPage<Societe>>(
     () => clientsApi.list({ page: 0, size: 100, recherche: null }, {}, { champ: 'nomSociete', sens: 'asc' }),
@@ -270,31 +273,42 @@ export function NouvelleDemandePage() {
     setEnregistrement(true)
     setErreur(null)
     try {
-      const payloadLignes: CreateLignePayload[] = lignes.map((l) => ({
-        serviceId: l.serviceId as number,
-        tarif: Number(l.tarif),
-        debutService: l.debutService,
-        finService: l.finService,
-      }))
-      const creee = await demandesApi.create({
-        societeId,
-        clientResponsableId: responsableId,
-        commercialId: commercialId === '' ? null : commercialId,
-        dateDemande,
-        commentaire: commentaire.trim() || null,
-        lignes: payloadLignes,
-        modeFacturation: mode,
-      })
-      const estCreation = payloadLignes.some(
-        (l) => typesServices.get(l.serviceId) === 'CREATION',
-      )
+      let cible = demandeCreee
+      if (!cible) {
+        const payloadLignes = lignes.map((l) => ({
+          serviceId: l.serviceId as number,
+          tarif: Number(l.tarif),
+          debutService: l.debutService,
+          finService: l.finService,
+        }))
+        const creee = await demandesApi.create({
+          societeId,
+          clientResponsableId: responsableId,
+          commercialId: commercialId === '' ? null : commercialId,
+          dateDemande,
+          commentaire: commentaire.trim() || null,
+          lignes: payloadLignes,
+          modeFacturation: mode,
+        })
+        cible = { id: creee.id, reference: creee.referenceDemande }
+        setDemandeCreee(cible)
+      }
+      for (const fichier of fichiers) {
+        await documentsApi.uploadDemande(cible.id, fichier, null)
+      }
+      const estCreation = lignes.some((l) => typesServices.get(l.serviceId as number) === 'CREATION')
       navigate(
         estCreation
-          ? `/demandes/${creee.referenceDemande}?onglet=dossier`
-          : `/demandes/${creee.referenceDemande}`,
+          ? `/demandes/${cible.reference}?onglet=dossier`
+          : `/demandes/${cible.reference}`,
       )
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : 'Échec de la création')
+      const message = err instanceof Error ? err.message : 'Échec de la création'
+      setErreur(
+        demandeCreee
+          ? `La demande ${demandeCreee.reference} a été créée, mais l'envoi des pièces jointes a échoué : ${message}`
+          : message,
+      )
     } finally {
       setEnregistrement(false)
     }
@@ -442,6 +456,12 @@ export function NouvelleDemandePage() {
                       placeholder="Précisions éventuelles"
                     />
                   </label>
+
+                  <SelectionFichiers
+                    fichiers={fichiers}
+                    onChange={setFichiers}
+                    desactive={enregistrement}
+                  />
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

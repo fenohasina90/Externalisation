@@ -6,6 +6,7 @@ import { FormEtapes } from '@/components/shared/FormEtapes'
 import { Spinner } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
 import { http } from '@/api/http'
+import { useAuth } from '@/features/auth/hooks/useAuth'
 import { formatDate, formatMontantMGA } from '@/utils/format'
 import type { Commercial } from '@/features/commerciaux/types'
 import type { Service } from '@/features/services/types'
@@ -16,6 +17,7 @@ import { planPaiementApi } from '@/features/plan-paiement/services/plan-paiement
 import type { Echeance } from '@/features/echeances/types'
 import { echeancesApi } from '@/features/echeances/services/echeances.service'
 import { ServiceFormModal } from '@/features/services/components/ServiceFormModal'
+import { PiecesJointes } from '@/features/documents'
 import { ChangerStatutModal, DemandeStepper, DossierEntrepriseDetail,
   DossierEntrepriseFormModal, StatutDemandePill } from '../components'
 import { DOSSIER_VIDE, type DossierEntreprise } from '../data/mockDossierEntreprise'
@@ -24,9 +26,9 @@ import type { Demande, Facture, HistoriqueDemande, HistoriqueLigne, LigneService
 import { dossierVersFormulaire, dossierVersPayload, type Dossier } from '../types/dossier'
 import { demandesApi, dossierApi, facturesApi, lignesApi } from '../services/demandes.service'
 
-type Onglet = 'informations' | 'services' | 'factures' | 'paiements' | 'historique' | 'dossier'
+type Onglet = 'informations' | 'services' | 'factures' | 'documents' | 'paiements' | 'historique' | 'dossier'
 
-const ONGLETS_VALIDES: Onglet[] = ['informations', 'services', 'factures', 'paiements', 'historique', 'dossier']
+const ONGLETS_VALIDES: Onglet[] = ['informations', 'services', 'factures', 'documents', 'paiements', 'historique', 'dossier']
 
 const LIBELLES_LIGNE: Record<string, string> = {
   VALIDE: 'Validé',
@@ -65,6 +67,7 @@ function EcheancePill({ statut }: { statut: string }) {
 /** Détail d'une demande multi-services branché sur l'API (route /demandes/:reference). */
 export function DemandeDetailPage() {
   const { reference } = useParams<{ reference: string }>()
+  const { hasPermission } = useAuth()
   const [paramsRecherche] = useSearchParams()
   const ongletInitial = paramsRecherche.get('onglet')
   const [onglet, setOnglet] = useState<Onglet>(
@@ -168,6 +171,9 @@ export function DemandeDetailPage() {
     ['informations', 'Informations'],
     ['services', `Services (${demande.lignes?.length ?? 0})`],
     ['factures', `Factures (${factures?.length ?? 0})`],
+    ...(hasPermission('DOCUMENT_DEMANDE_VIEW')
+      ? [['documents', 'Documents'] as [Onglet, string]]
+      : []),
     ['paiements', 'Paiements'],
     ['historique', 'Historique'],
     ...((demande.lignes ?? []).some((l) => l.typeService === 'CREATION')
@@ -306,6 +312,10 @@ export function DemandeDetailPage() {
       )}
 
       {onglet === 'paiements' && <PaiementsTab demande={demande} />}
+
+      {onglet === 'documents' && (
+        <PiecesJointes cible="demande" id={demande.id} titre="Pièces jointes de la demande" />
+      )}
 
       {onglet === 'dossier' && (
         <DossierTab
