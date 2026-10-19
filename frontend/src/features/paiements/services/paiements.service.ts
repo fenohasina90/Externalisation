@@ -54,8 +54,11 @@ export const paiementsApi = {
     return data
   },
 
-  /** URL de téléchargement du reçu PDF (DOCUMENT_PAIEMENT_VIEW). */
-  recepisseUrl(id: number): string {
-    return `/api/paiements/${id}/document/recepisse`
+  /** Reçu de paiement PDF, téléchargé avec le jeton Bearer (DOCUMENT_PAIEMENT_VIEW). */
+  async telechargerRecu(id: number): Promise<Blob> {
+    const { data } = await http.get<Blob>(`/paiements/${id}/document/recepisse`, {
+      responseType: 'blob',
+    })
+    return data
   },
 }

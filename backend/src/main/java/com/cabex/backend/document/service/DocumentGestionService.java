@@ -179,6 +179,7 @@ public class DocumentGestionService {
                 .orElseGet(() -> pdfGenerator.recapitulatifDemande(demande));
     }
 
+    @Transactional(readOnly = true)
     public byte[] recuPaiement(Integer paiementId) {
         Paiement paiement = paiementRepository.findById(paiementId)
                 .orElseThrow(() -> new ResourceNotFoundException(

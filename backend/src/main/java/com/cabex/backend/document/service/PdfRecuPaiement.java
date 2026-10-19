@@ -1,5 +1,7 @@
 package com.cabex.backend.document.service;
 
+import com.cabex.backend.demande.entity.LigneService;
+import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
@@ -8,6 +10,7 @@ import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 
+import java.math.BigDecimal;
 import java.util.Locale;
 
 /**
@@ -61,10 +64,24 @@ final class PdfRecuPaiement {
         String client = paiement.getDemande() != null && paiement.getDemande().getSociete() != null
                 ? paiement.getDemande().getSociete().getNomSociete() : null;
 
+        EcheancePaiement echeance = paiement.getEcheance();
+        LigneService ligne = echeance != null && echeance.getProposPaiement() != null
+                ? echeance.getProposPaiement().getLigneService() : null;
+        String service = ligne != null && ligne.getService() != null
+                ? ligne.getService().getNomService() : null;
+        String libelleEcheance = echeance != null
+                ? "N° " + echeance.getNumeroEcheance() + " — "
+                        + PdfFormats.valeurDate(echeance.getDateEcheance())
+                : null;
+
         PdfPCell cClient = PdfComposants.carte("Client et demande", new String[][]{
                 {"Client", PdfFormats.valeur(client)},
                 {"Demande", PdfFormats.valeur(paiement.getDemande() != null
                         ? paiement.getDemande().getReferenceDemande() : null)}
+        });
+        PdfPCell cService = PdfComposants.carte("Service et échéance", new String[][]{
+                {"Service", PdfFormats.valeur(service)},
+                {"Échéance", PdfFormats.valeur(libelleEcheance)}
         });
         PdfPCell cReglement = PdfComposants.carte("Règlement", new String[][]{
                 {"Date de paiement", PdfFormats.valeurDate(paiement.getDatePaiement())},
@@ -72,7 +89,30 @@ final class PdfRecuPaiement {
                         ? paiement.getModePaiement().getLibelle() : null)},
                 {"Référence virement", PdfFormats.valeur(paiement.getReferenceVirement())}
         });
-        PdfComposants.rangee(doc, 0.5f, cClient, cReglement);
+        PdfPCell cMontants = PdfComposants.carte("Montants de l'échéance", new String[][]{
+                {"Montant attendu", PdfFormats.formatArgent(montantAttendu(echeance))},
+                {"Montant payé", PdfFormats.formatArgent(montantPaye(echeance, paiement))},
+                {"Reste à payer", PdfFormats.formatArgent(reste(echeance, paiement))}
+        });
+
+        PdfComposants.rangee(doc, 0.5f, cClient, cService);
+        PdfComposants.rangee(doc, 0.5f, cReglement, cMontants);
+    }
+
+    private static BigDecimal montantAttendu(EcheancePaiement echeance) {
+        return echeance != null ? echeance.getMontantAttendu() : null;
+    }
+
+    private static BigDecimal montantPaye(EcheancePaiement echeance, Paiement paiement) {
+        return echeance != null ? echeance.getMontantPaye() : paiement.getMontantPaye();
+    }
+
+    private static BigDecimal reste(EcheancePaiement echeance, Paiement paiement) {
+        BigDecimal attendu = montantAttendu(echeance);
+        if (attendu == null) {
+            return null;
+        }
+        return attendu.subtract(PdfFormats.montantOuZero(montantPaye(echeance, paiement)));
     }
 
     private static void montantEnLettres(Document doc, Paiement paiement) {

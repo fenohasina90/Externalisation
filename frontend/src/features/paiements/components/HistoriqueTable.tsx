@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { formatDate, formatMontantMGA } from '@/utils/format'
+import { telechargerBlob } from '@/utils/telechargement'
 import { Can } from '@/components/shared/Can'
 import { paiementsApi } from '../services/paiements.service'
 import type { Paiement } from '../types'
@@ -6,10 +8,30 @@ import { ModePill } from './PaiementsTable'
 
 /** Historique des règlements enregistrés. */
 export function HistoriqueTable({ items }: { items:Paiement[] }) {
+  const [erreur, setErreur] = useState<string | null>(null)
+
   if (items.length === 0)
     return <div className="card-pad text-muted">Aucun paiement trouvé.</div>
 
+  async function telechargerRecu(paiement: Paiement) {
+    setErreur(null)
+    try {
+      const recu = await paiementsApi.telechargerRecu(paiement.id)
+      telechargerBlob(recu, `recu-${paiement.referencePaiement}.pdf`)
+    } catch {
+      setErreur(`Téléchargement du reçu ${paiement.referencePaiement} impossible.`)
+    }
+  }
+
   return (
+    <>
+      {erreur && (
+        <div className="card-pad">
+          <div className="alert alert-danger" role="alert">
+            {erreur}
+          </div>
+        </div>
+      )}
     <table className="table">
       <thead>
         <tr>
@@ -39,19 +61,19 @@ export function HistoriqueTable({ items }: { items:Paiement[] }) {
             <td className="text-secondary">{p.referenceVirement ?? '—'}</td>
             <td>
               <Can permission="DOCUMENT_PAIEMENT_VIEW">
-                <a
+                <button
+                  type="button"
                   className="btn-link success"
-                  href={paiementsApi.recepisseUrl(p.id)}
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={() => void telechargerRecu(p)}
                 >
                   PDF ›
-                </a>
+                </button>
               </Can>
             </td>
           </tr>
         ))}
       </tbody>
     </table>
+    </>
   )
 }

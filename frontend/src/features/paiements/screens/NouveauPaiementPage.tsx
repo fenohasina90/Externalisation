@@ -3,7 +3,9 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Alert, Autocomplete, Spinner } from '@/components/ui'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { messageErreur } from '@/constants/messages'
+import { useAuth } from '@/features/auth/hooks/useAuth'
 import { formatDate, formatMontantMGA } from '@/utils/format'
+import { telechargerBlob } from '@/utils/telechargement'
 import { VIREMENT } from '../constants/labels'
 import { EcheancePill } from '../components'
 import { useDemandesReglables, useEcheancesReglables, useModesPaiement } from '../hooks'
@@ -32,6 +34,7 @@ interface GroupeService {
  */
 export function NouveauPaiementPage() {
   const navigate = useNavigate()
+  const { hasPermission } = useAuth()
   const [params] = useSearchParams()
   const demandeIdParam = Number(params.get('demandeId'))
   const echeanceIdParam = Number(params.get('echeanceId'))
@@ -186,7 +189,7 @@ export function NouveauPaiementPage() {
 
     setSubmitting(true)
     try {
-      await paiementsApi.create({
+      const paiement = await paiementsApi.create({
         demandeId,
         echeanceId: choisie.echeance.id,
         modePaiementId: modeChoisi.id,
@@ -195,6 +198,12 @@ export function NouveauPaiementPage() {
         referenceVirement: estVirement ? refVirement.trim() : null,
         commentaire: commentaire.trim() || null,
       })
+
+      if (hasPermission('DOCUMENT_PAIEMENT_VIEW')) {
+        const recu = await paiementsApi.telechargerRecu(paiement.id).catch(() => null)
+        if (recu) telechargerBlob(recu, `recu-${paiement.referencePaiement}.pdf`)
+      }
+
       navigate(`/paiements/echeanciers/${choisie.referenceDemande}`)
     } catch (err) {
       setErreurEnregistrement(messageErreur(err))

@@ -1,16 +1,29 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Spinner } from '@/components/ui'
 import { Can } from '@/components/shared/Can'
 import { formatDate, formatMontantMGA } from '@/utils/format'
+import { telechargerBlob } from '@/utils/telechargement'
 import { EcheancePill, ModePill, SituationPlanPill, StatutDemandePill } from '../components'
 import { useEcheancierDemande } from '../hooks'
+import { paiementsApi } from '../services/paiements.service'
 import { situationPlan } from '../utils/situation'
 
 /** Échéancier d'une demande : résumé, échéances par service et paiements enregistrés. */
 export function EcheancierDetailPage() {
   const { reference } = useParams<{ reference: string }>()
   const { data, loading, error } = useEcheancierDemande(reference)
+  const [erreurRecu, setErreurRecu] = useState<string | null>(null)
+
+  const telechargerRecu = async (id: number, referencePaiement: string) => {
+    setErreurRecu(null)
+    try {
+      const recu = await paiementsApi.telechargerRecu(id)
+      telechargerBlob(recu, `recu-${referencePaiement}.pdf`)
+    } catch {
+      setErreurRecu(`Téléchargement du reçu ${referencePaiement} impossible.`)
+    }
+  }
 
   useEffect(() => {
     document.body.classList.add('page-responsables')
@@ -67,6 +80,12 @@ export function EcheancierDetailPage() {
           </Can>
         </div>
       </header>
+
+      {erreurRecu && (
+        <div className="alert alert-danger" role="alert">
+          {erreurRecu}
+        </div>
+      )}
 
       <section className="card card-pad">
         <div className="info-grid info-grid--5">
@@ -200,6 +219,7 @@ export function EcheancierDetailPage() {
                   <th>Mode</th>
                   <th>Réf. virement</th>
                   <th>Utilisateur</th>
+                  <th>Reçu</th>
                 </tr>
               </thead>
               <tbody>
@@ -213,11 +233,22 @@ export function EcheancierDetailPage() {
                     </td>
                     <td className="text-secondary">{p.referenceVirement ?? '—'}</td>
                     <td>{p.createdByName ?? '—'}</td>
+                    <td>
+                      <Can permission="DOCUMENT_PAIEMENT_VIEW">
+                        <button
+                          type="button"
+                          className="btn-link success"
+                          onClick={() => void telechargerRecu(p.id, p.referencePaiement)}
+                        >
+                          PDF ›
+                        </button>
+                      </Can>
+                    </td>
                   </tr>
                 ))}
                 {paiements.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-muted">
+                    <td colSpan={7} className="text-muted">
                       Aucun paiement enregistré pour cette demande.
                     </td>
                   </tr>
