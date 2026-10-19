@@ -48,7 +48,8 @@ public class DocumentController {
     @PostMapping(value = "/demandes/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAuthority('DOCUMENT_DEMANDE_UPLOAD')")
     @Operation(summary = "Uploader un document pour une demande",
-            description = "Types acceptés : pdf, images, doc(x), xls(x), txt. Taille max : 10 Mo.")
+            description = "Tous types de fichiers acceptés (pdf, images, doc(x), xls(x), "
+                    + "txt, archives…). Taille max : 10 Mo par défaut.")
     public ResponseEntity<DocumentResponse> upload(@PathVariable Integer id,
                                                    @RequestPart("fichier") MultipartFile fichier,
                                                    @RequestParam(required = false) String description) {
@@ -56,8 +57,26 @@ public class DocumentController {
                 .body(documentService.upload(id, fichier, description));
     }
 
+    @GetMapping("/paiements/{id}/documents")
+    @PreAuthorize("hasAuthority('DOCUMENT_PAIEMENT_VIEW')")
+    @Operation(summary = "Lister les documents d'un paiement")
+    public ResponseEntity<List<DocumentResponse>> listByPaiement(@PathVariable Integer id) {
+        return ResponseEntity.ok(documentService.listByPaiement(id));
+    }
+
+    @PostMapping(value = "/paiements/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('PAIEMENT_CREATE')")
+    @Operation(summary = "Uploader une pièce jointe pour un paiement",
+            description = "Justificatif de règlement ; tous types de fichiers acceptés.")
+    public ResponseEntity<DocumentResponse> uploadPaiement(@PathVariable Integer id,
+                                                           @RequestPart("fichier") MultipartFile fichier,
+                                                           @RequestParam(required = false) String description) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(documentService.uploadPaiement(id, fichier, description));
+    }
+
     @GetMapping("/documents/{id}/download")
-    @PreAuthorize("hasAuthority('DOCUMENT_DEMANDE_VIEW')")
+    @PreAuthorize("hasAnyAuthority('DOCUMENT_DEMANDE_VIEW', 'DOCUMENT_PAIEMENT_VIEW')")
     @Operation(summary = "Télécharger un document")
     public ResponseEntity<byte[]> download(@PathVariable Integer id) {
         FichierDocument f = documentService.telecharger(id);

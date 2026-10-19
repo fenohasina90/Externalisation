@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 public record DocumentResponse(
         Integer id,
         Integer demandeId,
+        Integer paiementId,
+        String referencePaiement,
         String nomFichier,
         String nomOriginal,
         String typeFichier,

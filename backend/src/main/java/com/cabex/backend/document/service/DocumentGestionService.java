@@ -32,15 +32,10 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class DocumentGestionService {
-
-    private static final Set<String> TYPES_AUTORISES = Set.of(
-            "pdf", "jpg", "jpeg", "png", "gif",
-            "doc", "docx", "xls", "xlsx", "txt");
 
     private final PieceJointeRepository pieceRepository;
     private final DemandeServiceRepository demandeRepository;
@@ -97,25 +92,37 @@ public class DocumentGestionService {
                 .stream().map(DocumentMapper::toResponse).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<DocumentResponse> listByPaiement(Integer paiementId) {
+        verifierPaiement(paiementId);
+        return pieceRepository.findByPaiementIdOrderByCreatedAtDesc(paiementId)
+                .stream().map(DocumentMapper::toResponse).toList();
+    }
+
     @Transactional
     public DocumentResponse upload(Integer demandeId, MultipartFile fichier, String description) {
         DemandeService demande = verifierDemande(demandeId);
+        return enregistrerPiece(demande, null, fichier, description);
+    }
+
+    @Transactional
+    public DocumentResponse uploadPaiement(Integer paiementId, MultipartFile fichier, String description) {
+        Paiement paiement = verifierPaiement(paiementId);
+        return enregistrerPiece(paiement.getDemande(), paiement, fichier, description);
+    }
+
+    private DocumentResponse enregistrerPiece(DemandeService demande, Paiement paiement,
+                                              MultipartFile fichier, String description) {
         if (fichier == null || fichier.isEmpty()) {
             throw new BusinessException("Le fichier est obligatoire");
-        }
-        String nomOriginal = fichier.getOriginalFilename() == null
-                ? "document" : fichier.getOriginalFilename();
-        String extension = extensionDe(nomOriginal);
-        if (!TYPES_AUTORISES.contains(extension)) {
-            throw new BusinessException(
-                    "Type de fichier non autorisé (." + extension + "). Types acceptés : "
-                            + String.join(", ", TYPES_AUTORISES));
         }
         if (fichier.getSize() > tailleMaxEffective()) {
             throw new BusinessException("Le fichier dépasse la taille maximale autorisée ("
                     + (tailleMaxEffective() / (1024 * 1024)) + " Mo)");
         }
-
+        String nomOriginal = fichier.getOriginalFilename() == null
+                ? "document" : fichier.getOriginalFilename();
+        String extension = extensionDe(nomOriginal);
         String nomStockage = UUID.randomUUID() + "." + extension;
         Path dossier = Paths.get(storagePath);
         try {
@@ -125,6 +132,7 @@ public class DocumentGestionService {
 
             PieceJointe piece = PieceJointe.builder()
                     .demande(demande)
+                    .paiement(paiement)
                     .nomFichier(nomStockage)
                     .nomOriginal(nomOriginal)
                     .cheminFichier(cible.toString())
@@ -208,7 +216,7 @@ public class DocumentGestionService {
         DemandeService demande = demandeRepository.findById(demandeId).orElseThrow();
         boolean fiche = dossierRepository.findByDemandeId(demandeId).isPresent();
         byte[] contenu = recapitulatifDemande(demandeId);
-        return enregistrerFichier(demande,
+        return enregistrerFichier(demande, null,
                 (fiche ? "fiche-creation-" : "recapitulatif-demande-")
                         + demande.getReferenceDemande() + ".pdf",
                 (fiche ? "Fiche de création générée automatiquement"
@@ -218,12 +226,10 @@ public class DocumentGestionService {
 
     @Transactional
     public DocumentResponse sauvegarderRecu(Integer paiementId) {
-        Paiement paiement = paiementRepository.findById(paiementId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        ErrorMessages.introuvable("Paiement", paiementId)));
+        Paiement paiement = verifierPaiement(paiementId);
         byte[] contenu = pdfGenerator.recuPaiement(paiement);
         DemandeService demande = paiement.getDemande();
-        return enregistrerFichier(demande,
+        return enregistrerFichier(demande, paiement,
                 "recu-paiement-" + paiement.getReferencePaiement() + ".pdf",
                 "Reçu de paiement généré automatiquement", contenu);
     }
@@ -236,13 +242,13 @@ public class DocumentGestionService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Aucun plan de paiement actif pour la demande " + demandeId));
         byte[] contenu = pdfGenerator.planPaiement(propos);
-        return enregistrerFichier(demande,
+        return enregistrerFichier(demande, null,
                 "plan-paiement-" + demande.getReferenceDemande() + ".pdf",
                 "Plan de paiement généré automatiquement", contenu);
     }
 
-    private DocumentResponse enregistrerFichier(DemandeService demande, String nomFichier,
-                                                String description, byte[] contenu) {
+    private DocumentResponse enregistrerFichier(DemandeService demande, Paiement paiement,
+                                                String nomFichier, String description, byte[] contenu) {
         String extension = extensionDe(nomFichier);
         String nomStockage = UUID.randomUUID() + "." + extension;
         Path dossier = Paths.get(storagePath);
@@ -252,6 +258,7 @@ public class DocumentGestionService {
             Files.write(cible, contenu);
             PieceJointe piece = PieceJointe.builder()
                     .demande(demande)
+                    .paiement(paiement)
                     .nomFichier(nomStockage)
                     .nomOriginal(nomFichier)
                     .cheminFichier(cible.toString())
@@ -273,6 +280,12 @@ public class DocumentGestionService {
         return demandeRepository.findById(demandeId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Demande", demandeId)));
+    }
+
+    private Paiement verifierPaiement(Integer paiementId) {
+        return paiementRepository.findById(paiementId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Paiement", paiementId)));
     }
 
     private PieceJointe getPiece(Integer id) {

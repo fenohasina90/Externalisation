@@ -1,6 +1,7 @@
 package com.cabex.backend.document.entity;
 
 import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.paiement.entity.Paiement;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
 import jakarta.persistence.*;
 import lombok.*;
@@ -24,6 +25,10 @@ public class PieceJointe {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "demande_id", nullable = false)
     private DemandeService demande;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "paiement_id")
+    private Paiement paiement;
 
     @Column(name = "nom_fichier", nullable = false, length = 255)
     private String nomFichier;
