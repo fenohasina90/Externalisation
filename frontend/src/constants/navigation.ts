@@ -101,10 +101,10 @@ const demandes: NavItem = {
   children: [{ label: 'Liste des demandes', to: '/demandes', end: true, permission: 'DEMANDE_VIEW' }],
 }
 const demandesLectureSeule: NavItem = {
-  label: 'Demandes de service',
+  label: 'Demandes',
   to: '/demandes',
   icon: 'file',
-  hint: 'lecture seule',
+  // hint: 'lecture seule',
   deroulant: true,
   permission: 'DEMANDE_VIEW',
   children: [{ label: 'Liste des demandes', to: '/demandes', end: true, permission: 'DEMANDE_VIEW' }],
