@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Can } from '@/components/shared/Can'
-import { Alert, EmptyState, Spinner } from '@/components/ui'
+import { Alert, EmptyState, Pagination, Spinner } from '@/components/ui'
 import { messageErreur } from '@/constants/messages'
 import { useApi } from '@/hooks/useApi'
+import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { useAuth } from '@/features/auth/hooks/useAuth'
 import { clientsApi } from '@/features/clients/services/clients.service'
 import type { Societe } from '@/features/clients/types'
@@ -57,6 +58,8 @@ export function RapportsPage() {
     ? selection
     : categories[0]?.id ?? 'general'
 
+  const [page, setPage] = useState(0)
+  const taillePage = Math.max(1, useTaillePagination())
   const [showFilters, setShowFilters] = useState(true)
   const [filtres, setFiltres] = useState<RapportFiltres>(FILTRES_VIDES)
   const [appliques, setAppliques] = useState<RapportFiltres>(FILTRES_VIDES)
@@ -211,11 +214,13 @@ export function RapportsPage() {
 
   function appliquer(): void {
     setAppliques({ ...filtres })
+    setPage(0)
   }
 
   function reinitialiser(): void {
     setFiltres(FILTRES_VIDES)
     setAppliques(FILTRES_VIDES)
+    setPage(0)
   }
 
   async function exporter(format: FormatExport): Promise<void> {
@@ -230,6 +235,28 @@ export function RapportsPage() {
       setExportEnCours(null)
     }
   }
+
+  const nombreLignes =
+    categorie === 'clients'
+      ? lignesClients?.length ?? 0
+      : categorie === 'services'
+        ? lignesServices?.length ?? 0
+        : categorie === 'demandes'
+          ? lignesDemandes?.length ?? 0
+          : categorie === 'paiements'
+            ? lignesPaiements?.length ?? 0
+            : 0
+  const estListe =
+    categorie === 'clients' ||
+    categorie === 'services' ||
+    categorie === 'demandes' ||
+    categorie === 'paiements'
+  const totalPages = Math.ceil(nombreLignes / taillePage)
+  const pageCourante = Math.min(page, Math.max(totalPages - 1, 0))
+  const debut = pageCourante * taillePage
+
+  const tranche = <T,>(lignes: T[] | null): T[] =>
+    lignes ? lignes.slice(debut, debut + taillePage) : []
 
   return (
     <div className="app-page responsables-page">
@@ -284,7 +311,10 @@ export function RapportsPage() {
 
       <CategoriesRapports
         selection={categorie}
-        onSelect={setSelection}
+        onSelect={(id) => {
+          setSelection(id)
+          setPage(0)
+        }}
         categories={categories}
       />
 
@@ -546,31 +576,44 @@ export function RapportsPage() {
                 <TableRapportFinancier rapport={financier} />
               ) : categorie === 'clients' && lignesClients ? (
                 lignesClients.length > 0 ? (
-                  <TableRapportClients lignes={lignesClients} />
+                  <TableRapportClients lignes={tranche(lignesClients)} />
                 ) : (
                   <EmptyState titre="Aucun client sur la période" />
                 )
               ) : categorie === 'services' && lignesServices ? (
                 lignesServices.length > 0 ? (
-                  <TableRapportServices lignes={lignesServices} />
+                  <TableRapportServices lignes={tranche(lignesServices)} />
                 ) : (
                   <EmptyState titre="Aucun service sur la période" />
                 )
               ) : categorie === 'demandes' && lignesDemandes ? (
                 lignesDemandes.length > 0 ? (
-                  <TableRapportDemandes lignes={lignesDemandes} />
+                  <TableRapportDemandes lignes={tranche(lignesDemandes)} />
                 ) : (
                   <EmptyState titre="Aucune demande sur la période" />
                 )
               ) : categorie === 'paiements' && lignesPaiements ? (
                 lignesPaiements.length > 0 ? (
-                  <TableRapportPaiements lignes={lignesPaiements} />
+                  <TableRapportPaiements lignes={tranche(lignesPaiements)} />
                 ) : (
                   <EmptyState titre="Aucun paiement sur la période" />
                 )
               ) : null}
             </div>
           </div>
+          {!chargement && estListe && nombreLignes > 0 && (
+            <div className="rapport-pagination">
+              <span className="pagination-info">
+                Affichage de {debut + 1} à {Math.min(debut + taillePage, nombreLignes)} sur{' '}
+                {nombreLignes}
+              </span>
+              <Pagination
+                page={pageCourante}
+                totalPages={totalPages}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
         </section>
 
         <section className="card card-pad">
