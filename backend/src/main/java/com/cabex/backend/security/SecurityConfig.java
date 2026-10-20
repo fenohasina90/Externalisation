@@ -2,6 +2,7 @@ package com.cabex.backend.security;
 
 import com.cabex.backend.exception.ApiError;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -55,6 +56,11 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Les dispatches ASYNC (téléchargement en flux, StreamingResponseBody) et
+                        // ERROR réutilisent une requête déjà authentifiée : le filtre JWT ne les
+                        // couvre pas, d'où un refus sur une réponse déjà envoyée. On les laisse
+                        // passer ; l'autorisation initiale reste appliquée au contrôleur.
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex

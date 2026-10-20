@@ -83,7 +83,8 @@ public class MysqlProcessRunner {
     public void restaurer(Path fichierSql) {
         List<String> arguments = List.of(
                 proprietes.getMysqlPath(),
-                "--host=" + proprietes.getDbHost(),
+                "--protocol=TCP",
+                "--host=" + hoteEffectif(),
                 "--port=" + proprietes.getDbPort(),
                 "--user=" + proprietes.getDbUsername(),
                 "--default-character-set=utf8mb4",
@@ -113,7 +114,8 @@ public class MysqlProcessRunner {
     private List<String> argumentsDump() {
         List<String> arguments = new ArrayList<>();
         arguments.add(proprietes.getMysqldumpPath());
-        arguments.add("--host=" + proprietes.getDbHost());
+        arguments.add("--protocol=TCP");
+        arguments.add("--host=" + hoteEffectif());
         arguments.add("--port=" + proprietes.getDbPort());
         arguments.add("--user=" + proprietes.getDbUsername());
         arguments.add("--single-transaction");
@@ -157,7 +159,8 @@ public class MysqlProcessRunner {
     private String executerRequete(String requete) {
         List<String> arguments = List.of(
                 proprietes.getMysqlPath(),
-                "--host=" + proprietes.getDbHost(),
+                "--protocol=TCP",
+                "--host=" + hoteEffectif(),
                 "--port=" + proprietes.getDbPort(),
                 "--user=" + proprietes.getDbUsername(),
                 "--skip-column-names",
@@ -175,6 +178,20 @@ public class MysqlProcessRunner {
             Thread.currentThread().interrupt();
             return null;
         }
+    }
+
+    /**
+     * Les clients MySQL interprètent {@code localhost} comme une connexion par socket Unix,
+     * en ignorant le port ; on force donc l'adresse IPv4 pour rester en TCP (XAMPP, Docker,
+     * hôtes distants) et éviter l'erreur 2002 sur {@code /var/run/mysqld/mysqld.sock}.
+     */
+    private String hoteEffectif() {
+        String hote = proprietes.getDbHost();
+        if (hote == null || hote.isBlank()) {
+            return "127.0.0.1";
+        }
+        String valeur = hote.trim();
+        return "localhost".equalsIgnoreCase(valeur) ? "127.0.0.1" : valeur;
     }
 
     private ProcessBuilder constructeur(List<String> arguments) {

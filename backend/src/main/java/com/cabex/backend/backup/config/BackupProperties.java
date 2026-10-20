@@ -26,7 +26,7 @@ public class BackupProperties {
             @Value("${backup.dir:./data/backups}") String dir,
             @Value("${backup.retention-days:14}") int retentionDays,
             @Value("${backup.cron:0 0 2 * * *}") String cron,
-            @Value("${backup.db.host:localhost}") String dbHost,
+            @Value("${backup.db.host:127.0.0.1}") String dbHost,
             @Value("${backup.db.port:3306}") int dbPort,
             @Value("${backup.db.name:gestion_externalisation}") String dbName,
             @Value("${backup.db.username:root}") String dbUsername,

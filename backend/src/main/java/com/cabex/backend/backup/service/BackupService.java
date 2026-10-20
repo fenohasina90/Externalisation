@@ -82,6 +82,9 @@ public class BackupService {
         } catch (IOException e) {
             supprimerSilencieusement(destination);
             throw new BackupException("Impossible d'écrire la sauvegarde : " + e.getMessage(), e);
+        } catch (RuntimeException e) {
+            supprimerSilencieusement(destination);
+            throw e;
         }
         BackupFileResponse fichier = stockage.decrire(nom);
         audit.log(action(type), MODULE, ENTITE, null, null,
