@@ -42,7 +42,8 @@ public class EcheanceGestionService {
     @Transactional(readOnly = true)
     public List<EcheanceResponse> getByPlan(Integer proposId) {
         getPropos(proposId);
-        return echeanceRepository.findByProposPaiementIdOrderByNumeroEcheanceAsc(proposId).stream()
+        return echeanceRepository
+                .findByProposPaiementIdOrderByDateEcheanceDescNumeroEcheanceDesc(proposId).stream()
                 .map(e -> EcheanceMapper.toEcheanceResponse(e, LocalDate.now(), JOURS_ALERTE))
                 .toList();
     }

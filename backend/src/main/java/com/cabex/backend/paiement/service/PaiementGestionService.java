@@ -26,7 +26,9 @@ import com.cabex.backend.security.SecurityUtils;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
 import com.cabex.backend.utilisateur.repository.UtilisateurRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -70,7 +72,11 @@ public class PaiementGestionService {
     @Transactional(readOnly = true)
     public Page<PaiementResponse> getAll(String recherche, Integer demandeId, Integer modeId,
                                          LocalDate dateDebut, LocalDate dateFin, Pageable pageable) {
-        return paiementRepository.rechercher(recherche, demandeId, modeId, dateDebut, dateFin, pageable)
+        Pageable tri = pageable.getSort().isSorted()
+                ? pageable
+                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                        Sort.by(Sort.Order.desc("datePaiement"), Sort.Order.desc("id")));
+        return paiementRepository.rechercher(recherche, demandeId, modeId, dateDebut, dateFin, tri)
                 .map(PaiementMapper::toResponse);
     }
 

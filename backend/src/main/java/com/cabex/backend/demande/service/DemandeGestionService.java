@@ -37,7 +37,9 @@ import com.cabex.backend.service.repository.ServiceRepository;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
 import com.cabex.backend.utilisateur.repository.UtilisateurRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -111,9 +113,13 @@ public class DemandeGestionService {
                                         Integer domaineId, Integer commercialId, String statut,
                                         LocalDate dateDebut, LocalDate dateFin,
                                         Boolean actif, String situation, Pageable pageable) {
+        Pageable tri = pageable.getSort().isSorted()
+                ? pageable
+                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                        Sort.by(Sort.Order.desc("dateDemande"), Sort.Order.desc("id")));
         Page<DemandeService> page = demandeRepository.rechercher(recherche, societeId, serviceId,
                 domaineId, commercialId, statut, dateDebut, dateFin, actif, situation,
-                LocalDate.now(), pageable);
+                LocalDate.now(), tri);
         Map<Integer, InfoSituation> situations = situations(page.getContent());
         return page.map(d -> toResponse(d, situations));
     }

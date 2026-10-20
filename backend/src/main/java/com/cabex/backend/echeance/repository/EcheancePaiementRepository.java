@@ -15,6 +15,10 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
 
     List<EcheancePaiement> findByProposPaiementIdOrderByNumeroEcheanceAsc(Integer proposPaiementId);
 
+    /** Échéances d'un plan, de la plus récente à la plus ancienne. */
+    List<EcheancePaiement> findByProposPaiementIdOrderByDateEcheanceDescNumeroEcheanceDesc(
+            Integer proposPaiementId);
+
     boolean existsByProposPaiementIdAndNumeroEcheance(Integer proposPaiementId, Integer numeroEcheance);
 
     long countByProposPaiementId(Integer proposPaiementId);
@@ -28,7 +32,7 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
     @Query("""
             SELECT e FROM EcheancePaiement e
             WHERE e.proposPaiement.demande.societe.id = :societeId
-            ORDER BY e.dateEcheance ASC
+            ORDER BY e.dateEcheance DESC, e.numeroEcheance DESC
             """)
     List<EcheancePaiement> findBySocieteId(@Param("societeId") Integer societeId);
 
@@ -36,7 +40,7 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
             SELECT e FROM EcheancePaiement e
             WHERE e.dateEcheance < :jour
               AND e.montantPaye < e.montantAttendu
-            ORDER BY e.dateEcheance ASC
+            ORDER BY e.dateEcheance DESC, e.numeroEcheance DESC
             """)
     List<EcheancePaiement> findEnRetard(@Param("jour") LocalDate jour);
 
@@ -78,7 +82,7 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
             SELECT e FROM EcheancePaiement e
             WHERE e.dateEcheance >= :jour
               AND e.montantPaye < e.montantAttendu
-            ORDER BY e.dateEcheance ASC
+            ORDER BY e.dateEcheance DESC, e.numeroEcheance DESC
             """)
     List<EcheancePaiement> findAVenir(@Param("jour") LocalDate jour);
 
@@ -86,7 +90,7 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
             SELECT e FROM EcheancePaiement e
             WHERE e.dateEcheance < :jour
               AND e.montantPaye < e.montantAttendu
-            ORDER BY e.dateEcheance ASC
+            ORDER BY e.dateEcheance DESC, e.numeroEcheance DESC
             """,
             countQuery = """
             SELECT COUNT(e) FROM EcheancePaiement e
@@ -99,7 +103,7 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
             SELECT e FROM EcheancePaiement e
             WHERE e.dateEcheance >= :jour
               AND e.montantPaye < e.montantAttendu
-            ORDER BY e.dateEcheance ASC
+            ORDER BY e.dateEcheance DESC, e.numeroEcheance DESC
             """,
             countQuery = """
             SELECT COUNT(e) FROM EcheancePaiement e

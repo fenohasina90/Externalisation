@@ -11,7 +11,9 @@ import com.cabex.backend.utilisateur.entity.Utilisateur;
 import com.cabex.backend.utilisateur.repository.UtilisateurRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -38,7 +40,11 @@ public class AuditService {
                                        Pageable pageable) {
         LocalDateTime debut = dateDebut != null ? dateDebut.atStartOfDay() : null;
         LocalDateTime fin = dateFin != null ? dateFin.atTime(LocalTime.MAX) : null;
-        return auditRepository.rechercher(utilisateurId, action, module, entite, debut, fin, pageable)
+        Pageable tri = pageable.getSort().isSorted()
+                ? pageable
+                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+        return auditRepository.rechercher(utilisateurId, action, module, entite, debut, fin, tri)
                 .map(AuditLogMapper::toResponse);
     }
 
