@@ -46,6 +46,15 @@ export function Topbar({ onMenu, onReplier, repliee = false, unreadNotifications
       <div className="topbar__spacer" />
 
       <Link
+        to="/recherche"
+        className="topbar__icon"
+        aria-label="Recherche globale"
+        title="Recherche globale"
+      >
+        <Icon name="search" />
+      </Link>
+
+      <Link
         to="/notifications"
         className="topbar__icon"
         aria-label={hasUnread ? `Notifications (${unreadNotifications} non lues)` : 'Notifications'}

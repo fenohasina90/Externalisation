@@ -13,6 +13,7 @@ import com.cabex.backend.recherche.dto.RechercheGlobaleResponse;
 import com.cabex.backend.recherche.dto.RecherchePaiementItem;
 import com.cabex.backend.recherche.dto.RechercheServiceItem;
 import com.cabex.backend.security.SecurityUtils;
+import com.cabex.backend.security.UserPrincipal;
 import com.cabex.backend.service.repository.ServiceRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -50,20 +51,27 @@ public class RechercheService {
             return new RechercheGlobaleResponse(List.of(), List.of(), List.of(), List.of());
         }
         String terme = q.trim();
-        List<RechercheClientItem> clients = societeRepository
-                .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
-                .stream().map(this::toClientItem).toList();
-        List<RechercheServiceItem> services = serviceRepository
-                .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
-                .stream().map(this::toServiceItem).toList();
-        List<RechercheDemandeItem> demandes = demandeRepository
-                .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
-                .stream().map(this::toDemandeItem).toList();
-        List<RecherchePaiementItem> paiements = "ACCUEIL".equalsIgnoreCase(SecurityUtils.currentRoleName())
-                ? List.of()
-                : paiementRepository
-                .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
-                .stream().map(this::toPaiementItem).toList();
+        UserPrincipal utilisateur = SecurityUtils.currentUser();
+        List<RechercheClientItem> clients = utilisateur.hasPermission("CLIENT_VIEW")
+                ? societeRepository
+                        .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
+                        .stream().map(this::toClientItem).toList()
+                : List.of();
+        List<RechercheServiceItem> services = utilisateur.hasPermission("SERVICE_VIEW")
+                ? serviceRepository
+                        .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
+                        .stream().map(this::toServiceItem).toList()
+                : List.of();
+        List<RechercheDemandeItem> demandes = utilisateur.hasPermission("DEMANDE_VIEW")
+                ? demandeRepository
+                        .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
+                        .stream().map(this::toDemandeItem).toList()
+                : List.of();
+        List<RecherchePaiementItem> paiements = utilisateur.hasPermission("PAIEMENT_VIEW")
+                ? paiementRepository
+                        .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
+                        .stream().map(this::toPaiementItem).toList()
+                : List.of();
         return new RechercheGlobaleResponse(clients, services, demandes, paiements);
     }
 
