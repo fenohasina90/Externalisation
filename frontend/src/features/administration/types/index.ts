@@ -22,6 +22,32 @@ export interface ApplicationConfiguration {
   modifiable: boolean
 }
 
+export interface StatutDemandeConfig {
+  id: number
+  statut: string
+  description: string | null
+  ordre: number
+  actif: boolean
+}
+
+export interface CreateStatutPayload {
+  statut: string
+  description?: string | null
+  ordre?: number | null
+}
+
+export interface ModePaiementAdmin {
+  id: number
+  code: string
+  libelle: string
+  actif: boolean
+}
+
+export interface CreateModePaiementPayload {
+  code: string
+  libelle: string
+}
+
 export interface Permission {
   id: number
   codePermission: string

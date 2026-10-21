@@ -95,7 +95,7 @@ const demandes: NavItem = {
   label: 'Demandes',
   to: '/demandes',
   icon: 'file',
-  badge: 'demandes',
+  // badge: 'demandes',
   deroulant: true,
   permission: 'DEMANDE_VIEW',
   children: [{ label: 'Liste des demandes', to: '/demandes', end: true, permission: 'DEMANDE_VIEW' }],
@@ -158,8 +158,22 @@ const administration: NavItem = {
     },
     { label: 'Audit', to: '/administration/audit', permission: 'AUDIT_VIEW' },
     { label: 'Configuration', to: '/administration/configuration', permission: 'CONFIG_VIEW' },
+    { label: 'Statuts', to: '/administration/statuts', permission: 'CONFIG_VIEW' },
+    {
+      label: 'Modes de paiement',
+      to: '/administration/modes-paiement',
+      permission: 'MODE_PAIEMENT_VIEW',
+    },
     { label: 'Sauvegardes', to: '/administration/sauvegardes', permission: 'BACKUP_VIEW' },
   ],
+}
+
+/** Accès direct pour l'Économat, qui n'a pas le menu Administration. */
+const modesPaiement: NavItem = {
+  label: 'Modes de paiement',
+  to: '/administration/modes-paiement',
+  icon: 'card',
+  permission: 'MODE_PAIEMENT_VIEW',
 }
 
 /** Menu par rôle. */
@@ -204,6 +218,6 @@ export const NAVIGATION: Record<NomRole, NavSection[]> = {
       label: 'Activité',
       items: [dashboard, clientsSimple, demandesLectureSeule, paiements],
     },
-    { label: 'Pilotage', items: [rapports, notifications] },
+    { label: 'Pilotage', items: [rapports, modesPaiement, notifications] },
   ],
 }

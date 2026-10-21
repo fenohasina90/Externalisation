@@ -61,6 +61,28 @@ const SECTIONS = [
     ),
   },
   {
+    to: '/administration/statuts',
+    titre: 'Statuts de demande',
+    description: 'Gérez les étapes du cycle de vie des demandes et leur ordre d’affichage.',
+    icone: (
+      <svg className="sv" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M8 12h8M12 8v8" />
+      </svg>
+    ),
+  },
+  {
+    to: '/administration/modes-paiement',
+    titre: 'Modes de paiement',
+    description: 'Définissez les moyens de règlement proposés lors des paiements.',
+    icone: (
+      <svg className="sv" viewBox="0 0 24 24">
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <path d="M2 10h20" />
+      </svg>
+    ),
+  },
+  {
     to: '/administration/sauvegardes',
     titre: 'Sauvegardes',
     description: 'Sauvegardez, téléchargez et restaurez la base de données, localement ou chiffrée.',

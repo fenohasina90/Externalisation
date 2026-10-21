@@ -8,8 +8,10 @@ import {
   AdministrationPage,
   AuditPage,
   ConfigurationPage,
+  ModesPaiementPage,
   ReinitialisationsPage,
   RolesPermissionsPage,
+  StatutsPage,
   UtilisateursPage,
 } from '@/features/administration'
 import { SauvegardesPage } from '@/features/backup'
@@ -248,6 +250,22 @@ function App() {
             element={
               <RequirePermission permission="CONFIG_VIEW">
                 <ConfigurationPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/administration/statuts"
+            element={
+              <RequirePermission permission="CONFIG_VIEW">
+                <StatutsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/administration/modes-paiement"
+            element={
+              <RequirePermission permission="MODE_PAIEMENT_VIEW">
+                <ModesPaiementPage />
               </RequirePermission>
             }
           />

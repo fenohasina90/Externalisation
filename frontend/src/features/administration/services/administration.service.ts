@@ -4,12 +4,16 @@ import type { Role, Utilisateur } from '@/features/auth/types'
 import type {
   ApplicationConfiguration,
   AuditEntry,
+  CreateModePaiementPayload,
   CreateRolePayload,
+  CreateStatutPayload,
   CreateUtilisateurPayload,
   DemandeReinitialisation,
+  ModePaiementAdmin,
   MotDePasseTemporaire,
   Permission,
   RoleDetail,
+  StatutDemandeConfig,
   StatutDemandeReinitialisation,
   UpdateRolePayload,
 } from '../types'
@@ -77,6 +81,62 @@ export const rolesApi = {
 
   async update(id: number, payload: UpdateRolePayload): Promise<RoleDetail> {
     const { data } = await http.put<RoleDetail>(`/roles/${id}`, payload)
+    return data
+  },
+}
+
+export const statutsApi = {
+  async list(
+    page: PageQuery,
+    filters: { actif?: boolean } = {},
+  ): Promise<ApiPage<StatutDemandeConfig>> {
+    const { data } = await http.get<ApiPage<StatutDemandeConfig>>('/statuts', {
+      params: buildQuery({ actif: filters.actif, sort: 'ordre,asc' }, page),
+    })
+    return data
+  },
+
+  async create(payload: CreateStatutPayload): Promise<StatutDemandeConfig> {
+    const { data } = await http.post<StatutDemandeConfig>('/statuts', payload)
+    return data
+  },
+
+  async update(id: number, payload: CreateStatutPayload): Promise<StatutDemandeConfig> {
+    const { data } = await http.put<StatutDemandeConfig>(`/statuts/${id}`, payload)
+    return data
+  },
+
+  async setActif(id: number, actif: boolean): Promise<StatutDemandeConfig> {
+    const { data } = await http.patch<StatutDemandeConfig>(`/statuts/${id}/activation`, { actif })
+    return data
+  },
+}
+
+export const modesPaiementApi = {
+  async list(
+    page: PageQuery,
+    filters: { actif?: boolean } = {},
+  ): Promise<ApiPage<ModePaiementAdmin>> {
+    const { data } = await http.get<ApiPage<ModePaiementAdmin>>('/modes-paiement', {
+      params: buildQuery({ actif: filters.actif, sort: 'code,asc' }, page),
+    })
+    return data
+  },
+
+  async create(payload: CreateModePaiementPayload): Promise<ModePaiementAdmin> {
+    const { data } = await http.post<ModePaiementAdmin>('/modes-paiement', payload)
+    return data
+  },
+
+  async update(id: number, payload: CreateModePaiementPayload): Promise<ModePaiementAdmin> {
+    const { data } = await http.put<ModePaiementAdmin>(`/modes-paiement/${id}`, payload)
+    return data
+  },
+
+  async setActif(id: number, actif: boolean): Promise<ModePaiementAdmin> {
+    const { data } = await http.patch<ModePaiementAdmin>(`/modes-paiement/${id}/activation`, {
+      actif,
+    })
     return data
   },
 }
