@@ -86,6 +86,24 @@ public final class ErrorMessages {
             "La précision de la forme juridique est obligatoire (Autre)";
     public static final String DOSSIER_FORME_INVALIDE = "La forme juridique fournie est invalide";
 
+    // Dossier de transaction immobilière
+    public static final String DOSSIER_TRANSACTION_DEJA_EXISTANT =
+            "Cette demande possède déjà un dossier de transaction immobilière";
+    public static final String DOSSIER_TRANSACTION_SERVICE_NON_TRANSACTION =
+            "Un dossier de transaction immobilière ne peut être lié qu'à une demande comportant un service de transaction immobilière";
+    public static final String DOSSIER_TRANSACTION_ACTION_REQUISE =
+            "Au moins une action doit être sélectionnée";
+    public static final String DOSSIER_TRANSACTION_ACTION_AUTRE_PRECISION_REQUISE =
+            "La précision de l'action est obligatoire (Autre)";
+    public static final String DOSSIER_TRANSACTION_OBJET_INVALIDE =
+            "L'objet fourni est invalide";
+    public static final String DOSSIER_TRANSACTION_OBJET_AUTRE_PRECISION_REQUISE =
+            "La précision de l'objet est obligatoire (Autre)";
+    public static final String DOSSIER_TRANSACTION_TYPE_TERRAIN_INVALIDE =
+            "Le type de terrain fourni est invalide";
+    public static final String DOSSIER_TRANSACTION_SITUATION_TERRAIN_INVALIDE =
+            "La situation du terrain fournie est invalide";
+
     // Général
     public static final String ERREUR_INTERNE = "Une erreur interne est survenue. Veuillez réessayer.";
 }
