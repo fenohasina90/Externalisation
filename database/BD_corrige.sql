@@ -21,6 +21,7 @@ DROP TABLE IF EXISTS propos_paiement;
 DROP TABLE IF EXISTS historique_ligne_service;
 DROP TABLE IF EXISTS ligne_service;
 DROP TABLE IF EXISTS facture;
+DROP TABLE IF EXISTS dossier_transaction_immobiliere;
 DROP TABLE IF EXISTS dossier_associe;
 DROP TABLE IF EXISTS dossier_creation_entreprise;
 DROP TABLE IF EXISTS demande_reinitialisation;
@@ -271,7 +272,7 @@ CREATE TABLE services (
 
     code_service VARCHAR(50) NOT NULL UNIQUE COMMENT 'Code unique auto-généré (SRV-0001, …)',
 
-    type_service VARCHAR(30) NOT NULL DEFAULT 'STANDARD' COMMENT 'STANDARD ou CREATION (dossier de création)',
+    type_service VARCHAR(30) NOT NULL DEFAULT 'STANDARD' COMMENT 'STANDARD, CREATION ou TRANSACTION_IMMOBILIERE',
 
     description TEXT,
 
@@ -285,7 +286,7 @@ CREATE TABLE services (
         ON UPDATE CURRENT_TIMESTAMP,
 
     CONSTRAINT chk_service_type
-        CHECK (type_service IN ('STANDARD', 'CREATION'))
+        CHECK (type_service IN ('STANDARD', 'CREATION', 'TRANSACTION_IMMOBILIERE'))
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_service_nom
@@ -438,6 +439,83 @@ CREATE TABLE dossier_associe (
         FOREIGN KEY (dossier_id)
         REFERENCES dossier_creation_entreprise(id)
         ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 13 bis. DOSSIER DE TRANSACTION IMMOBILIÈRE
+-- (1 ligne par demande_service ; voir migration_transaction_immobiliere.sql)
+-- Les informations client (nom, contact, mail, fb, adresse) et les
+-- informations de la demande (date, commercial, N° IM) sont lues par
+-- jointure et ne sont pas dupliquées ici.
+-- =========================================================
+
+CREATE TABLE dossier_transaction_immobiliere (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    demande_id INT NOT NULL UNIQUE,
+    nom_proprietaire_precedent VARCHAR(255) NULL,
+    action_achat BOOLEAN NOT NULL DEFAULT FALSE,
+    action_vente BOOLEAN NOT NULL DEFAULT FALSE,
+    action_location BOOLEAN NOT NULL DEFAULT FALSE,
+    action_regularisation_papiers BOOLEAN NOT NULL DEFAULT FALSE,
+    action_gestion_immobiliere BOOLEAN NOT NULL DEFAULT FALSE,
+    action_autre BOOLEAN NOT NULL DEFAULT FALSE,
+    action_autre_precision VARCHAR(255) NULL,
+    objet ENUM('TERRAIN', 'MAISON', 'AUTRE') NULL,
+    objet_autre_precision VARCHAR(255) NULL,
+    achat_mesure_m2 DECIMAL(15,2) NULL,
+    achat_position VARCHAR(255) NULL,
+    achat_axe_emplacement VARCHAR(255) NULL,
+    achat_montant DECIMAL(15,2) NULL,
+    achat_permis_construire BOOLEAN NULL,
+    vente_mesure_m2 DECIMAL(15,2) NULL,
+    vente_position VARCHAR(255) NULL,
+    vente_axe_emplacement VARCHAR(255) NULL,
+    vente_prise_photo BOOLEAN NULL,
+    vente_visite BOOLEAN NULL,
+    vente_montant DECIMAL(15,2) NULL,
+    vente_permis_construire BOOLEAN NULL,
+    regularisation_type_terrain ENUM('COMMUNAL_DOMAINE', 'PRIVE', 'HERITAGE_DON') NULL,
+    regularisation_situation_terrain ENUM('TITRE_BORNE', 'RECONNAISSANCE') NULL,
+    document_pv_reconnaissance BOOLEAN NOT NULL DEFAULT FALSE,
+    document_numero_demande_acquisition BOOLEAN NOT NULL DEFAULT FALSE,
+    document_acte_vente_privee_communale BOOLEAN NOT NULL DEFAULT FALSE,
+    document_situation_juridique BOOLEAN NOT NULL DEFAULT FALSE,
+    document_acte_notoriete BOOLEAN NOT NULL DEFAULT FALSE,
+    observations TEXT NULL,
+    nombre_commerciaux_terrain INT NULL,
+    commission_cn DECIMAL(15,2) NULL,
+    prestation_abonnement_mensuel BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_dti_demande
+        FOREIGN KEY (demande_id)
+        REFERENCES demande_service(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_dti_action
+        CHECK (action_achat OR action_vente OR action_location
+            OR action_regularisation_papiers OR action_gestion_immobiliere
+            OR action_autre),
+
+    CONSTRAINT chk_dti_action_autre
+        CHECK (action_autre = FALSE OR action_autre_precision IS NOT NULL),
+
+    CONSTRAINT chk_dti_objet_autre
+        CHECK (objet IS NULL OR objet <> 'AUTRE' OR objet_autre_precision IS NOT NULL),
+
+    CONSTRAINT chk_dti_mesures
+        CHECK ((achat_mesure_m2 IS NULL OR achat_mesure_m2 >= 0)
+            AND (vente_mesure_m2 IS NULL OR vente_mesure_m2 >= 0)),
+
+    CONSTRAINT chk_dti_montants
+        CHECK ((achat_montant IS NULL OR achat_montant >= 0)
+            AND (vente_montant IS NULL OR vente_montant >= 0)
+            AND (commission_cn IS NULL OR commission_cn >= 0)),
+
+    CONSTRAINT chk_dti_commerciaux
+        CHECK (nombre_commerciaux_terrain IS NULL OR nombre_commerciaux_terrain >= 0)
 ) ENGINE=InnoDB;
 
 -- =========================================================

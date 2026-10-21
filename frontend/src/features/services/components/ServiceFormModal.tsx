@@ -125,9 +125,10 @@ export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
               >
                 <option value="STANDARD">Standard</option>
                 <option value="CREATION">Création d&apos;entreprise ou de société</option>
+                <option value="TRANSACTION_IMMOBILIERE">Transaction immobilière</option>
               </select>
               <span className="form-help">
-                Seul un service de création porte un dossier de création d&apos;entreprise.
+                Les services de création et de transaction immobilière portent une fiche dédiée.
               </span>
             </label>
 

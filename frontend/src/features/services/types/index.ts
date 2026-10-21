@@ -6,7 +6,7 @@ export interface Domaine {
   nombreSocietes: number
 }
 
-export type TypeService = 'STANDARD' | 'CREATION'
+export type TypeService = 'STANDARD' | 'CREATION' | 'TRANSACTION_IMMOBILIERE'
 
 export interface Service {
   id: number

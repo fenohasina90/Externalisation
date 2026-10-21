@@ -12,7 +12,8 @@ public final class DossierRegles {
     private DossierRegles() {
     }
 
-    public static final Set<String> TYPES_SERVICE = Set.of("STANDARD", "CREATION");
+    public static final Set<String> TYPES_SERVICE = Set.of(
+            "STANDARD", "CREATION", "TRANSACTION_IMMOBILIERE");
 
     public static final Set<String> FORMES_JURIDIQUES = Set.of(
             "INDIVIDUELLE", "SARL", "SARLU", "SA", "AUTRE");
@@ -25,6 +26,12 @@ public final class DossierRegles {
 
     public static boolean estTypeCreation(String typeService) {
         return typeService != null && "CREATION".equalsIgnoreCase(typeService.trim());
+    }
+
+    /** Un service de transaction immobilière porte une fiche dédiée. */
+    public static boolean estTypeTransactionImmobiliere(String typeService) {
+        return typeService != null
+                && "TRANSACTION_IMMOBILIERE".equalsIgnoreCase(typeService.trim());
     }
 
     /** Une société (tout sauf Individuelle) exige des associés. */
