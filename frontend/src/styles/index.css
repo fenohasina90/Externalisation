@@ -2693,7 +2693,8 @@ button.form-etapes__pastille:hover {
   position: sticky;
   top: 76px;
   min-width: 0;
-  max-height: 750px;
+  max-height: 850px;
+  padding: 18px 16px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
