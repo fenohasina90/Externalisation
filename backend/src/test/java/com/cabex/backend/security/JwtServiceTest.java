@@ -40,6 +40,18 @@ class JwtServiceTest {
     }
 
     @Test
+    void refuseUneCleTropCourte() {
+        assertThrows(IllegalStateException.class,
+                () -> new JwtService("c2hvcnQ=", 3_600_000L, configurationRepository));
+    }
+
+    @Test
+    void refuseUneCleNonBase64() {
+        assertThrows(IllegalStateException.class,
+                () -> new JwtService("secret non base64 !", 3_600_000L, configurationRepository));
+    }
+
+    @Test
     void dureeLueDepuisLaConfiguration() {
         configDuree("120");
         JwtService jwtService = new JwtService(SECRET, 3_600_000L, configurationRepository);

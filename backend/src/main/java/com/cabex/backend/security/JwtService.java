@@ -2,6 +2,7 @@ package com.cabex.backend.security;
 
 import com.cabex.backend.configuration.repository.ConfigurationRepository;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -18,16 +19,34 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    private final String secretKey;
+    private final SecretKey signingKey;
     private final long expirationMs;
     private final ConfigurationRepository configurationRepository;
 
     public JwtService(@Value("${app.jwt.secret}") String secretKey,
                       @Value("${app.jwt.expiration-ms:3600000}") long expirationMs,
                       ConfigurationRepository configurationRepository) {
-        this.secretKey = secretKey;
+        this.signingKey = construireCle(secretKey);
         this.expirationMs = expirationMs;
         this.configurationRepository = configurationRepository;
+    }
+
+    private static SecretKey construireCle(String secretKey) {
+        if (secretKey == null || secretKey.isBlank()) {
+            throw new IllegalStateException(
+                    "JWT_SECRET est obligatoire : fournissez une clé Base64 d'au moins 32 octets.");
+        }
+        final byte[] keyBytes;
+        try {
+            keyBytes = Decoders.BASE64.decode(secretKey.trim());
+        } catch (JwtException e) {
+            throw new IllegalStateException("JWT_SECRET doit être une chaîne Base64 valide.", e);
+        }
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException(
+                    "JWT_SECRET doit contenir au moins 32 octets (256 bits) après décodage Base64.");
+        }
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 
     public String extractUsername(String token) {
@@ -102,7 +121,6 @@ public class JwtService {
     }
 
     private SecretKey getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
-        return Keys.hmacShaKeyFor(keyBytes);
+        return signingKey;
     }
 }

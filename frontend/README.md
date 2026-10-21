@@ -15,6 +15,8 @@ npm install
 npm run dev      # serveur de développement (http://localhost:5173)
 npm run build    # compilation de type + build de production
 npm run lint     # vérification ESLint
+npm test         # tests unitaires (Vitest)
+npm run test:watch
 ```
 
 Le backend doit être démarré sur le port 8080 (CORS autorisé pour `localhost:5173`).
