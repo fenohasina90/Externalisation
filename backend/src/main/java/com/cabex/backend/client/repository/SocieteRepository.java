@@ -50,4 +50,12 @@ public interface SocieteRepository extends JpaRepository<Societe, Integer> {
         GROUP BY d.societe.id
         """)
     List<Object[]> compterDemandesParSociete();
+
+    /** Sociétés actives proposées dans les filtres du tableau de bord. */
+    @Query("""
+        SELECT s FROM Societe s
+        WHERE s.actif = true AND s.archivedAt IS NULL
+        ORDER BY s.nomSociete
+        """)
+    List<Societe> findActivesPourFiltre();
 }

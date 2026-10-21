@@ -41,4 +41,12 @@ public interface ServiceRepository extends JpaRepository<Service, Integer> {
         ORDER BY s.nomService
         """)
     List<Service> rechercherGlobale(@Param("q") String q, Pageable pageable);
+
+    /** Services actifs et non archivés proposés dans les filtres du tableau de bord. */
+    @Query("""
+        SELECT s FROM Service s
+        WHERE s.actif = true AND s.archivedAt IS NULL
+        ORDER BY s.nomService
+        """)
+    List<Service> findActifsPourFiltre();
 }

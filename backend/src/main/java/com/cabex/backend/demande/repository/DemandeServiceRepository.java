@@ -235,4 +235,180 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
         ORDER BY COUNT(DISTINCT l.demande.id) DESC
         """)
     List<Object[]> compterParService();
+
+    // ------------------------------------------------------------------
+    // Tableau de bord filtré : période, société cliente et service.
+    // ------------------------------------------------------------------
+
+    @Query("""
+        SELECT COUNT(d) FROM DemandeService d
+        LEFT JOIN d.societe s
+        WHERE d.actif = true
+          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
+          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = d AND l.service.id = :serviceId))
+        """)
+    long countFiltre(@Param("dateDebut") LocalDate dateDebut,
+                     @Param("dateFin") LocalDate dateFin,
+                     @Param("societeId") Integer societeId,
+                     @Param("serviceId") Integer serviceId);
+
+    @Query("""
+        SELECT COUNT(DISTINCT s.id) FROM DemandeService d
+        JOIN d.societe s
+        WHERE d.actif = true
+          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
+          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = d AND l.service.id = :serviceId))
+        """)
+    long compterClientsFiltre(@Param("dateDebut") LocalDate dateDebut,
+                              @Param("dateFin") LocalDate dateFin,
+                              @Param("societeId") Integer societeId,
+                              @Param("serviceId") Integer serviceId);
+
+    @Query("""
+        SELECT h.statut.statut, COUNT(DISTINCT d.id)
+        FROM DemandeService d JOIN d.historiques h
+        LEFT JOIN d.societe s
+        WHERE h.id = (SELECT MAX(h2.id) FROM HistoriqueDemande h2 WHERE h2.demande = d)
+          AND d.actif = true
+          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
+          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = d AND l.service.id = :serviceId))
+        GROUP BY h.statut.statut
+        """)
+    List<Object[]> compterParStatutFiltre(@Param("dateDebut") LocalDate dateDebut,
+                                          @Param("dateFin") LocalDate dateFin,
+                                          @Param("societeId") Integer societeId,
+                                          @Param("serviceId") Integer serviceId);
+
+    @Query("""
+        SELECT EXTRACT(YEAR FROM d.dateDemande), EXTRACT(MONTH FROM d.dateDemande), COUNT(DISTINCT d.id)
+        FROM DemandeService d
+        LEFT JOIN d.societe s
+        WHERE d.actif = true
+          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
+          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = d AND l.service.id = :serviceId))
+        GROUP BY EXTRACT(YEAR FROM d.dateDemande), EXTRACT(MONTH FROM d.dateDemande)
+        ORDER BY EXTRACT(YEAR FROM d.dateDemande), EXTRACT(MONTH FROM d.dateDemande)
+        """)
+    List<Object[]> compterParMoisFiltre(@Param("dateDebut") LocalDate dateDebut,
+                                        @Param("dateFin") LocalDate dateFin,
+                                        @Param("societeId") Integer societeId,
+                                        @Param("serviceId") Integer serviceId);
+
+    @Query("""
+        SELECT l.service.id, l.service.nomService, COUNT(DISTINCT l.demande.id)
+        FROM LigneService l JOIN l.demande d
+        LEFT JOIN d.societe s
+        WHERE d.actif = true
+          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
+          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR l.service.id = :serviceId)
+        GROUP BY l.service.id, l.service.nomService
+        ORDER BY COUNT(DISTINCT l.demande.id) DESC
+        """)
+    List<Object[]> compterParServiceFiltre(@Param("dateDebut") LocalDate dateDebut,
+                                           @Param("dateFin") LocalDate dateFin,
+                                           @Param("societeId") Integer societeId,
+                                           @Param("serviceId") Integer serviceId);
+
+    @Query("""
+        SELECT l.service.id, l.service.nomService, COUNT(DISTINCT l.demande.id), COALESCE(SUM(l.tarif), 0)
+        FROM LigneService l JOIN l.demande d
+        LEFT JOIN d.societe s
+        WHERE d.actif = true
+          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
+          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR l.service.id = :serviceId)
+        GROUP BY l.service.id, l.service.nomService
+        ORDER BY COALESCE(SUM(l.tarif), 0) DESC
+        """)
+    List<Object[]> revenuParServiceFiltre(@Param("dateDebut") LocalDate dateDebut,
+                                          @Param("dateFin") LocalDate dateFin,
+                                          @Param("societeId") Integer societeId,
+                                          @Param("serviceId") Integer serviceId);
+
+    @Query("""
+        SELECT s.id, s.nomSociete, COUNT(DISTINCT d.id), COALESCE(SUM(l.tarif), 0)
+        FROM DemandeService d
+        LEFT JOIN d.lignes l ON (:serviceId IS NULL OR l.service.id = :serviceId)
+        LEFT JOIN d.societe s
+        WHERE d.actif = true
+          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
+          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR l.service.id = :serviceId)
+        GROUP BY s.id, s.nomSociete
+        ORDER BY COUNT(DISTINCT d.id) DESC
+        """)
+    List<Object[]> demandesParSocieteFiltre(@Param("dateDebut") LocalDate dateDebut,
+                                            @Param("dateFin") LocalDate dateFin,
+                                            @Param("societeId") Integer societeId,
+                                            @Param("serviceId") Integer serviceId);
+
+    @Query("""
+        SELECT d.commercial.id, d.commercial.nomCommercial, COUNT(DISTINCT d.id)
+        FROM DemandeService d
+        LEFT JOIN d.societe s
+        WHERE d.actif = true
+          AND d.commercial IS NOT NULL
+          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
+          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = d AND l.service.id = :serviceId))
+        GROUP BY d.commercial.id, d.commercial.nomCommercial
+        ORDER BY COUNT(DISTINCT d.id) DESC
+        """)
+    List<Object[]> compterParCommercialFiltre(@Param("dateDebut") LocalDate dateDebut,
+                                              @Param("dateFin") LocalDate dateFin,
+                                              @Param("societeId") Integer societeId,
+                                              @Param("serviceId") Integer serviceId);
+
+    @Query("""
+        SELECT COALESCE(SUM(l.tarif), 0)
+        FROM DemandeService d JOIN d.lignes l
+        LEFT JOIN d.societe s
+        WHERE d.actif = true
+          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
+          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR l.service.id = :serviceId)
+        """)
+    BigDecimal sommeTarifDashboard(@Param("dateDebut") LocalDate dateDebut,
+                                   @Param("dateFin") LocalDate dateFin,
+                                   @Param("societeId") Integer societeId,
+                                   @Param("serviceId") Integer serviceId);
+
+    @Query("""
+        SELECT COUNT(DISTINCT l.service.id)
+        FROM LigneService l JOIN l.demande d
+        LEFT JOIN d.societe s
+        WHERE d.actif = true
+          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
+          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR l.service.id = :serviceId)
+        """)
+    long compterServicesFiltre(@Param("dateDebut") LocalDate dateDebut,
+                               @Param("dateFin") LocalDate dateFin,
+                               @Param("societeId") Integer societeId,
+                               @Param("serviceId") Integer serviceId);
 }

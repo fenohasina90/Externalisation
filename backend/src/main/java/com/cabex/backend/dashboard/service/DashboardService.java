@@ -3,6 +3,9 @@ package com.cabex.backend.dashboard.service;
 import com.cabex.backend.client.repository.SocieteRepository;
 import com.cabex.backend.dashboard.dto.ClientRevenuResponse;
 import com.cabex.backend.dashboard.dto.CommercialTopResponse;
+import com.cabex.backend.dashboard.dto.DashboardFilter;
+import com.cabex.backend.dashboard.dto.DashboardFiltreOption;
+import com.cabex.backend.dashboard.dto.DashboardFiltresResponse;
 import com.cabex.backend.dashboard.dto.DashboardSummaryResponse;
 import com.cabex.backend.dashboard.dto.DemandeMoisResponse;
 import com.cabex.backend.dashboard.dto.DemandeTermineeMoisResponse;
@@ -31,8 +34,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,31 +68,37 @@ public class DashboardService {
     }
 
     @Transactional(readOnly = true)
-    public DashboardSummaryResponse summary() {
+    public DashboardSummaryResponse summary(DashboardFilter filtre) {
         LocalDate today = LocalDate.now();
         String role = SecurityUtils.currentRoleName();
 
-        Map<String, Long> parStatut = groupStatuts();
+        Map<String, Long> parStatut = groupStatuts(filtre);
         long demandesEnCours = parStatut.getOrDefault("EN_COURS", 0L);
         long demandesEnAttente = parStatut.getOrDefault("EN_ATTENTE", 0L);
 
         if ("ECONOMAT".equalsIgnoreCase(role)) {
-            BigDecimal montantTotal = demandeRepository.sommeTarifTotal(null, null, null, null, null, null);
-            BigDecimal montantPaye = paiementRepository.sommeTotalePayee();
-            if (montantTotal == null) montantTotal = BigDecimal.ZERO;
-            if (montantPaye == null) montantPaye = BigDecimal.ZERO;
+            BigDecimal montantTotal = sommeTarif(filtre);
+            BigDecimal montantPaye = sommePayee(filtre);
             BigDecimal reste = montantTotal.subtract(montantPaye).max(BigDecimal.ZERO);
             return new DashboardSummaryResponse(
                     null, null, null,
                     montantTotal, montantPaye, reste,
-                    echeanceRepository.countEnRetard(today),
-                    countProches(today),
+                    echeanceRepository.countEnRetardFiltre(today,
+                            filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId()),
+                    countProches(today, filtre),
                     null, null);
         }
 
-        long clients = societeRepository.countByActifTrue();
-        long demandes = demandeRepository.countByActifTrue();
-        long services = serviceRepository.countByActifTrue();
+        long clients = filtre.aDesFiltres()
+                ? demandeRepository.compterClientsFiltre(filtre.dateDebut(), filtre.dateFin(),
+                        filtre.clientId(), filtre.serviceId())
+                : societeRepository.countByActifTrue();
+        long demandes = demandeRepository.countFiltre(filtre.dateDebut(), filtre.dateFin(),
+                filtre.clientId(), filtre.serviceId());
+        long services = filtre.aDesFiltres()
+                ? demandeRepository.compterServicesFiltre(filtre.dateDebut(), filtre.dateFin(),
+                        filtre.clientId(), filtre.serviceId())
+                : serviceRepository.countByActifTrue();
 
         if ("ACCUEIL".equalsIgnoreCase(role)) {
             return new DashboardSummaryResponse(
@@ -99,37 +108,35 @@ public class DashboardService {
                     demandesEnAttente, demandesEnCours);
         }
 
-        BigDecimal montantTotal = demandeRepository.sommeTarifTotal(null, null, null, null, null, null);
-        BigDecimal montantPaye = paiementRepository.sommeTotalePayee();
-        if (montantTotal == null) montantTotal = BigDecimal.ZERO;
-        if (montantPaye == null) montantPaye = BigDecimal.ZERO;
+        BigDecimal montantTotal = sommeTarif(filtre);
+        BigDecimal montantPaye = sommePayee(filtre);
         BigDecimal reste = montantTotal.subtract(montantPaye).max(BigDecimal.ZERO);
 
         return new DashboardSummaryResponse(
                 clients, demandes, services,
                 montantTotal, montantPaye, reste,
-                echeanceRepository.countEnRetard(today),
-                countProches(today),
+                echeanceRepository.countEnRetardFiltre(today,
+                        filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId()),
+                countProches(today, filtre),
                 demandesEnAttente, demandesEnCours);
     }
 
     @Transactional(readOnly = true)
-    public PerformanceIndicateursResponse performances() {
+    public PerformanceIndicateursResponse performances(DashboardFilter filtre) {
         String role = SecurityUtils.currentRoleName();
+        BigDecimal tauxPaiementATemps = tauxPaiementATemps(filtre);
 
         if ("ECONOMAT".equalsIgnoreCase(role)) {
-            long totalPayts = paiementRepository.compterPaiementsSurEcheance();
-            long aTemps = paiementRepository.compterPaiementsSurEcheanceATemps();
-            BigDecimal tauxPaiementATemps = totalPayts == 0 ? BigDecimal.ZERO
-                    : BigDecimal.valueOf(aTemps * 100.0 / totalPayts).setScale(2, RoundingMode.HALF_UP);
             return new PerformanceIndicateursResponse(
                     null, null, null, null, tauxPaiementATemps,
                     null, null, List.of());
         }
 
-        List<Object[]> termeinees = historiqueRepository.termeineesEtDates();
+        List<Object[]> termeinees = historiqueRepository.termeineesEtDatesFiltrees(
+                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
         long nbTerminees = termeinees.size();
-        long totalDemandes = demandeRepository.countByActifTrue();
+        long totalDemandes = demandeRepository.countFiltre(filtre.dateDebut(), filtre.dateFin(),
+                filtre.clientId(), filtre.serviceId());
 
         BigDecimal delaiMoyen = BigDecimal.ZERO;
         if (nbTerminees > 0) {
@@ -147,23 +154,24 @@ public class DashboardService {
                 : BigDecimal.valueOf(nbTerminees * 100.0 / totalDemandes)
                         .setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal montantTotal = demandeRepository.sommeTarifTotal(null, null, null, null, null, null);
+        BigDecimal montantTotal = sommeTarif(filtre);
         BigDecimal montantMoyen = totalDemandes == 0 ? BigDecimal.ZERO
-                : montantTotal == null ? BigDecimal.ZERO
-                        : montantTotal.divide(BigDecimal.valueOf(totalDemandes), 2, RoundingMode.HALF_UP);
+                : montantTotal.divide(BigDecimal.valueOf(totalDemandes), 2, RoundingMode.HALF_UP);
 
         ServiceTopResponse serviceTop = null;
-        List<Object[]> services = demandeRepository.compterParService();
+        List<Object[]> services = demandeRepository.compterParServiceFiltre(
+                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
         if (!services.isEmpty()) {
             Object[] s = services.get(0);
-            serviceTop = new ServiceTopResponse((Integer) s[0], (String) s[1], (long) s[2]);
+            serviceTop = new ServiceTopResponse((Integer) s[0], (String) s[1], toLong(s[2]));
         }
 
         CommercialTopResponse commercialTop = null;
-        List<Object[]> commerciaux = demandeRepository.compterParCommercial();
+        List<Object[]> commerciaux = demandeRepository.compterParCommercialFiltre(
+                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
         if (!commerciaux.isEmpty()) {
             Object[] c = commerciaux.get(0);
-            commercialTop = new CommercialTopResponse((Integer) c[0], (String) c[1], (long) c[2]);
+            commercialTop = new CommercialTopResponse((Integer) c[0], (String) c[1], toLong(c[2]));
         }
 
         Map<YearMonth, Long> parMois = new TreeMap<>();
@@ -181,27 +189,23 @@ public class DashboardService {
                     serviceTop, commercialTop, parMoisList);
         }
 
-        long totalPayts = paiementRepository.compterPaiementsSurEcheance();
-        long aTemps = paiementRepository.compterPaiementsSurEcheanceATemps();
-        BigDecimal tauxPaiementATemps = totalPayts == 0 ? BigDecimal.ZERO
-                : BigDecimal.valueOf(aTemps * 100.0 / totalPayts).setScale(2, RoundingMode.HALF_UP);
-
         return new PerformanceIndicateursResponse(
                 delaiMoyen, nbTerminees, tauxTerminees, montantMoyen, tauxPaiementATemps,
                 serviceTop, commercialTop, parMoisList);
     }
 
     @Transactional(readOnly = true)
-    public List<StatutCountResponse> demandesParStatut() {
-        return groupStatuts().entrySet().stream()
+    public List<StatutCountResponse> demandesParStatut(DashboardFilter filtre) {
+        return groupStatuts(filtre).entrySet().stream()
                 .map(e -> new StatutCountResponse(e.getKey(), e.getValue()))
                 .sorted(Comparator.comparing(StatutCountResponse::statut))
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public PaiementDashboardResponse paiements() {
-        List<ModeMontantResponse> parMode = paiementRepository.sommeParMode(null, null, null, null, null)
+    public PaiementDashboardResponse paiements(DashboardFilter filtre) {
+        List<ModeMontantResponse> parMode = paiementRepository.sommeParMode(
+                        filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId(), null)
                 .stream()
                 .map(o -> new ModeMontantResponse(
                         (String) o[0], toBigDecimal(o[1])))
@@ -209,7 +213,8 @@ public class DashboardService {
                 .toList();
 
         Map<YearMonth, BigDecimal> map = new LinkedHashMap<>();
-        for (Object[] o : paiementRepository.montantsParMois()) {
+        for (Object[] o : paiementRepository.montantsParMoisFiltre(
+                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())) {
             YearMonth ym = YearMonth.of((int) o[0], (int) o[1]);
             map.merge(ym, toBigDecimal(o[2]), BigDecimal::add);
         }
@@ -221,12 +226,16 @@ public class DashboardService {
     }
 
     @Transactional(readOnly = true)
-    public EcheanceDashboardResponse echeances() {
+    public EcheanceDashboardResponse echeances(DashboardFilter filtre) {
         LocalDate today = LocalDate.now();
-        List<EcheanceAlerteResponse> enRetard = echeanceRepository.findEnRetard(today).stream()
+        List<EcheanceAlerteResponse> enRetard = echeanceRepository.findEnRetardFiltre(
+                        today, filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
+                .stream()
                 .map(e -> toAlerte(e, "EN_RETARD"))
                 .toList();
-        List<EcheanceAlerteResponse> aVenir = echeanceRepository.findAVenir(today).stream()
+        List<EcheanceAlerteResponse> aVenir = echeanceRepository.findAVenirFiltre(
+                        today, filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
+                .stream()
                 .filter(e -> !e.getDateEcheance().isAfter(today.plusDays(JOURS_ALERTE)))
                 .map(e -> toAlerte(e, "PROCHE"))
                 .toList();
@@ -234,70 +243,117 @@ public class DashboardService {
     }
 
     @Transactional(readOnly = true)
-    public List<ServiceRevenuResponse> services() {
-        return demandeRepository.revenuParService().stream()
+    public List<ServiceRevenuResponse> services(DashboardFilter filtre) {
+        return demandeRepository.revenuParServiceFiltre(
+                        filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
+                .stream()
                 .map(o -> new ServiceRevenuResponse(
                         (Integer) o[0],
                         (String) o[1],
-                        (long) o[2],
+                        toLong(o[2]),
                         toBigDecimal(o[3])))
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<ClientRevenuResponse> clients() {
+    public List<ClientRevenuResponse> clients(DashboardFilter filtre) {
         String role = SecurityUtils.currentRoleName();
+        List<Object[]> demandes = demandeRepository.demandesParSocieteFiltre(
+                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
+
         if ("ACCUEIL".equalsIgnoreCase(role)) {
-            return demandeRepository.demandesParSociete().stream()
+            return demandes.stream()
                     .map(o -> new ClientRevenuResponse(
-                            (Integer) o[0], (String) o[1], (long) o[2], null, null))
+                            (Integer) o[0], (String) o[1], toLong(o[2]), null, null))
                     .toList();
         }
-        Map<Integer, BigDecimal> payeParClient = new java.util.HashMap<>();
-        for (Object[] o : paiementRepository.sommeParSociete()) {
-            payeParClient.put((Integer) o[0], toBigDecimal(o[1]));
+
+        Map<Integer, BigDecimal> payeParClient = new HashMap<>();
+        for (Object[] o : paiementRepository.sommeParSocieteFiltre(
+                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())) {
+            if (o[0] != null) {
+                payeParClient.put((Integer) o[0], toBigDecimal(o[1]));
+            }
         }
-        return demandeRepository.demandesParSociete().stream()
+        return demandes.stream()
                 .map(o -> {
                     Integer clientId = (Integer) o[0];
                     String nom = (String) o[1];
-                    long nb = (long) o[2];
+                    long nb = toLong(o[2]);
                     BigDecimal total = toBigDecimal(o[3]);
+                    BigDecimal paye = payeParClient.getOrDefault(clientId, BigDecimal.ZERO);
                     if ("ECONOMAT".equalsIgnoreCase(role)) {
-                        BigDecimal paye = payeParClient.getOrDefault(clientId, BigDecimal.ZERO);
                         return new ClientRevenuResponse(clientId, nom, null, total, paye);
                     }
-                    BigDecimal paye = payeParClient.getOrDefault(clientId, BigDecimal.ZERO);
                     return new ClientRevenuResponse(clientId, nom, nb, total, paye);
                 })
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<DemandeMoisResponse> demandesParMois() {
-        return demandeRepository.compterParMois().stream()
+    public List<DemandeMoisResponse> demandesParMois(DashboardFilter filtre) {
+        return demandeRepository.compterParMoisFiltre(
+                        filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
+                .stream()
                 .map(o -> new DemandeMoisResponse(
-                        YearMonth.of((int) o[0], (int) o[1]).toString(), (long) o[2]))
+                        YearMonth.of((int) o[0], (int) o[1]).toString(), toLong(o[2])))
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<ServiceTopResponse> demandesParService() {
-        return demandeRepository.compterParService().stream()
-                .map(o -> new ServiceTopResponse((Integer) o[0], (String) o[1], (long) o[2]))
+    public List<ServiceTopResponse> demandesParService(DashboardFilter filtre) {
+        return demandeRepository.compterParServiceFiltre(
+                        filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
+                .stream()
+                .map(o -> new ServiceTopResponse((Integer) o[0], (String) o[1], toLong(o[2])))
                 .toList();
     }
 
-    private Map<String, Long> groupStatuts() {
+    @Transactional(readOnly = true)
+    public DashboardFiltresResponse filtres() {
+        List<DashboardFiltreOption> clients = societeRepository.findActivesPourFiltre().stream()
+                .map(s -> new DashboardFiltreOption(s.getId(), s.getNomSociete()))
+                .toList();
+        List<DashboardFiltreOption> services = serviceRepository.findActifsPourFiltre().stream()
+                .map(s -> new DashboardFiltreOption(s.getId(), s.getNomService()))
+                .toList();
+        return new DashboardFiltresResponse(clients, services);
+    }
+
+    private Map<String, Long> groupStatuts(DashboardFilter filtre) {
         Map<String, Long> map = new LinkedHashMap<>();
-        for (Object[] o : demandeRepository.compterParStatut()) {
-            map.put((String) o[0], (long) o[1]);
+        for (Object[] o : demandeRepository.compterParStatutFiltre(
+                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())) {
+            map.put((String) o[0], toLong(o[1]));
         }
         return map;
     }
 
-    private long countProches(LocalDate today) {
-        return echeanceRepository.countProches(today, today.plusDays(JOURS_ALERTE));
+    private long countProches(LocalDate today, DashboardFilter filtre) {
+        return echeanceRepository.countProchesFiltre(today, today.plusDays(JOURS_ALERTE),
+                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
+    }
+
+    private BigDecimal sommeTarif(DashboardFilter filtre) {
+        BigDecimal montant = demandeRepository.sommeTarifDashboard(
+                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
+        return montant == null ? BigDecimal.ZERO : montant;
+    }
+
+    private BigDecimal sommePayee(DashboardFilter filtre) {
+        BigDecimal montant = paiementRepository.sommePayee(
+                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId(), null);
+        return montant == null ? BigDecimal.ZERO : montant;
+    }
+
+    private BigDecimal tauxPaiementATemps(DashboardFilter filtre) {
+        List<Object[]> stats = paiementRepository.statistiquesPaiementsEcheance(
+                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
+        Object[] ligne = stats.isEmpty() ? null : stats.get(0);
+        long totalPayts = ligne == null ? 0 : toLong(ligne[0]);
+        long aTemps = ligne == null || ligne.length < 2 ? 0 : toLong(ligne[1]);
+        return totalPayts == 0 ? BigDecimal.ZERO
+                : BigDecimal.valueOf(aTemps * 100.0 / totalPayts).setScale(2, RoundingMode.HALF_UP);
     }
 
     private EcheanceAlerteResponse toAlerte(EcheancePaiement e, String statut) {
@@ -306,8 +362,10 @@ public class DashboardService {
         return new EcheanceAlerteResponse(
                 e.getId().longValue(),
                 e.getProposPaiement() != null && e.getProposPaiement().getDemande() != null
+                        && e.getProposPaiement().getDemande().getSociete() != null
                         ? e.getProposPaiement().getDemande().getSociete().getId() : null,
                 e.getProposPaiement() != null && e.getProposPaiement().getDemande() != null
+                        && e.getProposPaiement().getDemande().getSociete() != null
                         ? e.getProposPaiement().getDemande().getSociete().getNomSociete() : null,
                 e.getProposPaiement() != null && e.getProposPaiement().getDemande() != null
                         ? e.getProposPaiement().getDemande().getId() : null,
@@ -323,5 +381,9 @@ public class DashboardService {
 
     private BigDecimal toBigDecimal(Object o) {
         return o == null ? BigDecimal.ZERO : new BigDecimal(o.toString());
+    }
+
+    private long toLong(Object o) {
+        return o == null ? 0L : ((Number) o).longValue();
     }
 }

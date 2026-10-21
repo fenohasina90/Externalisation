@@ -111,4 +111,84 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
               AND e.montantPaye < e.montantAttendu
             """)
     Page<EcheancePaiement> findAVenirPagine(@Param("jour") LocalDate jour, Pageable pageable);
+
+    // ------------------------------------------------------------------
+    // Tableau de bord filtré : période, société cliente et service.
+    // ------------------------------------------------------------------
+
+    @Query("""
+            SELECT COUNT(e) FROM EcheancePaiement e
+            LEFT JOIN e.proposPaiement.demande.societe s
+            WHERE e.dateEcheance < :jour
+              AND e.montantPaye < e.montantAttendu
+              AND (:dateDebut IS NULL OR e.dateEcheance >= :dateDebut)
+              AND (:dateFin IS NULL OR e.dateEcheance <= :dateFin)
+              AND (:societeId IS NULL OR s.id = :societeId)
+              AND (:serviceId IS NULL OR EXISTS (
+                    SELECT 1 FROM LigneService l
+                    WHERE l.demande = e.proposPaiement.demande AND l.service.id = :serviceId))
+            """)
+    long countEnRetardFiltre(@Param("jour") LocalDate jour,
+                             @Param("dateDebut") LocalDate dateDebut,
+                             @Param("dateFin") LocalDate dateFin,
+                             @Param("societeId") Integer societeId,
+                             @Param("serviceId") Integer serviceId);
+
+    @Query("""
+            SELECT COUNT(e) FROM EcheancePaiement e
+            LEFT JOIN e.proposPaiement.demande.societe s
+            WHERE e.dateEcheance >= :jour
+              AND e.dateEcheance <= :fin
+              AND e.montantPaye < e.montantAttendu
+              AND (:dateDebut IS NULL OR e.dateEcheance >= :dateDebut)
+              AND (:dateFin IS NULL OR e.dateEcheance <= :dateFin)
+              AND (:societeId IS NULL OR s.id = :societeId)
+              AND (:serviceId IS NULL OR EXISTS (
+                    SELECT 1 FROM LigneService l
+                    WHERE l.demande = e.proposPaiement.demande AND l.service.id = :serviceId))
+            """)
+    long countProchesFiltre(@Param("jour") LocalDate jour,
+                            @Param("fin") LocalDate fin,
+                            @Param("dateDebut") LocalDate dateDebut,
+                            @Param("dateFin") LocalDate dateFin,
+                            @Param("societeId") Integer societeId,
+                            @Param("serviceId") Integer serviceId);
+
+    @Query("""
+            SELECT e FROM EcheancePaiement e
+            LEFT JOIN e.proposPaiement.demande.societe s
+            WHERE e.dateEcheance < :jour
+              AND e.montantPaye < e.montantAttendu
+              AND (:dateDebut IS NULL OR e.dateEcheance >= :dateDebut)
+              AND (:dateFin IS NULL OR e.dateEcheance <= :dateFin)
+              AND (:societeId IS NULL OR s.id = :societeId)
+              AND (:serviceId IS NULL OR EXISTS (
+                    SELECT 1 FROM LigneService l
+                    WHERE l.demande = e.proposPaiement.demande AND l.service.id = :serviceId))
+            ORDER BY e.dateEcheance DESC, e.numeroEcheance DESC
+            """)
+    List<EcheancePaiement> findEnRetardFiltre(@Param("jour") LocalDate jour,
+                                              @Param("dateDebut") LocalDate dateDebut,
+                                              @Param("dateFin") LocalDate dateFin,
+                                              @Param("societeId") Integer societeId,
+                                              @Param("serviceId") Integer serviceId);
+
+    @Query("""
+            SELECT e FROM EcheancePaiement e
+            LEFT JOIN e.proposPaiement.demande.societe s
+            WHERE e.dateEcheance >= :jour
+              AND e.montantPaye < e.montantAttendu
+              AND (:dateDebut IS NULL OR e.dateEcheance >= :dateDebut)
+              AND (:dateFin IS NULL OR e.dateEcheance <= :dateFin)
+              AND (:societeId IS NULL OR s.id = :societeId)
+              AND (:serviceId IS NULL OR EXISTS (
+                    SELECT 1 FROM LigneService l
+                    WHERE l.demande = e.proposPaiement.demande AND l.service.id = :serviceId))
+            ORDER BY e.dateEcheance DESC, e.numeroEcheance DESC
+            """)
+    List<EcheancePaiement> findAVenirFiltre(@Param("jour") LocalDate jour,
+                                            @Param("dateDebut") LocalDate dateDebut,
+                                            @Param("dateFin") LocalDate dateFin,
+                                            @Param("societeId") Integer societeId,
+                                            @Param("serviceId") Integer serviceId);
 }

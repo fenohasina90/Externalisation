@@ -3571,3 +3571,129 @@ body.page-responsables {
     align-items: flex-start;
   }
 }
+
+/* Filtres et indicateurs de performance du tableau de bord */
+.dash-filters__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.dash-filters__head h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.dash-filters__head .section-note {
+  margin: 0;
+}
+
+.dash-filters__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.perf-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.perf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.perf-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-soft, #f5f8f5);
+}
+
+.perf-card__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-light);
+}
+
+.perf-card__valeur {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+.perf-card__detail {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.perf-mois h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.perf-mois__barres {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  min-height: 112px;
+  padding-top: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.perf-mois__colonne {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.perf-mois__valeur {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.perf-mois__barre {
+  width: 100%;
+  max-width: 42px;
+  min-height: 6px;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(to top, #1d6b3f, #2d9a5c);
+}
+
+.perf-mois__colonne small {
+  padding-bottom: 6px;
+  font-size: 11px;
+  color: var(--text-light);
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .dash-filters__head {
+    flex-direction: column;
+  }
+
+  .dash-filters__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

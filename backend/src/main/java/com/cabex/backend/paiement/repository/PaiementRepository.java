@@ -177,4 +177,63 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
         ORDER BY p.datePaiement DESC
         """)
     List<Paiement> rechercherGlobale(@Param("q") String q, Pageable pageable);
+
+    // ------------------------------------------------------------------
+    // Tableau de bord filtré : période, société cliente et service.
+    // ------------------------------------------------------------------
+
+    @Query("""
+        SELECT COUNT(p), COALESCE(SUM(CASE WHEN p.datePaiement <= p.echeance.dateEcheance THEN 1 ELSE 0 END), 0)
+        FROM Paiement p
+        LEFT JOIN p.demande.societe s
+        WHERE p.actif = true
+          AND p.echeance IS NOT NULL
+          AND (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
+          AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = p.demande AND l.service.id = :serviceId))
+        """)
+    List<Object[]> statistiquesPaiementsEcheance(@Param("dateDebut") LocalDate dateDebut,
+                                                 @Param("dateFin") LocalDate dateFin,
+                                                 @Param("societeId") Integer societeId,
+                                                 @Param("serviceId") Integer serviceId);
+
+    @Query("""
+        SELECT EXTRACT(YEAR FROM p.datePaiement), EXTRACT(MONTH FROM p.datePaiement), COALESCE(SUM(p.montantPaye), 0)
+        FROM Paiement p
+        LEFT JOIN p.demande.societe s
+        WHERE p.actif = true
+          AND (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
+          AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = p.demande AND l.service.id = :serviceId))
+        GROUP BY EXTRACT(YEAR FROM p.datePaiement), EXTRACT(MONTH FROM p.datePaiement)
+        ORDER BY EXTRACT(YEAR FROM p.datePaiement), EXTRACT(MONTH FROM p.datePaiement)
+        """)
+    List<Object[]> montantsParMoisFiltre(@Param("dateDebut") LocalDate dateDebut,
+                                         @Param("dateFin") LocalDate dateFin,
+                                         @Param("societeId") Integer societeId,
+                                         @Param("serviceId") Integer serviceId);
+
+    @Query("""
+        SELECT s.id, COALESCE(SUM(p.montantPaye), 0)
+        FROM Paiement p
+        LEFT JOIN p.demande.societe s
+        WHERE p.actif = true
+          AND (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
+          AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = p.demande AND l.service.id = :serviceId))
+        GROUP BY s.id
+        """)
+    List<Object[]> sommeParSocieteFiltre(@Param("dateDebut") LocalDate dateDebut,
+                                         @Param("dateFin") LocalDate dateFin,
+                                         @Param("societeId") Integer societeId,
+                                         @Param("serviceId") Integer serviceId);
 }

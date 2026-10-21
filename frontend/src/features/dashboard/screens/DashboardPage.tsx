@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import { useState, type JSX } from 'react'
 import { Link } from 'react-router-dom'
 import { Spinner } from '@/components/ui'
 import { useAuth } from '@/features/auth/hooks/useAuth'
@@ -12,8 +12,14 @@ import {
   TopServices,
   TranchesRetard,
 } from '../components/charts'
-import { useDashboardData, type VueDashboard } from '../hooks'
-import type { AlerteDashboard, DashboardSummary } from '../types'
+import { PerformancesPanel } from '../components/Performances'
+import { useDashboardData, useDashboardFiltres, type VueDashboard } from '../hooks'
+import {
+  FILTRES_DASHBOARD_VIDES,
+  type AlerteDashboard,
+  type DashboardFiltres,
+  type DashboardSummary,
+} from '../types'
 
 function KpiDemandes({
   icon,
@@ -140,8 +146,31 @@ export function DashboardPage() {
         ? 'Suivi des paiements, des échéances et des montants à encaisser.'
         : 'Vue d’ensemble de vos clients, demandes et paiements d’externalisation.'
 
-  const { data, loading, error } = useDashboardData(vue)
+  const [filtres, setFiltres] = useState<DashboardFiltres>(FILTRES_DASHBOARD_VIDES)
+  const options = useDashboardFiltres()
+  const { data, loading, error } = useDashboardData(vue, filtres)
   const summary = data?.summary
+  const filtresActifs = Object.values(filtres).filter(Boolean).length
+
+  function changerDateDebut(valeur: string) {
+    setFiltres((actuels) => ({
+      ...actuels,
+      dateDebut: valeur,
+      dateFin:
+        actuels.dateFin && valeur && actuels.dateFin < valeur ? valeur : actuels.dateFin,
+    }))
+  }
+
+  function changerDateFin(valeur: string) {
+    setFiltres((actuels) => ({
+      ...actuels,
+      dateFin: valeur,
+      dateDebut:
+        actuels.dateDebut && valeur && valeur < actuels.dateDebut
+          ? valeur
+          : actuels.dateDebut,
+    }))
+  }
   const montantEnRetard =
     data?.echeances?.enRetard.reduce((total, e) => total + e.reste, 0) ?? 0
   const pourcentagePaye =
@@ -174,6 +203,88 @@ export function DashboardPage() {
           {error}
         </div>
       )}
+
+      <section className="card card-pad dash-filters">
+        <div className="dash-filters__head">
+          <div>
+            <h3>Filtres</h3>
+            <p className="section-note">
+              Période, client et service communs à tous les indicateurs.
+            </p>
+          </div>
+          <div className="dash-filters__actions">
+            {loading && data && <span className="section-note">Mise à jour…</span>}
+            {filtresActifs > 0 && (
+              <span className="pill wt">
+                {filtresActifs} filtre{filtresActifs > 1 ? 's' : ''} actif
+                {filtresActifs > 1 ? 's' : ''}
+              </span>
+            )}
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => setFiltres(FILTRES_DASHBOARD_VIDES)}
+              disabled={filtresActifs === 0}
+            >
+              Réinitialiser
+            </button>
+          </div>
+        </div>
+
+        <div className="filters-grid">
+          <label className="field">
+            Période — du
+            <input
+              type="date"
+              value={filtres.dateDebut}
+              max={filtres.dateFin || undefined}
+              onChange={(e) => changerDateDebut(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            Période — au
+            <input
+              type="date"
+              value={filtres.dateFin}
+              min={filtres.dateDebut || undefined}
+              onChange={(e) => changerDateFin(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            Client
+            <select
+              value={filtres.clientId}
+              onChange={(e) => setFiltres((f) => ({ ...f, clientId: e.target.value }))}
+              disabled={options.loading}
+            >
+              <option value="">Tous les clients</option>
+              {options.data?.clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.libelle ?? `Client #${client.id}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            Service
+            <select
+              value={filtres.serviceId}
+              onChange={(e) => setFiltres((f) => ({ ...f, serviceId: e.target.value }))}
+              disabled={options.loading}
+            >
+              <option value="">Tous les services</option>
+              {options.data?.services.map((service) => (
+                <option key={service.id} value={service.id}>
+                  {service.libelle ?? `Service #${service.id}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {options.error && (
+          <p className="field-hint">Options de filtres indisponibles : {options.error}</p>
+        )}
+      </section>
 
       {data && summary && (
         <>
@@ -261,6 +372,14 @@ export function DashboardPage() {
               />
             </section>
           )}
+
+          <section className="card card-pad">
+            <div className="dash-card-head">
+              <h3>Indicateurs de performance</h3>
+              {filtresActifs > 0 && <span className="pill wt">Périmètre filtré</span>}
+            </div>
+            <PerformancesPanel donnees={data.performances} vue={vue} />
+          </section>
 
           <div className="dash-grid">
             {vue !== 'ECONOMAT' && (

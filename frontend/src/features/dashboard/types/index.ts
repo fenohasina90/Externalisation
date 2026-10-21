@@ -68,6 +68,31 @@ export interface PaiementDashboard {
   parMois: MoisMontant[]
 }
 
+/** Filtres appliqués au tableau de bord. Les identifiants sont des chaînes issues des `<select>`. */
+export interface DashboardFiltres {
+  dateDebut: string
+  dateFin: string
+  clientId: string
+  serviceId: string
+}
+
+export interface FiltreOption {
+  id: number
+  libelle: string
+}
+
+export interface DashboardFiltreOptions {
+  clients: FiltreOption[]
+  services: FiltreOption[]
+}
+
+export const FILTRES_DASHBOARD_VIDES: DashboardFiltres = {
+  dateDebut: '',
+  dateFin: '',
+  clientId: '',
+  serviceId: '',
+}
+
 export interface PerformancesDashboard {
   delaiMoyenTraitementJours: number | null
   demandesTerminees: number | null
@@ -106,4 +131,5 @@ export interface DashboardData {
   paiements: PaiementDashboard | null
   echeances: EcheanceDashboard | null
   servicesRevenu: ServiceRevenu[]
+  performances: PerformancesDashboard
 }
