@@ -1,8 +1,9 @@
 package com.cabex.backend.echeance.service;
 
-import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.audit.action.AuditActions;
 import com.cabex.backend.audit.service.AuditService;
+import com.cabex.backend.configuration.service.ConfigurationKeys;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.echeance.dto.CreateEcheanceRequest;
 import com.cabex.backend.echeance.dto.EcheanceResponse;
 import com.cabex.backend.echeance.dto.UpdateEcheanceRequest;
@@ -25,26 +26,35 @@ import java.util.List;
 @org.springframework.stereotype.Service
 public class EcheanceGestionService {
 
-    private static final int JOURS_ALERTE = 3;
-
     private final EcheancePaiementRepository echeanceRepository;
     private final ProposPaiementRepository proposRepository;
     private final AuditService auditService;
+    private final ConfigurationService configurationService;
 
     public EcheanceGestionService(EcheancePaiementRepository echeanceRepository,
                                   ProposPaiementRepository proposRepository,
-                                  AuditService auditService) {
+                                  AuditService auditService,
+                                  ConfigurationService configurationService) {
         this.echeanceRepository = echeanceRepository;
         this.proposRepository = proposRepository;
         this.auditService = auditService;
+        this.configurationService = configurationService;
+    }
+
+    private int joursAlerte() {
+        return Math.max(configurationService.lireEntier(
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE,
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE_DEFAUT), 1);
     }
 
     @Transactional(readOnly = true)
     public List<EcheanceResponse> getByPlan(Integer proposId) {
         getPropos(proposId);
+        LocalDate aujourdHui = LocalDate.now();
+        int joursAlerte = joursAlerte();
         return echeanceRepository
                 .findByProposPaiementIdOrderByDateEcheanceDescNumeroEcheanceDesc(proposId).stream()
-                .map(e -> EcheanceMapper.toEcheanceResponse(e, LocalDate.now(), JOURS_ALERTE))
+                .map(e -> EcheanceMapper.toEcheanceResponse(e, aujourdHui, joursAlerte))
                 .toList();
     }
 
@@ -75,7 +85,7 @@ public class EcheanceGestionService {
         auditService.log(AuditActions.CREATE, "PAIEMENT", "EcheancePaiement",
                 Long.valueOf(echeance.getId()), null,
                 "plan=" + propos.getId() + ", echeance=" + echeance.getNumeroEcheance());
-        return EcheanceMapper.toEcheanceResponse(echeance, LocalDate.now(), JOURS_ALERTE);
+        return EcheanceMapper.toEcheanceResponse(echeance, LocalDate.now(), joursAlerte());
     }
 
     @Transactional
@@ -101,19 +111,23 @@ public class EcheanceGestionService {
                 "plan=" + echeance.getProposPaiement().getId(),
                 "plan=" + echeance.getProposPaiement().getId()
                         + ", echeance=" + echeance.getNumeroEcheance());
-        return EcheanceMapper.toEcheanceResponse(echeance, LocalDate.now(), JOURS_ALERTE);
+        return EcheanceMapper.toEcheanceResponse(echeance, LocalDate.now(), joursAlerte());
     }
 
     @Transactional(readOnly = true)
     public Page<EcheanceResponse> getEnRetard(Pageable pageable) {
-        return echeanceRepository.findEnRetardPagine(LocalDate.now(), pageable)
-                .map(e -> EcheanceMapper.toEcheanceResponse(e, LocalDate.now(), JOURS_ALERTE));
+        LocalDate aujourdHui = LocalDate.now();
+        int joursAlerte = joursAlerte();
+        return echeanceRepository.findEnRetardPagine(aujourdHui, pageable)
+                .map(e -> EcheanceMapper.toEcheanceResponse(e, aujourdHui, joursAlerte));
     }
 
     @Transactional(readOnly = true)
     public Page<EcheanceResponse> getAVenir(Pageable pageable) {
-        return echeanceRepository.findAVenirPagine(LocalDate.now(), pageable)
-                .map(e -> EcheanceMapper.toEcheanceResponse(e, LocalDate.now(), JOURS_ALERTE));
+        LocalDate aujourdHui = LocalDate.now();
+        int joursAlerte = joursAlerte();
+        return echeanceRepository.findAVenirPagine(aujourdHui, pageable)
+                .map(e -> EcheanceMapper.toEcheanceResponse(e, aujourdHui, joursAlerte));
     }
 
     private void validerDateDansIntervalle(ProposPaiement propos, LocalDate date) {

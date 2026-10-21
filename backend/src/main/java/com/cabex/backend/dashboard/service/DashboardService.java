@@ -1,6 +1,8 @@
 package com.cabex.backend.dashboard.service;
 
 import com.cabex.backend.client.repository.SocieteRepository;
+import com.cabex.backend.configuration.service.ConfigurationKeys;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.dashboard.dto.ClientRevenuResponse;
 import com.cabex.backend.dashboard.dto.CommercialTopResponse;
 import com.cabex.backend.dashboard.dto.DashboardFilter;
@@ -44,27 +46,34 @@ import java.util.TreeMap;
 @Service
 public class DashboardService {
 
-    private static final int JOURS_ALERTE = 3;
-
     private final SocieteRepository societeRepository;
     private final DemandeServiceRepository demandeRepository;
     private final HistoriqueDemandeRepository historiqueRepository;
     private final ServiceRepository serviceRepository;
     private final PaiementRepository paiementRepository;
     private final EcheancePaiementRepository echeanceRepository;
+    private final ConfigurationService configurationService;
 
     public DashboardService(SocieteRepository societeRepository,
                             DemandeServiceRepository demandeRepository,
                             HistoriqueDemandeRepository historiqueRepository,
                             ServiceRepository serviceRepository,
                             PaiementRepository paiementRepository,
-                            EcheancePaiementRepository echeanceRepository) {
+                            EcheancePaiementRepository echeanceRepository,
+                            ConfigurationService configurationService) {
         this.societeRepository = societeRepository;
         this.demandeRepository = demandeRepository;
         this.historiqueRepository = historiqueRepository;
         this.serviceRepository = serviceRepository;
         this.paiementRepository = paiementRepository;
         this.echeanceRepository = echeanceRepository;
+        this.configurationService = configurationService;
+    }
+
+    private int joursAlerte() {
+        return Math.max(configurationService.lireEntier(
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE,
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE_DEFAUT), 1);
     }
 
     @Transactional(readOnly = true)
@@ -228,6 +237,7 @@ public class DashboardService {
     @Transactional(readOnly = true)
     public EcheanceDashboardResponse echeances(DashboardFilter filtre) {
         LocalDate today = LocalDate.now();
+        LocalDate limite = today.plusDays(joursAlerte());
         List<EcheanceAlerteResponse> enRetard = echeanceRepository.findEnRetardFiltre(
                         today, filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
                 .stream()
@@ -236,7 +246,7 @@ public class DashboardService {
         List<EcheanceAlerteResponse> aVenir = echeanceRepository.findAVenirFiltre(
                         today, filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
                 .stream()
-                .filter(e -> !e.getDateEcheance().isAfter(today.plusDays(JOURS_ALERTE)))
+                .filter(e -> !e.getDateEcheance().isAfter(limite))
                 .map(e -> toAlerte(e, "PROCHE"))
                 .toList();
         return new EcheanceDashboardResponse(enRetard, aVenir);
@@ -330,7 +340,7 @@ public class DashboardService {
     }
 
     private long countProches(LocalDate today, DashboardFilter filtre) {
-        return echeanceRepository.countProchesFiltre(today, today.plusDays(JOURS_ALERTE),
+        return echeanceRepository.countProchesFiltre(today, today.plusDays(joursAlerte()),
                 filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
     }
 

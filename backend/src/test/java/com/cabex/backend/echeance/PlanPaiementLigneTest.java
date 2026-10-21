@@ -1,6 +1,7 @@
 package com.cabex.backend.echeance;
 
 import com.cabex.backend.audit.service.AuditService;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
@@ -45,6 +46,7 @@ class PlanPaiementLigneTest {
     @Mock private HistoriqueLigneServiceRepository historiqueLigneRepository;
     @Mock private UtilisateurRepository utilisateurRepository;
     @Mock private AuditService auditService;
+    @Mock private ConfigurationService configurationService;
 
     private PlanPaiementService service;
 
@@ -52,7 +54,8 @@ class PlanPaiementLigneTest {
     void setUp() {
         service = new PlanPaiementService(proposRepository, echeanceRepository,
                 demandeRepository, historiqueRepository, ligneRepository,
-                historiqueLigneRepository, utilisateurRepository, auditService);
+                historiqueLigneRepository, utilisateurRepository, auditService,
+                configurationService);
         lenient().when(proposRepository.save(any())).thenAnswer(inv -> {
             ProposPaiement p = inv.getArgument(0);
             p.setId(1);

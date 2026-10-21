@@ -171,22 +171,27 @@ public class NotificationService {
                 ROLE_SUPER_ADMIN, ROLE_ECONOMAT);
     }
 
+    @Transactional
     public void notifierEcheanceProche(EcheancePaiement echeance, int jours) {
         DemandeService demande = echeance.getProposPaiement().getDemande();
         if (demande == null) {
             return;
         }
         String societe = demande.getSociete() != null ? demande.getSociete().getNomSociete() : "client";
+        String delai = jours <= 0 ? "aujourd'hui"
+                : jours == 1 ? "demain"
+                : "dans " + jours + " jours";
         creerPourRoles(true,
                 "ECHEANCE_PROCHE",
                 "Échéance proche",
                 "⚠️ L'échéance n°" + echeance.getNumeroEcheance() + " de la société " + societe
-                        + " (" + montant(echeance.getMontantAttendu()) + ") arrive à échéance dans "
-                        + jours + " jour" + (jours > 1 ? "s" : "") + ".",
+                        + " (" + montant(echeance.getMontantAttendu()) + ") arrive à échéance "
+                        + delai + ".",
                 "ECHEANCE", echeance.getId() != null ? echeance.getId().longValue() : null,
                 ROLE_SUPER_ADMIN, ROLE_ECONOMAT);
     }
 
+    @Transactional
     public void notifierEcheanceEnRetard(EcheancePaiement echeance) {
         DemandeService demande = echeance.getProposPaiement().getDemande();
         if (demande == null) {

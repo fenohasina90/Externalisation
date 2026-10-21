@@ -113,7 +113,7 @@ class AuditJournalisationTest {
         PlanPaiementService service = new PlanPaiementService(
                 proposRepository, echeanceRepository, demandeRepository,
                 historiqueRepository, ligneRepository, historiqueLigneRepository,
-                utilisateurRepository, auditService);
+                utilisateurRepository, auditService, configurationService);
 
         service.create(10, new CreatePlanPaiementRequest(
                 LocalDate.of(2026, 9, 1), LocalDate.of(2026, 11, 30),
@@ -136,7 +136,7 @@ class AuditJournalisationTest {
         PlanPaiementService service = new PlanPaiementService(
                 proposRepository, echeanceRepository, demandeRepository,
                 historiqueRepository, ligneRepository, historiqueLigneRepository,
-                utilisateurRepository, auditService);
+                utilisateurRepository, auditService, configurationService);
 
         service.update(1, new com.cabex.backend.echeance.dto.UpdatePlanPaiementRequest(
                 LocalDate.of(2026, 9, 1), LocalDate.of(2026, 11, 30),
@@ -161,7 +161,7 @@ class AuditJournalisationTest {
             return e;
         });
         EcheanceGestionService service = new EcheanceGestionService(
-                echeanceRepository, proposRepository, auditService);
+                echeanceRepository, proposRepository, auditService, configurationService);
 
         service.create(1, new CreateEcheanceRequest(1,
                 LocalDate.of(2026, 10, 10), new BigDecimal("300000"), null));

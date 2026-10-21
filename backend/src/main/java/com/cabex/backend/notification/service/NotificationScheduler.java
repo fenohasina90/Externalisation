@@ -1,10 +1,12 @@
 package com.cabex.backend.notification.service;
 
+import com.cabex.backend.configuration.service.ConfigurationKeys;
 import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -17,8 +19,6 @@ import java.util.List;
  */
 @Component
 public class NotificationScheduler {
-
-    private static final int JOURS_ALERTE_DEFAUT = 3;
 
     private final EcheancePaiementRepository echeanceRepository;
     private final NotificationService notificationService;
@@ -33,6 +33,7 @@ public class NotificationScheduler {
     }
 
     @Scheduled(cron = "0 0 7 * * *")
+    @Transactional
     public void verifierEcheances() {
         LocalDate aujourdHui = LocalDate.now();
 
@@ -42,12 +43,13 @@ public class NotificationScheduler {
 
         List<EcheancePaiement> aVenir = echeanceRepository.findAVenir(aujourdHui);
         int joursAlerte = Math.max(configurationService.lireEntier(
-                "JOURS_AVANCE_ALERTE_ECHEANCE", JOURS_ALERTE_DEFAUT), 1);
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE,
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE_DEFAUT), 1);
         LocalDate limite = aujourdHui.plusDays(joursAlerte);
         for (EcheancePaiement echeance : aVenir) {
             if (!echeance.getDateEcheance().isAfter(limite)) {
                 int jours = (int) ChronoUnit.DAYS.between(aujourdHui, echeance.getDateEcheance());
-                notificationService.notifierEcheanceProche(echeance, Math.max(jours, 1));
+                notificationService.notifierEcheanceProche(echeance, jours);
             }
         }
     }

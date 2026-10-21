@@ -22,6 +22,8 @@ import com.cabex.backend.client.mapper.SocieteMapper;
 import com.cabex.backend.client.repository.ClientResponsableRepository;
 import com.cabex.backend.client.repository.SocieteRepository;
 import com.cabex.backend.commercial.entity.Commercial;
+import com.cabex.backend.configuration.service.ConfigurationKeys;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.HistoriqueDemande;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
@@ -54,8 +56,6 @@ import java.util.Map;
 @Service
 public class SocieteService {
 
-    private static final int JOURS_ALERTE = 3;
-
     private final SocieteRepository societeRepository;
     private final ClientResponsableRepository responsableRepository;
     private final DemandeServiceRepository demandeRepository;
@@ -66,6 +66,7 @@ public class SocieteService {
     private final DomaineServiceRepository domaineRepository;
     private final RisqueService risqueService;
     private final AuditService auditService;
+    private final ConfigurationService configurationService;
 
     public SocieteService(SocieteRepository societeRepository,
                           ClientResponsableRepository responsableRepository,
@@ -76,7 +77,8 @@ public class SocieteService {
                           PieceJointeRepository pieceJointeRepository,
                           DomaineServiceRepository domaineRepository,
                           RisqueService risqueService,
-                          AuditService auditService) {
+                          AuditService auditService,
+                          ConfigurationService configurationService) {
         this.societeRepository = societeRepository;
         this.responsableRepository = responsableRepository;
         this.demandeRepository = demandeRepository;
@@ -87,6 +89,13 @@ public class SocieteService {
         this.domaineRepository = domaineRepository;
         this.risqueService = risqueService;
         this.auditService = auditService;
+        this.configurationService = configurationService;
+    }
+
+    private int joursAlerte() {
+        return Math.max(configurationService.lireEntier(
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE,
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE_DEFAUT), 1);
     }
 
     @Transactional(readOnly = true)
@@ -169,7 +178,7 @@ public class SocieteService {
                                 e.getMontantAttendu(),
                                 e.getMontantPaye(),
                                 e.getMontantAttendu().subtract(e.getMontantPaye()),
-                                EcheanceMapper.calculerStatutEcheance(e, today, JOURS_ALERTE)))
+                                EcheanceMapper.calculerStatutEcheance(e, today, joursAlerte())))
                         .toList();
 
         List<CommercialFicheResponse> commerciaux = commerciauxDuClient(demandes);

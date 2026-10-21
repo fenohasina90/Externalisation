@@ -7,6 +7,7 @@ import com.cabex.backend.backup.crypto.BackupCryptoService;
 import com.cabex.backend.backup.dto.BackupFileResponse;
 import com.cabex.backend.backup.dto.BackupInfosResponse;
 import com.cabex.backend.backup.dto.RestoreResponse;
+import com.cabex.backend.configuration.service.ConfigurationKeys;
 import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.exception.BackupException;
 import com.cabex.backend.exception.BadRequestException;
@@ -41,7 +42,7 @@ public class BackupService {
     private static final Logger log = LoggerFactory.getLogger(BackupService.class);
     private static final String MODULE = "Sauvegarde";
     private static final String ENTITE = "Sauvegarde";
-    public static final String CLE_HEURE_SAUVEGARDE = "HEURE_SAUVEGARDE_AUTOMATIQUE";
+    public static final String CLE_HEURE_SAUVEGARDE = ConfigurationKeys.HEURE_SAUVEGARDE_AUTOMATIQUE;
     private static final LocalTime HEURE_SAUVEGARDE_DEFAUT = LocalTime.of(2, 0);
 
     private final BackupProperties proprietes;

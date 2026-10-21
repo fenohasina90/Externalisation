@@ -8,6 +8,7 @@ import com.cabex.backend.client.repository.ClientResponsableRepository;
 import com.cabex.backend.client.repository.SocieteRepository;
 import com.cabex.backend.client.service.RisqueService;
 import com.cabex.backend.client.service.SocieteService;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.document.repository.PieceJointeRepository;
@@ -48,6 +49,7 @@ class SocieteServiceTest {
     @Mock private DomaineServiceRepository domaineRepository;
     @Mock private RisqueService risqueService;
     @Mock private AuditService auditService;
+    @Mock private ConfigurationService configurationService;
 
     private SocieteService societeService;
 
@@ -56,7 +58,8 @@ class SocieteServiceTest {
         societeService = new SocieteService(
                 societeRepository, responsableRepository, demandeRepository,
                 historiqueRepository, paiementRepository, echeanceRepository,
-                pieceJointeRepository, domaineRepository, risqueService, auditService);
+                pieceJointeRepository, domaineRepository, risqueService, auditService,
+                configurationService);
     }
 
     private Societe societe(Integer id, String nom, boolean actif, boolean archivee) {

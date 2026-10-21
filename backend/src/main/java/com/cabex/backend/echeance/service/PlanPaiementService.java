@@ -11,6 +11,8 @@ import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.audit.action.AuditActions;
 import com.cabex.backend.audit.service.AuditService;
+import com.cabex.backend.configuration.service.ConfigurationKeys;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.echeance.dto.CreatePlanPaiementRequest;
 import com.cabex.backend.echeance.dto.PlanPaiementResponse;
 import com.cabex.backend.echeance.dto.UpdatePlanPaiementRequest;
@@ -39,8 +41,6 @@ import java.util.Set;
 @org.springframework.stereotype.Service
 public class PlanPaiementService {
 
-    private static final int JOURS_ALERTE = 3;
-
     private final ProposPaiementRepository proposRepository;
     private final EcheancePaiementRepository echeanceRepository;
     private final DemandeServiceRepository demandeRepository;
@@ -49,6 +49,7 @@ public class PlanPaiementService {
     private final HistoriqueLigneServiceRepository historiqueLigneRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final AuditService auditService;
+    private final ConfigurationService configurationService;
 
     public PlanPaiementService(ProposPaiementRepository proposRepository,
                                EcheancePaiementRepository echeanceRepository,
@@ -57,7 +58,8 @@ public class PlanPaiementService {
                                LigneServiceRepository ligneRepository,
                                HistoriqueLigneServiceRepository historiqueLigneRepository,
                                UtilisateurRepository utilisateurRepository,
-                               AuditService auditService) {
+                               AuditService auditService,
+                               ConfigurationService configurationService) {
         this.proposRepository = proposRepository;
         this.echeanceRepository = echeanceRepository;
         this.demandeRepository = demandeRepository;
@@ -66,6 +68,13 @@ public class PlanPaiementService {
         this.historiqueLigneRepository = historiqueLigneRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.auditService = auditService;
+        this.configurationService = configurationService;
+    }
+
+    private int joursAlerte() {
+        return Math.max(configurationService.lireEntier(
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE,
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE_DEFAUT), 1);
     }
 
     @Transactional(readOnly = true)
@@ -304,7 +313,7 @@ public class PlanPaiementService {
     }
 
     private PlanPaiementResponse toResponse(ProposPaiement propos) {
-        return EcheanceMapper.toPlanResponse(propos, LocalDate.now(), JOURS_ALERTE);
+        return EcheanceMapper.toPlanResponse(propos, LocalDate.now(), joursAlerte());
     }
 
     private DemandeService getDemande(Integer id) {

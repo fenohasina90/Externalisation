@@ -1,8 +1,8 @@
 package com.cabex.backend.configuration.config;
 
-import com.cabex.backend.backup.service.BackupService;
 import com.cabex.backend.configuration.entity.Configuration;
 import com.cabex.backend.configuration.repository.ConfigurationRepository;
+import com.cabex.backend.configuration.service.ConfigurationKeys;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 
@@ -13,9 +13,9 @@ public class ConfigurationInitializer {
     @Bean
     public CommandLineRunner initHeureSauvegarde(ConfigurationRepository repository) {
         return args -> {
-            if (!repository.existsByCle(BackupService.CLE_HEURE_SAUVEGARDE)) {
+            if (!repository.existsByCle(ConfigurationKeys.HEURE_SAUVEGARDE_AUTOMATIQUE)) {
                 repository.save(Configuration.builder()
-                        .cle(BackupService.CLE_HEURE_SAUVEGARDE)
+                        .cle(ConfigurationKeys.HEURE_SAUVEGARDE_AUTOMATIQUE)
                         .valeur("02:00")
                         .typeValeur("TIME")
                         .description("Heure de la sauvegarde automatique quotidienne (heure du serveur, HH:mm)")
