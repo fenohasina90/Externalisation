@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Can } from '@/components/shared/Can'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -672,6 +672,15 @@ function LigneCard({
     () => (plan ? echeancesApi.listByPlan(plan.id) : Promise.resolve([])),
     [plan?.id],
   )
+  const echeancesTriees = useMemo(
+    () =>
+      [...(echeances ?? [])].sort(
+        (a, b) =>
+          a.dateEcheance.localeCompare(b.dateEcheance) ||
+          a.numeroEcheance - b.numeroEcheance,
+      ),
+    [echeances],
+  )
   const [voirEcheances, setVoirEcheances] = useState(true)
   const [voirHistorique, setVoirHistorique] = useState(false)
 
@@ -726,7 +735,7 @@ function LigneCard({
                 </tr>
               </thead>
               <tbody>
-                {(echeances ?? []).map((e) => (
+                {echeancesTriees.map((e) => (
                   <tr key={e.id}>
                     <td>{e.numeroEcheance}</td>
                     <td className="text-secondary">{formatDate(e.dateEcheance)}</td>

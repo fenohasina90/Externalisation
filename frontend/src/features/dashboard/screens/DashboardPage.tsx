@@ -147,6 +147,7 @@ export function DashboardPage() {
         : 'Vue d’ensemble de vos clients, demandes et paiements d’externalisation.'
 
   const [filtres, setFiltres] = useState<DashboardFiltres>(FILTRES_DASHBOARD_VIDES)
+  const [filtresVisibles, setFiltresVisibles] = useState(true)
   const options = useDashboardFiltres()
   const { data, loading, error } = useDashboardData(vue, filtres)
   const summary = data?.summary
@@ -187,6 +188,24 @@ export function DashboardPage() {
         </div>
         <div className="actions">
           <span className="pill ok">Vue {vue}</span>
+          {filtresActifs > 0 && (
+            <span className="pill wt">
+              {filtresActifs} filtre{filtresActifs > 1 ? 's' : ''} actif
+              {filtresActifs > 1 ? 's' : ''}
+            </span>
+          )}
+          <button
+            type="button"
+            className="btn-ghost"
+            aria-expanded={filtresVisibles}
+            aria-controls="dashboard-filtres"
+            onClick={() => setFiltresVisibles((visible) => !visible)}
+          >
+            {/* <svg className="sv" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 5h16l-6 7v5l-4 2v-7L4 5z" />
+            </svg> */}
+            {filtresVisibles ? 'Masquer les filtres' : 'Afficher les filtres'}
+          </button>
           <button type="button" className="btn-ghost" onClick={() => window.print()}>
             <svg className="sv" viewBox="0 0 24 24">
               <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
@@ -204,34 +223,29 @@ export function DashboardPage() {
         </div>
       )}
 
-      <section className="card card-pad dash-filters">
-        <div className="dash-filters__head">
-          <div>
-            <h3>Filtres</h3>
-            <p className="section-note">
-              Période, client et service communs à tous les indicateurs.
-            </p>
+      {filtresVisibles && (
+        <section id="dashboard-filtres" className="card card-pad dash-filters">
+          <div className="dash-filters__head">
+            <div>
+              <h3>Filtres</h3>
+              <p className="section-note">
+                Période, client et service communs à tous les indicateurs.
+              </p>
+            </div>
+            <div className="dash-filters__actions">
+              {loading && data && <span className="section-note">Mise à jour…</span>}
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setFiltres(FILTRES_DASHBOARD_VIDES)}
+                disabled={filtresActifs === 0}
+              >
+                Réinitialiser
+              </button>
+            </div>
           </div>
-          <div className="dash-filters__actions">
-            {loading && data && <span className="section-note">Mise à jour…</span>}
-            {filtresActifs > 0 && (
-              <span className="pill wt">
-                {filtresActifs} filtre{filtresActifs > 1 ? 's' : ''} actif
-                {filtresActifs > 1 ? 's' : ''}
-              </span>
-            )}
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => setFiltres(FILTRES_DASHBOARD_VIDES)}
-              disabled={filtresActifs === 0}
-            >
-              Réinitialiser
-            </button>
-          </div>
-        </div>
 
-        <div className="filters-grid">
+          <div className="filters-grid">
           <label className="field">
             Période — du
             <input
@@ -281,10 +295,11 @@ export function DashboardPage() {
             </select>
           </label>
         </div>
-        {options.error && (
-          <p className="field-hint">Options de filtres indisponibles : {options.error}</p>
-        )}
-      </section>
+          {options.error && (
+            <p className="field-hint">Options de filtres indisponibles : {options.error}</p>
+          )}
+        </section>
+      )}
 
       {data && summary && (
         <>
