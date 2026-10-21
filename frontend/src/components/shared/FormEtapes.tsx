@@ -24,6 +24,8 @@ interface FormEtapesProps {
   erreur?: string | null
   /** Libellé du bouton final. */
   libelleTerminer?: string
+  /** Récapitulatif affiché à droite du contenu (formulaires progressifs). */
+  recapitulatif?: ReactNode
   /** Contenu de l'étape courante (fonction du numéro d'étape, base 0). */
   children: (etape: number) => ReactNode
 }
@@ -41,6 +43,7 @@ export function FormEtapes({
   enregistrement = false,
   erreur = null,
   libelleTerminer = 'Enregistrer',
+  recapitulatif,
   children,
 }: FormEtapesProps) {
   const [etape, setEtape] = useState(0)
@@ -116,7 +119,14 @@ export function FormEtapes({
         </div>
       )}
 
-      <div className="form-etapes__contenu">{children(etape)}</div>
+      {recapitulatif ? (
+        <div className="form-etapes__corps">
+          <div className="form-etapes__contenu">{children(etape)}</div>
+          <div className="form-etapes__recap">{recapitulatif}</div>
+        </div>
+      ) : (
+        <div className="form-etapes__contenu">{children(etape)}</div>
+      )}
 
       <footer className="modal-footer">
         <button type="button" className="btn-ghost" onClick={onAnnuler} disabled={enregistrement}>

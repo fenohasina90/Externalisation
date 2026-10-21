@@ -47,6 +47,8 @@ public class DocumentGestionService {
     private final ConfigurationService configurationService;
     private final com.cabex.backend.facture.repository.FactureRepository factureRepository;
     private final com.cabex.backend.dossier.repository.DossierCreationRepository dossierRepository;
+    private final com.cabex.backend.dossier.repository.DossierTransactionImmobiliereRepository
+            dossierTransactionRepository;
 
     @Value("${app.document.storage-path}")
     private String storagePath;
@@ -63,7 +65,9 @@ public class DocumentGestionService {
                                   AuditService auditService,
                                   ConfigurationService configurationService,
                                   com.cabex.backend.facture.repository.FactureRepository factureRepository,
-                                  com.cabex.backend.dossier.repository.DossierCreationRepository dossierRepository) {
+                                  com.cabex.backend.dossier.repository.DossierCreationRepository dossierRepository,
+                                  com.cabex.backend.dossier.repository.DossierTransactionImmobiliereRepository
+                                          dossierTransactionRepository) {
         this.pieceRepository = pieceRepository;
         this.demandeRepository = demandeRepository;
         this.paiementRepository = paiementRepository;
@@ -74,6 +78,7 @@ public class DocumentGestionService {
         this.configurationService = configurationService;
         this.factureRepository = factureRepository;
         this.dossierRepository = dossierRepository;
+        this.dossierTransactionRepository = dossierTransactionRepository;
     }
 
     /**
@@ -181,9 +186,11 @@ public class DocumentGestionService {
         DemandeService demande = demandeRepository.findById(demandeId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Demande", demandeId)));
-        // Demande de création avec dossier saisi : fiche de création au format papier.
+        // Demandes à fiche dédiée : création, puis transaction immobilière.
         return dossierRepository.findByDemandeId(demandeId)
                 .map(dossier -> pdfGenerator.ficheCreation(demande, dossier))
+                .or(() -> dossierTransactionRepository.findByDemandeId(demandeId)
+                        .map(dossier -> pdfGenerator.ficheTransactionImmobiliere(demande, dossier)))
                 .orElseGet(() -> pdfGenerator.recapitulatifDemande(demande));
     }
 
@@ -214,14 +221,18 @@ public class DocumentGestionService {
     public DocumentResponse sauvegarderRecapitulatif(Integer demandeId) {
         verifierDemande(demandeId);
         DemandeService demande = demandeRepository.findById(demandeId).orElseThrow();
-        boolean fiche = dossierRepository.findByDemandeId(demandeId).isPresent();
+        boolean ficheCreation = dossierRepository.findByDemandeId(demandeId).isPresent();
+        boolean ficheTransaction = !ficheCreation
+                && dossierTransactionRepository.findByDemandeId(demandeId).isPresent();
         byte[] contenu = recapitulatifDemande(demandeId);
+        String prefixe = ficheCreation ? "fiche-creation-"
+                : ficheTransaction ? "fiche-transaction-immobiliere-"
+                : "recapitulatif-demande-";
+        String description = ficheCreation ? "Fiche de création générée automatiquement"
+                : ficheTransaction ? "Fiche de transaction immobilière générée automatiquement"
+                : "Récapitulatif de demande généré automatiquement";
         return enregistrerFichier(demande, null,
-                (fiche ? "fiche-creation-" : "recapitulatif-demande-")
-                        + demande.getReferenceDemande() + ".pdf",
-                (fiche ? "Fiche de création générée automatiquement"
-                        : "Récapitulatif de demande généré automatiquement"),
-                contenu);
+                prefixe + demande.getReferenceDemande() + ".pdf", description, contenu);
     }
 
     @Transactional

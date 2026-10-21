@@ -1,7 +1,13 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
 import { FormEtapes } from '@/components/shared/FormEtapes'
 import {
+  RecapitulatifForm,
+  type SectionRecapitulatif,
+} from '@/components/shared/RecapitulatifForm'
+import { formatMontantMGA } from '@/utils/format'
+import {
   OBJETS,
+  POSITIONS_TERRAIN,
   SITUATIONS_TERRAIN,
   TYPES_TERRAIN,
   type DossierTransactionForm,
@@ -34,6 +40,15 @@ const ETAPES = [
   { titre: 'Régularisation', description: 'Terrain et documents disponibles.' },
   { titre: 'Suivi', description: 'Commerciaux, commission et prestation.' },
 ]
+
+const ouiNonLabel = (valeur: OuiNon): string =>
+  valeur === '' ? '' : valeur === 'oui' ? 'Oui' : 'Non'
+
+const mesure = (valeur: number | null): string =>
+  valeur === null ? '' : `${valeur.toLocaleString('fr-FR')} m²`
+
+const montant = (valeur: number | null): string =>
+  valeur === null ? '' : formatMontantMGA(valeur)
 
 function Case({
   name,
@@ -139,11 +154,154 @@ export function DossierTransactionImmobiliereFormModal({
     return null
   }
 
+  const actions: string[] = []
+  if (form.actionAchat) actions.push('Achat')
+  if (form.actionVente) actions.push('Vente')
+  if (form.actionLocation) actions.push('Location')
+  if (form.actionRegularisationPapiers) actions.push('Régularisation des papiers')
+  if (form.actionGestionImmobiliere) actions.push('Gestion immobilière')
+  if (form.actionAutre) {
+    actions.push(
+      form.actionAutrePrecision.trim() !== ''
+        ? `Autre (${form.actionAutrePrecision.trim()})`
+        : 'Autre',
+    )
+  }
+
+  const objetLabel = OBJETS.find((o) => o.valeur === form.objet)?.label ?? ''
+  const objetValeur =
+    form.objet === 'AUTRE' && form.objetAutrePrecision.trim() !== ''
+      ? `Autre (${form.objetAutrePrecision.trim()})`
+      : objetLabel
+
+  const documents = [
+    form.documentPvReconnaissance && 'PV de reconnaissance',
+    form.documentNumeroDemandeAcquisition && 'N° de demande d’acquisition',
+    form.documentActeVentePriveeCommunale && 'Acte de vente privée ou communale',
+    form.documentSituationJuridique && 'Situation juridique',
+    form.documentActeNotoriete && 'Acte de notoriété',
+  ].filter((document): document is string => Boolean(document))
+
+  const achatRenseigne =
+    form.actionAchat ||
+    form.achatMesureM2 !== null ||
+    form.achatPosition !== '' ||
+    form.achatAxeEmplacement.trim() !== '' ||
+    form.achatMontant !== null ||
+    form.achatPermisConstruire !== ''
+  const venteRenseignee =
+    form.actionVente ||
+    form.venteMesureM2 !== null ||
+    form.ventePosition !== '' ||
+    form.venteAxeEmplacement.trim() !== '' ||
+    form.ventePrisePhoto !== '' ||
+    form.venteVisite !== '' ||
+    form.venteMontant !== null ||
+    form.ventePermisConstruire !== ''
+  const regularisationRenseignee =
+    form.regularisationTypeTerrain !== '' ||
+    form.regularisationSituationTerrain !== '' ||
+    documents.length > 0 ||
+    form.observations.trim() !== ''
+  const suiviRenseigne =
+    form.nombreCommerciauxTerrain !== null ||
+    form.commissionCn !== null ||
+    form.prestationAbonnementMensuel
+
+  const recapSections: SectionRecapitulatif[] = [
+    {
+      titre: 'Transaction',
+      lignes: [
+        { label: 'Propriétaire précédent', valeur: form.nomProprietairePrecedent },
+        { label: 'Actions', valeur: actions.join(', ') },
+        { label: 'Objet', valeur: objetValeur },
+      ],
+    },
+    ...(achatRenseigne
+      ? [
+          {
+            titre: 'Achat',
+            lignes: [
+              { label: 'Mesure', valeur: mesure(form.achatMesureM2) },
+              { label: 'Position', valeur: form.achatPosition },
+              { label: 'Axe / emplacement', valeur: form.achatAxeEmplacement },
+              { label: 'Montant', valeur: montant(form.achatMontant) },
+              {
+                label: 'Permis de construire',
+                valeur: ouiNonLabel(form.achatPermisConstruire),
+              },
+            ],
+          },
+        ]
+      : []),
+    ...(venteRenseignee
+      ? [
+          {
+            titre: 'Vente',
+            lignes: [
+              { label: 'Mesure', valeur: mesure(form.venteMesureM2) },
+              { label: 'Position', valeur: form.ventePosition },
+              { label: 'Axe / emplacement', valeur: form.venteAxeEmplacement },
+              { label: 'Montant', valeur: montant(form.venteMontant) },
+              { label: 'Prise de photo', valeur: ouiNonLabel(form.ventePrisePhoto) },
+              { label: 'Visite', valeur: ouiNonLabel(form.venteVisite) },
+              {
+                label: 'Permis de construire',
+                valeur: ouiNonLabel(form.ventePermisConstruire),
+              },
+            ],
+          },
+        ]
+      : []),
+    ...(regularisationRenseignee
+      ? [
+          {
+            titre: 'Régularisation',
+            lignes: [
+              {
+                label: 'Type de terrain',
+                valeur:
+                  TYPES_TERRAIN.find((t) => t.valeur === form.regularisationTypeTerrain)?.label ??
+                  '',
+              },
+              {
+                label: 'Situation du terrain',
+                valeur:
+                  SITUATIONS_TERRAIN.find(
+                    (s) => s.valeur === form.regularisationSituationTerrain,
+                  )?.label ?? '',
+              },
+              { label: 'Documents', valeur: documents.join(', ') },
+              { label: 'Observations', valeur: form.observations },
+            ],
+          },
+        ]
+      : []),
+    ...(suiviRenseigne
+      ? [
+          {
+            titre: 'Suivi',
+            lignes: [
+              {
+                label: 'Commerciaux sur terrain',
+                valeur: form.nombreCommerciauxTerrain ?? '',
+              },
+              { label: 'Commission CN', valeur: montant(form.commissionCn) },
+              {
+                label: 'Abonnement mensuel',
+                valeur: form.prestationAbonnementMensuel ? 'Oui' : 'Non',
+              },
+            ],
+          },
+        ]
+      : []),
+  ]
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-card"
-        style={{ maxWidth: 820 }}
+        style={{ maxWidth: 1060 }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="Dossier de transaction immobilière"
@@ -168,6 +326,7 @@ export function DossierTransactionImmobiliereFormModal({
             onAnnuler={onClose}
             enregistrement={enregistrement}
             libelleTerminer="Enregistrer"
+            recapitulatif={<RecapitulatifForm sections={recapSections} />}
           >
             {(etape) => (
               <>
@@ -269,7 +428,18 @@ export function DossierTransactionImmobiliereFormModal({
                       </label>
                       <label className="field">
                         Position / plan
-                        <input name="achatPosition" value={form.achatPosition} onChange={handleChange} />
+                        <select
+                          name="achatPosition"
+                          value={form.achatPosition}
+                          onChange={handleChange}
+                        >
+                          <option value="">Sélectionner…</option>
+                          {POSITIONS_TERRAIN.map((position) => (
+                            <option key={position} value={position}>
+                              {position}
+                            </option>
+                          ))}
+                        </select>
                       </label>
                       <label className="field form-grid__full">
                         Axe ou emplacement
@@ -322,7 +492,18 @@ export function DossierTransactionImmobiliereFormModal({
                       </label>
                       <label className="field">
                         Position / plan
-                        <input name="ventePosition" value={form.ventePosition} onChange={handleChange} />
+                        <select
+                          name="ventePosition"
+                          value={form.ventePosition}
+                          onChange={handleChange}
+                        >
+                          <option value="">Sélectionner…</option>
+                          {POSITIONS_TERRAIN.map((position) => (
+                            <option key={position} value={position}>
+                              {position}
+                            </option>
+                          ))}
+                        </select>
                       </label>
                       <label className="field form-grid__full">
                         Axe ou emplacement

@@ -1,4 +1,4 @@
-import { libelleTypeService, type Service } from '../types'
+import type { Service } from '../types'
 
 interface Props {
   items: Service[]

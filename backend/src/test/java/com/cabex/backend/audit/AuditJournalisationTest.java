@@ -69,6 +69,8 @@ class AuditJournalisationTest {
     @Mock private com.cabex.backend.configuration.service.ConfigurationService configurationService;
     @Mock private com.cabex.backend.facture.repository.FactureRepository factureRepository;
     @Mock private com.cabex.backend.dossier.repository.DossierCreationRepository dossierRepository;
+    @Mock private com.cabex.backend.dossier.repository.DossierTransactionImmobiliereRepository
+            dossierTransactionRepository;
 
     @TempDir
     Path dossierTemporaire;
@@ -180,7 +182,7 @@ class AuditJournalisationTest {
         DocumentGestionService service = new DocumentGestionService(
                 pieceRepository, demandeRepository, paiementRepository, proposRepository,
                 utilisateurRepository, pdfGenerator, auditService, configurationService,
-                factureRepository, dossierRepository);
+                factureRepository, dossierRepository, dossierTransactionRepository);
         ReflectionTestUtils.setField(service, "storagePath", dossierTemporaire.toString());
         ReflectionTestUtils.setField(service, "maxSize", 10 * 1024 * 1024L);
         lenient().when(configurationService.lireEntierLong(anyString(), anyLong()))

@@ -2307,6 +2307,81 @@ button.form-etapes__pastille:hover {
   gap: 16px;
 }
 
+.form-etapes__corps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 264px;
+  gap: 16px;
+  align-items: start;
+}
+
+.form-etapes__recap {
+  min-width: 0;
+}
+
+.form-etapes__recap .recap-card {
+  position: sticky;
+  top: 0;
+  max-height: min(62vh, 560px);
+  overflow: auto;
+}
+
+/* Récapitulatif latéral des formulaires progressifs */
+.recap-form__section + .recap-form__section {
+  margin-top: 14px;
+}
+
+.recap-form__section h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-light);
+}
+
+.recap-form__liste {
+  margin: 0;
+}
+
+.recap-form__liste .rc {
+  padding: 8px 0;
+  font-size: 13px;
+  align-items: flex-start;
+}
+
+.recap-form__liste dt {
+  color: var(--text-muted);
+  min-width: 0;
+}
+
+.recap-form__liste dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.recap-form__vide {
+  color: var(--text-light);
+  font-weight: 500;
+}
+
+.recap-form__note {
+  margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+  .form-etapes__corps {
+    grid-template-columns: 1fr;
+  }
+
+  .form-etapes__recap .recap-card {
+    position: static;
+    max-height: none;
+  }
+}
+
 /* Titres de section dans les grands formulaires en modale */
 .form-section {
   margin: 18px 0 12px;

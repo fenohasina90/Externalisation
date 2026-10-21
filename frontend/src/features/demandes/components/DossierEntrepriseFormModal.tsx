@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { FormEtapes } from '@/components/shared/FormEtapes'
 import {
+  RecapitulatifForm,
+  type SectionRecapitulatif,
+} from '@/components/shared/RecapitulatifForm'
+import { formatDate, formatMontantMGA } from '@/utils/format'
+import {
   FORMES_JURIDIQUES,
   HEBERGEMENTS,
   REGIMES_ACTIVITE,
@@ -111,11 +116,81 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
 
   const vides = form.associes.length === 0
 
+  const formeJuridiqueLabel =
+    FORMES_JURIDIQUES.find((f) => f.valeur === form.formeJuridique)?.label ?? ''
+  const hebergementLabel =
+    HEBERGEMENTS.find((h) => h.valeur === form.hebergement)?.label ?? ''
+  const regimeLabel =
+    REGIMES_ACTIVITE.find((r) => r.valeur === form.regimeActivite)?.label ?? ''
+  const adresse = [form.adresse, form.ville, form.commune, form.district, form.region]
+    .filter((valeur) => valeur.trim() !== '')
+    .join(', ')
+
+  const recapSections: SectionRecapitulatif[] = [
+    {
+      titre: 'Société',
+      lignes: [
+        { label: 'Forme juridique', valeur: formeJuridiqueLabel },
+        { label: 'Dénomination', valeur: form.denomination },
+        {
+          label: 'Capital social',
+          valeur: form.capitalSocial === null ? '' : formatMontantMGA(form.capitalSocial),
+        },
+        { label: 'Siège actuel', valeur: form.siegeSocialActuel },
+      ],
+    },
+    ...(estSociete
+      ? [
+          {
+            titre: 'Associés',
+            lignes:
+              form.associes.length === 0
+                ? [{ label: 'Associés', valeur: '' }]
+                : form.associes.map((associe, index) => ({
+                    label: `Associé ${index + 1}`,
+                    valeur: [associe.nom, associe.partSociale]
+                      .filter((valeur) => valeur.trim() !== '')
+                      .join(' · '),
+                  })),
+          },
+        ]
+      : []),
+    {
+      titre: 'Gérance',
+      lignes: [
+        { label: 'Gérant', valeur: form.nomGerant },
+        { label: 'Fonction', valeur: form.fonctionGerant },
+        { label: 'Location de gérance', valeur: form.locationGerance ? 'Oui' : 'Non' },
+      ],
+    },
+    {
+      titre: 'Siège',
+      lignes: [
+        { label: 'Adresse', valeur: adresse },
+        { label: 'Hébergement', valeur: hebergementLabel },
+        {
+          label: 'Contrat de bail',
+          valeur: form.contratBail === '' ? '' : form.contratBail === 'oui' ? 'Oui' : 'Non',
+        },
+        { label: 'Secteur d’activité', valeur: form.secteurActivite },
+      ],
+    },
+    {
+      titre: 'Activité',
+      lignes: [
+        { label: 'Objet social', valeur: form.objetSocial },
+        { label: 'Début souhaité', valeur: form.dateSouhaitee ? formatDate(form.dateSouhaitee) : '' },
+        { label: 'Régime', valeur: regimeLabel },
+        { label: 'TVA', valeur: form.tva },
+      ],
+    },
+  ]
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-card"
-        style={{ maxWidth: 760 }}
+        style={{ maxWidth: 1080 }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="Dossier de création d’entreprise"
@@ -140,6 +215,7 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
             onAnnuler={onClose}
             erreur={error}
             libelleTerminer="Enregistrer"
+            recapitulatif={<RecapitulatifForm sections={recapSections} />}
           >
             {(etape) => (
               <>

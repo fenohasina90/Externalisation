@@ -1,8 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { FormEtapes } from '@/components/shared/FormEtapes'
+import {
+  RecapitulatifForm,
+  type SectionRecapitulatif,
+} from '@/components/shared/RecapitulatifForm'
 import { Autocomplete } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
+import { formatDate, formatMontantMGA } from '@/utils/format'
 import type { ApiPage } from '@/types'
 import type { CreateSocietePayload, Societe } from '@/features/clients/types'
 import type { Commercial } from '@/features/commerciaux/types'
@@ -314,6 +319,58 @@ export function NouvelleDemandePage() {
     }
   }
 
+  const commercialLabel =
+    (commerciaux?.content ?? []).find((c) => c.id === commercialId)?.nomCommercial ?? ''
+
+  const recapSections: SectionRecapitulatif[] = [
+    {
+      titre: 'Demande',
+      lignes: [
+        { label: 'Client', valeur: clientTexte },
+        { label: 'Responsable', valeur: responsableTexte },
+        { label: 'Commercial', valeur: commercialLabel },
+        { label: 'Date', valeur: dateDemande ? formatDate(dateDemande) : '' },
+        {
+          label: 'Facturation',
+          valeur: mode === 'PAR_SERVICE' ? 'Une facture par service' : 'Facture unique',
+        },
+        {
+          label: 'Pièces jointes',
+          valeur:
+            fichiers.length === 0
+              ? ''
+              : `${fichiers.length} fichier${fichiers.length > 1 ? 's' : ''}`,
+        },
+      ],
+    },
+    {
+      titre: 'Services',
+      lignes: [
+        ...lignes.map((ligne, index) => {
+          const nom =
+            ligne.serviceId !== ''
+              ? nomsServices.get(ligne.serviceId as number)
+              : undefined
+          const tarif =
+            ligne.tarif !== '' && !Number.isNaN(Number(ligne.tarif))
+              ? formatMontantMGA(Number(ligne.tarif))
+              : ''
+          const periode =
+            ligne.debutService !== '' || ligne.finService !== ''
+              ? `${ligne.debutService ? formatDate(ligne.debutService) : '…'} → ${
+                  ligne.finService ? formatDate(ligne.finService) : '…'
+                }`
+              : ''
+          return {
+            label: nom ?? `Service ${index + 1}`,
+            valeur: [tarif, periode].filter(Boolean).join(' · '),
+          }
+        }),
+        { label: 'Montant total', valeur: formatMontantMGA(total) },
+      ],
+    },
+  ]
+
   return (
     <div className="app-page responsables-page">
       <header className="page-header page-header-sticky">
@@ -551,23 +608,15 @@ export function NouvelleDemandePage() {
           </FormEtapes>
         </section>
 
-        <aside className="card card-pad recap-card">
-          <h3>Récapitulatif</h3>
-          {(lignes.filter((l) => l.serviceId !== ''))?.map((l, i) => (
-            <div className="rc" key={i}>
-              <span>{nomsServices.get(l.serviceId as number) ?? '—'}</span>
-              <strong>{(Number(l.tarif) || 0).toLocaleString('fr-FR')} MGA</strong>
-            </div>
-          ))}
-          <div className="rc">
-            <span>Montant total</span>
-            <strong>{total.toLocaleString('fr-FR')} MGA</strong>
-          </div>
-          <div className="nt" style={{ marginTop: 12 }}>
-            <strong>Montants figés</strong> : les factures proforma sont générées à la
-            création ; les échéances, paiements et rapports s&apos;appuient sur ces montants.
-          </div>
-        </aside>
+        <RecapitulatifForm
+          sections={recapSections}
+          note={
+            <>
+              <strong>Montants figés</strong> : les factures proforma sont générées à la
+              création ; les échéances, paiements et rapports s&apos;appuient sur ces montants.
+            </>
+          }
+        />
       </div>
 
       <ClientFormModal

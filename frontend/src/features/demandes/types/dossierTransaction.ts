@@ -20,6 +20,16 @@ export const SITUATIONS_TERRAIN: { valeur: SituationTerrain; label: string }[] =
   { valeur: 'RECONNAISSANCE', label: 'Reconnaissance' },
 ]
 
+export const POSITIONS_TERRAIN = [
+  'Premier plan',
+  'Deuxième plan',
+  'Troisième plan',
+  'Quatrième plan et plus',
+  "Terrain d'angle",
+  'Terrain intérieur',
+  'Terrain en bord de route',
+]
+
 export interface DossierTransactionImmobiliere {
   id: number
   demandeId: number

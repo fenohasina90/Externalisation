@@ -3,19 +3,22 @@ package com.cabex.backend.document.service;
 import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.dossier.entity.DossierCreation;
+import com.cabex.backend.dossier.entity.DossierTransactionImmobiliere;
 import com.cabex.backend.echeance.entity.ProposPaiement;
 import com.cabex.backend.facture.entity.Facture;
 import com.cabex.backend.paiement.entity.Paiement;
 import org.springframework.stereotype.Component;
 
 /**
- * Génération des documents PDF du cabinet : récapitulatif de demande, fiche de
- * création, reçu de paiement, plan de paiement et facture proforma.
+ * Génération des documents PDF du cabinet : récapitulatif de demande, fiches de
+ * création et de transaction immobilière, reçu de paiement, plan de paiement et
+ * facture proforma.
  *
  * <p>Point d'entrée du service ; la mise en page est déléguée aux générateurs
  * spécialisés ({@link PdfRecapitulatif}, {@link PdfFicheCreation},
- * {@link PdfRecuPaiement}, {@link PdfPlanPaiement}, {@link PdfFactureProforma}) et
- * la charte graphique est centralisée dans {@link PdfTheme}.</p>
+ * {@link PdfFicheTransactionImmobiliere}, {@link PdfRecuPaiement},
+ * {@link PdfPlanPaiement}, {@link PdfFactureProforma}) et la charte graphique
+ * est centralisée dans {@link PdfTheme}.</p>
  */
 @Component
 public class PdfGenerator {
@@ -40,6 +43,14 @@ public class PdfGenerator {
      */
     public byte[] ficheCreation(DemandeService demande, DossierCreation dossier) {
         return PdfFicheCreation.generer(demande, dossier);
+    }
+
+    /**
+     * Fiche de transaction immobilière (reprend la fiche papier du cabinet).
+     */
+    public byte[] ficheTransactionImmobiliere(DemandeService demande,
+                                              DossierTransactionImmobiliere dossier) {
+        return PdfFicheTransactionImmobiliere.generer(demande, dossier);
     }
 
     public byte[] recuPaiement(Paiement paiement) {
