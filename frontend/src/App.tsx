@@ -18,7 +18,13 @@ import { SauvegardesPage } from '@/features/backup'
 import { ClientDetailPage, ClientsPage } from '@/features/clients'
 import { CommerciauxPage } from '@/features/commerciaux'
 import { DashboardPage } from '@/features/dashboard'
-import { DemandeDetailPage, DemandesPage, NouvelleDemandePage } from '@/features/demandes'
+import {
+  DemandeDetailPage,
+  DemandesPage,
+  DossierEntreprisePage,
+  DossierTransactionImmobilierePage,
+  NouvelleDemandePage,
+} from '@/features/demandes'
 import { DocumentsPage } from '@/features/documents'
 import { EcheancesPage } from '@/features/echeances'
 import { NotificationsPage } from '@/features/notifications'
@@ -128,6 +134,22 @@ function App() {
             element={
               <RequirePermission permission="DEMANDE_VIEW">
                 <DemandeDetailPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/demandes/:reference/dossier-entreprise"
+            element={
+              <RequirePermission permission={['DOSSIER_VIEW', 'DOSSIER_CREATE', 'DOSSIER_UPDATE']}>
+                <DossierEntreprisePage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/demandes/:reference/dossier-transaction-immobiliere"
+            element={
+              <RequirePermission permission={['DOSSIER_VIEW', 'DOSSIER_CREATE', 'DOSSIER_UPDATE']}>
+                <DossierTransactionImmobilierePage />
               </RequirePermission>
             }
           />

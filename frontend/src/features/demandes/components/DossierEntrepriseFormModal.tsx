@@ -22,10 +22,21 @@ interface Props {
   dossier: DossierEntreprise
   onClose: () => void
   onSave: (d: DossierEntreprise) => void
+  /** Affiche le formulaire dans la page (3/4) avec son récapitulatif (1/4). */
+  inline?: boolean
+  /** Enregistrement en cours : désactive les boutons. */
+  enregistrement?: boolean
 }
 
 /** Formulaire du dossier de création d'entreprise (cf. fiche papier). */
-export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: Props) {
+export function DossierEntrepriseFormModal({
+  open,
+  dossier,
+  onClose,
+  onSave,
+  inline = false,
+  enregistrement = false,
+}: Props) {
   const [form, setForm] = useState<DossierEntreprise>(dossier)
   const [error, setError] = useState<string | null>(null)
 
@@ -54,7 +65,7 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
     [estSociete],
   )
 
-  if (!open) return null
+  if (!open && !inline) return null
 
   const set = <K extends keyof DossierEntreprise>(cle: K, valeur: DossierEntreprise[K]) => {
     setForm((f) => ({ ...f, [cle]: valeur }))
@@ -187,35 +198,43 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
   ]
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div
+      className={inline ? 'split-layout' : 'modal-backdrop'}
+      onClick={inline ? undefined : onClose}
+    >
       <div
-        className="modal-card"
-        style={{ maxWidth: 1080 }}
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
+        className={inline ? 'card card-pad' : 'modal-card'}
+        style={inline ? undefined : { maxWidth: 1140 }}
+        onClick={inline ? undefined : (e) => e.stopPropagation()}
+        role={inline ? undefined : 'dialog'}
         aria-label="Dossier de création d’entreprise"
       >
-        <header className="modal-header">
-          <div>
-            <h3 className="modal-title">Dossier de création d’entreprise</h3>
-            <p className="modal-subtitle">
-              Date et N° IM repris de la demande d’origine. Associés obligatoires pour une société.
-            </p>
-          </div>
-          <button type="button" className="btn-ghost" onClick={onClose} aria-label="Fermer">
-            ✕
-          </button>
-        </header>
+        {!inline && (
+          <header className="modal-header">
+            <div>
+              <h3 className="modal-title">Dossier de création d’entreprise</h3>
+              <p className="modal-subtitle">
+                Date et N° IM repris de la demande d’origine. Associés obligatoires pour une société.
+              </p>
+            </div>
+            <button type="button" className="btn-ghost" onClick={onClose} aria-label="Fermer">
+              ✕
+            </button>
+          </header>
+        )}
 
-        <div className="modal-body">
+        <div className={inline ? 'dossier-form__corps' : 'modal-body'}>
           <FormEtapes
             etapes={etapes}
             validerEtape={validerEtape}
             onTerminer={handleSubmit}
             onAnnuler={onClose}
             erreur={error}
+            enregistrement={enregistrement}
             libelleTerminer="Enregistrer"
-            recapitulatif={<RecapitulatifForm sections={recapSections} />}
+            recapitulatif={
+              inline ? undefined : <RecapitulatifForm sections={recapSections} />
+            }
           >
             {(etape) => (
               <>
@@ -490,6 +509,7 @@ export function DossierEntrepriseFormModal({ open, dossier, onClose, onSave }: P
           </FormEtapes>
         </div>
       </div>
+      {inline && <RecapitulatifForm sections={recapSections} />}
     </div>
   )
 }

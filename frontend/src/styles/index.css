@@ -2309,7 +2309,7 @@ button.form-etapes__pastille:hover {
 
 .form-etapes__corps {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 264px;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -2321,8 +2321,10 @@ button.form-etapes__pastille:hover {
 .form-etapes__recap .recap-card {
   position: sticky;
   top: 0;
-  max-height: min(62vh, 560px);
-  overflow: auto;
+  max-height: 750px;
+  padding-bottom: 15px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* Récapitulatif latéral des formulaires progressifs */
@@ -2346,7 +2348,9 @@ button.form-etapes__pastille:hover {
 .recap-form__liste .rc {
   padding: 8px 0;
   font-size: 13px;
+  flex-direction: column;
   align-items: flex-start;
+  gap: 2px;
 }
 
 .recap-form__liste dt {
@@ -2356,10 +2360,12 @@ button.form-etapes__pastille:hover {
 
 .recap-form__liste dd {
   margin: 0;
-  text-align: right;
+  width: 100%;
+  text-align: left;
   font-weight: 600;
   min-width: 0;
   overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .recap-form__vide {
@@ -2678,7 +2684,7 @@ button.form-etapes__pastille:hover {
 
 .split-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -2686,6 +2692,18 @@ button.form-etapes__pastille:hover {
 .recap-card {
   position: sticky;
   top: 76px;
+  min-width: 0;
+  max-height: 750px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dossier-form__entete {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
 /* Détail demande : deux cartes côte à côte sur grand écran */

@@ -19,19 +19,11 @@ import { echeancesApi } from '@/features/echeances/services/echeances.service'
 import { ServiceFormModal } from '@/features/services/components/ServiceFormModal'
 import { PiecesJointes } from '@/features/documents'
 import { ChangerStatutModal, DemandeStepper, DossierEntrepriseDetail,
-  DossierEntrepriseFormModal, DossierTransactionImmobiliereDetail,
-  DossierTransactionImmobiliereFormModal, StatutDemandePill } from '../components'
-import { DOSSIER_VIDE, type DossierEntreprise } from '../data/mockDossierEntreprise'
+  DossierTransactionImmobiliereDetail, StatutDemandePill } from '../components'
 import type { Demande, Facture, HistoriqueDemande, HistoriqueLigne, LigneService,
   StatutDemande } from '../types'
-import { dossierVersFormulaire, dossierVersPayload, type Dossier } from '../types/dossier'
-import {
-  DOSSIER_TRANSACTION_VIDE,
-  dossierTransactionVersFormulaire,
-  dossierTransactionVersPayload,
-  type DossierTransactionForm,
-  type DossierTransactionImmobiliere,
-} from '../types/dossierTransaction'
+import { dossierVersFormulaire, type Dossier } from '../types/dossier'
+import type { DossierTransactionImmobiliere } from '../types/dossierTransaction'
 import {
   demandesApi,
   dossierApi,
@@ -336,20 +328,10 @@ export function DemandeDetailPage() {
         <PiecesJointes cible="demande" id={demande.id} titre="Pièces jointes de la demande" />
       )}
 
-      {onglet === 'dossier' && (
-        <DossierTab
-          demande={demande}
-          onErreur={setErreur}
-          onMessage={setMessage}
-        />
-      )}
+      {onglet === 'dossier' && <DossierTab demande={demande} />}
 
       {onglet === 'dossier-transaction' && (
-        <DossierTransactionTab
-          demande={demande}
-          onErreur={setErreur}
-          onMessage={setMessage}
-        />
+        <DossierTransactionTab demande={demande} />
       )}
 
       {onglet === 'historique' && (
@@ -1253,44 +1235,16 @@ function PlanModal({
   )
 }
 
-/** Onglet Dossier : saisie et consultation du dossier de création (demandes CREATION). */
-function DossierTab({
-  demande,
-  onErreur,
-  onMessage,
-}: {
-  demande: Demande
-  onErreur: (message: string | null) => void
-  onMessage: (message: string | null) => void
-}) {
-  const [formOuvert, setFormOuvert] = useState(false)
-  const [enregistrement, setEnregistrement] = useState(false)
-  const { data: dossier, loading, reload } = useApi<Dossier | null>(
+/** Onglet Dossier : consultation du dossier de création (demandes CREATION). */
+function DossierTab({ demande }: { demande: Demande }) {
+  const { data: dossier, loading } = useApi<Dossier | null>(
     () => dossierApi.get(demande.id).catch(() => null),
     [demande.id],
   )
 
-  const handleSave = async (formulaire: DossierEntreprise) => {
-    setEnregistrement(true)
-    try {
-      const payload = dossierVersPayload(formulaire)
-      if (dossier) {
-        await dossierApi.update(demande.id, payload)
-        onMessage('Dossier mis à jour.')
-      } else {
-        await dossierApi.create(demande.id, payload)
-        onMessage('Dossier enregistré.')
-      }
-      setFormOuvert(false)
-      reload()
-    } catch (err) {
-      onErreur(err instanceof Error ? err.message : 'Échec de l’enregistrement du dossier')
-    } finally {
-      setEnregistrement(false)
-    }
-  }
-
   if (loading) return <Spinner label="Chargement du dossier…" />
+
+  const route = `/demandes/${demande.referenceDemande}/dossier-entreprise`
 
   if (!dossier) {
     return (
@@ -1300,95 +1254,42 @@ function DossierTab({
           Aucun dossier saisi pour cette demande de création d&apos;entreprise.
         </p>
         <Can permission="DOSSIER_CREATE">
-          <button type="button" className="btn-primary" onClick={() => setFormOuvert(true)}>
+          <Link to={route} className="btn-primary">
             Saisir le dossier
-          </button>
+          </Link>
         </Can>
-        <DossierEntrepriseFormModal
-          open={formOuvert}
-          dossier={{ ...DOSSIER_VIDE, referenceDemande: demande.referenceDemande }}
-          onClose={() => setFormOuvert(false)}
-          onSave={(d) => void handleSave(d)}
-        />
-        {enregistrement && <Spinner label="Enregistrement…" />}
       </section>
     )
   }
-
-  const formulaire = dossierVersFormulaire(dossier, demande.referenceDemande)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div>
         <Can permission="DOSSIER_UPDATE">
-          <button type="button" className="btn-ghost" onClick={() => setFormOuvert(true)}>
+          <Link to={route} className="btn-ghost">
             Modifier le dossier
-          </button>
+          </Link>
         </Can>
       </div>
       <DossierEntrepriseDetail
-        dossier={formulaire}
+        dossier={dossierVersFormulaire(dossier, demande.referenceDemande)}
         dateDemande={dossier.dateDemande ?? demande.dateDemande}
         numeroIM={dossier.numeroIm ?? '—'}
       />
-      <DossierEntrepriseFormModal
-        open={formOuvert}
-        dossier={formulaire}
-        onClose={() => setFormOuvert(false)}
-        onSave={(d) => void handleSave(d)}
-      />
-      {enregistrement && <Spinner label="Enregistrement…" />}
     </div>
   )
 }
 
-/** Onglet Dossier : fiche de transaction immobilière (demandes TRANSACTION_IMMOBILIERE). */
-function DossierTransactionTab({
-  demande,
-  onErreur,
-  onMessage,
-}: {
-  demande: Demande
-  onErreur: (message: string | null) => void
-  onMessage: (message: string | null) => void
-}) {
-  const [formOuvert, setFormOuvert] = useState(false)
-  const [enregistrement, setEnregistrement] = useState(false)
-  const { data: dossier, loading, reload } = useApi<DossierTransactionImmobiliere | null>(
+/** Onglet Dossier : consultation de la fiche de transaction immobilière. */
+function DossierTransactionTab({ demande }: { demande: Demande }) {
+  const { data: dossier, loading } = useApi<DossierTransactionImmobiliere | null>(
     () => dossierTransactionApi.get(demande.id).catch(() => null),
     [demande.id],
   )
-  const formulaire = useMemo<DossierTransactionForm>(
-    () => (dossier ? dossierTransactionVersFormulaire(dossier) : DOSSIER_TRANSACTION_VIDE),
-    [dossier],
-  )
-
-  const handleSave = async (f: DossierTransactionForm) => {
-    setEnregistrement(true)
-    onErreur(null)
-    try {
-      const payload = dossierTransactionVersPayload(f)
-      if (dossier) {
-        await dossierTransactionApi.update(demande.id, payload)
-        onMessage('Dossier de transaction immobilière mis à jour.')
-      } else {
-        await dossierTransactionApi.create(demande.id, payload)
-        onMessage('Dossier de transaction immobilière enregistré.')
-      }
-      setFormOuvert(false)
-      reload()
-    } catch (err) {
-      onErreur(
-        err instanceof Error
-          ? err.message
-          : 'Échec de l’enregistrement du dossier de transaction immobilière',
-      )
-    } finally {
-      setEnregistrement(false)
-    }
-  }
 
   if (loading) return <Spinner label="Chargement du dossier de transaction immobilière…" />
+
+  const route = `/demandes/${demande.referenceDemande}/dossier-transaction-immobiliere`
 
   if (!dossier) {
     return (
@@ -1400,17 +1301,10 @@ function DossierTransactionTab({
           Aucune fiche renseignée pour cette demande de transaction immobilière.
         </p>
         <Can permission="DOSSIER_CREATE">
-          <button type="button" className="btn-primary" onClick={() => setFormOuvert(true)}>
+          <Link to={route} className="btn-primary">
             Saisir le dossier
-          </button>
+          </Link>
         </Can>
-        <DossierTransactionImmobiliereFormModal
-          open={formOuvert}
-          dossier={formulaire}
-          enregistrement={enregistrement}
-          onClose={() => setFormOuvert(false)}
-          onSave={(d) => void handleSave(d)}
-        />
       </section>
     )
   }
@@ -1419,19 +1313,12 @@ function DossierTransactionTab({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div>
         <Can permission="DOSSIER_UPDATE">
-          <button type="button" className="btn-ghost" onClick={() => setFormOuvert(true)}>
+          <Link to={route} className="btn-ghost">
             Modifier le dossier
-          </button>
+          </Link>
         </Can>
       </div>
       <DossierTransactionImmobiliereDetail dossier={dossier} />
-      <DossierTransactionImmobiliereFormModal
-        open={formOuvert}
-        dossier={formulaire}
-        enregistrement={enregistrement}
-        onClose={() => setFormOuvert(false)}
-        onSave={(d) => void handleSave(d)}
-      />
     </div>
   )
 }

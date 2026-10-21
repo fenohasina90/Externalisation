@@ -1,6 +1,8 @@
 export { DemandesPage } from './screens/DemandesPage'
 export { NouvelleDemandePage } from './screens/NouvelleDemandePage'
 export { DemandeDetailPage } from './screens/DemandeDetailPage'
+export { DossierEntreprisePage } from './screens/DossierEntreprisePage'
+export { DossierTransactionImmobilierePage } from './screens/DossierTransactionImmobilierePage'
 export {
   DemandesTable,
   StatutDemandePill,

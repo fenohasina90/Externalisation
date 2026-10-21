@@ -23,6 +23,8 @@ interface Props {
   enregistrement?: boolean
   onClose: () => void
   onSave: (dossier: DossierTransactionForm) => void
+  /** Affiche le formulaire dans la page (3/4) avec son récapitulatif (1/4). */
+  inline?: boolean
 }
 
 const NOMBRES = new Set([
@@ -82,6 +84,7 @@ export function DossierTransactionImmobiliereFormModal({
   enregistrement = false,
   onClose,
   onSave,
+  inline = false,
 }: Props) {
   const [form, setForm] = useState<DossierTransactionForm>(dossier)
 
@@ -92,7 +95,7 @@ export function DossierTransactionImmobiliereFormModal({
     }
   }, [open, dossier])
 
-  if (!open) return null
+  if (!open && !inline) return null
 
   const set = <K extends keyof DossierTransactionForm>(
     cle: K,
@@ -298,27 +301,32 @@ export function DossierTransactionImmobiliereFormModal({
   ]
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div
+      className={inline ? 'split-layout' : 'modal-backdrop'}
+      onClick={inline ? undefined : onClose}
+    >
       <div
-        className="modal-card"
-        style={{ maxWidth: 1060 }}
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
+        className={inline ? 'card card-pad' : 'modal-card'}
+        style={inline ? undefined : { maxWidth: 1120 }}
+        onClick={inline ? undefined : (e) => e.stopPropagation()}
+        role={inline ? undefined : 'dialog'}
         aria-label="Dossier de transaction immobilière"
       >
-        <header className="modal-header">
-          <div>
-            <h3 className="modal-title">Dossier de transaction immobilière</h3>
-            <p className="modal-subtitle">
-              Date, commercial et coordonnées du client sont repris de la demande.
-            </p>
-          </div>
-          <button type="button" className="btn-ghost" onClick={onClose} aria-label="Fermer">
-            ✕
-          </button>
-        </header>
+        {!inline && (
+          <header className="modal-header">
+            <div>
+              <h3 className="modal-title">Dossier de transaction immobilière</h3>
+              <p className="modal-subtitle">
+                Date, commercial et coordonnées du client sont repris de la demande.
+              </p>
+            </div>
+            <button type="button" className="btn-ghost" onClick={onClose} aria-label="Fermer">
+              ✕
+            </button>
+          </header>
+        )}
 
-        <div className="modal-body">
+        <div className={inline ? 'dossier-form__corps' : 'modal-body'}>
           <FormEtapes
             etapes={ETAPES}
             validerEtape={validerEtape}
@@ -326,7 +334,9 @@ export function DossierTransactionImmobiliereFormModal({
             onAnnuler={onClose}
             enregistrement={enregistrement}
             libelleTerminer="Enregistrer"
-            recapitulatif={<RecapitulatifForm sections={recapSections} />}
+            recapitulatif={
+              inline ? undefined : <RecapitulatifForm sections={recapSections} />
+            }
           >
             {(etape) => (
               <>
@@ -698,6 +708,7 @@ export function DossierTransactionImmobiliereFormModal({
           </FormEtapes>
         </div>
       </div>
+      {inline && <RecapitulatifForm sections={recapSections} />}
     </div>
   )
 }
