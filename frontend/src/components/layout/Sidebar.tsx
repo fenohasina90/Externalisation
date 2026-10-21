@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { Badge, Icon } from '@/components/ui'
 import { LIBELLES_ROLE } from '@/constants/labels'
-import { NAVIGATION, type BadgeKey, type NavItem } from '@/constants/navigation'
+import { navigationPour, type BadgeKey, type NavItem } from '@/constants/navigation'
 import { useAuth } from '@/features/auth/hooks/useAuth'
 import { initiales } from '@/utils/format'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -167,16 +167,16 @@ export function Sidebar({ open, onClose, badges = {}, repliee = false, onDeplier
 
   const role = utilisateur.role.nomRole
 
-  // Entrées filtrées par les permissions effectives : toute modification
-  // des permissions d'un rôle se reflète dans le menu sans reconnexion
-  // (la session étant rechargée à chaque navigation, voir AppLayout).
+  // Navigation construite depuis les permissions effectives : toute
+  // modification des permissions d'un rôle se reflète dans le menu sans
+  // reconnexion (session rechargée périodiquement, voir AuthContext).
   const visible = (permission?: string | string[]): boolean => {
     if (!permission) return true
     const codes = Array.isArray(permission) ? permission : [permission]
     return codes.some((code) => hasPermission(code))
   }
 
-  const sections = NAVIGATION[role]
+  const sections = navigationPour(hasPermission)
     .map((section) => ({
       ...section,
       items: section.items

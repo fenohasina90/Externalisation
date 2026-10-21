@@ -1,5 +1,4 @@
 import type { IconName } from '@/components/ui'
-import type { NomRole } from '@/types'
 
 export type BadgeKey = 'demandes' | 'notifications'
 
@@ -40,6 +39,14 @@ export interface NavSection {
   items: NavItem[]
 }
 
+const ADMIN_MENU_PERMISSIONS = [
+  'USER_VIEW',
+  'AUDIT_VIEW',
+  'CONFIG_VIEW',
+  'PASSWORD_RESET_MANAGE',
+  'BACKUP_VIEW',
+] as const
+
 const dashboard: NavItem = {
   label: 'Tableau de bord',
   to: '/',
@@ -48,22 +55,16 @@ const dashboard: NavItem = {
   permission: 'DASHBOARD_VIEW',
 }
 
-const clients: NavItem = { label: 'Clients', to: '/clients', icon: 'users' }
-const clientsAvecSousMenus: NavItem = {
-  ...clients,
+const clients: NavItem = {
+  label: 'Clients',
+  to: '/clients',
+  icon: 'users',
   deroulant: true,
-  permission: 'CLIENT_VIEW',
+  permission: ['CLIENT_VIEW', 'RESPONSABLE_VIEW'],
   children: [
     { label: 'Liste des clients', to: '/clients', end: true, permission: 'CLIENT_VIEW' },
     { label: 'Responsables', to: '/responsables', permission: 'RESPONSABLE_VIEW' },
-    { label: 'Domaines', to: '/domaines', permission: 'DOMAINE_VIEW' },
   ],
-}
-const clientsSimple: NavItem = {
-  ...clients,
-  deroulant: true,
-  permission: 'CLIENT_VIEW',
-  children: [{ label: 'Liste des clients', to: '/clients', end: true, permission: 'CLIENT_VIEW' }],
 }
 
 const commerciaux: NavItem = {
@@ -87,24 +88,17 @@ const services: NavItem = {
   to: '/services',
   icon: 'layers',
   deroulant: true,
-  permission: 'SERVICE_VIEW',
-  children: [{ label: 'Liste des services', to: '/services', end: true, permission: 'SERVICE_VIEW' }],
+  permission: ['SERVICE_VIEW', 'DOMAINE_VIEW'],
+  children: [
+    { label: 'Liste des services', to: '/services', end: true, permission: 'SERVICE_VIEW' },
+    { label: 'Domaines', to: '/domaines', permission: 'DOMAINE_VIEW' },
+  ],
 }
 
 const demandes: NavItem = {
   label: 'Demandes',
   to: '/demandes',
   icon: 'file',
-  // badge: 'demandes',
-  deroulant: true,
-  permission: 'DEMANDE_VIEW',
-  children: [{ label: 'Liste des demandes', to: '/demandes', end: true, permission: 'DEMANDE_VIEW' }],
-}
-const demandesLectureSeule: NavItem = {
-  label: 'Demandes',
-  to: '/demandes',
-  icon: 'file',
-  // hint: 'lecture seule',
   deroulant: true,
   permission: 'DEMANDE_VIEW',
   children: [{ label: 'Liste des demandes', to: '/demandes', end: true, permission: 'DEMANDE_VIEW' }],
@@ -122,6 +116,7 @@ const paiements: NavItem = {
     { label: 'Historique', to: '/paiements/historique', permission: 'PAIEMENT_VIEW' },
   ],
 }
+
 const notifications: NavItem = {
   label: 'Notifications',
   to: '/notifications',
@@ -135,19 +130,13 @@ const rapports: NavItem = {
   icon: 'chart',
   permission: ['RAPPORT_DEMANDE_VIEW', 'RAPPORT_PAIEMENT_VIEW'],
 }
-const rapportsDemandes: NavItem = {
-  label: 'Rapports',
-  to: '/rapports',
-  icon: 'chart',
-  hint: 'demandes',
-  permission: 'RAPPORT_DEMANDE_VIEW',
-}
 
 const administration: NavItem = {
   label: 'Administration',
   to: '/administration',
   icon: 'gear',
-  permission: ['USER_VIEW', 'AUDIT_VIEW', 'CONFIG_VIEW', 'PASSWORD_RESET_MANAGE', 'BACKUP_VIEW'],
+  deroulant: true,
+  permission: [...ADMIN_MENU_PERMISSIONS],
   children: [
     { label: 'Utilisateurs', to: '/administration/utilisateurs', permission: 'USER_VIEW' },
     { label: 'Rôles & permissions', to: '/administration/roles', permission: 'USER_VIEW' },
@@ -168,7 +157,10 @@ const administration: NavItem = {
   ],
 }
 
-/** Accès direct pour l'Économat, qui n'a pas le menu Administration. */
+/**
+ * Accès direct pour les rôles qui possèdent `MODE_PAIEMENT_VIEW` sans
+ * accès au menu Administration (ex. Économat).
+ */
 const modesPaiement: NavItem = {
   label: 'Modes de paiement',
   to: '/administration/modes-paiement',
@@ -176,48 +168,46 @@ const modesPaiement: NavItem = {
   permission: 'MODE_PAIEMENT_VIEW',
 }
 
-/** Menu par rôle. */
-export const NAVIGATION: Record<NomRole, NavSection[]> = {
-  SUPER_ADMIN: [
+/**
+ * Navigation construite à partir des permissions effectives, et non d'une
+ * liste figée par rôle : un droit accordé ou retiré apparaît/disparaît
+ * immédiatement dans les menus, sans reconnexion.
+ */
+export function navigationPour(
+  hasPermission: (permission: string) => boolean,
+): NavSection[] {
+  const adminVisible = ADMIN_MENU_PERMISSIONS.some(hasPermission)
+  const rapportDemandes = hasPermission('RAPPORT_DEMANDE_VIEW')
+  const rapportFinancier = hasPermission('RAPPORT_PAIEMENT_VIEW')
+  const lectureSeuleDemandes =
+    hasPermission('DEMANDE_VIEW') &&
+    !hasPermission('DEMANDE_CREATE') &&
+    !hasPermission('DEMANDE_UPDATE')
+
+  const demandesItem: NavItem = {
+    ...demandes,
+    hint: lectureSeuleDemandes ? 'lecture seule' : undefined,
+  }
+  const rapportsItem: NavItem = {
+    ...rapports,
+    hint: rapportDemandes && !rapportFinancier
+      ? 'demandes'
+      : !rapportDemandes && rapportFinancier
+        ? 'financier'
+        : undefined,
+  }
+
+  const pilotage = [notifications, rapportsItem]
+
+  // Évite le doublon avec l'entrée « Modes de paiement » du menu Administration.
+  if (!adminVisible) pilotage.push(modesPaiement)
+  pilotage.push(administration)
+
+  return [
     {
       label: 'Activité',
-      items: [
-        dashboard,
-        clientsAvecSousMenus,
-        commerciaux,
-        services,
-        demandes,
-        paiements,
-      ],
+      items: [dashboard, clients, commerciaux, services, demandesItem, paiements],
     },
-    { label: 'Pilotage', items: [notifications, rapports, administration] },
-  ],
-  ADMIN: [
-    {
-      label: 'Activité',
-      items: [
-        dashboard,
-        clientsAvecSousMenus,
-        commerciaux,
-        services,
-        demandes,
-        paiements,
-      ],
-    },
-    { label: 'Pilotage', items: [notifications, rapports, administration] },
-  ],
-  ACCUEIL: [
-    {
-      label: 'Activité',
-      items: [dashboard, clientsAvecSousMenus, commerciaux, services, demandes],
-    },
-    { label: 'Pilotage', items: [rapportsDemandes, notifications] },
-  ],
-  ECONOMAT: [
-    {
-      label: 'Activité',
-      items: [dashboard, clientsSimple, demandesLectureSeule, paiements],
-    },
-    { label: 'Pilotage', items: [rapports, modesPaiement, notifications] },
-  ],
+    { label: 'Pilotage', items: pilotage },
+  ]
 }

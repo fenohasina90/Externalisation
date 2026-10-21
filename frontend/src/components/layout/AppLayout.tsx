@@ -27,9 +27,10 @@ export function AppLayout() {
     setRepliee(false)
   }, [])
 
-  // Recharge la session à chaque navigation : toute modification des rôles
-  // et permissions s'applique à toutes les sessions connectées, sans
-  // reconnexion (menus, gardes de route et boutons suivent aussitôt).
+  // Recharge aussi la session à chaque navigation : les changements de
+  // permissions s'appliquent aux menus, gardes de route et boutons, sans
+  // reconnexion (un rafraîchissement périodique couvre les pages ouvertes,
+  // voir AuthContext).
   useEffect(() => {
     void refresh().catch(() => undefined)
   }, [pathname, refresh])

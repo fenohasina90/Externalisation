@@ -200,7 +200,9 @@ export function RolesPermissionsPage() {
       if (utilisateur !== null && utilisateur.role.id === roleId) {
         await refresh()
       }
-      setMessage(`Permissions du rôle ${carte?.nomRole} enregistrées.`)
+      setMessage(
+        `Permissions du rôle ${carte?.nomRole} enregistrées. Les autres sessions connectées les appliqueront sous quelques secondes.`,
+      )
       rechargerDetail()
     } catch (err) {
       setErreur(err instanceof Error ? err.message : 'Échec de l’enregistrement')
