@@ -53,6 +53,18 @@ class NotificationSchedulerTest {
     }
 
     @Test
+    void echeanceDuJourNotifieeAvecZero() {
+        EcheancePaiement echeance = echeanceDans(0);
+        when(echeanceRepository.findEnRetard(any())).thenReturn(List.of());
+        when(echeanceRepository.findAVenir(any())).thenReturn(List.of(echeance));
+        when(configurationService.lireEntier("JOURS_AVANCE_ALERTE_ECHEANCE", 3)).thenReturn(3);
+
+        scheduler.verifierEcheances();
+
+        verify(notificationService).notifierEcheanceProche(any(EcheancePaiement.class), eq(0));
+    }
+
+    @Test
     void echeanceEnRetardNotifie() {
         EcheancePaiement echeance = echeanceDans(-2);
         when(echeanceRepository.findEnRetard(any())).thenReturn(List.of(echeance));
