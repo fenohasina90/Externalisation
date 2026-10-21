@@ -6,6 +6,7 @@ import com.cabex.backend.backup.crypto.BackupCryptoService;
 import com.cabex.backend.backup.service.BackupService;
 import com.cabex.backend.backup.service.BackupStorageService;
 import com.cabex.backend.backup.service.MysqlProcessRunner;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.exception.BackupException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +40,8 @@ class BackupServiceTest {
     private BackupCryptoService crypto;
     @Mock
     private AuditService audit;
+    @Mock
+    private ConfigurationService configurationService;
 
     @InjectMocks
     private BackupService service;

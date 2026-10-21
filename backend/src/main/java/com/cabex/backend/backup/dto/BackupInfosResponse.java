@@ -4,7 +4,7 @@ public record BackupInfosResponse(
         String baseDeDonnees,
         String repertoire,
         int retentionJours,
-        String cron,
+        String heureSauvegarde,
         long tailleMaxUpload
 ) {
 }

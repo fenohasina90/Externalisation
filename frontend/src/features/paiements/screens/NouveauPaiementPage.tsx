@@ -11,17 +11,11 @@ import { VIREMENT } from '../constants/labels'
 import { EcheancePill } from '../components'
 import { useDemandesReglables, useEcheancesReglables, useModesPaiement } from '../hooks'
 import { paiementsApi } from '../services/paiements.service'
-import type { EcheanceReglable } from '../types'
 
 const LIMITE_COMMENTAIRE = 500
 
 function aujourdhui(): string {
   return new Date().toISOString().slice(0, 10)
-}
-
-interface GroupeService {
-  label: string
-  lignes: EcheanceReglable[]
 }
 
 /**
@@ -108,17 +102,6 @@ export function NouveauPaiementPage() {
     () => echeances.find((e) => e.echeance.id === echeanceId) ?? null,
     [echeances, echeanceId],
   )
-
-  // Échéances groupées par service : l'utilisateur règle service par service.
-  const groupes = useMemo(() => {
-    const map = new Map<string, EcheanceReglable[]>()
-    echeances.forEach((e) => {
-      const liste = map.get(e.ligneLabel) ?? []
-      liste.push(e)
-      map.set(e.ligneLabel, liste)
-    })
-    return Array.from(map, ([label, lignes]): GroupeService => ({ label, lignes }))
-  }, [echeances])
 
   const montant =
     montantSaisi && montantSaisi.echeanceId === echeanceId
@@ -303,16 +286,12 @@ export function NouveauPaiementPage() {
                     {echeances.length === 0 && (
                       <option value="">Aucune échéance à régler</option>
                     )}
-                    {groupes.map((groupe) => (
-                      <optgroup key={groupe.label} label={groupe.label}>
-                        {groupe.lignes.map((reglable) => (
-                          <option key={reglable.echeance.id} value={reglable.echeance.id}>
-                            N° {reglable.echeance.numeroEcheance} ·{' '}
-                            {formatDate(reglable.echeance.dateEcheance)} — reste{' '}
-                            {formatMontantMGA(reglable.echeance.reste)}
-                          </option>
-                        ))}
-                      </optgroup>
+                    {echeances.map((reglable) => (
+                      <option key={reglable.echeance.id} value={reglable.echeance.id}>
+                        N° {reglable.echeance.numeroEcheance} ·{' '}
+                        {formatDate(reglable.echeance.dateEcheance)} — {reglable.ligneLabel} · reste{' '}
+                        {formatMontantMGA(reglable.echeance.reste)}
+                      </option>
                     ))}
                   </select>
                   <span className="form-help">

@@ -201,21 +201,27 @@ public class DemandeGestionService {
                     request.debutService(), request.finService()));
         }
 
-        long nbCreation = lignesDemandees.stream()
+        List<com.cabex.backend.service.entity.Service> servicesDemandes = lignesDemandees.stream()
                 .map(l -> serviceRepository.findById(l.serviceId())
                         .orElseThrow(() -> new ResourceNotFoundException(
                                 ErrorMessages.introuvable("Service", l.serviceId()))))
-                .filter(s -> {
+                .peek(s -> {
                     if (!Boolean.TRUE.equals(s.getActif())) {
                         throw new BusinessException(ErrorMessages.SERVICE_INDISPONIBLE);
                     }
-                    return com.cabex.backend.dossier.DossierRegles
-                            .estTypeCreation(s.getTypeService());
                 })
+                .toList();
+        long nbCreation = servicesDemandes.stream()
+                .filter(s -> com.cabex.backend.dossier.DossierRegles
+                        .estTypeCreation(s.getTypeService()))
                 .count();
-        if (nbCreation > 0 && lignesDemandees.size() > 1) {
-            throw new BusinessException(
-                    "Un service de création d'entreprise ne peut pas être combiné avec d'autres services");
+        boolean typeSolo = servicesDemandes.stream()
+                .anyMatch(s -> com.cabex.backend.dossier.DossierRegles
+                        .estTypeCreation(s.getTypeService())
+                        || com.cabex.backend.dossier.DossierRegles
+                        .estTypeTransactionImmobiliere(s.getTypeService()));
+        if (typeSolo && lignesDemandees.size() > 1) {
+            throw new BusinessException(ErrorMessages.SERVICE_SOLO_CREATION_TRANSACTION);
         }
         if (societe == null && nbCreation == 0) {
             throw new BusinessException(ErrorMessages.DEMANDE_SOCIETE_REQUISE);

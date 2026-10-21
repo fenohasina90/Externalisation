@@ -1410,6 +1410,13 @@ VALUES
 ),
 
 (
+    'HEURE_SAUVEGARDE_AUTOMATIQUE',
+    '02:00',
+    'TIME',
+    'Heure de la sauvegarde automatique quotidienne (heure du serveur, HH:mm)'
+),
+
+(
     'DUREE_VALIDITE_DEMANDE_RESET',
     '1440',
     'INTEGER',

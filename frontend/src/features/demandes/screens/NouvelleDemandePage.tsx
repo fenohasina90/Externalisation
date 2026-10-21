@@ -12,7 +12,11 @@ import type { ApiPage } from '@/types'
 import type { CreateSocietePayload, Societe } from '@/features/clients/types'
 import type { Commercial } from '@/features/commerciaux/types'
 import type { Responsable } from '@/features/responsables/types'
-import type { Domaine, Service } from '@/features/services/types'
+import {
+  estTypeServiceSolo,
+  type Domaine,
+  type Service,
+} from '@/features/services/types'
 import { clientsApi } from '@/features/clients/services/clients.service'
 import { commerciauxApi } from '@/features/commerciaux/services/commerciaux.service'
 import { responsablesApi } from '@/features/responsables/services/responsables.service'
@@ -250,7 +254,7 @@ export function NouvelleDemandePage() {
     }
     if (lignes.length === 0) return 'Ajoutez au moins un service'
     const vus = new Set<number>()
-    const creation = new Set<number>()
+    let typeSolo = false
     for (const [i, l] of lignes.entries()) {
       if (l.serviceId === '') return `Ligne ${i + 1} : service obligatoire`
       if (vus.has(l.serviceId)) return 'Un service ne peut pas être sélectionné deux fois'
@@ -265,11 +269,10 @@ export function NouvelleDemandePage() {
       if (l.finService <= l.debutService) {
         return `Ligne ${i + 1} : la fin doit être strictement postérieure au début`
       }
-      const type = typesServices.get(l.serviceId)
-      if (type === 'CREATION') creation.add(l.serviceId as number)
+      if (estTypeServiceSolo(typesServices.get(l.serviceId))) typeSolo = true
     }
-    if (creation.size > 0 && lignes.length > 1) {
-      return "Un service de création d'entreprise ne peut pas être combiné avec d'autres services"
+    if (typeSolo && lignes.length > 1) {
+      return "Un service de création d'entreprise ou de transaction immobilière ne peut pas être combiné avec d'autres services"
     }
     return null
   }
@@ -301,11 +304,15 @@ export function NouvelleDemandePage() {
       for (const fichier of fichiers) {
         await documentsApi.uploadDemande(cible.id, fichier, null)
       }
-      const estCreation = lignes.some((l) => typesServices.get(l.serviceId as number) === 'CREATION')
+      const typeSolo = lignes
+        .map((l) => typesServices.get(l.serviceId as number))
+        .find(estTypeServiceSolo)
       navigate(
-        estCreation
+        typeSolo === 'CREATION'
           ? `/demandes/${cible.reference}?onglet=dossier`
-          : `/demandes/${cible.reference}`,
+          : typeSolo === 'TRANSACTION_IMMOBILIERE'
+            ? `/demandes/${cible.reference}?onglet=dossier-transaction`
+            : `/demandes/${cible.reference}`,
       )
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Échec de la création'

@@ -68,6 +68,8 @@ public final class ErrorMessages {
     public static final String DOMAINE_NOM_EXISTE = "Un domaine avec ce nom existe déjà";
     public static final String SERVICE_NOM_EXISTE = "Un service avec ce nom existe déjà";
     public static final String TARIF_POSITIF = "Le tarif doit être positif ou nul";
+    public static final String SERVICE_SOLO_CREATION_TRANSACTION =
+            "Un service de création d'entreprise ou de transaction immobilière ne peut pas être combiné avec d'autres services";
 
     // Demande sans société (création d'entreprise)
     public static final String DEMANDE_SOCIETE_REQUISE =

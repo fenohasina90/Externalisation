@@ -119,7 +119,7 @@ public class LigneServiceService {
         DemandeService demande = verifierDemande(demandeId);
         exigerEnAttente(demande);
         Service service = verifierService(request.serviceId());
-        verifierCoherenceCreation(demande, service);
+        verifierCoherenceTypeSolo(demande, service);
         verifierDoublonService(demandeId, request.serviceId(), null);
         verifierDates(request.debutService(), request.finService());
         if (request.tarif().signum() < 0) {
@@ -278,15 +278,21 @@ public class LigneServiceService {
         }
     }
 
-    private void verifierCoherenceCreation(DemandeService demande, Service service) {        boolean nouveauCreation =
+    private void verifierCoherenceTypeSolo(DemandeService demande, Service service) {
+        boolean nouveauCreation =
                 com.cabex.backend.dossier.DossierRegles.estTypeCreation(service.getTypeService());
+        boolean nouveauSolo = nouveauCreation
+                || com.cabex.backend.dossier.DossierRegles
+                .estTypeTransactionImmobiliere(service.getTypeService());
         List<LigneService> existantes = ligneRepository.findByDemandeId(demande.getId());
-        boolean existantCreation = existantes.stream()
-                .anyMatch(l -> l.getService() != null && com.cabex.backend.dossier.DossierRegles
-                        .estTypeCreation(l.getService().getTypeService()));
-        if ((nouveauCreation || existantCreation) && !existantes.isEmpty()) {
-            throw new BusinessException(
-                    "Un service de création d'entreprise ne peut pas être combiné avec d'autres services");
+        boolean existantSolo = existantes.stream()
+                .anyMatch(l -> l.getService() != null
+                        && (com.cabex.backend.dossier.DossierRegles
+                        .estTypeCreation(l.getService().getTypeService())
+                        || com.cabex.backend.dossier.DossierRegles
+                        .estTypeTransactionImmobiliere(l.getService().getTypeService())));
+        if ((nouveauSolo || existantSolo) && !existantes.isEmpty()) {
+            throw new BusinessException(ErrorMessages.SERVICE_SOLO_CREATION_TRANSACTION);
         }
         if (demande.getSociete() == null && !nouveauCreation) {
             throw new BusinessException(ErrorMessages.DEMANDE_SOCIETE_REQUISE);

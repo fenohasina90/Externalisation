@@ -70,7 +70,7 @@ secrets. Le fichier `.env` est ignoré par Git.
 | `CORS_ALLOWED_ORIGINS` | Non | `http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173` | Origines autorisées, séparées par des virgules |
 | `BACKUP_DIR` | Non | `./data/backups` | Dossier des archives de sauvegarde |
 | `BACKUP_RETENTION_DAYS` | Non | `14` | Durée de rétention |
-| `BACKUP_CRON` | Non | `0 0 2 * * *` | Planification des sauvegardes automatiques |
+| `BACKUP_HEURE` | Non | `02:00` | Heure par défaut des sauvegardes automatiques (modifiable dans l'administration) |
 | `BACKUP_DB_*` | Non | valeurs de la datasource | Connexion utilisée par `mysqldump`/`mysql` |
 | `MYSQLDUMP_PATH`, `MYSQL_PATH` | Non | `mysqldump`, `mysql` | Chemins des clients MySQL |
 

@@ -197,7 +197,8 @@ export function SauvegardesPage() {
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>Configuration</h3>
           <p className="section-note" style={{ margin: 0 }}>
             Base : <strong>{infos.baseDeDonnees}</strong> — rétention {infos.retentionJours} jours —
-            planification automatique (cron) <code className="code-inline">{infos.cron}</code>.
+            sauvegarde automatique quotidienne à{' '}
+            <code className="code-inline">{infos.heureSauvegarde}</code> (heure du serveur).
           </p>
           <p className="section-note" style={{ margin: 0 }}>
             Dossier de stockage : <code className="code-inline">{infos.repertoire}</code>

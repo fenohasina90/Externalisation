@@ -131,6 +131,39 @@ class LigneServiceTest {
     }
 
     @Test
+    void mixTransactionImmobiliereInterdit() {
+        DemandeService demande = demande(17);
+        when(demandeRepository.findById(17)).thenReturn(Optional.of(demande));
+        Service transaction = serviceCatalogue(9, "TRANSACTION_IMMOBILIERE");
+        LigneService existante = LigneService.builder().id(1).demande(demande)
+                .service(transaction).tarif(new BigDecimal("1000000")).build();
+        when(ligneRepository.findByDemandeId(17)).thenReturn(List.of(existante));
+        when(serviceRepository.findById(2)).thenReturn(Optional.of(serviceCatalogue(2, "STANDARD")));
+
+        var ex = assertThrows(BusinessException.class,
+                () -> service.ajouter(17, requete(2, "7000000")));
+        assertEquals(com.cabex.backend.exception.ErrorMessages
+                .SERVICE_SOLO_CREATION_TRANSACTION, ex.getMessage());
+    }
+
+    @Test
+    void ajoutTransactionSurDemandeExistanteInterdit() {
+        DemandeService demande = demande(17);
+        when(demandeRepository.findById(17)).thenReturn(Optional.of(demande));
+        Service standard = serviceCatalogue(2, "STANDARD");
+        LigneService existante = LigneService.builder().id(1).demande(demande)
+                .service(standard).tarif(new BigDecimal("1000000")).build();
+        when(ligneRepository.findByDemandeId(17)).thenReturn(List.of(existante));
+        when(serviceRepository.findById(9))
+                .thenReturn(Optional.of(serviceCatalogue(9, "TRANSACTION_IMMOBILIERE")));
+
+        var ex = assertThrows(BusinessException.class,
+                () -> service.ajouter(17, requete(9, "7000000")));
+        assertEquals(com.cabex.backend.exception.ErrorMessages
+                .SERVICE_SOLO_CREATION_TRANSACTION, ex.getMessage());
+    }
+
+    @Test
     void retraitDernierServiceInterdit() {
         DemandeService demande = demande(17);
         LigneService ligne = LigneService.builder().id(1).demande(demande)

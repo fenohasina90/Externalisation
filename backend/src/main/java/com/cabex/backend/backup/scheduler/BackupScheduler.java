@@ -7,6 +7,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
+
 /**
  * Sauvegarde automatique planifiée de la base de données, suivie de la purge
  * des archives au-delà de la durée de rétention configurée.
@@ -18,13 +21,36 @@ public class BackupScheduler {
 
     private final BackupService backupService;
     private final NotificationService notificationService;
+    private LocalDate derniereExecution;
 
     public BackupScheduler(BackupService backupService, NotificationService notificationService) {
         this.backupService = backupService;
         this.notificationService = notificationService;
     }
 
-    @Scheduled(cron = "${backup.cron:0 0 2 * * *}")
+    /**
+     * Vérifie chaque minute si l'heure configurée dans l'administration
+     * (HEURE_SAUVEGARDE_AUTOMATIQUE) est atteinte. La valeur est relue à chaque
+     * passage : une modification s'applique donc sans redémarrage.
+     */
+    @Scheduled(cron = "0 * * * * *")
+    public void verifierHeureSauvegarde() {
+        verifierHeureSauvegarde(
+                LocalTime.now().withSecond(0).withNano(0),
+                LocalDate.now());
+    }
+
+    public void verifierHeureSauvegarde(LocalTime maintenant, LocalDate jour) {
+        if (jour.equals(derniereExecution)) {
+            return;
+        }
+        if (!maintenant.equals(backupService.heureSauvegarde())) {
+            return;
+        }
+        derniereExecution = jour;
+        sauvegarderAutomatiquement();
+    }
+
     public void sauvegarderAutomatiquement() {
         try {
             var fichier = backupService.creerSauvegarde("auto");

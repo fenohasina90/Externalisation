@@ -16,6 +16,11 @@ const SECTIONS: { titre: string; sousTitre: string; cles: string[] }[] = [
     cles: ['JOURS_AVANCE_ALERTE_ECHEANCE', 'TAUX_TVA'],
   },
   {
+    titre: 'Sauvegardes',
+    sousTitre: 'Heure quotidienne de la sauvegarde automatique (heure du serveur).',
+    cles: ['HEURE_SAUVEGARDE_AUTOMATIQUE'],
+  },
+  {
     titre: 'Fichiers, session et affichage',
     sousTitre: 'Limites techniques.',
     cles: ['TAILLE_MAX_FICHIER', 'DUREE_SESSION_MINUTES', 'PAGINATION_TAILLE_DEFAUT'],
@@ -153,7 +158,13 @@ export function ConfigurationPage() {
               <label key={champ.cle} className="field">
                 {champ.description ?? champ.cle}
                 <input
-                  type={champ.typeValeur === 'STRING' ? 'text' : 'number'}
+                  type={
+                    champ.typeValeur === 'TIME'
+                      ? 'time'
+                      : champ.typeValeur === 'STRING'
+                        ? 'text'
+                        : 'number'
+                  }
                   value={valeurs[champ.cle] ?? ''}
                   disabled={!champ.modifiable}
                   onChange={(e) => {

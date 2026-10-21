@@ -7,6 +7,7 @@ import com.cabex.backend.backup.crypto.BackupCryptoService;
 import com.cabex.backend.backup.dto.BackupFileResponse;
 import com.cabex.backend.backup.dto.BackupInfosResponse;
 import com.cabex.backend.backup.dto.RestoreResponse;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.exception.BackupException;
 import com.cabex.backend.exception.BadRequestException;
 import org.slf4j.Logger;
@@ -23,6 +24,8 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
 import java.util.zip.GZIPInputStream;
@@ -38,23 +41,28 @@ public class BackupService {
     private static final Logger log = LoggerFactory.getLogger(BackupService.class);
     private static final String MODULE = "Sauvegarde";
     private static final String ENTITE = "Sauvegarde";
+    public static final String CLE_HEURE_SAUVEGARDE = "HEURE_SAUVEGARDE_AUTOMATIQUE";
+    private static final LocalTime HEURE_SAUVEGARDE_DEFAUT = LocalTime.of(2, 0);
 
     private final BackupProperties proprietes;
     private final BackupStorageService stockage;
     private final MysqlProcessRunner runner;
     private final BackupCryptoService crypto;
     private final AuditService audit;
+    private final ConfigurationService configurationService;
 
     public BackupService(BackupProperties proprietes,
                          BackupStorageService stockage,
                          MysqlProcessRunner runner,
                          BackupCryptoService crypto,
-                         AuditService audit) {
+                         AuditService audit,
+                         ConfigurationService configurationService) {
         this.proprietes = proprietes;
         this.stockage = stockage;
         this.runner = runner;
         this.crypto = crypto;
         this.audit = audit;
+        this.configurationService = configurationService;
     }
 
     public record SauvegardeEphemere(Path chemin, String nomFichier) {
@@ -69,8 +77,24 @@ public class BackupService {
                 proprietes.getDbName(),
                 stockage.repertoire().toString(),
                 proprietes.getRetentionDays(),
-                proprietes.getCron(),
+                heureSauvegarde().toString(),
                 proprietes.getUploadMaxSize());
+    }
+
+    /**
+     * Heure quotidienne de la sauvegarde automatique : valeur d'administration
+     * HEURE_SAUVEGARDE_AUTOMATIQUE, avec repli sur backup.heure puis 02:00.
+     */
+    public LocalTime heureSauvegarde() {
+        LocalTime defaut = HEURE_SAUVEGARDE_DEFAUT;
+        try {
+            defaut = LocalTime.parse(proprietes.getHeure());
+        } catch (DateTimeParseException e) {
+            log.warn("Heure de sauvegarde invalide dans backup.heure : {}", proprietes.getHeure());
+        }
+        return configurationService.lireHeure(CLE_HEURE_SAUVEGARDE, defaut)
+                .withSecond(0)
+                .withNano(0);
     }
 
     /** Génère une sauvegarde conservée sur le serveur (types : manuel, auto, securite). */

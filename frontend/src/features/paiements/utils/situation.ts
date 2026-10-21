@@ -20,9 +20,20 @@ export function resteDesEcheances(echeances: Echeance[]): number {
   return echeances.reduce((somme, e) => somme + e.reste, 0)
 }
 
+/** Ordre chronologique : date d'échéance puis numéro. */
+export function comparerEcheances(a: Echeance, b: Echeance): number {
+  return (
+    a.dateEcheance.localeCompare(b.dateEcheance) ||
+    a.numeroEcheance - b.numeroEcheance
+  )
+}
+
+/** Échéances triées par date puis numéro, sans muter la liste reçue. */
+export function trierEcheances(echeances: Echeance[]): Echeance[] {
+  return [...echeances].sort(comparerEcheances)
+}
+
 /** Échéances non soldées, triées par date puis numéro. */
 export function echeancesOuvertes(echeances: Echeance[]): Echeance[] {
-  return echeances
-    .filter((e) => e.reste > 0)
-    .sort((a, b) => a.dateEcheance.localeCompare(b.dateEcheance) || a.numeroEcheance - b.numeroEcheance)
+  return trierEcheances(echeances.filter((e) => e.reste > 0))
 }

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -72,6 +73,50 @@ class ConfigurationServiceTest {
                 .thenReturn(Optional.of(parametre("3", "INTEGER", true)));
         assertThrows(BadRequestException.class, () -> configurationService.update(
                 "JOURS_AVANCE_ALERTE_ECHEANCE", new UpdateConfigurationRequest("abc")));
+    }
+
+    @Test
+    void updateHeureValide() {
+        when(configurationRepository.findByCle("HEURE_SAUVEGARDE_AUTOMATIQUE"))
+                .thenReturn(Optional.of(Configuration.builder().id(3)
+                        .cle("HEURE_SAUVEGARDE_AUTOMATIQUE").valeur("02:00")
+                        .typeValeur("TIME").modifiable(true).build()));
+        when(configurationRepository.save(any(Configuration.class))).thenAnswer(i -> i.getArgument(0));
+
+        var resultat = configurationService.update(
+                "HEURE_SAUVEGARDE_AUTOMATIQUE", new UpdateConfigurationRequest("03:30"));
+
+        assertEquals("03:30", resultat.valeur());
+    }
+
+    @Test
+    void updateHeureInvalide() {
+        when(configurationRepository.findByCle("HEURE_SAUVEGARDE_AUTOMATIQUE"))
+                .thenReturn(Optional.of(Configuration.builder().id(3)
+                        .cle("HEURE_SAUVEGARDE_AUTOMATIQUE").valeur("02:00")
+                        .typeValeur("TIME").modifiable(true).build()));
+
+        assertThrows(BadRequestException.class, () -> configurationService.update(
+                "HEURE_SAUVEGARDE_AUTOMATIQUE", new UpdateConfigurationRequest("25:00")));
+    }
+
+    @Test
+    void lireHeureAvecRepli() {
+        when(configurationRepository.findByCle("HEURE_SAUVEGARDE_AUTOMATIQUE"))
+                .thenReturn(Optional.of(Configuration.builder().id(3)
+                        .cle("HEURE_SAUVEGARDE_AUTOMATIQUE").valeur("03:15")
+                        .typeValeur("TIME").build()));
+        when(configurationRepository.findByCle("MAL_FORME"))
+                .thenReturn(Optional.of(Configuration.builder().id(4)
+                        .cle("MAL_FORME").valeur("25:00").typeValeur("TIME").build()));
+        when(configurationRepository.findByCle("ABSENTE")).thenReturn(Optional.empty());
+
+        assertEquals(LocalTime.of(3, 15),
+                configurationService.lireHeure("HEURE_SAUVEGARDE_AUTOMATIQUE", LocalTime.of(2, 0)));
+        assertEquals(LocalTime.of(2, 0),
+                configurationService.lireHeure("MAL_FORME", LocalTime.of(2, 0)));
+        assertEquals(LocalTime.of(2, 0),
+                configurationService.lireHeure("ABSENTE", LocalTime.of(2, 0)));
     }
 
     @Test

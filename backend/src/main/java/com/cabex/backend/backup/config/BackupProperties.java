@@ -12,7 +12,7 @@ public class BackupProperties {
 
     private final String dir;
     private final int retentionDays;
-    private final String cron;
+    private final String heure;
     private final String dbHost;
     private final int dbPort;
     private final String dbName;
@@ -25,7 +25,7 @@ public class BackupProperties {
     public BackupProperties(
             @Value("${backup.dir:./data/backups}") String dir,
             @Value("${backup.retention-days:14}") int retentionDays,
-            @Value("${backup.cron:0 0 2 * * *}") String cron,
+            @Value("${backup.heure:02:00}") String heure,
             @Value("${backup.db.host:127.0.0.1}") String dbHost,
             @Value("${backup.db.port:3306}") int dbPort,
             @Value("${backup.db.name:gestion_externalisation}") String dbName,
@@ -36,7 +36,7 @@ public class BackupProperties {
             @Value("${backup.upload.max-size:268435456}") long uploadMaxSize) {
         this.dir = dir;
         this.retentionDays = retentionDays;
-        this.cron = cron;
+        this.heure = heure;
         this.dbHost = dbHost;
         this.dbPort = dbPort;
         this.dbName = dbName;
@@ -55,8 +55,8 @@ public class BackupProperties {
         return retentionDays;
     }
 
-    public String getCron() {
-        return cron;
+    public String getHeure() {
+        return heure;
     }
 
     public String getDbHost() {

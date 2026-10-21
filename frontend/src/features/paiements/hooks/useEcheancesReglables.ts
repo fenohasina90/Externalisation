@@ -5,7 +5,7 @@ import type { Demande } from '@/features/demandes/types'
 import { planPaiementApi } from '@/features/plan-paiement/services/plan-paiement.service'
 import { paiementsApi } from '../services/paiements.service'
 import type { EcheanceReglable, ModePaiement } from '../types'
-import { echeancesOuvertes } from '../utils/situation'
+import { comparerEcheances, echeancesOuvertes } from '../utils/situation'
 
 export interface DemandeReglable {
   /** null tant qu'aucune demande n'est sélectionnée. */
@@ -43,6 +43,9 @@ export function useEcheancesReglables(demandeId: number | null) {
           })
         })
       })
+      // Les plans sont chargés service par service : on recolle les échéances
+      // dans un ordre chronologique global pour le sélecteur de règlement.
+      echeances.sort((a, b) => comparerEcheances(a.echeance, b.echeance))
       return { demande, echeances }
     },
     [demandeId],

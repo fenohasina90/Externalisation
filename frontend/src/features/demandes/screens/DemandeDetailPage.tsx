@@ -9,7 +9,7 @@ import { http } from '@/api/http'
 import { useAuth } from '@/features/auth/hooks/useAuth'
 import { formatDate, formatMontantMGA } from '@/utils/format'
 import type { Commercial } from '@/features/commerciaux/types'
-import type { Service } from '@/features/services/types'
+import { estTypeServiceSolo, type Service } from '@/features/services/types'
 import { commerciauxApi } from '@/features/commerciaux/services/commerciaux.service'
 import { servicesApi } from '@/features/services/services/services.service'
 import type { PlanPaiement } from '@/features/plan-paiement/types'
@@ -566,6 +566,9 @@ function ServicesTab({
     && (demande.lignes ?? []).every((l) => fige(l))
   const [ajoutOuvert, setAjoutOuvert] = useState(false)
   const [edition, setEdition] = useState<LigneService | null>(null)
+  const contientTypeSolo = (demande.lignes ?? []).some((l) =>
+    estTypeServiceSolo(l.typeService),
+  )
   const [retrait, setRetrait] = useState<LigneService | null>(null)
   const [planPour, setPlanPour] = useState<LigneService | null>(null)
   const [traitement, setTraitement] = useState(false)
@@ -599,7 +602,7 @@ function ServicesTab({
           onPlan={() => setPlanPour(ligne)}
         />
       ))}
-      {modifiable && !toutFige && (
+      {modifiable && !toutFige && !contientTypeSolo && (
         <Can permission="DEMANDE_UPDATE">
           <div>
             <button type="button" className="btn-ghost" onClick={() => setAjoutOuvert(true)}>
@@ -616,6 +619,9 @@ function ServicesTab({
           .filter((l) => l.id !== edition?.id)
           .map((l) => l.serviceId)
           .filter((id): id is number => id !== null)}
+        typesPris={(demande.lignes ?? [])
+          .filter((l) => l.id !== edition?.id)
+          .map((l) => l.typeService)}
         onClose={() => {
           setAjoutOuvert(false)
           setEdition(null)
@@ -840,6 +846,7 @@ function LigneFormModal({
   ligne,
   demandeId,
   servicesPris,
+  typesPris,
   onClose,
   onSaved,
   onErreur,
@@ -849,6 +856,8 @@ function LigneFormModal({
   demandeId: number
   /** Identifiants déjà utilisés : masqués du select (pas de doublon). */
   servicesPris: number[]
+  /** Types déjà présents : contrôle des services qui doivent rester seuls. */
+  typesPris: (string | null)[]
   onClose: () => void
   onSaved: () => void
   onErreur: (message: string | null) => void
@@ -897,6 +906,21 @@ function LigneFormModal({
     if (servicesPris.includes(serviceId as number) && !ligne) {
       setErreur('Ce service est déjà présent dans la demande')
       return
+    }
+    if (!ligne) {
+      const typeChoisi = (pageServices?.content ?? []).find((s) => s.id === serviceId)?.typeService
+      if (estTypeServiceSolo(typeChoisi) && servicesPris.length > 0) {
+        setErreur(
+          "Un service de création d'entreprise ou de transaction immobilière ne peut pas être combiné avec d'autres services",
+        )
+        return
+      }
+      if (typesPris.some(estTypeServiceSolo)) {
+        setErreur(
+          'Cette demande contient déjà un service qui doit rester seul ; aucun autre service ne peut être ajouté',
+        )
+        return
+      }
     }
     if (!tarif || Number(tarif) < 0 || Number.isNaN(Number(tarif))) {
       setErreur('Le tarif doit être positif ou nul')

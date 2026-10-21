@@ -112,6 +112,31 @@ class DemandeSansSocieteTest {
         verify(demandeRepository).save(argThat(d -> d.getSociete() == null));
     }
 
+    private Service serviceTransaction() {
+        return Service.builder().id(21).nomService("Transaction immobilière")
+                .typeService("TRANSACTION_IMMOBILIERE")
+                .actif(true).build();
+    }
+
+    @Test
+    void transactionImmobiliereSeuleAvecUnAutreService400() {
+        when(serviceRepository.findById(21)).thenReturn(Optional.of(serviceTransaction()));
+        when(serviceRepository.findById(1)).thenReturn(Optional.of(serviceAudit()));
+        var requeteMixte = new CreateDemandeRequest(
+                LocalDate.of(2026, 9, 1), null, null,
+                null, null, null, null, null, null,
+                java.util.List.of(
+                        new CreateLigneRequest(21, new BigDecimal("700000"),
+                                LocalDate.of(2026, 9, 1), LocalDate.of(2027, 2, 28)),
+                        new CreateLigneRequest(1, new BigDecimal("700000"),
+                                LocalDate.of(2026, 9, 1), LocalDate.of(2027, 2, 28))),
+                "PAR_SERVICE");
+
+        var ex = assertThrows(BusinessException.class, () -> service.create(requeteMixte));
+        assertEquals(ErrorMessages.SERVICE_SOLO_CREATION_TRANSACTION, ex.getMessage());
+        verify(demandeRepository, never()).save(any());
+    }
+
     @Test
     void serviceClassiqueSansSociete400() {
         when(serviceRepository.findById(1)).thenReturn(Optional.of(serviceAudit()));

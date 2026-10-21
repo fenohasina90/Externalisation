@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @Service
@@ -78,6 +80,16 @@ public class ConfigurationService {
         }
     }
 
+    /** Lecture d'une heure HH:mm avec repli si la clé est absente ou mal formée. */
+    @Transactional(readOnly = true)
+    public LocalTime lireHeure(String cle, LocalTime defaut) {
+        try {
+            return LocalTime.parse(lireValeur(cle, defaut.toString()).trim());
+        } catch (DateTimeParseException e) {
+            return defaut;
+        }
+    }
+
     @Transactional
     public ConfigurationResponse update(String cle, UpdateConfigurationRequest request) {
         Configuration config = getEntity(cle);
@@ -115,6 +127,7 @@ public class ConfigurationService {
                     }
                 }
                 case "DATE" -> java.time.LocalDate.parse(valeur);
+                case "TIME" -> LocalTime.parse(valeur);
                 case "DATETIME", "TIMESTAMP" -> java.time.LocalDateTime.parse(valeur);
                 default -> {
                 }

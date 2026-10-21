@@ -9,7 +9,7 @@ import { telechargerBlob } from '@/utils/telechargement'
 import { EcheancePill, ModePill, SituationPlanPill, StatutDemandePill } from '../components'
 import { useEcheancierDemande } from '../hooks'
 import { paiementsApi } from '../services/paiements.service'
-import { situationPlan } from '../utils/situation'
+import { situationPlan, trierEcheances } from '../utils/situation'
 
 /** Échéancier d'une demande : résumé, échéances par service et paiements enregistrés. */
 export function EcheancierDetailPage() {
@@ -163,7 +163,7 @@ export function EcheancierDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(ligne.plan.echeances ?? []).map((e) => (
+                    {trierEcheances(ligne.plan.echeances ?? []).map((e) => (
                       <tr key={e.id}>
                         <td>{e.numeroEcheance}</td>
                         <td className="text-secondary">{formatDate(e.dateEcheance)}</td>

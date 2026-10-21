@@ -12,7 +12,7 @@ export interface BackupInfos {
   baseDeDonnees: string
   repertoire: string
   retentionJours: number
-  cron: string
+  heureSauvegarde: string
   tailleMaxUpload: number
 }
 

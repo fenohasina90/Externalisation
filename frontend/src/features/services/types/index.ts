@@ -18,6 +18,11 @@ export function libelleTypeService(type: string | null): string {
   return TYPES_SERVICE.find((t) => t.valeur === type)?.label ?? type ?? 'Standard'
 }
 
+/** Les services CREATION et TRANSACTION_IMMOBILIERE doivent être seuls dans une demande. */
+export function estTypeServiceSolo(type: string | null | undefined): boolean {
+  return type === 'CREATION' || type === 'TRANSACTION_IMMOBILIERE'
+}
+
 export interface Service {
   id: number
   nomService: string
