@@ -8,6 +8,16 @@ export interface Domaine {
 
 export type TypeService = 'STANDARD' | 'CREATION' | 'TRANSACTION_IMMOBILIERE'
 
+export const TYPES_SERVICE: { valeur: TypeService; label: string }[] = [
+  { valeur: 'STANDARD', label: 'Standard' },
+  { valeur: 'CREATION', label: "Création d'entreprise ou de société" },
+  { valeur: 'TRANSACTION_IMMOBILIERE', label: 'Transaction immobilière' },
+]
+
+export function libelleTypeService(type: string | null): string {
+  return TYPES_SERVICE.find((t) => t.valeur === type)?.label ?? type ?? 'Standard'
+}
+
 export interface Service {
   id: number
   nomService: string

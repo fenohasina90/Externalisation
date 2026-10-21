@@ -31,8 +31,9 @@ public class ServiceGestionService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ServiceResponse> getAll(String recherche, Boolean actif, Pageable pageable) {
-        return serviceRepository.rechercher(recherche, actif, pageable)
+    public Page<ServiceResponse> getAll(String recherche, Boolean actif, String typeService,
+                                        Pageable pageable) {
+        return serviceRepository.rechercher(recherche, actif, normaliserTypeFiltre(typeService), pageable)
                 .map(ServiceMapper::toResponse);
     }
 
@@ -96,6 +97,21 @@ public class ServiceGestionService {
         return serviceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Service", id)));
+    }
+
+    /**
+     * Normalise un filtre de type : vide signifie « tous », toute valeur inconnue
+     * est rejetée comme pour la création et la modification.
+     */
+    String normaliserTypeFiltre(String type) {
+        if (type == null || type.isBlank()) {
+            return null;
+        }
+        String normalise = type.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!com.cabex.backend.dossier.DossierRegles.TYPES_SERVICE.contains(normalise)) {
+            throw new BusinessException(ErrorMessages.formatInvalide("type de service"));
+        }
+        return normalise;
     }
 
     /**

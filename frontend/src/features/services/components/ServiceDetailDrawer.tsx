@@ -1,4 +1,4 @@
-import type { Service } from '../types'
+import { libelleTypeService, type Service } from '../types'
 
 interface Props {
   service: Service | null
@@ -37,6 +37,11 @@ export function ServiceDetailDrawer({ service, onClose, onEdit, onArchive }: Pro
         <div className="drawer__row">
           <span className="drawer__label">Code</span>
           <strong>{service.codeService ?? '—'}</strong>
+        </div>
+
+        <div className="drawer__row">
+          <span className="drawer__label">Type</span>
+          <strong>{libelleTypeService(service.typeService)}</strong>
         </div>
 
         <div className="drawer__row">

@@ -19,6 +19,8 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -78,12 +80,25 @@ class ServiceControllerTest {
     @Test
     @WithMockUser(authorities = {"SERVICE_VIEW"})
     void rechercheParNomOuCode200() throws Exception {
-        when(serviceGestionService.getAll(any(), any(), any()))
+        when(serviceGestionService.getAll(any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(service()), PageRequest.of(0, 8), 1));
 
         mockMvc.perform(get("/api/services").param("recherche", "SRV-0001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].codeService").value("SRV-0001"));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"SERVICE_VIEW"})
+    void filtreParTypeService200() throws Exception {
+        when(serviceGestionService.getAll(any(), any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(service()), PageRequest.of(0, 8), 1));
+
+        mockMvc.perform(get("/api/services").param("typeService", "TRANSACTION_IMMOBILIERE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].typeService").value("STANDARD"));
+
+        verify(serviceGestionService).getAll(eq(null), eq(null), eq("TRANSACTION_IMMOBILIERE"), any());
     }
 
     @Test

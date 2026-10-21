@@ -15,6 +15,7 @@ import type {
   UpdateLignePayload,
 } from '../types'
 import type { Dossier, DossierPayload } from '../types/dossier'
+import type { DossierTransactionImmobiliere, DossierTransactionPayload } from '../types/dossierTransaction'
 
 export interface DemandeFiltres {
   statut?: string
@@ -151,6 +152,36 @@ export const dossierApi = {
 
   async update(demandeId: number, payload: DossierPayload): Promise<Dossier> {
     const { data } = await http.put<Dossier>(`/demandes/${demandeId}/dossier`, payload)
+    return data
+  },
+}
+export const dossierTransactionApi = {
+  async get(demandeId: number): Promise<DossierTransactionImmobiliere> {
+    const { data } = await http.get<DossierTransactionImmobiliere>(
+      `/demandes/${demandeId}/dossier-transaction-immobiliere`,
+    )
+    return data
+  },
+
+  async create(
+    demandeId: number,
+    payload: DossierTransactionPayload,
+  ): Promise<DossierTransactionImmobiliere> {
+    const { data } = await http.post<DossierTransactionImmobiliere>(
+      `/demandes/${demandeId}/dossier-transaction-immobiliere`,
+      payload,
+    )
+    return data
+  },
+
+  async update(
+    demandeId: number,
+    payload: DossierTransactionPayload,
+  ): Promise<DossierTransactionImmobiliere> {
+    const { data } = await http.put<DossierTransactionImmobiliere>(
+      `/demandes/${demandeId}/dossier-transaction-immobiliere`,
+      payload,
+    )
     return data
   },
 }

@@ -9,6 +9,8 @@ import com.cabex.backend.service.entity.Service;
 import com.cabex.backend.service.repository.ServiceRepository;
 import com.cabex.backend.service.service.ServiceGestionService;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -96,6 +98,39 @@ class ServiceGestionServiceTest {
         var ex = assertThrows(ResourceNotFoundException.class,
                 () -> serviceGestionService.getByCode("SRV-9999"));
         assertEquals(ErrorMessages.introuvable("Service", "SRV-9999"), ex.getMessage());
+    }
+
+    @Test
+    void getAllFiltreTypeNormalise() {
+        Service service = Service.builder().id(1).nomService("Transaction immobilière")
+                .codeService("SRV-0025").typeService("TRANSACTION_IMMOBILIERE").actif(true).build();
+        when(serviceRepository.rechercher(null, null, "TRANSACTION_IMMOBILIERE",
+                PageRequest.of(0, 8)))
+                .thenReturn(new PageImpl<>(List.of(service), PageRequest.of(0, 8), 1));
+
+        var page = serviceGestionService.getAll(null, null, " transaction_immobiliere ",
+                PageRequest.of(0, 8));
+
+        assertEquals(1, page.getTotalElements());
+        assertEquals("TRANSACTION_IMMOBILIERE", page.getContent().getFirst().typeService());
+    }
+
+    @Test
+    void getAllSansTypeNeFiltrePas() {
+        when(serviceRepository.rechercher(null, null, null, PageRequest.of(0, 8)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 8), 0));
+
+        var page = serviceGestionService.getAll(null, null, "  ", PageRequest.of(0, 8));
+
+        assertTrue(page.isEmpty());
+    }
+
+    @Test
+    void getAllTypeInvalide400() {
+        var ex = assertThrows(BusinessException.class,
+                () -> serviceGestionService.getAll(null, null, "INCONNU", PageRequest.of(0, 8)));
+
+        assertEquals(ErrorMessages.formatInvalide("type de service"), ex.getMessage());
     }
 
     @Test

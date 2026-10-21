@@ -30,9 +30,11 @@ public interface ServiceRepository extends JpaRepository<Service, Integer> {
                OR LOWER(s.nomService) LIKE LOWER(CONCAT('%', :recherche, '%'))
                OR LOWER(COALESCE(s.codeService, '')) LIKE LOWER(CONCAT('%', :recherche, '%')))
           AND (:actif IS NULL OR s.actif = :actif)
+          AND (:typeService IS NULL OR s.typeService = :typeService)
         """)
     Page<Service> rechercher(@Param("recherche") String recherche,
                              @Param("actif") Boolean actif,
+                             @Param("typeService") String typeService,
                              Pageable pageable);
 
     @Query("""

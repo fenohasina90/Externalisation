@@ -1,4 +1,4 @@
-import type { Service } from '../types'
+import { libelleTypeService, type Service } from '../types'
 
 interface Props {
   items: Service[]
@@ -20,6 +20,7 @@ export function ServicesTable({ items, loading = false, onView, onEdit, onArchiv
         <tr>
           <th>Service</th>
           <th>Code</th>
+          {/* <th>Type</th> */}
           <th>Description</th>
           <th>Statut</th>
           <th>Actions</th>
@@ -30,6 +31,9 @@ export function ServicesTable({ items, loading = false, onView, onEdit, onArchiv
           <tr key={s.id}>
             <td className="fw-700">{s.nomService}</td>
             <td className="text-secondary">{s.codeService ?? '—'}</td>
+            {/* <td>
+              <span className="pill">{libelleTypeService(s.typeService)}</span>
+            </td> */}
             <td className="text-secondary" style={{ whiteSpace: 'normal', minWidth: 220 }}>
               {s.description ?? '—'}
             </td>

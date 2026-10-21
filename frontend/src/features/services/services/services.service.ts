@@ -1,6 +1,12 @@
 import { buildQuery, http } from '@/api/http'
 import type { ApiPage, PageQuery } from '@/types'
-import type { CreateServicePayload, Domaine, Service, UpdateServicePayload } from '../types'
+import type {
+  CreateServicePayload,
+  Domaine,
+  Service,
+  TypeService,
+  UpdateServicePayload,
+} from '../types'
 
 export const domainesApi = {
   async list(
@@ -38,10 +44,10 @@ export const domainesApi = {
 export const servicesApi = {
   async list(
     page: PageQuery,
-    filters: { actif?: boolean } = {},
+    filters: { actif?: boolean; typeService?: TypeService } = {},
   ): Promise<ApiPage<Service>> {
     const { data } = await http.get<ApiPage<Service>>('/services', {
-      params: buildQuery({ actif: filters.actif }, page),
+      params: buildQuery({ actif: filters.actif, typeService: filters.typeService }, page),
     })
     return data
   },

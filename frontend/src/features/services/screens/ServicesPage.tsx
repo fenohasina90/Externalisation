@@ -4,9 +4,18 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Can } from '@/components/shared/Can'
 import { Alert, Spinner } from '@/components/ui'
 import { ServiceDetailDrawer, ServiceFormModal, ServicesTable } from '../components'
-import { useServicesList, type StatutServiceFilter } from '../hooks/useServicesList'
+import {
+  useServicesList,
+  type StatutServiceFilter,
+  type TypeServiceFilter,
+} from '../hooks/useServicesList'
 import { servicesApi } from '../services/services.service'
-import type { CreateServicePayload, Service, UpdateServicePayload } from '../types'
+import {
+  TYPES_SERVICE,
+  type CreateServicePayload,
+  type Service,
+  type UpdateServicePayload,
+} from '../types'
 
 
 /**
@@ -22,8 +31,22 @@ export function ServicesPage() {
   const [confirmArchive, setConfirmArchive] = useState<Service | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const { items, total, totalPages, page, loading, error, setPage, search, setSearch, statut, setStatut, reload } =
-    useServicesList(PAGE_SIZE)
+  const {
+    items,
+    total,
+    totalPages,
+    page,
+    loading,
+    error,
+    setPage,
+    search,
+    setSearch,
+    statut,
+    setStatut,
+    typeService,
+    setTypeService,
+    reload,
+  } = useServicesList(PAGE_SIZE)
 
   const actifs = items.filter((s) => s.actif).length
   const archives = items.filter((s) => !s.actif).length
@@ -162,6 +185,20 @@ export function ServicesPage() {
               <option value="tous">Tous</option>
               <option value="actifs">Actifs</option>
               <option value="archives">Archivés</option>
+            </select>
+          </label>
+          <label className="field filter-field">
+            Type de service
+            <select
+              value={typeService}
+              onChange={(e) => setTypeService(e.target.value as TypeServiceFilter)}
+            >
+              <option value="tous">Tous les types</option>
+              {TYPES_SERVICE.map((t) => (
+                <option key={t.valeur} value={t.valeur}>
+                  {t.label}
+                </option>
+              ))}
             </select>
           </label>
           {/* <button type="submit" className="btn-primary">

@@ -19,16 +19,32 @@ import { echeancesApi } from '@/features/echeances/services/echeances.service'
 import { ServiceFormModal } from '@/features/services/components/ServiceFormModal'
 import { PiecesJointes } from '@/features/documents'
 import { ChangerStatutModal, DemandeStepper, DossierEntrepriseDetail,
-  DossierEntrepriseFormModal, StatutDemandePill } from '../components'
+  DossierEntrepriseFormModal, DossierTransactionImmobiliereDetail,
+  DossierTransactionImmobiliereFormModal, StatutDemandePill } from '../components'
 import { DOSSIER_VIDE, type DossierEntreprise } from '../data/mockDossierEntreprise'
 import type { Demande, Facture, HistoriqueDemande, HistoriqueLigne, LigneService,
   StatutDemande } from '../types'
 import { dossierVersFormulaire, dossierVersPayload, type Dossier } from '../types/dossier'
-import { demandesApi, dossierApi, facturesApi, lignesApi } from '../services/demandes.service'
+import {
+  DOSSIER_TRANSACTION_VIDE,
+  dossierTransactionVersFormulaire,
+  dossierTransactionVersPayload,
+  type DossierTransactionForm,
+  type DossierTransactionImmobiliere,
+} from '../types/dossierTransaction'
+import {
+  demandesApi,
+  dossierApi,
+  dossierTransactionApi,
+  facturesApi,
+  lignesApi,
+} from '../services/demandes.service'
 
-type Onglet = 'informations' | 'services' | 'factures' | 'documents' | 'paiements' | 'historique' | 'dossier'
+type Onglet = 'informations' | 'services' | 'factures' | 'documents' | 'paiements'
+  | 'historique' | 'dossier' | 'dossier-transaction'
 
-const ONGLETS_VALIDES: Onglet[] = ['informations', 'services', 'factures', 'documents', 'paiements', 'historique', 'dossier']
+const ONGLETS_VALIDES: Onglet[] = ['informations', 'services', 'factures', 'documents',
+  'paiements', 'historique', 'dossier', 'dossier-transaction']
 
 const LIBELLES_LIGNE: Record<string, string> = {
   VALIDE: 'Validé',
@@ -179,6 +195,9 @@ export function DemandeDetailPage() {
     ...((demande.lignes ?? []).some((l) => l.typeService === 'CREATION')
       ? [['dossier', 'Dossier entreprise'] as [Onglet, string]]
       : []),
+    ...((demande.lignes ?? []).some((l) => l.typeService === 'TRANSACTION_IMMOBILIERE')
+      ? [['dossier-transaction', 'Dossier transaction immobilière'] as [Onglet, string]]
+      : []),
   ]
 
   return (
@@ -319,6 +338,14 @@ export function DemandeDetailPage() {
 
       {onglet === 'dossier' && (
         <DossierTab
+          demande={demande}
+          onErreur={setErreur}
+          onMessage={setMessage}
+        />
+      )}
+
+      {onglet === 'dossier-transaction' && (
+        <DossierTransactionTab
           demande={demande}
           onErreur={setErreur}
           onMessage={setMessage}
@@ -1311,6 +1338,100 @@ function DossierTab({
         onSave={(d) => void handleSave(d)}
       />
       {enregistrement && <Spinner label="Enregistrement…" />}
+    </div>
+  )
+}
+
+/** Onglet Dossier : fiche de transaction immobilière (demandes TRANSACTION_IMMOBILIERE). */
+function DossierTransactionTab({
+  demande,
+  onErreur,
+  onMessage,
+}: {
+  demande: Demande
+  onErreur: (message: string | null) => void
+  onMessage: (message: string | null) => void
+}) {
+  const [formOuvert, setFormOuvert] = useState(false)
+  const [enregistrement, setEnregistrement] = useState(false)
+  const { data: dossier, loading, reload } = useApi<DossierTransactionImmobiliere | null>(
+    () => dossierTransactionApi.get(demande.id).catch(() => null),
+    [demande.id],
+  )
+  const formulaire = useMemo<DossierTransactionForm>(
+    () => (dossier ? dossierTransactionVersFormulaire(dossier) : DOSSIER_TRANSACTION_VIDE),
+    [dossier],
+  )
+
+  const handleSave = async (f: DossierTransactionForm) => {
+    setEnregistrement(true)
+    onErreur(null)
+    try {
+      const payload = dossierTransactionVersPayload(f)
+      if (dossier) {
+        await dossierTransactionApi.update(demande.id, payload)
+        onMessage('Dossier de transaction immobilière mis à jour.')
+      } else {
+        await dossierTransactionApi.create(demande.id, payload)
+        onMessage('Dossier de transaction immobilière enregistré.')
+      }
+      setFormOuvert(false)
+      reload()
+    } catch (err) {
+      onErreur(
+        err instanceof Error
+          ? err.message
+          : 'Échec de l’enregistrement du dossier de transaction immobilière',
+      )
+    } finally {
+      setEnregistrement(false)
+    }
+  }
+
+  if (loading) return <Spinner label="Chargement du dossier de transaction immobilière…" />
+
+  if (!dossier) {
+    return (
+      <section className="card card-pad">
+        <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700 }}>
+          Dossier de transaction immobilière
+        </h3>
+        <p className="section-note">
+          Aucune fiche renseignée pour cette demande de transaction immobilière.
+        </p>
+        <Can permission="DOSSIER_CREATE">
+          <button type="button" className="btn-primary" onClick={() => setFormOuvert(true)}>
+            Saisir le dossier
+          </button>
+        </Can>
+        <DossierTransactionImmobiliereFormModal
+          open={formOuvert}
+          dossier={formulaire}
+          enregistrement={enregistrement}
+          onClose={() => setFormOuvert(false)}
+          onSave={(d) => void handleSave(d)}
+        />
+      </section>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div>
+        <Can permission="DOSSIER_UPDATE">
+          <button type="button" className="btn-ghost" onClick={() => setFormOuvert(true)}>
+            Modifier le dossier
+          </button>
+        </Can>
+      </div>
+      <DossierTransactionImmobiliereDetail dossier={dossier} />
+      <DossierTransactionImmobiliereFormModal
+        open={formOuvert}
+        dossier={formulaire}
+        enregistrement={enregistrement}
+        onClose={() => setFormOuvert(false)}
+        onSave={(d) => void handleSave(d)}
+      />
     </div>
   )
 }
