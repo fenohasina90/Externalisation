@@ -71,17 +71,32 @@ public class DemandeMapper {
                                              BigDecimal montantPaye, BigDecimal resteAPayer,
                                              List<LigneServiceResponse> lignes, BigDecimal montantTotal,
                                              String situationPaiement, Long nombreEcheances) {
+        return toResponse(d, statutActuel, montantPaye, resteAPayer, lignes, montantTotal,
+                situationPaiement, nombreEcheances, null);
+    }
+
+    /**
+     * Variante utilisée par les listes : les lignes sont déjà chargées en une
+     * seule requête pour toute la page, ce qui évite un accès LAZY par demande.
+     */
+    public static DemandeResponse toResponse(DemandeService d, String statutActuel,
+                                             BigDecimal montantPaye, BigDecimal resteAPayer,
+                                             List<LigneServiceResponse> lignes, BigDecimal montantTotal,
+                                             String situationPaiement, Long nombreEcheances,
+                                             List<LigneService> entitesChargees) {
         if (d == null) {
             return null;
         }
         // Compatibilité : les champs historiques mono-service sont renseignés
         // depuis la première ligne (les clients API utilisent « lignes »).
-        List<LigneService> entites = d.getLignes() != null
-                ? d.getLignes().stream().sorted(
+        List<LigneService> source = entitesChargees;
+        if (source == null) {
+            source = d.getLignes() != null ? List.copyOf(d.getLignes()) : List.of();
+        }
+        List<LigneService> entites = source.stream().sorted(
                         (a, b) -> Integer.compare(
                                 a.getId() != null ? a.getId() : 0,
-                                b.getId() != null ? b.getId() : 0)).toList()
-                : List.of();
+                                b.getId() != null ? b.getId() : 0)).toList();
         LigneService ref = entites.isEmpty() ? null : entites.get(0);
         return new DemandeResponse(
                 d.getId(),

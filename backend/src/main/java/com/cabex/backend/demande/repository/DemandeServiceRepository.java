@@ -3,6 +3,7 @@ package com.cabex.backend.demande.repository;
 import com.cabex.backend.demande.entity.DemandeService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -46,6 +47,7 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
      * </ul>
      * Les prédicats sont mutuellement exclusifs par construction.
      */
+    @EntityGraph(attributePaths = {"societe", "societe.domaine", "commercial", "clientResponsable"})
     @Query("""
         SELECT d FROM DemandeService d
         LEFT JOIN d.societe s LEFT JOIN s.domaine dom LEFT JOIN d.commercial c

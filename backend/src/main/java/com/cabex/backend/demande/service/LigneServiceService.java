@@ -35,6 +35,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Gestion des lignes de service d'une demande (multi-services).
@@ -95,8 +96,16 @@ public class LigneServiceService {
     @Transactional(readOnly = true)
     public List<LigneServiceResponse> listerParDemande(Integer demandeId) {
         verifierDemande(demandeId);
-        return ligneRepository.findByDemandeIdOrderByIdAsc(demandeId).stream()
-                .map(this::toResponse)
+        List<LigneService> lignes = ligneRepository.findByDemandeIdInWithService(List.of(demandeId));
+        Map<Integer, BigDecimal> paiements = lignes.isEmpty()
+                ? Map.of()
+                : ligneRepository.sommesPayeesParLignes(
+                        lignes.stream().map(LigneService::getId).toList()).stream()
+                        .collect(Collectors.toMap(
+                                o -> ((Number) o[0]).intValue(),
+                                o -> o[1] == null ? BigDecimal.ZERO : new BigDecimal(o[1].toString())));
+        return lignes.stream()
+                .map(l -> toResponse(l, paiements.getOrDefault(l.getId(), BigDecimal.ZERO)))
                 .toList();
     }
 
@@ -263,7 +272,10 @@ public class LigneServiceService {
     }
 
     public LigneServiceResponse toResponse(LigneService ligne) {
-        BigDecimal paye = montantPayeParLigne(ligne.getId());
+        return toResponse(ligne, montantPayeParLigne(ligne.getId()));
+    }
+
+    private LigneServiceResponse toResponse(LigneService ligne, BigDecimal paye) {
         BigDecimal tarif = ligne.getTarif() != null ? ligne.getTarif() : BigDecimal.ZERO;
         return DemandeMapper.toLigneResponse(ligne, paye, tarif.subtract(paye).max(BigDecimal.ZERO));
     }

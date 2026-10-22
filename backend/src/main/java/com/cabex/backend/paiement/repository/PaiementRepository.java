@@ -3,12 +3,14 @@ package com.cabex.backend.paiement.repository;
 import com.cabex.backend.paiement.entity.Paiement;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,6 +29,15 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
 
     @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.demande.id = :demandeId AND p.actif = true")
     BigDecimal sommePayeeParDemande(@Param("demandeId") Integer demandeId);
+
+    /** Montants payés par demande, en une seule requête pour toute une page. */
+    @Query("""
+        SELECT p.demande.id, COALESCE(SUM(p.montantPaye), 0)
+        FROM Paiement p
+        WHERE p.demande.id IN :demandeIds AND p.actif = true
+        GROUP BY p.demande.id
+        """)
+    List<Object[]> sommesPayeesParDemandes(@Param("demandeIds") Collection<Integer> demandeIds);
 
     @Query("SELECT p FROM Paiement p WHERE p.demande.societe.id = :societeId AND p.actif = true ORDER BY p.datePaiement DESC")
     List<Paiement> findBySocieteId(@Param("societeId") Integer societeId);
@@ -65,6 +76,7 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
      * demande de création d'entreprise n'a pas de société (`societe_id` NULL)
      * et ses paiements doivent rester trouvables.
      */
+    @EntityGraph(attributePaths = {"demande", "demande.societe", "modePaiement", "createdBy"})
     @Query("""
         SELECT p FROM Paiement p
         LEFT JOIN p.demande.societe s

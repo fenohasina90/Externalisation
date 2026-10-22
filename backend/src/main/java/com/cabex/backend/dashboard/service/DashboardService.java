@@ -245,9 +245,9 @@ public class DashboardService {
                 .map(e -> toAlerte(e, "EN_RETARD"))
                 .toList();
         List<EcheanceAlerteResponse> aVenir = echeanceRepository.findAVenirFiltre(
-                        today, filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
+                        today, limite, filtre.dateDebut(), filtre.dateFin(),
+                        filtre.clientId(), filtre.serviceId())
                 .stream()
-                .filter(e -> !e.getDateEcheance().isAfter(limite))
                 .map(e -> toAlerte(e, "PROCHE"))
                 .toList();
         return new EcheanceDashboardResponse(enRetard, aVenir);

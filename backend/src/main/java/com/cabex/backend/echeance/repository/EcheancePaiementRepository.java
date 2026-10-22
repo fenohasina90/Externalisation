@@ -38,6 +38,9 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
 
     @Query("""
             SELECT e FROM EcheancePaiement e
+            JOIN FETCH e.proposPaiement p
+            JOIN FETCH p.demande d
+            LEFT JOIN FETCH d.societe s
             WHERE e.dateEcheance < :jour
               AND e.montantPaye < e.montantAttendu
             ORDER BY e.dateEcheance DESC, e.numeroEcheance DESC
@@ -80,11 +83,16 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
 
     @Query("""
             SELECT e FROM EcheancePaiement e
+            JOIN FETCH e.proposPaiement p
+            JOIN FETCH p.demande d
+            LEFT JOIN FETCH d.societe s
             WHERE e.dateEcheance >= :jour
+              AND e.dateEcheance <= :limite
               AND e.montantPaye < e.montantAttendu
             ORDER BY e.dateEcheance DESC, e.numeroEcheance DESC
             """)
-    List<EcheancePaiement> findAVenir(@Param("jour") LocalDate jour);
+    List<EcheancePaiement> findAVenir(@Param("jour") LocalDate jour,
+                                      @Param("limite") LocalDate limite);
 
     @Query(value = """
             SELECT e FROM EcheancePaiement e
@@ -156,7 +164,9 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
 
     @Query("""
             SELECT e FROM EcheancePaiement e
-            LEFT JOIN e.proposPaiement.demande.societe s
+            JOIN FETCH e.proposPaiement p
+            JOIN FETCH p.demande d
+            LEFT JOIN FETCH d.societe s
             WHERE e.dateEcheance < :jour
               AND e.montantPaye < e.montantAttendu
               AND (:dateDebut IS NULL OR e.dateEcheance >= :dateDebut)
@@ -175,8 +185,11 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
 
     @Query("""
             SELECT e FROM EcheancePaiement e
-            LEFT JOIN e.proposPaiement.demande.societe s
+            JOIN FETCH e.proposPaiement p
+            JOIN FETCH p.demande d
+            LEFT JOIN FETCH d.societe s
             WHERE e.dateEcheance >= :jour
+              AND e.dateEcheance <= :limite
               AND e.montantPaye < e.montantAttendu
               AND (:dateDebut IS NULL OR e.dateEcheance >= :dateDebut)
               AND (:dateFin IS NULL OR e.dateEcheance <= :dateFin)
@@ -187,6 +200,7 @@ public interface EcheancePaiementRepository extends JpaRepository<EcheancePaieme
             ORDER BY e.dateEcheance DESC, e.numeroEcheance DESC
             """)
     List<EcheancePaiement> findAVenirFiltre(@Param("jour") LocalDate jour,
+                                            @Param("limite") LocalDate limite,
                                             @Param("dateDebut") LocalDate dateDebut,
                                             @Param("dateFin") LocalDate dateFin,
                                             @Param("societeId") Integer societeId,

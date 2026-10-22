@@ -44,7 +44,7 @@ class NotificationSchedulerTest {
     void seuilLuDepuisLaConfiguration() {
         EcheancePaiement echeance = echeanceDans(5);
         when(echeanceRepository.findEnRetard(any())).thenReturn(List.of());
-        when(echeanceRepository.findAVenir(any())).thenReturn(List.of(echeance));
+        when(echeanceRepository.findAVenir(any(), any())).thenReturn(List.of(echeance));
         when(configurationService.lireEntier("JOURS_AVANCE_ALERTE_ECHEANCE", 3)).thenReturn(7);
 
         scheduler.verifierEcheances();
@@ -56,7 +56,7 @@ class NotificationSchedulerTest {
     void echeanceDuJourNotifieeAvecZero() {
         EcheancePaiement echeance = echeanceDans(0);
         when(echeanceRepository.findEnRetard(any())).thenReturn(List.of());
-        when(echeanceRepository.findAVenir(any())).thenReturn(List.of(echeance));
+        when(echeanceRepository.findAVenir(any(), any())).thenReturn(List.of(echeance));
         when(configurationService.lireEntier("JOURS_AVANCE_ALERTE_ECHEANCE", 3)).thenReturn(3);
 
         scheduler.verifierEcheances();
@@ -68,7 +68,7 @@ class NotificationSchedulerTest {
     void echeanceEnRetardNotifie() {
         EcheancePaiement echeance = echeanceDans(-2);
         when(echeanceRepository.findEnRetard(any())).thenReturn(List.of(echeance));
-        when(echeanceRepository.findAVenir(any())).thenReturn(List.of());
+        when(echeanceRepository.findAVenir(any(), any())).thenReturn(List.of());
 
         scheduler.verifierEcheances();
 
@@ -78,9 +78,8 @@ class NotificationSchedulerTest {
 
     @Test
     void horsSeuilPasDeNotification() {
-        EcheancePaiement echeance = echeanceDans(5);
         when(echeanceRepository.findEnRetard(any())).thenReturn(List.of());
-        when(echeanceRepository.findAVenir(any())).thenReturn(List.of(echeance));
+        when(echeanceRepository.findAVenir(any(), any())).thenReturn(List.of());
         when(configurationService.lireEntier("JOURS_AVANCE_ALERTE_ECHEANCE", 3)).thenReturn(3);
 
         scheduler.verifierEcheances();

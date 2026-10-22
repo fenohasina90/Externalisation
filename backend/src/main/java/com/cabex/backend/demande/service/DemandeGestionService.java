@@ -13,6 +13,7 @@ import com.cabex.backend.demande.dto.CreateDemandeRequest;
 import com.cabex.backend.demande.dto.CreateLigneRequest;
 import com.cabex.backend.demande.dto.DemandeResponse;
 import com.cabex.backend.demande.dto.HistoriqueDemandeResponse;
+import com.cabex.backend.demande.dto.LigneServiceResponse;
 import com.cabex.backend.demande.dto.StatutResponse;
 import com.cabex.backend.demande.dto.UpdateDemandeRequest;
 import com.cabex.backend.demande.entity.DemandeService;
@@ -45,6 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -120,27 +122,74 @@ public class DemandeGestionService {
         Page<DemandeService> page = demandeRepository.rechercher(recherche, societeId, serviceId,
                 domaineId, commercialId, statut, dateDebut, dateFin, actif, situation,
                 LocalDate.now(), tri);
-        Map<Integer, InfoSituation> situations = situations(page.getContent());
-        return page.map(d -> toResponse(d, situations));
+
+        List<DemandeService> demandes = page.getContent();
+        if (demandes.isEmpty()) {
+            return page.map(d -> toResponse(d));
+        }
+
+        List<Integer> demandeIds = demandes.stream()
+                .map(DemandeService::getId)
+                .toList();
+        Map<Integer, List<LigneService>> lignesParDemande = ligneRepository
+                .findByDemandeIdInWithService(demandeIds).stream()
+                .collect(Collectors.groupingBy(
+                        l -> l.getDemande().getId(),
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+        List<Integer> ligneIds = lignesParDemande.values().stream()
+                .flatMap(List::stream)
+                .map(LigneService::getId)
+                .toList();
+        Map<Integer, BigDecimal> paiementsParLigne = ligneIds.isEmpty()
+                ? Map.of()
+                : ligneRepository.sommesPayeesParLignes(ligneIds).stream()
+                        .collect(Collectors.toMap(
+                                o -> ((Number) o[0]).intValue(),
+                                o -> toBigDecimal(o[1])));
+        Map<Integer, BigDecimal> paiementsParDemande = paiementRepository
+                .sommesPayeesParDemandes(demandeIds).stream()
+                .collect(Collectors.toMap(
+                        o -> ((Number) o[0]).intValue(),
+                        o -> toBigDecimal(o[1])));
+        Map<Integer, String> statuts = historiqueRepository.statutsActuels(demandeIds).stream()
+                .collect(Collectors.toMap(
+                        o -> ((Number) o[0]).intValue(),
+                        o -> (String) o[1]));
+        Map<Integer, InfoSituation> situations = situations(demandes);
+
+        return page.map(d -> toResponseListe(d, lignesParDemande, paiementsParLigne,
+                paiementsParDemande, statuts, situations));
     }
 
-    private DemandeResponse toResponse(DemandeService demande, Map<Integer, InfoSituation> situations) {
+    private DemandeResponse toResponseListe(DemandeService demande,
+                                            Map<Integer, List<LigneService>> lignesParDemande,
+                                            Map<Integer, BigDecimal> paiementsParLigne,
+                                            Map<Integer, BigDecimal> paiementsParDemande,
+                                            Map<Integer, String> statuts,
+                                            Map<Integer, InfoSituation> situations) {
+        List<LigneService> lignes = lignesParDemande.getOrDefault(demande.getId(), List.of());
+        BigDecimal montantTotal = lignes.stream()
+                .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal montantPaye = paiementsParDemande.getOrDefault(demande.getId(), BigDecimal.ZERO);
+        BigDecimal reste = montantTotal.subtract(montantPaye).max(BigDecimal.ZERO);
+        List<LigneServiceResponse> lignesReponse = lignes.stream()
+                .map(l -> {
+                    BigDecimal tarif = l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO;
+                    BigDecimal paye = paiementsParLigne.getOrDefault(l.getId(), BigDecimal.ZERO);
+                    return DemandeMapper.toLigneResponse(l, paye,
+                            tarif.subtract(paye).max(BigDecimal.ZERO));
+                })
+                .toList();
         InfoSituation info = situations.getOrDefault(demande.getId(), InfoSituation.NON_PLANIFIE);
-        return DemandeMapper.toResponse(demande, statutActuel(demande.getId()),
-                montantPaye(demande.getId()), reste(demande.getId()),
-                ligneServiceService.listerParDemande(demande.getId()),
-                ligneServiceService.montantTotalDemande(demande.getId()),
-                info.situation(), info.nombreEcheances());
+        return DemandeMapper.toResponse(demande, statuts.get(demande.getId()),
+                montantPaye, reste, lignesReponse, montantTotal,
+                info.situation(), info.nombreEcheances(), lignes);
     }
 
-    private BigDecimal montantPaye(Integer demandeId) {
-        BigDecimal paye = paiementRepository.sommePayeeParDemande(demandeId);
-        return paye == null ? BigDecimal.ZERO : paye;
-    }
-
-    private BigDecimal reste(Integer demandeId) {
-        BigDecimal total = ligneServiceService.montantTotalDemande(demandeId);
-        return total.subtract(montantPaye(demandeId)).max(BigDecimal.ZERO);
+    private BigDecimal toBigDecimal(Object value) {
+        return value == null ? BigDecimal.ZERO : new BigDecimal(value.toString());
     }
 
     @Transactional(readOnly = true)

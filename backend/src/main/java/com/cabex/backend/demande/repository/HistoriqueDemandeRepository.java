@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
-
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +21,16 @@ public interface HistoriqueDemandeRepository extends JpaRepository<HistoriqueDem
     Optional<HistoriqueDemande> findFirstByDemandeIdOrderByIdDesc(Integer demandeId);
 
     long countByDemandeId(Integer demandeId);
+
+    /** Statut courant (dernier historique) pour un lot de demandes. */
+    @Query("""
+        SELECT h.demande.id, h.statut.statut
+        FROM HistoriqueDemande h
+        WHERE h.demande.id IN :demandeIds
+          AND h.id = (SELECT MAX(h2.id) FROM HistoriqueDemande h2
+                      WHERE h2.demande.id = h.demande.id)
+        """)
+    List<Object[]> statutsActuels(@Param("demandeIds") Collection<Integer> demandeIds);
 
     @Query("""
         SELECT h.demande.id, h.demande.dateDemande, MIN(h.createdAt)
