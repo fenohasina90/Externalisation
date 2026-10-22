@@ -147,7 +147,7 @@ export function DashboardPage() {
         : 'Vue d’ensemble de vos clients, demandes et paiements d’externalisation.'
 
   const [filtres, setFiltres] = useState<DashboardFiltres>(FILTRES_DASHBOARD_VIDES)
-  const [filtresVisibles, setFiltresVisibles] = useState(true)
+  const [filtresVisibles, setFiltresVisibles] = useState(false)
   const options = useDashboardFiltres()
   const { data, loading, error } = useDashboardData(vue, filtres)
   const summary = data?.summary

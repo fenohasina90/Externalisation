@@ -60,7 +60,7 @@ export function RapportsPage() {
 
   const [page, setPage] = useState(0)
   const taillePage = Math.max(1, useTaillePagination())
-  const [showFilters, setShowFilters] = useState(true)
+  const [showFilters, setShowFilters] = useState(false)
   const [filtres, setFiltres] = useState<RapportFiltres>(FILTRES_VIDES)
   const [appliques, setAppliques] = useState<RapportFiltres>(FILTRES_VIDES)
   const [exportEnCours, setExportEnCours] = useState<FormatExport | null>(null)
