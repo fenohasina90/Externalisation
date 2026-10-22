@@ -80,6 +80,7 @@ public class DashboardService {
     public DashboardSummaryResponse summary(DashboardFilter filtre) {
         LocalDate today = LocalDate.now();
         String role = SecurityUtils.currentRoleName();
+        int joursAlerte = joursAlerte();
 
         Map<String, Long> parStatut = groupStatuts(filtre);
         long demandesEnCours = parStatut.getOrDefault("EN_COURS", 0L);
@@ -94,8 +95,8 @@ public class DashboardService {
                     montantTotal, montantPaye, reste,
                     echeanceRepository.countEnRetardFiltre(today,
                             filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId()),
-                    countProches(today, filtre),
-                    null, null);
+                    countProches(today, filtre, joursAlerte),
+                    null, null, joursAlerte);
         }
 
         long clients = filtre.aDesFiltres()
@@ -114,7 +115,7 @@ public class DashboardService {
                     clients, demandes, services,
                     null, null, null,
                     null, null,
-                    demandesEnAttente, demandesEnCours);
+                    demandesEnAttente, demandesEnCours, joursAlerte);
         }
 
         BigDecimal montantTotal = sommeTarif(filtre);
@@ -126,8 +127,8 @@ public class DashboardService {
                 montantTotal, montantPaye, reste,
                 echeanceRepository.countEnRetardFiltre(today,
                         filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId()),
-                countProches(today, filtre),
-                demandesEnAttente, demandesEnCours);
+                countProches(today, filtre, joursAlerte),
+                demandesEnAttente, demandesEnCours, joursAlerte);
     }
 
     @Transactional(readOnly = true)
@@ -339,8 +340,8 @@ public class DashboardService {
         return map;
     }
 
-    private long countProches(LocalDate today, DashboardFilter filtre) {
-        return echeanceRepository.countProchesFiltre(today, today.plusDays(joursAlerte()),
+    private long countProches(LocalDate today, DashboardFilter filtre, int joursAlerte) {
+        return echeanceRepository.countProchesFiltre(today, today.plusDays(joursAlerte),
                 filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
     }
 

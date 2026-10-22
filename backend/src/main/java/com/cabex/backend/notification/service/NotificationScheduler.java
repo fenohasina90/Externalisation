@@ -13,9 +13,14 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
- * Génère quotidiennement des alertes de notifications pour les échéances
+ * Génère régulièrement des alertes de notifications pour les échéances
  * proches (seuil lu depuis la configuration JOURS_AVANCE_ALERTE_ECHEANCE,
  * 3 jours par défaut) et les échéances en retard.
+ *
+ * <p>La vérification est exécutée après le démarrage puis toutes les heures :
+ * elle ne dépend donc pas du fait que l'application soit allumée à une heure
+ * précise. Les notifications sont dédupliquées par utilisateur, type et
+ * échéance.</p>
  */
 @Component
 public class NotificationScheduler {
@@ -32,7 +37,9 @@ public class NotificationScheduler {
         this.configurationService = configurationService;
     }
 
-    @Scheduled(cron = "0 0 7 * * *")
+    @Scheduled(
+            initialDelayString = "${app.notification.echeance-initial-delay-ms:30000}",
+            fixedDelayString = "${app.notification.echeance-check-delay-ms:3600000}")
     @Transactional
     public void verifierEcheances() {
         LocalDate aujourdHui = LocalDate.now();

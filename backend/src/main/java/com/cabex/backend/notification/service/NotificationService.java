@@ -19,6 +19,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -29,6 +30,7 @@ public class NotificationService {
     private static final String ROLE_ADMIN = "ADMIN";
     private static final String ROLE_ACCUEIL = "ACCUEIL";
     private static final String ROLE_ECONOMAT = "ECONOMAT";
+    private static final DateTimeFormatter FORMAT_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private static final List<String> TYPES_DEMANDE = List.of(
             "NOUVELLE_DEMANDE", "CHANGEMENT_STATUT");
@@ -186,7 +188,8 @@ public class NotificationService {
                 "Échéance proche",
                 "⚠️ L'échéance n°" + echeance.getNumeroEcheance() + " de la société " + societe
                         + " (" + montant(echeance.getMontantAttendu()) + ") arrive à échéance "
-                        + delai + ".",
+                        + delai + ". Référence de la demande : "
+                        + nullSafe(demande.getReferenceDemande()) + ".",
                 "ECHEANCE", echeance.getId() != null ? echeance.getId().longValue() : null,
                 ROLE_SUPER_ADMIN, ROLE_ECONOMAT);
     }
@@ -203,7 +206,8 @@ public class NotificationService {
                 "Paiement en retard",
                 "⛔ L'échéance n°" + echeance.getNumeroEcheance() + " de la société " + societe
                         + " (" + montant(echeance.getMontantAttendu()) + ") est en retard depuis le "
-                        + echeance.getDateEcheance() + ".",
+                        + echeance.getDateEcheance().format(FORMAT_DATE) + ". Référence de la demande : "
+                        + nullSafe(demande.getReferenceDemande()) + ".",
                 "ECHEANCE", echeance.getId() != null ? echeance.getId().longValue() : null,
                 ROLE_SUPER_ADMIN, ROLE_ECONOMAT);
     }

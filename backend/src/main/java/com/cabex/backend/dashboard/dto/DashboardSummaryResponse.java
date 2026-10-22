@@ -12,6 +12,7 @@ public record DashboardSummaryResponse(
         Long echeancesEnRetard,
         Long echeancesProches,
         Long demandesEnAttente,
-        Long demandesEnCours
+        Long demandesEnCours,
+        Integer joursAlerteEcheance
 ) {
 }

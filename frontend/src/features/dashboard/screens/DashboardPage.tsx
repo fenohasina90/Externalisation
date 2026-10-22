@@ -87,13 +87,16 @@ function construireAlertes(vue: VueDashboard, summary: DashboardSummary, montant
   const enRetard = summary.echeancesEnRetard ?? 0
   const proches = summary.echeancesProches ?? 0
   const enAttente = summary.demandesEnAttente ?? 0
+  const joursAlerte = summary.joursAlerteEcheance ?? 3
 
   if (vue !== 'ACCUEIL') {
     if (proches > 0) {
       alertes.push({
         ton: 'orange',
         etiquette: 'Échéances proches',
-        titre: `${proches} échéance${proches > 1 ? 's' : ''} sous 3 jours`,
+        titre: `${proches} échéance${proches > 1 ? 's' : ''} sous ${joursAlerte} jour${
+          joursAlerte > 1 ? 's' : ''
+        }`,
         detail: 'Relancez les clients concernés',
         lien: '/paiements/echeanciers',
       })
@@ -187,7 +190,7 @@ export function DashboardPage() {
           <p>{sousTitre}</p>
         </div>
         <div className="actions">
-          <span className="pill ok">Vue {vue}</span>
+          {/* <span className="pill ok">Vue {vue}</span> */}
           {filtresActifs > 0 && (
             <span className="pill wt">
               {filtresActifs} filtre{filtresActifs > 1 ? 's' : ''} actif
@@ -399,8 +402,19 @@ export function DashboardPage() {
           <div className="dash-grid">
             {vue !== 'ECONOMAT' && (
               <section className="card card-pad">
-                <h3>Évolution des demandes</h3>
-                <CourbeEvolution donnees={data.demandesMois} />
+                <div className="dash-card-head">
+                  <div>
+                    <h3>Évolution des demandes</h3>
+                    <p className="section-note">
+                      Nombre de demandes créées par mois, avec les valeurs et la tendance.
+                    </p>
+                  </div>
+                </div>
+                <CourbeEvolution
+                  donnees={data.demandesMois}
+                  dateDebut={filtres.dateDebut}
+                  dateFin={filtres.dateFin}
+                />
               </section>
             )}
             {vue !== 'ECONOMAT' && (
@@ -417,8 +431,19 @@ export function DashboardPage() {
             )}
             {vue !== 'ACCUEIL' && (
               <section className="card card-pad">
-                <h3>Paiements par mois</h3>
-                <BarresPaiementsMensuels donnees={data.paiements?.parMois ?? []} />
+                <div className="dash-card-head">
+                  <div>
+                    <h3>Montants encaissés par mois</h3>
+                    <p className="section-note">
+                      Paiements reçus chaque mois, avec le total et la moyenne de la période.
+                    </p>
+                  </div>
+                </div>
+                <BarresPaiementsMensuels
+                  donnees={data.paiements?.parMois ?? []}
+                  dateDebut={filtres.dateDebut}
+                  dateFin={filtres.dateFin}
+                />
               </section>
             )}
             {vue !== 'ACCUEIL' && (

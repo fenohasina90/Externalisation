@@ -17,10 +17,64 @@ const MOIS_COURTS = [
   'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.',
 ]
 
-/** `2026-04` → `avr.` */
+/** `2026-04` → `avr. 26` */
 function libelleMois(mois: string): string {
-  const [, m] = mois.split('-').map(Number)
-  return MOIS_COURTS[m - 1] ?? mois
+  const [annee, m] = mois.split('-').map(Number)
+  const label = MOIS_COURTS[m - 1] ?? mois
+  return annee ? `${label} ${String(annee).slice(-2)}` : label
+}
+
+/** Liste continue de mois `AAAA-MM` entre deux bornes incluses. */
+function moisEntre(debut: string, fin: string): string[] {
+  const [anneeDebut, moisDebut] = debut.split('-').map(Number)
+  const [anneeFin, moisFin] = fin.split('-').map(Number)
+  if (!anneeDebut || !moisDebut || !anneeFin || !moisFin) return []
+
+  const curseur = new Date(Date.UTC(anneeDebut, moisDebut - 1, 1))
+  const borne = new Date(Date.UTC(anneeFin, moisFin - 1, 1))
+  const mois: string[] = []
+
+  while (curseur <= borne && mois.length < 240) {
+    mois.push(
+      `${curseur.getUTCFullYear()}-${String(curseur.getUTCMonth() + 1).padStart(2, '0')}`,
+    )
+    curseur.setUTCMonth(curseur.getUTCMonth() + 1)
+  }
+
+  return mois
+}
+
+/**
+ * Complète les mois sans activité par une valeur nulle, afin que la courbe et
+ * les barres représentent une période continue et non des mois juxtaposés.
+ */
+function completerMois<T extends { mois: string }>(
+  donnees: T[],
+  creerVide: (mois: string) => T,
+  dateDebut?: string,
+  dateFin?: string,
+): T[] {
+  const parMois = new Map(donnees.map((d) => [d.mois, d]))
+  const moisTries = [...parMois.keys()].sort()
+  const debut = dateDebut?.slice(0, 7) || moisTries[0]
+  const fin = dateFin?.slice(0, 7) || moisTries[moisTries.length - 1]
+
+  if (!debut || !fin) return []
+
+  return moisEntre(debut, fin).map((mois) => parMois.get(mois) ?? creerVide(mois))
+}
+
+const formaterCompact = new Intl.NumberFormat('fr-FR', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
+
+function montantCompact(valeur: number): string {
+  return formaterCompact.format(valeur)
+}
+
+function formatEntier(valeur: number): string {
+  return valeur.toLocaleString('fr-FR')
 }
 
 const COULEURS_STATUT: Record<string, string> = {
@@ -41,53 +95,106 @@ const LIBELLES_STATUT: Record<string, string> = {
 
 /* ---------------- Courbe d'évolution (SVG) ---------------- */
 
-export function CourbeEvolution({ donnees }: { donnees: DemandeMois[] }) {
-  if (donnees.length === 0) {
-    return <p className="section-note">Aucune demande enregistrée.</p>
+export function CourbeEvolution({
+  donnees,
+  dateDebut,
+  dateFin,
+}: {
+  donnees: DemandeMois[]
+  dateDebut?: string
+  dateFin?: string
+}) {
+  const serie = completerMois(donnees, (mois) => ({ mois, nombre: 0 }), dateDebut, dateFin)
+  const total = serie.reduce((somme, d) => somme + d.nombre, 0)
+
+  if (serie.length === 0 || total === 0) {
+    return <p className="section-note">Aucune demande sur la période.</p>
   }
 
-  const W = 320
-  const H = 190
-  const padL = 26
-  const padB = 22
-  const padT = 10
-  const max = Math.max(1, ...donnees.map((d) => d.nombre))
-  const plafond = Math.max(4, Math.ceil(max / 4) * 4)
+  const W = Math.max(360, serie.length * 58 + 56)
+  const H = 230
+  const padL = 34
+  const padR = 28
+  const padB = 28
+  const padT = 18
+  const max = Math.max(1, ...serie.map((d) => d.nombre))
+  const plafond = max <= 4 ? 4 : Math.ceil(max / 4) * 4
+  const moyenne = total / serie.length
+  const pic = serie.reduce((meilleur, d) => (d.nombre > meilleur.nombre ? d : meilleur), serie[0])
   const xs = (i: number) =>
-    padL + (i * (W - padL - 8)) / Math.max(1, donnees.length - 1)
+    serie.length === 1
+      ? W / 2
+      : padL + (i * (W - padL - padR)) / (serie.length - 1)
   const ys = (v: number) => padT + (H - padB - padT) * (1 - v / plafond)
-  const points = donnees.map((d, i) => `${xs(i)},${ys(d.nombre)}`).join(' ')
-  const aire = `${padL},${H - padB} ${points} ${xs(donnees.length - 1)},${H - padB}`
+  const points = serie.map((d, i) => `${xs(i)},${ys(d.nombre)}`).join(' ')
+  const baseGauche = serie.length === 1 ? W / 2 : padL
+  const aire = `${baseGauche},${H - padB} ${points} ${xs(serie.length - 1)},${H - padB}`
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="chart-svg" role="img" aria-label="Évolution des demandes">
-      {[0, 1, 2, 3, 4].map((i) => {
-        const valeur = Math.round((plafond * i) / 4)
-        return (
-          <g key={i}>
-            <line x1={padL} y1={ys(valeur)} x2={W - 4} y2={ys(valeur)} className="chart-grid" />
-            <text x={2} y={ys(valeur) + 4} className="chart-axe">
-              {valeur}
-            </text>
-          </g>
-        )
-      })}
-      <polygon points={aire} className="chart-aire" />
-      <polyline points={points} className="chart-ligne" />
-      {donnees.map((d, i) => (
-        <g key={`${d.mois}-${i}`}>
-          <circle cx={xs(i)} cy={ys(d.nombre)} r={4} className="chart-point" />
-          {i === donnees.length - 1 && (
-            <text x={xs(i) - 6} y={ys(d.nombre) - 10} className="chart-valeur">
-              {d.nombre}
-            </text>
-          )}
-          <text x={xs(i) - 8} y={H - 6} className="chart-axe">
-            {libelleMois(d.mois)}
-          </text>
-        </g>
-      ))}
-    </svg>
+    <div>
+      <div className="chart-scroll">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="chart-svg"
+          style={{ minWidth: `${W}px` }}
+          role="img"
+          aria-labelledby="evolution-demandes-titre"
+          aria-describedby="evolution-demandes-desc"
+        >
+          <title id="evolution-demandes-titre">Évolution mensuelle des demandes</title>
+          <desc id="evolution-demandes-desc">
+            {`${formatEntier(total)} demandes sur la période, ${moyenne.toLocaleString('fr-FR', {
+              maximumFractionDigits: 1,
+            })} par mois en moyenne. Pic à ${formatEntier(pic.nombre)} en ${libelleMois(pic.mois)}.`}
+          </desc>
+          {[0, 1, 2, 3, 4].map((i) => {
+            const valeur = Math.round((plafond * i) / 4)
+            return (
+              <g key={i}>
+                <line x1={padL} y1={ys(valeur)} x2={W - padR} y2={ys(valeur)} className="chart-grid" />
+                <text x={2} y={ys(valeur) + 4} className="chart-axe">
+                  {valeur}
+                </text>
+              </g>
+            )
+          })}
+          <polygon points={aire} className="chart-aire" />
+          <polyline points={points} className="chart-ligne" />
+          {serie.map((d, i) => (
+            <g key={d.mois}>
+              <circle cx={xs(i)} cy={ys(d.nombre)} r={4} className="chart-point">
+                <title>{`${libelleMois(d.mois)} : ${formatEntier(d.nombre)} demande${
+                  d.nombre > 1 ? 's' : ''
+                }`}</title>
+              </circle>
+              <text
+                x={xs(i)}
+                y={Math.max(padT + 9, ys(d.nombre) - 10)}
+                textAnchor="middle"
+                className="chart-valeur"
+              >
+                {formatEntier(d.nombre)}
+              </text>
+              <text x={xs(i)} y={H - 8} textAnchor="middle" className="chart-axe">
+                {libelleMois(d.mois)}
+              </text>
+            </g>
+          ))}
+        </svg>
+      </div>
+      <div className="chart-resume">
+        <span>
+          <strong>{formatEntier(total)}</strong> demande{total > 1 ? 's' : ''} sur la période
+        </span>
+        <span>
+          <strong>{moyenne.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}</strong> / mois en
+          moyenne
+        </span>
+        <span>
+          Pic : <strong>{formatEntier(pic.nombre)}</strong> en {libelleMois(pic.mois)}
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -157,26 +264,67 @@ export function DonutStatuts({ donnees }: { donnees: StatutCount[] }) {
 
 /* ---------------- Barres verticales ---------------- */
 
-export function BarresPaiementsMensuels({ donnees }: { donnees: MoisMontant[] }) {
-  if (donnees.length === 0) {
-    return <p className="section-note">Aucun paiement enregistré.</p>
+export function BarresPaiementsMensuels({
+  donnees,
+  dateDebut,
+  dateFin,
+}: {
+  donnees: MoisMontant[]
+  dateDebut?: string
+  dateFin?: string
+}) {
+  const serie = completerMois(donnees, (mois) => ({ mois, montant: 0 }), dateDebut, dateFin)
+  const total = serie.reduce((somme, m) => somme + m.montant, 0)
+
+  if (serie.length === 0 || total === 0) {
+    return <p className="section-note">Aucun paiement sur la période.</p>
   }
-  const max = Math.max(1, ...donnees.map((m) => m.montant))
+
+  const max = Math.max(1, ...serie.map((m) => m.montant))
+  const moyenne = total / serie.length
+  const pic = serie.reduce((meilleur, m) => (m.montant > meilleur.montant ? m : meilleur), serie[0])
+
   return (
     <div>
-      <div className="vbars" role="img" aria-label="Paiements par mois">
-        {donnees.map((m) => (
-          <div key={m.mois} className="vbars__mois">
-            <div className="vbars__colonnes">
-              <span
-                style={{ height: `${(m.montant / max) * 100}%` }}
-                className="vbars__paye"
-                title={`Payé : ${formatMontantMGA(m.montant)}`}
-              />
-            </div>
-            <span className="vbars__label">{libelleMois(m.mois)}</span>
-          </div>
-        ))}
+      <div className="chart-scroll">
+        <div
+          className="vbars"
+          style={{ minWidth: `${Math.max(serie.length * 64, 320)}px` }}
+          role="img"
+          aria-label={`Paiements par mois. Total ${formatMontantMGA(total)}, moyenne ${formatMontantMGA(
+            moyenne,
+          )} par mois, meilleur mois ${libelleMois(pic.mois)} avec ${formatMontantMGA(pic.montant)}.`}
+        >
+          {serie.map((m) => {
+            const hauteur = m.montant > 0 ? Math.max(3, (m.montant / max) * 100) : 0
+            return (
+              <div
+                key={m.mois}
+                className="vbars__mois"
+                title={`${libelleMois(m.mois)} : ${formatMontantMGA(m.montant)}`}
+              >
+                <div className="vbars__colonnes">
+                  <div className="vbars__barre" style={{ height: `${hauteur}%` }}>
+                    <span className="vbars__valeur">{montantCompact(m.montant)}</span>
+                    <span className="vbars__paye" />
+                  </div>
+                </div>
+                <span className="vbars__label">{libelleMois(m.mois)}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <div className="chart-resume">
+        <span>
+          <strong>{formatMontantMGA(total)}</strong> encaissés sur la période
+        </span>
+        <span>
+          <strong>{formatMontantMGA(moyenne)}</strong> / mois en moyenne
+        </span>
+        <span>
+          Meilleur mois : <strong>{libelleMois(pic.mois)}</strong> ({formatMontantMGA(pic.montant)})
+        </span>
       </div>
       <p className="chart-legende">
         <i className="dot dot--vert" /> Montant encaissé par mois

@@ -10,6 +10,7 @@ export interface DashboardSummary {
   echeancesProches: number | null
   demandesEnAttente: number | null
   demandesEnCours: number | null
+  joursAlerteEcheance: number | null
 }
 
 export interface StatutCount {

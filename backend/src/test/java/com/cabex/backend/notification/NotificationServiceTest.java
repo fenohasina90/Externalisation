@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -71,12 +72,30 @@ class NotificationServiceTest {
     }
 
     @Test
-    void echeanceDemainAfficheDemain() {
-        assertTrue(messageEcheanceProche(1).contains("arrive à échéance demain"));
+    void echeanceDemainAfficheDemainEtLaReferenceDemande() {
+        String message = messageEcheanceProche(1);
+        assertTrue(message.contains("arrive à échéance demain"));
+        assertTrue(message.contains("Référence de la demande : DEM-2026-00001"));
     }
 
     @Test
     void echeanceDansPlusieursJoursAfficheLeNombre() {
         assertTrue(messageEcheanceProche(3).contains("arrive à échéance dans 3 jours"));
+    }
+
+    @Test
+    void echeanceEnRetardAfficheLaDateAuFormatFrancais() {
+        preparerDestinataires();
+        EcheancePaiement echeance = echeance();
+        echeance.setDateEcheance(LocalDate.of(2026, 3, 15));
+
+        notificationService.notifierEcheanceEnRetard(echeance);
+
+        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository).save(captor.capture());
+        String message = captor.getValue().getMessage();
+        assertTrue(message.contains("15/03/2026"));
+        assertTrue(message.contains("Référence de la demande : DEM-2026-00001"));
+        assertFalse(message.contains("2026-03-15"));
     }
 }
