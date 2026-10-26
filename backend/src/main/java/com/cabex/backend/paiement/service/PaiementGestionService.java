@@ -3,7 +3,9 @@ package com.cabex.backend.paiement.service;
 import com.cabex.backend.audit.action.AuditActions;
 import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
+import com.cabex.backend.demande.service.DemandeGestionService;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.echeance.entity.ProposPaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
@@ -13,6 +15,7 @@ import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.notification.service.NotificationService;
 import com.cabex.backend.paiement.dto.CreatePaiementRequest;
 import com.cabex.backend.paiement.dto.ModePaiementResponse;
+import com.cabex.backend.paiement.dto.PaiementDetailResponse;
 import com.cabex.backend.paiement.dto.PaiementResponse;
 import com.cabex.backend.paiement.dto.UpdatePaiementRequest;
 import com.cabex.backend.paiement.entity.ModePaiement;
@@ -24,7 +27,9 @@ import com.cabex.backend.security.SecurityUtils;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
 import com.cabex.backend.utilisateur.repository.UtilisateurRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -45,6 +50,7 @@ public class PaiementGestionService {
     private final UtilisateurRepository utilisateurRepository;
     private final NotificationService notificationService;
     private final AuditService auditService;
+    private final DemandeGestionService demandeGestionService;
 
     public PaiementGestionService(PaiementRepository paiementRepository,
                                   DemandeServiceRepository demandeRepository,
@@ -52,7 +58,8 @@ public class PaiementGestionService {
                                   EcheancePaiementRepository echeanceRepository,
                                   UtilisateurRepository utilisateurRepository,
                                   NotificationService notificationService,
-                                  AuditService auditService) {
+                                  AuditService auditService,
+                                  DemandeGestionService demandeGestionService) {
         this.paiementRepository = paiementRepository;
         this.demandeRepository = demandeRepository;
         this.modeRepository = modeRepository;
@@ -60,18 +67,32 @@ public class PaiementGestionService {
         this.utilisateurRepository = utilisateurRepository;
         this.notificationService = notificationService;
         this.auditService = auditService;
+        this.demandeGestionService = demandeGestionService;
     }
 
     @Transactional(readOnly = true)
     public Page<PaiementResponse> getAll(String recherche, Integer demandeId, Integer modeId,
                                          LocalDate dateDebut, LocalDate dateFin, Pageable pageable) {
-        return paiementRepository.rechercher(recherche, demandeId, modeId, dateDebut, dateFin, pageable)
+        Pageable tri = pageable.getSort().isSorted()
+                ? pageable
+                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                        Sort.by(Sort.Order.desc("datePaiement"), Sort.Order.desc("id")));
+        return paiementRepository.rechercher(recherche, demandeId, modeId, dateDebut, dateFin, tri)
                 .map(PaiementMapper::toResponse);
     }
 
     @Transactional(readOnly = true)
     public PaiementResponse getById(Integer id) {
         return PaiementMapper.toResponse(getEntity(id));
+    }
+
+    @Transactional(readOnly = true)
+    public PaiementDetailResponse getByReference(String reference) {
+        Paiement paiement = paiementRepository
+                .findByReferencePaiementAndActifTrue(reference.trim())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Paiement", reference)));
+        return PaiementMapper.toDetailResponse(paiement);
     }
 
     @Transactional(readOnly = true)
@@ -93,19 +114,15 @@ public class PaiementGestionService {
 
         EcheancePaiement echeance = null;
         if (request.echeanceId() != null) {
-            echeance = echeanceRepository.findById(request.echeanceId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            ErrorMessages.introuvable("Échéance", request.echeanceId())));
-            if (echeance.getProposPaiement() == null
-                    || echeance.getProposPaiement().getDemande() == null
-                    || !echeance.getProposPaiement().getDemande().getId().equals(demande.getId())) {
-                throw new BusinessException(
-                        "L'échéance n'appartient pas à la demande sélectionnée");
-            }
+            echeance = chargerEcheanceDeDemande(request.echeanceId(), demande);
+        } else {
+            throw new BusinessException(
+                    "L'échéance est obligatoire : rattachez le paiement à une échéance du service concerné");
         }
 
         validerVirement(mode, request.referenceVirement());
         validerMontant(demande, echeance, request.montantPaye(), BigDecimal.ZERO, null);
+        validerDatePaiement(ligneDe(echeance), request.datePaiement());
 
         Paiement paiement = Paiement.builder()
                 .referencePaiement(genererReference(LocalDate.now().getYear()))
@@ -122,6 +139,10 @@ public class PaiementGestionService {
         paiement = paiementRepository.save(paiement);
 
         ajouterAEcheance(echeance, request.montantPaye());
+
+        demandeGestionService.promouvoirEnCoursParLigne(ligneDe(echeance),
+                "paiement " + paiement.getReferencePaiement()
+                        + " (échéance n°" + echeance.getNumeroEcheance() + ")");
 
         notificationService.notifierPaiementEnregistre(paiement);
 
@@ -140,20 +161,15 @@ public class PaiementGestionService {
 
         EcheancePaiement nouvelleEcheance = null;
         if (request.echeanceId() != null) {
-            nouvelleEcheance = echeanceRepository.findById(request.echeanceId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            ErrorMessages.introuvable("Échéance", request.echeanceId())));
-            if (nouvelleEcheance.getProposPaiement() == null
-                    || nouvelleEcheance.getProposPaiement().getDemande() == null
-                    || !nouvelleEcheance.getProposPaiement().getDemande().getId().equals(demande.getId())) {
-                throw new BusinessException(
-                        "L'échéance n'appartient pas à la demande sélectionnée");
-            }
+            nouvelleEcheance = chargerEcheanceDeDemande(request.echeanceId(), demande);
         }
 
         validerVirement(mode, request.referenceVirement());
         validerMontant(demande, nouvelleEcheance, request.montantPaye(),
                 paiement.getMontantPaye(), paiement.getEcheance());
+        validerDatePaiement(
+                nouvelleEcheance != null ? ligneDe(nouvelleEcheance) : ligneDe(paiement.getEcheance()),
+                request.datePaiement());
 
         if (paiement.getEcheance() != null) {
             soustraireDeEcheance(paiement.getEcheance(), paiement.getMontantPaye());
@@ -197,6 +213,37 @@ public class PaiementGestionService {
         }
     }
 
+    private EcheancePaiement chargerEcheanceDeDemande(Integer echeanceId, DemandeService demande) {
+        EcheancePaiement echeance = echeanceRepository.findById(echeanceId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Échéance", echeanceId)));
+        if (echeance.getProposPaiement() == null
+                || echeance.getProposPaiement().getDemande() == null
+                || !echeance.getProposPaiement().getDemande().getId().equals(demande.getId())) {
+            throw new BusinessException(
+                    "L'échéance n'appartient pas à la demande sélectionnée");
+        }
+        return echeance;
+    }
+
+    private LigneService ligneDe(EcheancePaiement echeance) {
+        if (echeance == null || echeance.getProposPaiement() == null) {
+            return null;
+        }
+        return echeance.getProposPaiement().getLigneService();
+    }
+
+    private void validerDatePaiement(LigneService ligne, LocalDate date) {
+        LocalDate debut = ligne != null ? ligne.getDebutService() : null;
+        LocalDate fin = ligne != null ? ligne.getFinService() : null;
+        if (date != null && debut != null && fin != null
+                && (date.isBefore(debut) || date.isAfter(fin))) {
+            throw new BusinessException(
+                    "Le paiement doit être effectué entre le début et la fin du service ("
+                            + debut + " → " + fin + ")");
+        }
+    }
+
     private void validerMontant(DemandeService demande, EcheancePaiement echeance,
                                 BigDecimal montant, BigDecimal ancienMontant,
                                 EcheancePaiement ancienneEcheance) {
@@ -210,11 +257,17 @@ public class PaiementGestionService {
                     ? ancienMontant : BigDecimal.ZERO;
             reste = echeance.getMontantAttendu().subtract(echeance.getMontantPaye()).add(libere);
         } else {
+            // Paiements historiques sans échéance : plafond au total des lignes.
             BigDecimal dejaPayer = paiementRepository.sommePayeeParDemande(demande.getId());
             if (dejaPayer == null) {
                 dejaPayer = BigDecimal.ZERO;
             }
-            reste = demande.getTarifServiceApplique().subtract(dejaPayer).add(ancienMontant);
+            BigDecimal total = demande.getLignes() != null
+                    ? demande.getLignes().stream()
+                            .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    : BigDecimal.ZERO;
+            reste = total.subtract(dejaPayer).add(ancienMontant);
         }
         if (montant.compareTo(reste) > 0) {
             throw new BusinessException(

@@ -1,6 +1,7 @@
 package com.cabex.backend.echeance.controller;
 
 import com.cabex.backend.echeance.dto.CreateEcheanceRequest;
+import com.cabex.backend.echeance.dto.EcheanceCibleResponse;
 import com.cabex.backend.echeance.dto.EcheanceResponse;
 import com.cabex.backend.echeance.dto.UpdateEcheanceRequest;
 import com.cabex.backend.echeance.service.EcheanceGestionService;
@@ -58,6 +59,14 @@ public class EcheanceController {
     public ResponseEntity<EcheanceResponse> update(@PathVariable Integer id,
                                                    @Valid @RequestBody UpdateEcheanceRequest request) {
         return ResponseEntity.ok(echeanceService.update(id, request));
+    }
+
+    @GetMapping("/echeances/{id}")
+    @PreAuthorize("hasAuthority('DEMANDE_VIEW')")
+    @Operation(summary = "Cible d'une échéance",
+            description = "Retourne la demande associée afin d'ouvrir son échéancier depuis une notification")
+    public ResponseEntity<EcheanceCibleResponse> getCible(@PathVariable Integer id) {
+        return ResponseEntity.ok(echeanceService.getCible(id));
     }
 
     @GetMapping("/echeances/en-retard")

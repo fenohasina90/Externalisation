@@ -1,7 +1,10 @@
 package com.cabex.backend.document.service;
 
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.document.dto.DocumentResponse;
 import com.cabex.backend.document.dto.FichierDocument;
 import com.cabex.backend.document.entity.PieceJointe;
@@ -29,15 +32,10 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class DocumentGestionService {
-
-    private static final Set<String> TYPES_AUTORISES = Set.of(
-            "pdf", "jpg", "jpeg", "png", "gif",
-            "doc", "docx", "xls", "xlsx", "txt");
 
     private final PieceJointeRepository pieceRepository;
     private final DemandeServiceRepository demandeRepository;
@@ -45,6 +43,12 @@ public class DocumentGestionService {
     private final ProposPaiementRepository proposRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final PdfGenerator pdfGenerator;
+    private final AuditService auditService;
+    private final ConfigurationService configurationService;
+    private final com.cabex.backend.facture.repository.FactureRepository factureRepository;
+    private final com.cabex.backend.dossier.repository.DossierCreationRepository dossierRepository;
+    private final com.cabex.backend.dossier.repository.DossierTransactionImmobiliereRepository
+            dossierTransactionRepository;
 
     @Value("${app.document.storage-path}")
     private String storagePath;
@@ -57,13 +61,33 @@ public class DocumentGestionService {
                                   PaiementRepository paiementRepository,
                                   ProposPaiementRepository proposRepository,
                                   UtilisateurRepository utilisateurRepository,
-                                  PdfGenerator pdfGenerator) {
+                                  PdfGenerator pdfGenerator,
+                                  AuditService auditService,
+                                  ConfigurationService configurationService,
+                                  com.cabex.backend.facture.repository.FactureRepository factureRepository,
+                                  com.cabex.backend.dossier.repository.DossierCreationRepository dossierRepository,
+                                  com.cabex.backend.dossier.repository.DossierTransactionImmobiliereRepository
+                                          dossierTransactionRepository) {
         this.pieceRepository = pieceRepository;
         this.demandeRepository = demandeRepository;
         this.paiementRepository = paiementRepository;
         this.proposRepository = proposRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.pdfGenerator = pdfGenerator;
+        this.auditService = auditService;
+        this.configurationService = configurationService;
+        this.factureRepository = factureRepository;
+        this.dossierRepository = dossierRepository;
+        this.dossierTransactionRepository = dossierTransactionRepository;
+    }
+
+    /**
+     * Taille maximale effective : valeur d'administration TAILLE_MAX_FICHIER,
+     * avec repli sur la propriété {@code app.document.max-size}. Toute
+     * modification depuis l'administration s'applique au prochain téléversement.
+     */
+    private long tailleMaxEffective() {
+        return configurationService.lireEntierLong("TAILLE_MAX_FICHIER", maxSize);
     }
 
     @Transactional(readOnly = true)
@@ -73,25 +97,37 @@ public class DocumentGestionService {
                 .stream().map(DocumentMapper::toResponse).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<DocumentResponse> listByPaiement(Integer paiementId) {
+        verifierPaiement(paiementId);
+        return pieceRepository.findByPaiementIdOrderByCreatedAtDesc(paiementId)
+                .stream().map(DocumentMapper::toResponse).toList();
+    }
+
     @Transactional
     public DocumentResponse upload(Integer demandeId, MultipartFile fichier, String description) {
         DemandeService demande = verifierDemande(demandeId);
+        return enregistrerPiece(demande, null, fichier, description);
+    }
+
+    @Transactional
+    public DocumentResponse uploadPaiement(Integer paiementId, MultipartFile fichier, String description) {
+        Paiement paiement = verifierPaiement(paiementId);
+        return enregistrerPiece(paiement.getDemande(), paiement, fichier, description);
+    }
+
+    private DocumentResponse enregistrerPiece(DemandeService demande, Paiement paiement,
+                                              MultipartFile fichier, String description) {
         if (fichier == null || fichier.isEmpty()) {
             throw new BusinessException("Le fichier est obligatoire");
+        }
+        if (fichier.getSize() > tailleMaxEffective()) {
+            throw new BusinessException("Le fichier dépasse la taille maximale autorisée ("
+                    + (tailleMaxEffective() / (1024 * 1024)) + " Mo)");
         }
         String nomOriginal = fichier.getOriginalFilename() == null
                 ? "document" : fichier.getOriginalFilename();
         String extension = extensionDe(nomOriginal);
-        if (!TYPES_AUTORISES.contains(extension)) {
-            throw new BusinessException(
-                    "Type de fichier non autorisé (." + extension + "). Types acceptés : "
-                            + String.join(", ", TYPES_AUTORISES));
-        }
-        if (fichier.getSize() > maxSize) {
-            throw new BusinessException("Le fichier dépasse la taille maximale autorisée ("
-                    + (maxSize / (1024 * 1024)) + " Mo)");
-        }
-
         String nomStockage = UUID.randomUUID() + "." + extension;
         Path dossier = Paths.get(storagePath);
         try {
@@ -101,6 +137,7 @@ public class DocumentGestionService {
 
             PieceJointe piece = PieceJointe.builder()
                     .demande(demande)
+                    .paiement(paiement)
                     .nomFichier(nomStockage)
                     .nomOriginal(nomOriginal)
                     .cheminFichier(cible.toString())
@@ -109,7 +146,10 @@ public class DocumentGestionService {
                     .description(description)
                     .uploadedBy(currentUtilisateur())
                     .build();
-            return DocumentMapper.toResponse(pieceRepository.save(piece));
+            PieceJointe saved = pieceRepository.save(piece);
+            auditService.log(AuditActions.CREATE, "DOCUMENT", "PieceJointe",
+                    Long.valueOf(saved.getId()), null, "fichier=" + nomOriginal);
+            return DocumentMapper.toResponse(saved);
         } catch (IOException e) {
             throw new BusinessException("Impossible d'enregistrer le fichier : " + e.getMessage());
         }
@@ -131,21 +171,30 @@ public class DocumentGestionService {
     @Transactional
     public void delete(Integer id) {
         PieceJointe piece = getPiece(id);
+        String nom = piece.getNomOriginal();
         try {
             Files.deleteIfExists(Paths.get(piece.getCheminFichier()));
         } catch (IOException ignored) {
             // le fichier peut ne plus exister; on supprime quand même l'enregistrement
         }
         pieceRepository.delete(piece);
+        auditService.log(AuditActions.DELETE, "DOCUMENT", "PieceJointe",
+                Long.valueOf(id), "fichier=" + nom, null);
     }
 
     public byte[] recapitulatifDemande(Integer demandeId) {
         DemandeService demande = demandeRepository.findById(demandeId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Demande", demandeId)));
-        return pdfGenerator.recapitulatifDemande(demande);
+        // Demandes à fiche dédiée : création, puis transaction immobilière.
+        return dossierRepository.findByDemandeId(demandeId)
+                .map(dossier -> pdfGenerator.ficheCreation(demande, dossier))
+                .or(() -> dossierTransactionRepository.findByDemandeId(demandeId)
+                        .map(dossier -> pdfGenerator.ficheTransactionImmobiliere(demande, dossier)))
+                .orElseGet(() -> pdfGenerator.recapitulatifDemande(demande));
     }
 
+    @Transactional(readOnly = true)
     public byte[] recuPaiement(Integer paiementId) {
         Paiement paiement = paiementRepository.findById(paiementId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -161,23 +210,37 @@ public class DocumentGestionService {
         return pdfGenerator.planPaiement(propos);
     }
 
+    public byte[] factureProforma(Integer factureId) {
+        com.cabex.backend.facture.entity.Facture facture = factureRepository.findById(factureId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Facture", factureId)));
+        return pdfGenerator.factureProforma(facture);
+    }
+
     @Transactional
     public DocumentResponse sauvegarderRecapitulatif(Integer demandeId) {
         verifierDemande(demandeId);
         DemandeService demande = demandeRepository.findById(demandeId).orElseThrow();
-        byte[] contenu = pdfGenerator.recapitulatifDemande(demande);
-        return enregistrerFichier(demande, "recapitulatif-demande-" + demande.getReferenceDemande() + ".pdf",
-                "Récapitulatif de demande généré automatiquement", contenu);
+        boolean ficheCreation = dossierRepository.findByDemandeId(demandeId).isPresent();
+        boolean ficheTransaction = !ficheCreation
+                && dossierTransactionRepository.findByDemandeId(demandeId).isPresent();
+        byte[] contenu = recapitulatifDemande(demandeId);
+        String prefixe = ficheCreation ? "fiche-creation-"
+                : ficheTransaction ? "fiche-transaction-immobiliere-"
+                : "recapitulatif-demande-";
+        String description = ficheCreation ? "Fiche de création générée automatiquement"
+                : ficheTransaction ? "Fiche de transaction immobilière générée automatiquement"
+                : "Récapitulatif de demande généré automatiquement";
+        return enregistrerFichier(demande, null,
+                prefixe + demande.getReferenceDemande() + ".pdf", description, contenu);
     }
 
     @Transactional
     public DocumentResponse sauvegarderRecu(Integer paiementId) {
-        Paiement paiement = paiementRepository.findById(paiementId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        ErrorMessages.introuvable("Paiement", paiementId)));
+        Paiement paiement = verifierPaiement(paiementId);
         byte[] contenu = pdfGenerator.recuPaiement(paiement);
         DemandeService demande = paiement.getDemande();
-        return enregistrerFichier(demande,
+        return enregistrerFichier(demande, paiement,
                 "recu-paiement-" + paiement.getReferencePaiement() + ".pdf",
                 "Reçu de paiement généré automatiquement", contenu);
     }
@@ -190,13 +253,13 @@ public class DocumentGestionService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Aucun plan de paiement actif pour la demande " + demandeId));
         byte[] contenu = pdfGenerator.planPaiement(propos);
-        return enregistrerFichier(demande,
+        return enregistrerFichier(demande, null,
                 "plan-paiement-" + demande.getReferenceDemande() + ".pdf",
                 "Plan de paiement généré automatiquement", contenu);
     }
 
-    private DocumentResponse enregistrerFichier(DemandeService demande, String nomFichier,
-                                                String description, byte[] contenu) {
+    private DocumentResponse enregistrerFichier(DemandeService demande, Paiement paiement,
+                                                String nomFichier, String description, byte[] contenu) {
         String extension = extensionDe(nomFichier);
         String nomStockage = UUID.randomUUID() + "." + extension;
         Path dossier = Paths.get(storagePath);
@@ -206,6 +269,7 @@ public class DocumentGestionService {
             Files.write(cible, contenu);
             PieceJointe piece = PieceJointe.builder()
                     .demande(demande)
+                    .paiement(paiement)
                     .nomFichier(nomStockage)
                     .nomOriginal(nomFichier)
                     .cheminFichier(cible.toString())
@@ -214,7 +278,10 @@ public class DocumentGestionService {
                     .description(description)
                     .uploadedBy(currentUtilisateur())
                     .build();
-            return DocumentMapper.toResponse(pieceRepository.save(piece));
+            PieceJointe saved = pieceRepository.save(piece);
+            auditService.log(AuditActions.CREATE, "DOCUMENT", "PieceJointe",
+                    Long.valueOf(saved.getId()), null, "fichier=" + nomFichier);
+            return DocumentMapper.toResponse(saved);
         } catch (IOException e) {
             throw new BusinessException("Impossible d'enregistrer le document généré : " + e.getMessage());
         }
@@ -224,6 +291,12 @@ public class DocumentGestionService {
         return demandeRepository.findById(demandeId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Demande", demandeId)));
+    }
+
+    private Paiement verifierPaiement(Integer paiementId) {
+        return paiementRepository.findById(paiementId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Paiement", paiementId)));
     }
 
     private PieceJointe getPiece(Integer id) {

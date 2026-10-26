@@ -15,12 +15,15 @@ import com.cabex.backend.client.dto.SocieteDetailResponse;
 import com.cabex.backend.client.dto.SocieteResponse;
 import com.cabex.backend.client.dto.SyntheseClientFiche;
 import com.cabex.backend.client.dto.UpdateSocieteRequest;
+import com.cabex.backend.client.entity.ClientResponsable;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.client.mapper.ResponsableMapper;
 import com.cabex.backend.client.mapper.SocieteMapper;
 import com.cabex.backend.client.repository.ClientResponsableRepository;
 import com.cabex.backend.client.repository.SocieteRepository;
 import com.cabex.backend.commercial.entity.Commercial;
+import com.cabex.backend.configuration.service.ConfigurationKeys;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.HistoriqueDemande;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
@@ -35,6 +38,9 @@ import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.cabex.backend.paiement.repository.PaiementRepository;
+import com.cabex.backend.security.SecurityUtils;
+import com.cabex.backend.service.entity.DomaineService;
+import com.cabex.backend.service.repository.DomaineServiceRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -50,8 +56,6 @@ import java.util.Map;
 @Service
 public class SocieteService {
 
-    private static final int JOURS_ALERTE = 3;
-
     private final SocieteRepository societeRepository;
     private final ClientResponsableRepository responsableRepository;
     private final DemandeServiceRepository demandeRepository;
@@ -59,8 +63,10 @@ public class SocieteService {
     private final PaiementRepository paiementRepository;
     private final EcheancePaiementRepository echeanceRepository;
     private final PieceJointeRepository pieceJointeRepository;
+    private final DomaineServiceRepository domaineRepository;
     private final RisqueService risqueService;
     private final AuditService auditService;
+    private final ConfigurationService configurationService;
 
     public SocieteService(SocieteRepository societeRepository,
                           ClientResponsableRepository responsableRepository,
@@ -69,8 +75,10 @@ public class SocieteService {
                           PaiementRepository paiementRepository,
                           EcheancePaiementRepository echeanceRepository,
                           PieceJointeRepository pieceJointeRepository,
+                          DomaineServiceRepository domaineRepository,
                           RisqueService risqueService,
-                          AuditService auditService) {
+                          AuditService auditService,
+                          ConfigurationService configurationService) {
         this.societeRepository = societeRepository;
         this.responsableRepository = responsableRepository;
         this.demandeRepository = demandeRepository;
@@ -78,18 +86,36 @@ public class SocieteService {
         this.paiementRepository = paiementRepository;
         this.echeanceRepository = echeanceRepository;
         this.pieceJointeRepository = pieceJointeRepository;
+        this.domaineRepository = domaineRepository;
         this.risqueService = risqueService;
         this.auditService = auditService;
+        this.configurationService = configurationService;
+    }
+
+    private int joursAlerte() {
+        return Math.max(configurationService.lireEntier(
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE,
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE_DEFAUT), 1);
     }
 
     @Transactional(readOnly = true)
-    public Page<SocieteResponse> getAll(String recherche, Boolean actif, Pageable pageable) {
+    public Page<SocieteResponse> getAll(String recherche, Boolean actif, Integer domaineId,
+                                        Boolean archive, Pageable pageable) {
         Map<Integer, Integer> nbParSociete = new java.util.HashMap<>();
         for (Object[] o : societeRepository.compterDemandesParSociete()) {
             nbParSociete.put((Integer) o[0], ((Number) o[1]).intValue());
         }
-        return societeRepository.rechercher(recherche, actif, pageable)
-                .map(s -> SocieteMapper.toResponse(s, nbParSociete.getOrDefault(s.getId(), 0)));
+        Page<Societe> page = societeRepository.rechercher(recherche, actif, domaineId, archive, pageable);
+        Map<Integer, String> responsableParSociete = new java.util.HashMap<>();
+        if (!page.getContent().isEmpty()) {
+            List<Integer> ids = page.getContent().stream().map(Societe::getId).toList();
+            for (ClientResponsable r : responsableRepository.findBySocieteIdInOrderByIdAsc(ids)) {
+                responsableParSociete.putIfAbsent(r.getSociete().getId(), r.getNomClient());
+            }
+        }
+        return page.map(s -> SocieteMapper.toResponse(s,
+                nbParSociete.getOrDefault(s.getId(), 0),
+                responsableParSociete.get(s.getId())));
     }
 
     @Transactional(readOnly = true)
@@ -101,53 +127,59 @@ public class SocieteService {
                 .toList();
 
         List<DemandeService> demandes = demandeRepository
-                .rechercher(null, id, null, null, null, null, null, null, null, Pageable.unpaged()).getContent();
+                .rechercher(null, id, null, null, null, null, null, null, null, null, null,
+                        Pageable.unpaged()).getContent();
 
         List<DemandeFicheResponse> demandesFiche = demandes.stream()
                 .map(this::toDemandeFiche)
                 .toList();
 
         List<ServiceUtiliseResponse> services = demandes.stream()
-                .collect(java.util.stream.Collectors.groupingBy(d -> d.getService().getId()))
+                .flatMap(d -> d.getLignes() != null
+                        ? d.getLignes().stream()
+                        : java.util.stream.Stream.empty())
+                .filter(l -> l.getService() != null)
+                .collect(java.util.stream.Collectors.groupingBy(l -> l.getService().getId()))
                 .values().stream()
                 .map(list -> new ServiceUtiliseResponse(
                         list.get(0).getService().getId(),
                         list.get(0).getService().getNomService(),
-                        list.get(0).getService().getDomaine() != null
-                                ? list.get(0).getService().getDomaine().getId() : null,
-                        list.get(0).getService().getDomaine() != null
-                                ? list.get(0).getService().getDomaine().getNomDomaine() : null,
-                        list.get(0).getService().getTarifService(),
+                        societe.getDomaine() != null ? societe.getDomaine().getId() : null,
+                        societe.getDomaine() != null ? societe.getDomaine().getNomDomaine() : null,
                         list.size()))
                 .toList();
 
-        List<PaiementFicheResponse> paiements = paiementRepository.findBySocieteId(id).stream()
-                .map(p -> new PaiementFicheResponse(
-                        p.getId(),
-                        p.getReferencePaiement(),
-                        p.getDemande() != null ? p.getDemande().getReferenceDemande() : null,
-                        p.getDemande() != null ? p.getDemande().getId() : null,
-                        p.getModePaiement() != null ? p.getModePaiement().getLibelle() : null,
-                        p.getDatePaiement(),
-                        p.getMontantPaye(),
-                        p.getReferenceVirement()))
-                .toList();
+        boolean accueil = "ACCUEIL".equalsIgnoreCase(SecurityUtils.currentRoleName());
+
+        List<PaiementFicheResponse> paiements = accueil ? List.of()
+                : paiementRepository.findBySocieteId(id).stream()
+                        .map(p -> new PaiementFicheResponse(
+                                p.getId(),
+                                p.getReferencePaiement(),
+                                p.getDemande() != null ? p.getDemande().getReferenceDemande() : null,
+                                p.getDemande() != null ? p.getDemande().getId() : null,
+                                p.getModePaiement() != null ? p.getModePaiement().getLibelle() : null,
+                                p.getDatePaiement(),
+                                p.getMontantPaye(),
+                                p.getReferenceVirement()))
+                        .toList();
 
         LocalDate today = LocalDate.now();
-        List<EcheanceFicheResponse> echeances = echeanceRepository.findBySocieteId(id).stream()
-                .map(e -> new EcheanceFicheResponse(
-                        e.getId(),
-                        e.getProposPaiement() != null && e.getProposPaiement().getDemande() != null
-                                ? e.getProposPaiement().getDemande().getReferenceDemande() : null,
-                        e.getProposPaiement() != null && e.getProposPaiement().getDemande() != null
-                                ? e.getProposPaiement().getDemande().getId() : null,
-                        e.getNumeroEcheance(),
-                        e.getDateEcheance(),
-                        e.getMontantAttendu(),
-                        e.getMontantPaye(),
-                        e.getMontantAttendu().subtract(e.getMontantPaye()),
-                        EcheanceMapper.calculerStatutEcheance(e, today, JOURS_ALERTE)))
-                .toList();
+        List<EcheanceFicheResponse> echeances = accueil ? List.of()
+                : echeanceRepository.findBySocieteId(id).stream()
+                        .map(e -> new EcheanceFicheResponse(
+                                e.getId(),
+                                e.getProposPaiement() != null && e.getProposPaiement().getDemande() != null
+                                        ? e.getProposPaiement().getDemande().getReferenceDemande() : null,
+                                e.getProposPaiement() != null && e.getProposPaiement().getDemande() != null
+                                        ? e.getProposPaiement().getDemande().getId() : null,
+                                e.getNumeroEcheance(),
+                                e.getDateEcheance(),
+                                e.getMontantAttendu(),
+                                e.getMontantPaye(),
+                                e.getMontantAttendu().subtract(e.getMontantPaye()),
+                                EcheanceMapper.calculerStatutEcheance(e, today, joursAlerte())))
+                        .toList();
 
         List<CommercialFicheResponse> commerciaux = commerciauxDuClient(demandes);
 
@@ -156,7 +188,8 @@ public class SocieteService {
                 .map(this::toPieceJointeFiche)
                 .toList();
 
-        SyntheseClientFiche synthese = syntheseDuClient(demandes, paiements, echeances, id);
+        SyntheseClientFiche synthese = accueil ? null
+                : syntheseDuClient(demandes, paiements, echeances, id);
 
         return new SocieteDetailResponse(
                 SocieteMapper.toResponse(societe, demandes.size()),
@@ -200,7 +233,10 @@ public class SocieteService {
                                                  List<EcheanceFicheResponse> echeances,
                                                  Integer societeId) {
         BigDecimal montantTotal = demandes.stream()
-                .map(d -> d.getTarifServiceApplique() == null ? BigDecimal.ZERO : d.getTarifServiceApplique())
+                .flatMap(d -> d.getLignes() != null
+                        ? d.getLignes().stream()
+                        : java.util.stream.Stream.empty())
+                .map(l -> l.getTarif() == null ? BigDecimal.ZERO : l.getTarif())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal montantPaye = paiements.stream()
                 .map(PaiementFicheResponse::montantPaye)
@@ -232,6 +268,7 @@ public class SocieteService {
                 .dateCreation(request.dateCreation())
                 .nombrePersonnel(request.nombrePersonnel())
                 .chiffreAffaireMensuel(request.chiffreAffaireMensuel())
+                .domaine(getDomaine(request.domaineId()))
                 .actif(true)
                 .build();
         Societe saved = societeRepository.save(societe);
@@ -251,6 +288,7 @@ public class SocieteService {
         societe.setDateCreation(request.dateCreation());
         societe.setNombrePersonnel(request.nombrePersonnel());
         societe.setChiffreAffaireMensuel(request.chiffreAffaireMensuel());
+        societe.setDomaine(getDomaine(request.domaineId()));
         Societe saved = societeRepository.save(societe);
         auditService.log(AuditActions.UPDATE, "CLIENT", "Societe", saved.getId().longValue(), null, "nom=" + saved.getNomSociete());
         return SocieteMapper.toResponse(saved);
@@ -268,15 +306,26 @@ public class SocieteService {
 
     private DemandeFicheResponse toDemandeFiche(DemandeService d) {
         BigDecimal montantPaye = paiementRepository.sommePayeeParDemande(d.getId());
-        BigDecimal reste = d.getTarifServiceApplique().subtract(montantPaye);
+        java.util.List<com.cabex.backend.demande.entity.LigneService> lignes =
+                d.getLignes() != null ? new java.util.ArrayList<>(d.getLignes()) : java.util.List.of();
+        BigDecimal total = lignes.stream()
+                .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal reste = total.subtract(montantPaye != null ? montantPaye : BigDecimal.ZERO);
         String statut = deriverStatut(d.getId());
         return new DemandeFicheResponse(
                 d.getId(),
                 d.getReferenceDemande(),
                 d.getDateDemande(),
-                d.getDebutService(),
-                d.getFinService(),
-                d.getService() != null ? d.getService().getNomService() : null,
+                lignes.stream().map(com.cabex.backend.demande.entity.LigneService::getDebutService)
+                        .filter(java.util.Objects::nonNull)
+                        .min(java.time.LocalDate::compareTo).orElse(null),
+                lignes.stream().map(com.cabex.backend.demande.entity.LigneService::getFinService)
+                        .filter(java.util.Objects::nonNull)
+                        .max(java.time.LocalDate::compareTo).orElse(null),
+                lignes.stream().map(l -> l.getService() != null ? l.getService().getNomService() : null)
+                        .filter(java.util.Objects::nonNull).distinct()
+                        .collect(java.util.stream.Collectors.joining(", ")),
                 statut,
                 montantPaye,
                 reste,
@@ -291,6 +340,12 @@ public class SocieteService {
         }
         HistoriqueDemande dernier = historiques.get(historiques.size() - 1);
         return dernier.getStatut() != null ? dernier.getStatut().getStatut() : "EN_ATTENTE";
+    }
+
+    private DomaineService getDomaine(Integer id) {
+        return domaineRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Domaine", id)));
     }
 
     private Societe getEntity(Integer id) {

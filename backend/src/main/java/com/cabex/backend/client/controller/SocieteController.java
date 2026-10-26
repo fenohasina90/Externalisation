@@ -44,12 +44,14 @@ public class SocieteController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('CLIENT_VIEW')")
-    @Operation(summary = "Lister / rechercher / filtrer les sociétés", description = "Pagination, recherche par nom/activité/contact, filtre par actif")
+    @Operation(summary = "Lister / rechercher / filtrer les sociétés", description = "Pagination, recherche par nom/activité/contact, filtres par actif, archivage et domaine")
     public ResponseEntity<Page<SocieteResponse>> getAll(
             @RequestParam(value = "recherche", required = false) String recherche,
             @RequestParam(value = "actif", required = false) Boolean actif,
+            @RequestParam(value = "domaineId", required = false) Integer domaineId,
+            @RequestParam(value = "archive", required = false) Boolean archive,
             Pageable pageable) {
-        return ResponseEntity.ok(societeService.getAll(recherche, actif, pageable));
+        return ResponseEntity.ok(societeService.getAll(recherche, actif, domaineId, archive, pageable));
     }
 
     @GetMapping("/{id}")

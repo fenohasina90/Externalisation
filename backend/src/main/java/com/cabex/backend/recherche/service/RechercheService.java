@@ -12,6 +12,8 @@ import com.cabex.backend.recherche.dto.RechercheDemandeItem;
 import com.cabex.backend.recherche.dto.RechercheGlobaleResponse;
 import com.cabex.backend.recherche.dto.RecherchePaiementItem;
 import com.cabex.backend.recherche.dto.RechercheServiceItem;
+import com.cabex.backend.security.SecurityUtils;
+import com.cabex.backend.security.UserPrincipal;
 import com.cabex.backend.service.repository.ServiceRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -49,18 +51,27 @@ public class RechercheService {
             return new RechercheGlobaleResponse(List.of(), List.of(), List.of(), List.of());
         }
         String terme = q.trim();
-        List<RechercheClientItem> clients = societeRepository
-                .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
-                .stream().map(this::toClientItem).toList();
-        List<RechercheServiceItem> services = serviceRepository
-                .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
-                .stream().map(this::toServiceItem).toList();
-        List<RechercheDemandeItem> demandes = demandeRepository
-                .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
-                .stream().map(this::toDemandeItem).toList();
-        List<RecherchePaiementItem> paiements = paiementRepository
-                .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
-                .stream().map(this::toPaiementItem).toList();
+        UserPrincipal utilisateur = SecurityUtils.currentUser();
+        List<RechercheClientItem> clients = utilisateur.hasPermission("CLIENT_VIEW")
+                ? societeRepository
+                        .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
+                        .stream().map(this::toClientItem).toList()
+                : List.of();
+        List<RechercheServiceItem> services = utilisateur.hasPermission("SERVICE_VIEW")
+                ? serviceRepository
+                        .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
+                        .stream().map(this::toServiceItem).toList()
+                : List.of();
+        List<RechercheDemandeItem> demandes = utilisateur.hasPermission("DEMANDE_VIEW")
+                ? demandeRepository
+                        .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
+                        .stream().map(this::toDemandeItem).toList()
+                : List.of();
+        List<RecherchePaiementItem> paiements = utilisateur.hasPermission("PAIEMENT_VIEW")
+                ? paiementRepository
+                        .rechercherGlobale(terme, PageRequest.of(0, LIMIT_PER_CATEGORIE))
+                        .stream().map(this::toPaiementItem).toList()
+                : List.of();
         return new RechercheGlobaleResponse(clients, services, demandes, paiements);
     }
 
@@ -69,8 +80,7 @@ public class RechercheService {
     }
 
     private RechercheServiceItem toServiceItem(com.cabex.backend.service.entity.Service s) {
-        return new RechercheServiceItem(s.getId(), s.getNomService(),
-                s.getDomaine() != null ? s.getDomaine().getNomDomaine() : null, s.getTarifService());
+        return new RechercheServiceItem(s.getId(), s.getNomService(), s.getCodeService());
     }
 
     private RechercheDemandeItem toDemandeItem(DemandeService d) {
@@ -78,8 +88,14 @@ public class RechercheService {
                 .map(h -> h.getStatut().getStatut()).orElse(null);
         return new RechercheDemandeItem(d.getId(), d.getReferenceDemande(),
                 d.getSociete() != null ? d.getSociete().getNomSociete() : null,
-                d.getService() != null ? d.getService().getNomService() : null,
-                statut, d.getDateDemande(), d.getTarifServiceApplique());
+                d.getLignes() != null ? d.getLignes().stream()
+                        .map(l -> l.getService() != null ? l.getService().getNomService() : null)
+                        .filter(java.util.Objects::nonNull).distinct()
+                        .collect(java.util.stream.Collectors.joining(", ")) : null,
+                statut, d.getDateDemande(),
+                d.getLignes() != null ? d.getLignes().stream()
+                        .map(l -> l.getTarif() != null ? l.getTarif() : java.math.BigDecimal.ZERO)
+                        .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add) : null);
     }
 
     private RecherchePaiementItem toPaiementItem(Paiement p) {

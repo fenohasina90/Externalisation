@@ -42,10 +42,27 @@ public class PlanPaiementController {
     @PostMapping("/demandes/{id}/plan-paiement")
     @PreAuthorize("hasAuthority('DEMANDE_UPDATE')")
     @Operation(summary = "Créer un plan de paiement pour une demande",
-            description = "Génère les échéances ; demande doit être approuvée ou en cours")
+            description = "Demandes à ligne unique : crée le plan de la ligne. Demandes multi-services : utilisez POST /lignes/{ligneId}/plan-paiement")
     public ResponseEntity<PlanPaiementResponse> create(@PathVariable Integer id,
                                                        @Valid @RequestBody CreatePlanPaiementRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(planService.create(id, request));
+    }
+
+    @GetMapping("/lignes/{ligneId}/plan-paiement")
+    @PreAuthorize("hasAuthority('DEMANDE_VIEW')")
+    @Operation(summary = "Consulter le plan de paiement d'une ligne de service")
+    public ResponseEntity<PlanPaiementResponse> getByLigne(@PathVariable Integer ligneId) {
+        return ResponseEntity.ok(planService.getByLigne(ligneId));
+    }
+
+    @PostMapping("/lignes/{ligneId}/plan-paiement")
+    @PreAuthorize("hasAuthority('DEMANDE_UPDATE')")
+    @Operation(summary = "Créer le plan de paiement d'une ligne de service",
+            description = "Chaque échéance doit être comprise dans la période du service ; la ligne passe EN_ATTENTE")
+    public ResponseEntity<PlanPaiementResponse> createForLigne(@PathVariable Integer ligneId,
+                                                               @Valid @RequestBody CreatePlanPaiementRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(planService.createForLigne(ligneId, request));
     }
 
     @PutMapping("/plans-paiement/{id}")

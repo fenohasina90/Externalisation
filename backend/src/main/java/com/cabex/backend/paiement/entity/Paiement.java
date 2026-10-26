@@ -68,6 +68,7 @@ public class Paiement {
     private LocalDateTime updatedAt;
 
     @Column(name = "actif", nullable = false)
+    @Builder.Default
     private Boolean actif = true;
 
     @Column(name = "archived_at")

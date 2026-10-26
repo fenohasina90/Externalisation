@@ -30,6 +30,9 @@ public class Utilisateur {
     @Column(name = "prenom", nullable = false, length = 100)
     private String prenom;
 
+    @Column(name = "username", nullable = false, unique = true, length = 100)
+    private String username;
+
     @Column(name = "email", nullable = false, unique = true, length = 150)
     private String email;
 
@@ -43,6 +46,13 @@ public class Utilisateur {
     @Column(name = "actif", nullable = false)
     @Builder.Default
     private Boolean actif = true;
+
+    @Column(name = "doit_changer_mdp", nullable = false)
+    @Builder.Default
+    private Boolean doitChangerMdp = false;
+
+    @Column(name = "date_expiration_mdp_temporaire")
+    private LocalDateTime dateExpirationMdpTemporaire;
 
     @Column(name = "derniere_connexion")
     private LocalDateTime derniereConnexion;

@@ -1,10 +1,8 @@
 package com.cabex.backend.service.controller;
 
 import com.cabex.backend.service.dto.CreateServiceRequest;
-import com.cabex.backend.service.dto.HistoriqueTarifResponse;
 import com.cabex.backend.service.dto.ServiceResponse;
 import com.cabex.backend.service.dto.UpdateServiceRequest;
-import com.cabex.backend.service.dto.UpdateTarifRequest;
 import com.cabex.backend.service.service.ServiceGestionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -43,13 +41,13 @@ public class ServiceController {
     @GetMapping
     @PreAuthorize("hasAuthority('SERVICE_VIEW')")
     @Operation(summary = "Lister / rechercher / filtrer les services",
-            description = "Pagination, recherche par nom, filtre par domaine et par actif")
+            description = "Pagination, recherche par nom ou code, filtres par actif et par type de service")
     public ResponseEntity<Page<ServiceResponse>> getAll(
             @RequestParam(value = "recherche", required = false) String recherche,
-            @RequestParam(value = "domaineId", required = false) Integer domaineId,
             @RequestParam(value = "actif", required = false) Boolean actif,
+            @RequestParam(value = "typeService", required = false) String typeService,
             Pageable pageable) {
-        return ResponseEntity.ok(serviceService.getAll(recherche, domaineId, actif, pageable));
+        return ResponseEntity.ok(serviceService.getAll(recherche, actif, typeService, pageable));
     }
 
     @GetMapping("/{id}")
@@ -57,6 +55,13 @@ public class ServiceController {
     @Operation(summary = "Consulter un service")
     public ResponseEntity<ServiceResponse> getById(@PathVariable Integer id) {
         return ResponseEntity.ok(serviceService.getById(id));
+    }
+
+    @GetMapping("/code/{code}")
+    @PreAuthorize("hasAuthority('SERVICE_VIEW')")
+    @Operation(summary = "Consulter un service par son code (ex. SRV-0001)")
+    public ResponseEntity<ServiceResponse> getByCode(@PathVariable String code) {
+        return ResponseEntity.ok(serviceService.getByCode(code));
     }
 
     @PostMapping
@@ -81,20 +86,5 @@ public class ServiceController {
                                                    @RequestBody Map<String, Boolean> body) {
         boolean archive = Boolean.TRUE.equals(body.get("archive"));
         return ResponseEntity.ok(serviceService.archive(id, archive));
-    }
-
-    @GetMapping("/{id}/tarifs")
-    @PreAuthorize("hasAuthority('TARIF_VIEW')")
-    @Operation(summary = "Consulter l'historique des tarifs d'un service")
-    public ResponseEntity<List<HistoriqueTarifResponse>> getHistoriqueTarifs(@PathVariable Integer id) {
-        return ResponseEntity.ok(serviceService.getHistoriqueTarifs(id));
-    }
-
-    @PostMapping("/{id}/tarifs")
-    @PreAuthorize("hasAuthority('TARIF_UPDATE')")
-    @Operation(summary = "Modifier le tarif d'un service (génère une entrée d'historique)")
-    public ResponseEntity<HistoriqueTarifResponse> updateTarif(@PathVariable Integer id,
-                                                               @Valid @RequestBody UpdateTarifRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(serviceService.updateTarif(id, request));
     }
 }

@@ -1,5 +1,6 @@
 package com.cabex.backend.service.entity;
 
+import com.cabex.backend.client.entity.Societe;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -42,5 +43,5 @@ public class DomaineService {
 
     @OneToMany(mappedBy = "domaine", fetch = FetchType.LAZY)
     @Builder.Default
-    private Set<Service> services = new HashSet<>();
+    private Set<Societe> societes = new HashSet<>();
 }

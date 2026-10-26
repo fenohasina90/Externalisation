@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 public record ClientRevenuResponse(
         Integer clientId,
         String nomSociete,
-        long nombreDemandes,
+        Long nombreDemandes,
         BigDecimal montantTotal,
         BigDecimal montantPaye
 ) {

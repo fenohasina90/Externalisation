@@ -1,0 +1,52 @@
+package com.cabex.backend.dossier.dto;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+public record DossierTransactionImmobiliereResponse(
+        Integer id,
+        Integer demandeId,
+        String referenceDemande,
+        LocalDate dateDemande,
+        String nomCommercial,
+        String numeroIm,
+        String nomSociete,
+        String contactClient,
+        String emailClient,
+        String fbClient,
+        String adresseClient,
+        String nomProprietairePrecedent,
+        Boolean actionAchat,
+        Boolean actionVente,
+        Boolean actionLocation,
+        Boolean actionRegularisationPapiers,
+        Boolean actionGestionImmobiliere,
+        Boolean actionAutre,
+        String actionAutrePrecision,
+        String objet,
+        String objetAutrePrecision,
+        BigDecimal achatMesureM2,
+        String achatPosition,
+        String achatAxeEmplacement,
+        BigDecimal achatMontant,
+        Boolean achatPermisConstruire,
+        BigDecimal venteMesureM2,
+        String ventePosition,
+        String venteAxeEmplacement,
+        Boolean ventePrisePhoto,
+        Boolean venteVisite,
+        BigDecimal venteMontant,
+        Boolean ventePermisConstruire,
+        String regularisationTypeTerrain,
+        String regularisationSituationTerrain,
+        Boolean documentPvReconnaissance,
+        Boolean documentNumeroDemandeAcquisition,
+        Boolean documentActeVentePriveeCommunale,
+        Boolean documentSituationJuridique,
+        Boolean documentActeNotoriete,
+        String observations,
+        Integer nombreCommerciauxTerrain,
+        BigDecimal commissionCn,
+        Boolean prestationAbonnementMensuel
+) {
+}

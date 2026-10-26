@@ -26,6 +26,16 @@ public final class SecurityUtils {
         return "SUPER_ADMIN".equalsIgnoreCase(principal.getRoleName());
     }
 
+    public static boolean isAdmin() {
+        UserPrincipal principal = currentUser();
+        return "SUPER_ADMIN".equalsIgnoreCase(principal.getRoleName())
+                || "ADMIN".equalsIgnoreCase(principal.getRoleName());
+    }
+
+    public static String currentRoleName() {
+        return currentUser().getRoleName();
+    }
+
     public static void requirePermission(String codePermission) {
         UserPrincipal principal = currentUser();
         if (!principal.hasPermission(codePermission)) {

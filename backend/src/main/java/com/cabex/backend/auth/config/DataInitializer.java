@@ -36,6 +36,7 @@ public class DataInitializer {
                 Utilisateur admin = Utilisateur.builder()
                         .nom("Administrateur")
                         .prenom("Système")
+                        .username("admin")
                         .email("admin@cabex.mg")
                         .mdpHash(passwordEncoder.encode(defaultPassword))
                         .role(superAdminRole)
@@ -45,7 +46,7 @@ public class DataInitializer {
                         .build();
 
                 utilisateurRepository.save(admin);
-                log.info("Compte administrateur par défaut créé : admin@cabex.mg / {}", defaultPassword);
+                log.info("Compte administrateur par défaut créé : admin / {}", defaultPassword);
             }
         };
     }

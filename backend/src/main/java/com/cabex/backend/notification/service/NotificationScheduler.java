@@ -1,54 +1,61 @@
 package com.cabex.backend.notification.service;
 
-import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.configuration.service.ConfigurationKeys;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
- * Génère quotidiennement des alertes de notifications pour les échéances
- * proches (sous 3 jours) et les échéances en retard.
+ * Génère régulièrement des alertes de notifications pour les échéances
+ * proches (seuil lu depuis la configuration JOURS_AVANCE_ALERTE_ECHEANCE,
+ * 3 jours par défaut) et les échéances en retard.
+ *
+ * <p>La vérification est exécutée après le démarrage puis toutes les heures :
+ * elle ne dépend donc pas du fait que l'application soit allumée à une heure
+ * précise. Les notifications sont dédupliquées par utilisateur, type et
+ * échéance.</p>
  */
 @Component
 public class NotificationScheduler {
 
-    private static final int JOURS_ALERTE = 3;
-
     private final EcheancePaiementRepository echeanceRepository;
     private final NotificationService notificationService;
+    private final ConfigurationService configurationService;
 
     public NotificationScheduler(EcheancePaiementRepository echeanceRepository,
-                                 NotificationService notificationService) {
+                                 NotificationService notificationService,
+                                 ConfigurationService configurationService) {
         this.echeanceRepository = echeanceRepository;
         this.notificationService = notificationService;
+        this.configurationService = configurationService;
     }
 
-    @Scheduled(cron = "0 0 7 * * *")
+    @Scheduled(
+            initialDelayString = "${app.notification.echeance-initial-delay-ms:30000}",
+            fixedDelayString = "${app.notification.echeance-check-delay-ms:3600000}")
+    @Transactional
     public void verifierEcheances() {
         LocalDate aujourdHui = LocalDate.now();
 
         for (EcheancePaiement echeance : echeanceRepository.findEnRetard(aujourdHui)) {
-            DemandeService demande = echeance.getProposPaiement().getDemande();
-            if (demande != null) {
-                notificationService.notifierEcheanceEnRetard(demande);
-            }
+            notificationService.notifierEcheanceEnRetard(echeance);
         }
 
-        List<EcheancePaiement> aVenir = echeanceRepository.findAVenir(aujourdHui);
-        LocalDate limite = aujourdHui.plusDays(JOURS_ALERTE);
+        int joursAlerte = Math.max(configurationService.lireEntier(
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE,
+                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE_DEFAUT), 1);
+        LocalDate limite = aujourdHui.plusDays(joursAlerte);
+        List<EcheancePaiement> aVenir = echeanceRepository.findAVenir(aujourdHui, limite);
         for (EcheancePaiement echeance : aVenir) {
-            if (!echeance.getDateEcheance().isAfter(limite)) {
-                DemandeService demande = echeance.getProposPaiement().getDemande();
-                if (demande != null) {
-                    int jours = (int) ChronoUnit.DAYS.between(aujourdHui, echeance.getDateEcheance());
-                    notificationService.notifierEcheanceProche(demande, Math.max(jours, 1));
-                }
-            }
+            int jours = (int) ChronoUnit.DAYS.between(aujourdHui, echeance.getDateEcheance());
+            notificationService.notifierEcheanceProche(echeance, jours);
         }
     }
 }

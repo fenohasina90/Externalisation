@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 public class UserPrincipal implements UserDetails {
 
     private final Integer id;
+    private final String username;
     private final String email;
     private final String password;
     private final boolean active;
@@ -22,9 +23,10 @@ public class UserPrincipal implements UserDetails {
     private final String roleName;
     private final Set<String> authorities;
 
-    public UserPrincipal(Integer id, String email, String password, boolean active,
+    public UserPrincipal(Integer id, String username, String email, String password, boolean active,
                          Integer roleId, String roleName, Set<String> authorities) {
         this.id = id;
+        this.username = username;
         this.email = email;
         this.password = password;
         this.active = active;
@@ -43,6 +45,7 @@ public class UserPrincipal implements UserDetails {
 
         return new UserPrincipal(
                 utilisateur.getId(),
+                utilisateur.getUsername(),
                 utilisateur.getEmail(),
                 utilisateur.getMdpHash(),
                 Boolean.TRUE.equals(utilisateur.getActif()),
@@ -61,7 +64,7 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public String getUsername() {
-        return email;
+        return username;
     }
 
     @Override

@@ -53,13 +53,14 @@ public class DemandeController {
             @RequestParam(required = false) Integer serviceId,
             @RequestParam(required = false) Integer domaineId,
             @RequestParam(required = false) Integer commercialId,
-            @RequestParam(required = false) String statut,
+@RequestParam(required = false) String statut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(required = false) Boolean actif,
+            @RequestParam(required = false) String situation,
             Pageable pageable) {
-        return ResponseEntity.ok(demandeService.getAll(recherche, societeId, serviceId,
-                domaineId, commercialId, statut, dateDebut, dateFin, actif, pageable));
+        return ResponseEntity.ok(demandeService.getAll(recherche, societeId, serviceId, domaineId,
+                commercialId, statut, dateDebut, dateFin, actif, situation, pageable));
     }
 
     @GetMapping("/{id}")
@@ -68,6 +69,13 @@ public class DemandeController {
             description = "Informations client, service, dates, tarif, statut, montant payé / restant")
     public ResponseEntity<DemandeResponse> getById(@PathVariable Integer id) {
         return ResponseEntity.ok(demandeService.getById(id));
+    }
+
+    @GetMapping("/reference/{reference}")
+    @PreAuthorize("hasAuthority('DEMANDE_VIEW')")
+    @Operation(summary = "Consulter le détail d'une demande par sa référence (ex. DEM-2026-00017)")
+    public ResponseEntity<DemandeResponse> getByReference(@PathVariable String reference) {
+        return ResponseEntity.ok(demandeService.getByReference(reference));
     }
 
     @GetMapping("/{id}/historique")
@@ -88,7 +96,7 @@ public class DemandeController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('DEMANDE_UPDATE')")
-    @Operation(summary = "Modifier une demande", description = "Autorisé tant que la demande n'est pas TERMINEE ou ANNULEE")
+    @Operation(summary = "Modifier une demande", description = "Autorisé tant que la demande est EN_ATTENTE (commercial et commentaire ; les services se modifient via les lignes)")
     public ResponseEntity<DemandeResponse> update(@PathVariable Integer id,
                                                   @Valid @RequestBody UpdateDemandeRequest request) {
         return ResponseEntity.ok(demandeService.update(id, request));
@@ -97,7 +105,7 @@ public class DemandeController {
     @PatchMapping("/{id}/statut")
     @PreAuthorize("hasAuthority('DEMANDE_STATUS_UPDATE')")
     @Operation(summary = "Changer le statut d'une demande",
-            description = "Cycle EN_ATTENTE → APPROUVEE → EN_COURS → TERMINEE, ou → ANNULEE ; chaque changement est historié")
+            description = "EN_ATTENTE → VALIDATION (contrôlée : factures validées + plans établis) → EN_COURS ; EN_COURS → TERMINEE (manuelle ou automatique) ; ANNULEE depuis EN_ATTENTE uniquement ; chaque changement est historié")
     public ResponseEntity<DemandeResponse> changeStatut(@PathVariable Integer id,
                                                         @Valid @RequestBody ChangeStatutRequest request) {
         return ResponseEntity.ok(demandeService.changeStatut(id, request));

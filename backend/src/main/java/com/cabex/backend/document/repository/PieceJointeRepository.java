@@ -11,6 +11,8 @@ public interface PieceJointeRepository extends JpaRepository<PieceJointe, Intege
 
     List<PieceJointe> findByDemandeIdOrderByCreatedAtDesc(Integer demandeId);
 
+    List<PieceJointe> findByPaiementIdOrderByCreatedAtDesc(Integer paiementId);
+
     @Query("""
         SELECT p FROM PieceJointe p
         WHERE p.demande.societe.id = :societeId

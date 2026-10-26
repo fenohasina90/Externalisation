@@ -3,9 +3,11 @@ package com.cabex.backend.rapport.service;
 import com.cabex.backend.client.repository.SocieteRepository;
 import com.cabex.backend.demande.dto.DemandeResponse;
 import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.mapper.DemandeMapper;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
+import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.cabex.backend.paiement.repository.PaiementRepository;
@@ -38,19 +40,22 @@ public class RapportService {
     private final EcheancePaiementRepository echeanceRepository;
     private final SocieteRepository societeRepository;
     private final ServiceRepository serviceRepository;
+    private final LigneServiceService ligneService;
 
     public RapportService(DemandeServiceRepository demandeRepository,
                           HistoriqueDemandeRepository historiqueRepository,
                           PaiementRepository paiementRepository,
                           EcheancePaiementRepository echeanceRepository,
                           SocieteRepository societeRepository,
-                          ServiceRepository serviceRepository) {
+                          ServiceRepository serviceRepository,
+                          LigneServiceService ligneService) {
         this.demandeRepository = demandeRepository;
         this.historiqueRepository = historiqueRepository;
         this.paiementRepository = paiementRepository;
         this.echeanceRepository = echeanceRepository;
         this.societeRepository = societeRepository;
         this.serviceRepository = serviceRepository;
+        this.ligneService = ligneService;
     }
 
     @Transactional(readOnly = true)
@@ -90,33 +95,50 @@ public class RapportService {
     public List<RapportClientLigne> clients(RapportFilter f) {
         Map<Integer, List<DemandeService>> parClient = new LinkedHashMap<>();
         for (DemandeService d : demandesFiltrees(f)) {
-            parClient.computeIfAbsent(d.getSociete().getId(), k -> new ArrayList<>()).add(d);
+            // Demandes de création d'entreprise : pas encore de société liée.
+            Integer cle = d.getSociete() != null ? d.getSociete().getId() : null;
+            parClient.computeIfAbsent(cle, k -> new ArrayList<>()).add(d);
         }
         return parClient.entrySet().stream().map(e -> {
             Integer clientId = e.getKey();
             List<DemandeService> list = e.getValue();
             BigDecimal total = sommeTarif(list);
-            BigDecimal paye = fin(f, clientId);
+            BigDecimal paye = clientId == null
+                    ? list.stream()
+                            .map(d -> toBigDecimal(paiementRepository.sommePayeeParDemande(d.getId())))
+                            .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    : fin(f, clientId);
+            String nom = clientId == null
+                    ? "Création d'entreprise (sans société)"
+                    : list.get(0).getSociete().getNomSociete();
             return new RapportClientLigne(clientId,
-                    list.get(0).getSociete().getNomSociete(),
+                    nom,
                     list.size(), total, paye, total.subtract(paye).max(BigDecimal.ZERO));
         }).sorted(Comparator.comparingLong(RapportClientLigne::nombreDemandes).reversed()).toList();
     }
 
     @Transactional(readOnly = true)
     public List<RapportServiceLigne> services(RapportFilter f) {
-        Map<Integer, List<DemandeService>> parService = new LinkedHashMap<>();
+        Map<Integer, List<LigneService>> parService = new LinkedHashMap<>();
         for (DemandeService d : demandesFiltrees(f)) {
-            parService.computeIfAbsent(d.getService().getId(), k -> new ArrayList<>()).add(d);
+            if (d.getLignes() == null) {
+                continue;
+            }
+            for (LigneService l : d.getLignes()) {
+                if (l.getService() == null) {
+                    continue;
+                }
+                parService.computeIfAbsent(l.getService().getId(), k -> new ArrayList<>()).add(l);
+            }
         }
         return parService.entrySet().stream().map(e -> {
             Integer serviceId = e.getKey();
-            List<DemandeService> list = e.getValue();
+            List<LigneService> list = e.getValue();
             return new RapportServiceLigne(serviceId,
                     list.get(0).getService().getNomService(),
-                    list.get(0).getService().getDomaine() != null
-                            ? list.get(0).getService().getDomaine().getNomDomaine() : null,
-                    list.size(), sommeTarif(list));
+                    null,
+                    (int) list.stream().map(l -> l.getDemande().getId()).distinct().count(),
+                    sommeTarifLignes(list));
         }).sorted(Comparator.comparing(RapportServiceLigne::revenu).reversed()).toList();
     }
 
@@ -136,7 +158,7 @@ public class RapportService {
 
     public RapportData table(String type, RapportFilter f) {
         return switch (type) {
-            case "general" -> tableGeneral();
+            case "general" -> tableGeneral(f);
             case "financier" -> tableFinancier(f);
             case "clients" -> tableClients(f);
             case "services" -> tableServices(f);
@@ -146,20 +168,19 @@ public class RapportService {
         };
     }
 
-    private RapportData tableGeneral() {
+    private RapportData tableGeneral(RapportFilter f) {
+        RapportGeneralResponse r = general(f);
         return new RapportData("Rapport général", List.of("Indicateur", "Valeur"),
                 List.of(
-                        List.of("Nombre de clients", societeRepository.countByActifTrue()),
-                        List.of("Nombre de demandes actives", demandeRepository.countByActifTrue()),
-                        List.of("Nombre de services actifs", serviceRepository.countByActifTrue()),
-                        List.of("Montant total prévu", format(paiementRepository.sommeTotalePayee() == null ? BigDecimal.ZERO : demandeMontantTotal())),
-                        List.of("Montant encaissé", format(paiementRepository.sommeTotalePayee())),
-                        List.of("Échéances en retard", echeanceRepository.countEnRetard(LocalDate.now()))
+                        List.of("Nombre de clients", r.nombreClients()),
+                        List.of("Nombre de demandes actives", r.nombreDemandes()),
+                        List.of("Nombre de services actifs", r.nombreServices()),
+                        List.of("Montant total prévu", format(r.montantTotalPrevu())),
+                        List.of("Montant encaissé", format(r.montantEncaisse())),
+                        List.of("Reste à payer", format(r.resteAPayer())),
+                        List.of("Montant en retard", format(r.montantEnRetard())),
+                        List.of("Échéances en retard", r.echeancesEnRetard())
                 ));
-    }
-
-    private BigDecimal demandeMontantTotal() {
-        return demandeRepository.sommeTarifTotal(null, null, null, null, null, null);
     }
 
     private RapportData tableFinancier(RapportFilter f) {
@@ -213,7 +234,7 @@ public class RapportService {
             row.add(d.nomService());
             row.add(d.statutActuel());
             row.add(d.dateDemande());
-            row.add(format(d.tarifServiceApplique()));
+            row.add(format(d.tarif()));
             row.add(format(d.montantPaye()));
             row.add(format(d.resteAPayer()));
             lignes.add(row);
@@ -240,7 +261,8 @@ public class RapportService {
 
     private List<DemandeService> demandesFiltrees(RapportFilter f) {
         return demandeRepository.rechercher(null, f.clientId(), f.serviceId(), f.domaineId(),
-                        f.commercialId(), f.statut(), f.dateDebut(), f.dateFin(), null, Pageable.unpaged())
+                        f.commercialId(), f.statut(), f.dateDebut(), f.dateFin(), null, null, null,
+                Pageable.unpaged())
                 .getContent();
     }
 
@@ -253,7 +275,18 @@ public class RapportService {
     }
 
     private BigDecimal sommeTarif(List<DemandeService> list) {
-        return list.stream().map(DemandeService::getTarifServiceApplique).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return list.stream()
+                .flatMap(d -> d.getLignes() != null
+                        ? d.getLignes().stream()
+                        : java.util.stream.Stream.empty())
+                .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal sommeTarifLignes(List<LigneService> list) {
+        return list.stream()
+                .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private DemandeResponse toDemandeResponse(DemandeService d) {
@@ -261,8 +294,10 @@ public class RapportService {
                 .map(h -> h.getStatut().getStatut()).orElse(null);
         BigDecimal paye = paiementRepository.sommePayeeParDemande(d.getId());
         if (paye == null) paye = BigDecimal.ZERO;
-        BigDecimal reste = d.getTarifServiceApplique().subtract(paye).max(BigDecimal.ZERO);
-        return DemandeMapper.toResponse(d, statut, paye, reste);
+        BigDecimal total = sommeTarif(java.util.List.of(d));
+        BigDecimal reste = total.subtract(paye).max(BigDecimal.ZERO);
+        return DemandeMapper.toResponse(d, statut, paye, reste,
+                ligneService.listerParDemande(d.getId()), total);
     }
 
     private RapportPaiementLigne toPaiementLigne(Paiement p) {

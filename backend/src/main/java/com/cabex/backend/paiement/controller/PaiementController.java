@@ -2,6 +2,7 @@ package com.cabex.backend.paiement.controller;
 
 import com.cabex.backend.paiement.dto.CreatePaiementRequest;
 import com.cabex.backend.paiement.dto.ModePaiementResponse;
+import com.cabex.backend.paiement.dto.PaiementDetailResponse;
 import com.cabex.backend.paiement.dto.PaiementResponse;
 import com.cabex.backend.paiement.dto.UpdatePaiementRequest;
 import com.cabex.backend.paiement.service.PaiementGestionService;
@@ -69,6 +70,14 @@ public class PaiementController {
             description = "Référence, demande, échéance, mode, montant, virement, utilisateur enregistreur")
     public ResponseEntity<PaiementResponse> getById(@PathVariable Integer id) {
         return ResponseEntity.ok(paiementService.getById(id));
+    }
+
+    @GetMapping("/reference/{reference}")
+    @PreAuthorize("hasAuthority('PAIEMENT_VIEW')")
+    @Operation(summary = "Consulter le détail d'un paiement par sa référence (ex. PAY-2026-00020)",
+            description = "Reprend les informations du reçu : service et échéance, montants attendu/payé/reste, montant en lettres")
+    public ResponseEntity<PaiementDetailResponse> getByReference(@PathVariable String reference) {
+        return ResponseEntity.ok(paiementService.getByReference(reference));
     }
 
     @PostMapping

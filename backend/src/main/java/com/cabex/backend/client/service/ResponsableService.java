@@ -8,6 +8,8 @@ import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.client.mapper.ResponsableMapper;
 import com.cabex.backend.client.repository.ClientResponsableRepository;
 import com.cabex.backend.client.repository.SocieteRepository;
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
@@ -22,11 +24,14 @@ public class ResponsableService {
 
     private final ClientResponsableRepository responsableRepository;
     private final SocieteRepository societeRepository;
+    private final AuditService auditService;
 
     public ResponsableService(ClientResponsableRepository responsableRepository,
-                              SocieteRepository societeRepository) {
+                              SocieteRepository societeRepository,
+                              AuditService auditService) {
         this.responsableRepository = responsableRepository;
         this.societeRepository = societeRepository;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -50,9 +55,12 @@ public class ResponsableService {
 
     @Transactional
     public ResponsableResponse create(CreateResponsableRequest request) {
-        Societe societe = societeRepository.findById(request.societeId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        ErrorMessages.introuvable("Société", request.societeId())));
+        Societe societe = null;
+        if (request.societeId() != null) {
+            societe = societeRepository.findById(request.societeId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            ErrorMessages.introuvable("Société", request.societeId())));
+        }
         ClientResponsable responsable = ClientResponsable.builder()
                 .societe(societe)
                 .nomClient(request.nomClient().trim())
@@ -61,7 +69,10 @@ public class ResponsableService {
                 .fonction(request.fonction())
                 .actif(true)
                 .build();
-        return ResponsableMapper.toResponse(responsableRepository.save(responsable));
+        ClientResponsable saved = responsableRepository.save(responsable);
+        auditService.log(AuditActions.CREATE, "CLIENT", "ClientResponsable",
+                Long.valueOf(saved.getId()), null, "nom=" + saved.getNomClient());
+        return ResponsableMapper.toResponse(saved);
     }
 
     @Transactional
@@ -71,21 +82,31 @@ public class ResponsableService {
         responsable.setContact(request.contact());
         responsable.setEmail(request.email());
         responsable.setFonction(request.fonction());
-        return ResponsableMapper.toResponse(responsableRepository.save(responsable));
+        ClientResponsable saved = responsableRepository.save(responsable);
+        auditService.log(AuditActions.UPDATE, "CLIENT", "ClientResponsable",
+                Long.valueOf(saved.getId()), null, "nom=" + saved.getNomClient());
+        return ResponsableMapper.toResponse(saved);
     }
 
     @Transactional
     public ResponsableResponse toggleActivation(Integer id, boolean actif) {
         ClientResponsable responsable = getEntity(id);
+        boolean previousActif = responsable.getActif();
         responsable.setActif(actif);
-        return ResponsableMapper.toResponse(responsableRepository.save(responsable));
+        ClientResponsable saved = responsableRepository.save(responsable);
+        auditService.log(AuditActions.UPDATE, "CLIENT", "ClientResponsable",
+                Long.valueOf(saved.getId()), "actif=" + previousActif, "actif=" + actif);
+        return ResponsableMapper.toResponse(saved);
     }
 
     @Transactional
     public void delete(Integer id) {
         ClientResponsable responsable = getEntity(id);
+        String nom = responsable.getNomClient();
         responsable.setActif(false);
         responsableRepository.save(responsable);
+        auditService.log(AuditActions.DELETE, "CLIENT", "ClientResponsable",
+                Long.valueOf(responsable.getId()), "nom=" + nom, null);
     }
 
     private ClientResponsable getEntity(Integer id) {

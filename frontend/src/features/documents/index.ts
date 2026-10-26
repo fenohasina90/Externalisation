@@ -1,0 +1,5 @@
+export { DocumentsPage } from './screens/DocumentsPage'
+export { PiecesJointes } from './components/PiecesJointes'
+export { SelectionFichiers } from './components/SelectionFichiers'
+export { documentsApi } from './services/documents.service'
+export type { CiblePieceJointe, PieceJointe } from './types'

@@ -40,10 +40,13 @@ public class UtilisateurController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('USER_VIEW')")
-    @Operation(summary = "Lister les utilisateurs", description = "Liste paginée des utilisateurs, filtrable par recherche")
+    @Operation(summary = "Lister les utilisateurs", description = "Liste paginée, filtrable par recherche, rôle et statut")
     public ResponseEntity<Page<UtilisateurResponse>> getAll(
-            @RequestParam(value = "search", required = false) String search, Pageable pageable) {
-        return ResponseEntity.ok(utilisateurService.getAll(search, pageable));
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "roleId", required = false) Integer roleId,
+            @RequestParam(value = "actif", required = false) Boolean actif,
+            Pageable pageable) {
+        return ResponseEntity.ok(utilisateurService.getAll(search, roleId, actif, pageable));
     }
 
     @GetMapping("/{id}")

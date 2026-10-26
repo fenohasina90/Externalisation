@@ -39,16 +39,17 @@ public class DocumentController {
     }
 
     @GetMapping("/demandes/{id}/documents")
-    @PreAuthorize("hasAuthority('DOCUMENT_VIEW')")
+    @PreAuthorize("hasAuthority('DOCUMENT_DEMANDE_VIEW')")
     @Operation(summary = "Lister les documents d'une demande")
     public ResponseEntity<List<DocumentResponse>> listByDemande(@PathVariable Integer id) {
         return ResponseEntity.ok(documentService.listByDemande(id));
     }
 
     @PostMapping(value = "/demandes/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAuthority('DOCUMENT_UPLOAD')")
+    @PreAuthorize("hasAuthority('DOCUMENT_DEMANDE_UPLOAD')")
     @Operation(summary = "Uploader un document pour une demande",
-            description = "Types acceptés : pdf, images, doc(x), xls(x), txt. Taille max : 10 Mo.")
+            description = "Tous types de fichiers acceptés (pdf, images, doc(x), xls(x), "
+                    + "txt, archives…). Taille max : 10 Mo par défaut.")
     public ResponseEntity<DocumentResponse> upload(@PathVariable Integer id,
                                                    @RequestPart("fichier") MultipartFile fichier,
                                                    @RequestParam(required = false) String description) {
@@ -56,8 +57,26 @@ public class DocumentController {
                 .body(documentService.upload(id, fichier, description));
     }
 
+    @GetMapping("/paiements/{id}/documents")
+    @PreAuthorize("hasAuthority('DOCUMENT_PAIEMENT_VIEW')")
+    @Operation(summary = "Lister les documents d'un paiement")
+    public ResponseEntity<List<DocumentResponse>> listByPaiement(@PathVariable Integer id) {
+        return ResponseEntity.ok(documentService.listByPaiement(id));
+    }
+
+    @PostMapping(value = "/paiements/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('PAIEMENT_CREATE')")
+    @Operation(summary = "Uploader une pièce jointe pour un paiement",
+            description = "Justificatif de règlement ; tous types de fichiers acceptés.")
+    public ResponseEntity<DocumentResponse> uploadPaiement(@PathVariable Integer id,
+                                                           @RequestPart("fichier") MultipartFile fichier,
+                                                           @RequestParam(required = false) String description) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(documentService.uploadPaiement(id, fichier, description));
+    }
+
     @GetMapping("/documents/{id}/download")
-    @PreAuthorize("hasAuthority('DOCUMENT_VIEW')")
+    @PreAuthorize("hasAnyAuthority('DOCUMENT_DEMANDE_VIEW', 'DOCUMENT_PAIEMENT_VIEW')")
     @Operation(summary = "Télécharger un document")
     public ResponseEntity<byte[]> download(@PathVariable Integer id) {
         FichierDocument f = documentService.telecharger(id);
@@ -70,7 +89,7 @@ public class DocumentController {
     }
 
     @DeleteMapping("/documents/{id}")
-    @PreAuthorize("hasAuthority('DOCUMENT_DELETE')")
+    @PreAuthorize("hasAuthority('DOCUMENT_DEMANDE_DELETE')")
     @Operation(summary = "Supprimer un document (réservé SUPER_ADMIN)",
             description = "Supprime le fichier disque et l'enregistrement")
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
@@ -79,7 +98,7 @@ public class DocumentController {
     }
 
     @GetMapping("/demandes/{id}/documents/recapitulatif")
-    @PreAuthorize("hasAuthority('DOCUMENT_VIEW')")
+    @PreAuthorize("hasAuthority('DOCUMENT_DEMANDE_VIEW')")
     @Operation(summary = "Générer le récapitulatif de demande (PDF)",
             description = "Par défaut envoie le PDF en téléchargement. Avec sauvegarder=true, l'enregistre comme document.")
     public ResponseEntity<?> recapitulatif(@PathVariable Integer id,
@@ -91,8 +110,8 @@ public class DocumentController {
     }
 
     @GetMapping("/paiements/{id}/document/recepisse")
-    @PreAuthorize("hasAuthority('DOCUMENT_VIEW')")
-    @Operation(summary = "Générer le reçu de paiement (PDF)",
+    @PreAuthorize("hasAuthority('DOCUMENT_PAIEMENT_VIEW')")
+    @Operation(summary = "Générer le reçu de paiement (PDF) — SUPER_ADMIN + ECONOMAT",
             description = "Par défaut envoie le PDF en téléchargement. Avec sauvegarder=true, l'enregistre comme document.")
     public ResponseEntity<?> recuPaiement(@PathVariable Integer id,
                                           @RequestParam(defaultValue = "false") boolean sauvegarder) {
@@ -103,7 +122,7 @@ public class DocumentController {
     }
 
     @GetMapping("/demandes/{id}/plan-paiement/document")
-    @PreAuthorize("hasAuthority('DOCUMENT_VIEW')")
+    @PreAuthorize("hasAuthority('DOCUMENT_DEMANDE_VIEW')")
     @Operation(summary = "Générer le plan de paiement (PDF)",
             description = "Par défaut envoie le PDF en téléchargement. Avec sauvegarder=true, l'enregistre comme document.")
     public ResponseEntity<?> planPaiement(@PathVariable Integer id,
@@ -112,6 +131,13 @@ public class DocumentController {
             return ResponseEntity.ok(Map.of("document", documentService.sauvegarderPlan(id)));
         }
         return pdfResponse(documentService.planPaiement(id), "plan-paiement-demande-" + id + ".pdf");
+    }
+
+    @GetMapping("/factures/{id}/document/proforma")
+    @PreAuthorize("hasAuthority('FACTURE_VIEW')")
+    @Operation(summary = "Générer la facture proforma (PDF)")
+    public ResponseEntity<byte[]> factureProforma(@PathVariable Integer id) {
+        return pdfResponse(documentService.factureProforma(id), "facture-proforma-" + id + ".pdf");
     }
 
     private ResponseEntity<byte[]> pdfResponse(byte[] contenu, String nomFichier) {

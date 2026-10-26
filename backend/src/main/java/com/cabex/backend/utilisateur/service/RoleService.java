@@ -4,6 +4,8 @@ import com.cabex.backend.exception.BadRequestException;
 import com.cabex.backend.exception.DuplicateResourceException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
+import com.cabex.backend.audit.action.AuditActions;
+import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.utilisateur.dto.CreateRoleRequest;
 import com.cabex.backend.utilisateur.dto.RoleDetailResponse;
 import com.cabex.backend.utilisateur.dto.RoleResponse;
@@ -26,11 +28,14 @@ public class RoleService {
 
     private final RoleUtilisateurRepository roleRepository;
     private final PermissionRepository permissionRepository;
+    private final AuditService auditService;
 
     public RoleService(RoleUtilisateurRepository roleRepository,
-                       PermissionRepository permissionRepository) {
+                       PermissionRepository permissionRepository,
+                       AuditService auditService) {
         this.roleRepository = roleRepository;
         this.permissionRepository = permissionRepository;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -63,7 +68,10 @@ public class RoleService {
         role.setUpdatedAt(LocalDateTime.now());
         role.setPermissions(resolvePermissions(request.permissionIds()));
 
-        return UtilisateurMapper.toRoleDetailResponse(roleRepository.save(role));
+        RoleUtilisateur saved = roleRepository.save(role);
+        auditService.log(AuditActions.CREATE, "UTILISATEUR", "Role",
+                Long.valueOf(saved.getId()), null, "role=" + saved.getNomRole());
+        return UtilisateurMapper.toRoleDetailResponse(saved);
     }
 
     @Transactional
@@ -79,7 +87,10 @@ public class RoleService {
             role.setPermissions(resolvePermissions(request.permissionIds()));
         }
         role.setUpdatedAt(LocalDateTime.now());
-        return UtilisateurMapper.toRoleDetailResponse(roleRepository.save(role));
+        RoleUtilisateur saved = roleRepository.save(role);
+        auditService.log(AuditActions.UPDATE, "UTILISATEUR", "Role",
+                Long.valueOf(saved.getId()), null, "role=" + saved.getNomRole());
+        return UtilisateurMapper.toRoleDetailResponse(saved);
     }
 
     private RoleUtilisateur getEntity(Integer id) {

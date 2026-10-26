@@ -26,8 +26,8 @@ public interface DomaineServiceRepository extends JpaRepository<DomaineService, 
                                     Pageable pageable);
 
     @Query("""
-        SELECT s.domaine.id, COUNT(s) FROM Service s
+        SELECT s.domaine.id, COUNT(s) FROM Societe s
         GROUP BY s.domaine.id
         """)
-    List<Object[]> compterServicesParDomaine();
+    List<Object[]> compterSocietesParDomaine();
 }

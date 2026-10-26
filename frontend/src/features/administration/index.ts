@@ -1,0 +1,8 @@
+export { AdministrationPage } from './screens/AdministrationPage'
+export { UtilisateursPage } from './screens/UtilisateursPage'
+export { RolesPermissionsPage } from './screens/RolesPermissionsPage'
+export { AuditPage } from './screens/AuditPage'
+export { ReinitialisationsPage } from './screens/ReinitialisationsPage'
+export { ConfigurationPage } from './screens/ConfigurationPage'
+export { StatutsPage } from './screens/StatutsPage'
+export { ModesPaiementPage } from './screens/ModesPaiementPage'

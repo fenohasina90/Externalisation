@@ -113,7 +113,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ApiError> handleBadCredentials(BadCredentialsException ex, WebRequest request) {
-        return build(HttpStatus.UNAUTHORIZED, "Email ou mot de passe incorrect", request);
+        return build(HttpStatus.UNAUTHORIZED, "Identifiant ou mot de passe incorrect", request);
     }
 
     @ExceptionHandler(AuthenticationException.class)
@@ -129,6 +129,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiError> handleDataIntegrity(DataIntegrityViolationException ex, WebRequest request) {
         return build(HttpStatus.CONFLICT, "Conflit de données : cette référence est probablement déjà utilisée", request);
+    }
+
+    @ExceptionHandler(BackupException.class)
+    public ResponseEntity<ApiError> handleBackup(BackupException ex, WebRequest request) {
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), request);
     }
 
     @ExceptionHandler(Exception.class)

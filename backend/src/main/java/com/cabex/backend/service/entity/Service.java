@@ -5,7 +5,6 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -26,16 +25,15 @@ public class Service {
     @Column(name = "nom_service", nullable = false, length = 200)
     private String nomService;
 
-    @Column(name = "tarif_service", nullable = false, precision = 15, scale = 2)
+    @Column(name = "code_service", nullable = false, unique = true, length = 50)
+    private String codeService;
+
+    @Column(name = "type_service", nullable = false, length = 30)
     @Builder.Default
-    private BigDecimal tarifService = BigDecimal.ZERO;
+    private String typeService = "STANDARD";
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "domaine_id", nullable = false)
-    private DomaineService domaine;
 
     @Column(name = "actif", nullable = false)
     @Builder.Default
@@ -51,8 +49,4 @@ public class Service {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-
-    @OneToMany(mappedBy = "service", fetch = FetchType.LAZY)
-    @Builder.Default
-    private Set<HistoriqueTarifService> historiqueTarifs = new HashSet<>();
 }

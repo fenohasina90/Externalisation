@@ -1,0 +1,14 @@
+# Secrets et configuration locale
+.env
+.env.*
+!.env.example
+*.local
+
+# Données d'exécution
+data/
+*.log
+
+# Builds et dépendances
+backend/target/
+frontend/node_modules/
+frontend/dist/

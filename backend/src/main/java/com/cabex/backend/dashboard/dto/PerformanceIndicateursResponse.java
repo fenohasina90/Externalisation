@@ -5,7 +5,7 @@ import java.util.List;
 
 public record PerformanceIndicateursResponse(
         BigDecimal delaiMoyenTraitementJours,
-        long demandesTerminees,
+        Long demandesTerminees,
         BigDecimal tauxDemandesTerminees,
         BigDecimal montantMoyenParDemande,
         BigDecimal tauxPaiementATemps,

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -35,8 +36,10 @@ public class NotificationController {
     @Operation(summary = "Lister mes notifications",
             description = "Notifications de l'utilisateur connecté, triées par date décroissante")
     public ResponseEntity<Page<NotificationResponse>> list(
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(notificationService.list(pageable));
+            @PageableDefault(size = 20) Pageable pageable,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) Boolean nonLues) {
+        return ResponseEntity.ok(notificationService.list(pageable, type, nonLues));
     }
 
     @GetMapping("/non-lues")

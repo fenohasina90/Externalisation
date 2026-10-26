@@ -9,6 +9,11 @@ public class SocieteMapper {
     }
 
     public static SocieteResponse toResponse(Societe societe, Integer nombreDemandes) {
+        return toResponse(societe, nombreDemandes, null);
+    }
+
+    public static SocieteResponse toResponse(Societe societe, Integer nombreDemandes,
+                                             String responsablePrincipal) {
         if (societe == null) {
             return null;
         }
@@ -24,8 +29,12 @@ public class SocieteMapper {
                 societe.getNombrePersonnel(),
                 societe.getChiffreAffaireMensuel(),
                 societe.getActif(),
+                societe.getArchivedAt() != null,
+                responsablePrincipal,
                 nombreDemandes,
-                societe.getCreatedAt()
+                societe.getCreatedAt(),
+                societe.getDomaine() != null ? societe.getDomaine().getId() : null,
+                societe.getDomaine() != null ? societe.getDomaine().getNomDomaine() : null
         );
     }
 

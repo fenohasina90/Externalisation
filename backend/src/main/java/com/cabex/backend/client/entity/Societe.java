@@ -1,5 +1,6 @@
 package com.cabex.backend.client.entity;
 
+import com.cabex.backend.service.entity.DomaineService;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -50,6 +51,10 @@ public class Societe {
 
     @Column(name = "chiffre_affaire_mensuel", precision = 15, scale = 2)
     private BigDecimal chiffreAffaireMensuel;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "domaine_id", nullable = false)
+    private DomaineService domaine;
 
     @Column(name = "actif", nullable = false)
     @Builder.Default

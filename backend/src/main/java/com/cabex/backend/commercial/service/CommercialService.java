@@ -40,10 +40,7 @@ public class CommercialService {
 
     @Transactional
     public CommercialResponse create(CreateCommercialRequest request) {
-        String immatricule = request.immatricule().trim().toUpperCase();
-        if (commercialRepository.existsByImmatricule(immatricule)) {
-            throw new DuplicateResourceException(ErrorMessages.referenceDejaUtilisee(immatricule));
-        }
+        String immatricule = genererImmatricule();
         Commercial commercial = Commercial.builder()
                 .nomCommercial(request.nomCommercial().trim())
                 .immatricule(immatricule)
@@ -54,6 +51,35 @@ public class CommercialService {
         Commercial saved = commercialRepository.save(commercial);
         auditService.log(AuditActions.CREATE, "COMMERCIAL", "Commercial", saved.getId().longValue(), null, "nom=" + saved.getNomCommercial());
         return CommercialMapper.toResponse(saved);
+    }
+
+    /**
+     * Génère la prochaine immatricule libre (C001, C002, …).
+     * Le test d'existence final protège des doublons en cas d'accès concurrents
+     * (la colonne reste UNIQUE en base).
+     */
+    String genererImmatricule() {
+        int max = 0;
+        for (String immatricule : commercialRepository.findAllImmatricules()) {
+            if (immatricule == null) {
+                continue;
+            }
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("^C(\\d+)$", java.util.regex.Pattern.CASE_INSENSITIVE)
+                    .matcher(immatricule.trim());
+            if (m.matches()) {
+                max = Math.max(max, Integer.parseInt(m.group(1)));
+            }
+        }
+        String candidate = suivante(max + 1);
+        while (commercialRepository.existsByImmatricule(candidate)) {
+            candidate = suivante(++max + 1);
+        }
+        return candidate;
+    }
+
+    private String suivante(int numero) {
+        return "C" + String.format("%03d", numero);
     }
 
     @Transactional

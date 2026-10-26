@@ -4,8 +4,8 @@ import com.cabex.backend.auth.dto.AuthResponse;
 import com.cabex.backend.auth.dto.ChangePasswordRequest;
 import com.cabex.backend.auth.dto.ForgotPasswordRequest;
 import com.cabex.backend.auth.dto.LoginRequest;
-import com.cabex.backend.auth.dto.ResetPasswordRequest;
 import com.cabex.backend.auth.service.AuthService;
+import com.cabex.backend.auth.service.PasswordResetService;
 import com.cabex.backend.audit.action.AuditActions;
 import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.security.UserPrincipal;
@@ -29,20 +29,23 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 @Tag(name = "Authentification", description = "Connexion, mot de passe et session utilisateur (JWT)")
 public class AuthController {
-
-    private final AuthService authService;
+private final AuthService authService;
+    private final PasswordResetService passwordResetService;
     private final AuditService auditService;
 
-    public AuthController(AuthService authService, AuditService auditService) {
+    public AuthController(AuthService authService,
+                          PasswordResetService passwordResetService,
+                          AuditService auditService) {
         this.authService = authService;
+        this.passwordResetService = passwordResetService;
         this.auditService = auditService;
     }
 
     @PostMapping("/login")
-    @Operation(summary = "Connexion", description = "Authentifie un utilisateur et retourne un token JWT")
+    @Operation(summary = "Connexion", description = "Authentifie un utilisateur par username + mot de passe et retourne un token JWT")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Connexion réussie"),
-            @ApiResponse(responseCode = "401", description = "Email/mot de passe incorrect ou compte désactivé"),
+            @ApiResponse(responseCode = "401", description = "Username/mot de passe incorrect ou compte désactivé"),
             @ApiResponse(responseCode = "400", description = "Données de connexion invalides")
     })
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
@@ -60,25 +63,20 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    @Operation(summary = "Mot de passe oublié", description = "Génère un lien de réinitialisation pour l'email fourni (réponse identique si l'email n'existe pas)")
+    @Operation(summary = "Demander la réinitialisation du mot de passe",
+            description = "Enregistre une demande de réinitialisation et notifie les administrateurs. "
+                    + "Après approbation, un mot de passe temporaire est généré que l'utilisateur devra "
+                    + "changer à sa prochaine connexion. La réponse est identique que l'email existe ou non.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Demande traitée"),
+            @ApiResponse(responseCode = "200", description = "Demande enregistrée"),
             @ApiResponse(responseCode = "400", description = "Email invalide")
     })
     public ResponseEntity<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        authService.forgotPassword(request);
-        return ResponseEntity.ok(Map.of("message", "Si cet email existe, un lien de réinitialisation a été envoyé."));
-    }
-
-    @PostMapping("/reset-password")
-    @Operation(summary = "Réinitialisation du mot de passe", description = "Définit un nouveau mot de passe à l'aide du token reçu par email")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Mot de passe réinitialisé"),
-            @ApiResponse(responseCode = "400", description = "Token invalide ou expiré")
-    })
-    public ResponseEntity<Map<String, String>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        authService.resetPassword(request);
-        return ResponseEntity.ok(Map.of("message", "Votre mot de passe a été réinitialisé avec succès."));
+        passwordResetService.demanderReinitialisation(request);
+        return ResponseEntity.ok(Map.of(
+                "message",
+                "Votre demande a été enregistrée. Un administrateur doit l'approuver ; "
+                        + "un mot de passe temporaire vous sera ensuite communiqué."));
     }
 
     @PostMapping("/change-password")

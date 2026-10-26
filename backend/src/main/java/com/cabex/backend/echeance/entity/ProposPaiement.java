@@ -1,6 +1,7 @@
 package com.cabex.backend.echeance.entity;
 
 import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
 import jakarta.persistence.*;
 import lombok.*;
@@ -29,6 +30,10 @@ public class ProposPaiement {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "demande_id", nullable = false)
     private DemandeService demande;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ligne_service_id")
+    private LigneService ligneService;
 
     @Column(name = "date_debut", nullable = false)
     private LocalDate dateDebut;

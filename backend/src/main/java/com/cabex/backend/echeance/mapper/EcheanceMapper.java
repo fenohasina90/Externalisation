@@ -59,7 +59,9 @@ public class EcheanceMapper {
         List<EcheanceResponse> echeances = propos.getEcheances() == null
                 ? List.of()
                 : propos.getEcheances().stream()
-                        .sorted(Comparator.comparing(EcheancePaiement::getNumeroEcheance))
+                        .sorted(Comparator.comparing(EcheancePaiement::getDateEcheance)
+                                .thenComparing(EcheancePaiement::getNumeroEcheance)
+                                .reversed())
                         .map(e -> toEcheanceResponse(e, aujourdhui, joursAlerte))
                         .collect(Collectors.toList());
         return new PlanPaiementResponse(

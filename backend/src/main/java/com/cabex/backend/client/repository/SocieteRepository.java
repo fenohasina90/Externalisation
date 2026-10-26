@@ -24,9 +24,15 @@ public interface SocieteRepository extends JpaRepository<Societe, Integer> {
                OR LOWER(COALESCE(s.activite, '')) LIKE LOWER(CONCAT('%', :recherche, '%'))
                OR LOWER(COALESCE(s.contact, '')) LIKE LOWER(CONCAT('%', :recherche, '%')))
           AND (:actif IS NULL OR s.actif = :actif)
+          AND (:domaineId IS NULL OR s.domaine.id = :domaineId)
+          AND (:archive IS NULL
+               OR (:archive = TRUE AND s.archivedAt IS NOT NULL)
+               OR (:archive = FALSE AND s.archivedAt IS NULL))
         """)
     Page<Societe> rechercher(@Param("recherche") String recherche,
                              @Param("actif") Boolean actif,
+                             @Param("domaineId") Integer domaineId,
+                             @Param("archive") Boolean archive,
                              Pageable pageable);
 
     @Query("""
@@ -44,4 +50,12 @@ public interface SocieteRepository extends JpaRepository<Societe, Integer> {
         GROUP BY d.societe.id
         """)
     List<Object[]> compterDemandesParSociete();
+
+    /** Sociétés actives proposées dans les filtres du tableau de bord. */
+    @Query("""
+        SELECT s FROM Societe s
+        WHERE s.actif = true AND s.archivedAt IS NULL
+        ORDER BY s.nomSociete
+        """)
+    List<Societe> findActivesPourFiltre();
 }

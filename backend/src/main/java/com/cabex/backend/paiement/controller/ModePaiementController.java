@@ -39,7 +39,7 @@ public class ModePaiementController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('CONFIG_VIEW')")
+    @PreAuthorize("hasAuthority('MODE_PAIEMENT_VIEW')")
     @Operation(summary = "Lister / filtrer les modes de paiement", description = "Pagination, filtre par actif")
     public ResponseEntity<Page<ModePaiementResponse>> getAll(
             @RequestParam(value = "actif", required = false) Boolean actif,
@@ -48,21 +48,21 @@ public class ModePaiementController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('CONFIG_VIEW')")
+    @PreAuthorize("hasAuthority('MODE_PAIEMENT_VIEW')")
     @Operation(summary = "Consulter un mode de paiement")
     public ResponseEntity<ModePaiementResponse> getById(@PathVariable Integer id) {
         return ResponseEntity.ok(modePaiementService.getById(id));
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('CONFIG_UPDATE')")
+    @PreAuthorize("hasAuthority('MODE_PAIEMENT_UPDATE')")
     @Operation(summary = "Créer un mode de paiement")
     public ResponseEntity<ModePaiementResponse> create(@Valid @RequestBody CreateModePaiementRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(modePaiementService.create(request));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('CONFIG_UPDATE')")
+    @PreAuthorize("hasAuthority('MODE_PAIEMENT_UPDATE')")
     @Operation(summary = "Modifier un mode de paiement")
     public ResponseEntity<ModePaiementResponse> update(@PathVariable Integer id,
                                                        @Valid @RequestBody UpdateModePaiementRequest request) {
@@ -70,7 +70,7 @@ public class ModePaiementController {
     }
 
     @PatchMapping("/{id}/activation")
-    @PreAuthorize("hasAuthority('CONFIG_UPDATE')")
+    @PreAuthorize("hasAuthority('MODE_PAIEMENT_UPDATE')")
     @Operation(summary = "Activer / désactiver un mode de paiement")
     public ResponseEntity<ModePaiementResponse> toggleActivation(@PathVariable Integer id,
                                                                  @RequestBody Map<String, Boolean> body) {
@@ -79,7 +79,7 @@ public class ModePaiementController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('CONFIG_UPDATE')")
+    @PreAuthorize("hasAuthority('MODE_PAIEMENT_UPDATE')")
     @Operation(summary = "Désactiver (supprimer) un mode de paiement")
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
         modePaiementService.delete(id);

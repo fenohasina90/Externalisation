@@ -5,6 +5,6 @@ public record DomaineResponse(
         String nomDomaine,
         String description,
         Boolean actif,
-        long nombreServices
+        long nombreSocietes
 ) {
 }

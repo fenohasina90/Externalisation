@@ -15,6 +15,8 @@ public class DocumentMapper {
         return new DocumentResponse(
                 piece.getId(),
                 piece.getDemande() != null ? piece.getDemande().getId() : null,
+                piece.getPaiement() != null ? piece.getPaiement().getId() : null,
+                piece.getPaiement() != null ? piece.getPaiement().getReferencePaiement() : null,
                 piece.getNomFichier(),
                 piece.getNomOriginal(),
                 piece.getTypeFichier(),

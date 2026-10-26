@@ -30,7 +30,6 @@ import java.util.List;
 @RequestMapping("/api/rapports")
 @Tag(name = "Rapports", description = "Rapports et exports (PDF, Excel, CSV)")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasAnyAuthority('REPORT_VIEW','REPORT_EXPORT')")
 public class RapportController {
 
     private final RapportService rapportService;
@@ -42,7 +41,8 @@ public class RapportController {
     }
 
     @GetMapping("/general")
-    @Operation(summary = "Rapport général")
+    @PreAuthorize("hasAuthority('RAPPORT_DEMANDE_VIEW')")
+    @Operation(summary = "Rapport général — SUPER_ADMIN + ACCUEIL")
     public ResponseEntity<?> general(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
@@ -60,7 +60,8 @@ public class RapportController {
     }
 
     @GetMapping("/financier")
-    @Operation(summary = "Rapport financier")
+    @PreAuthorize("hasAuthority('RAPPORT_PAIEMENT_VIEW')")
+    @Operation(summary = "Rapport financier — SUPER_ADMIN + ECONOMAT")
     public ResponseEntity<?> financier(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
@@ -78,7 +79,8 @@ public class RapportController {
     }
 
     @GetMapping("/clients")
-    @Operation(summary = "Rapport par client")
+    @PreAuthorize("hasAuthority('RAPPORT_DEMANDE_VIEW')")
+    @Operation(summary = "Rapport par client — SUPER_ADMIN + ACCUEIL")
     public ResponseEntity<?> clients(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
@@ -96,7 +98,8 @@ public class RapportController {
     }
 
     @GetMapping("/services")
-    @Operation(summary = "Rapport par service")
+    @PreAuthorize("hasAuthority('RAPPORT_PAIEMENT_VIEW')")
+    @Operation(summary = "Rapport par service — SUPER_ADMIN + ECONOMAT")
     public ResponseEntity<?> services(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
@@ -114,7 +117,8 @@ public class RapportController {
     }
 
     @GetMapping("/demandes")
-    @Operation(summary = "Rapport des demandes")
+    @PreAuthorize("hasAuthority('RAPPORT_DEMANDE_VIEW')")
+    @Operation(summary = "Rapport des demandes — SUPER_ADMIN + ACCUEIL")
     public ResponseEntity<?> demandes(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
@@ -132,7 +136,8 @@ public class RapportController {
     }
 
     @GetMapping("/paiements")
-    @Operation(summary = "Rapport des paiements")
+    @PreAuthorize("hasAuthority('RAPPORT_PAIEMENT_VIEW')")
+    @Operation(summary = "Rapport des paiements — SUPER_ADMIN + ECONOMAT")
     public ResponseEntity<?> paiements(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
@@ -150,7 +155,11 @@ public class RapportController {
     }
 
     private ResponseEntity<byte[]> export(String type, RapportFilter f, String format) {
-        SecurityUtils.requirePermission("REPORT_EXPORT");
+        String permission = switch (type) {
+            case "general", "clients", "demandes" -> "RAPPORT_DEMANDE_EXPORT";
+            default -> "RAPPORT_PAIEMENT_EXPORT";
+        };
+        SecurityUtils.requirePermission(permission);
         byte[] bytes = rapportExporter.exporter(rapportService.table(type, f), format);
         String filename = "rapport-" + type + "." + rapportExporter.extension(format);
         return ResponseEntity.ok()

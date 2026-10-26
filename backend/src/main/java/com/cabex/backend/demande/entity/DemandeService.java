@@ -3,14 +3,12 @@ package com.cabex.backend.demande.entity;
 import com.cabex.backend.client.entity.ClientResponsable;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.commercial.entity.Commercial;
-import com.cabex.backend.service.entity.Service;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -35,14 +33,8 @@ public class DemandeService {
     @Column(name = "date_demande", nullable = false)
     private LocalDate dateDemande;
 
-    @Column(name = "debut_service", nullable = false)
-    private LocalDate debutService;
-
-    @Column(name = "fin_service", nullable = false)
-    private LocalDate finService;
-
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "societe_id", nullable = false)
+    @JoinColumn(name = "societe_id")
     private Societe societe;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -52,13 +44,6 @@ public class DemandeService {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "client_responsable_id")
     private ClientResponsable clientResponsable;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "service_id", nullable = false)
-    private Service service;
-
-    @Column(name = "tarif_service_applique", nullable = false, precision = 15, scale = 2)
-    private BigDecimal tarifServiceApplique;
 
     @Column(name = "commentaire", columnDefinition = "TEXT")
     private String commentaire;
@@ -85,6 +70,11 @@ public class DemandeService {
     @OneToMany(mappedBy = "demande", fetch = FetchType.LAZY)
     @Builder.Default
     private Set<HistoriqueDemande> historiques = new HashSet<>();
+
+    @OneToMany(mappedBy = "demande", fetch = FetchType.LAZY,
+            cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private Set<LigneService> lignes = new HashSet<>();
 
     @OneToMany(mappedBy = "demande", fetch = FetchType.LAZY)
     @Builder.Default

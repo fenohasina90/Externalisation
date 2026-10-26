@@ -15,10 +15,9 @@ public class ServiceMapper {
         return new ServiceResponse(
                 service.getId(),
                 service.getNomService(),
-                service.getTarifService(),
+                service.getCodeService(),
+                service.getTypeService(),
                 service.getDescription(),
-                service.getDomaine() != null ? service.getDomaine().getId() : null,
-                service.getDomaine() != null ? service.getDomaine().getNomDomaine() : null,
                 service.getActif()
         );
     }

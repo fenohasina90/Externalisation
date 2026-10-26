@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @Service
@@ -44,6 +46,48 @@ public class ConfigurationService {
     @Transactional(readOnly = true)
     public ConfigurationResponse getByCle(String cle) {
         return ConfigurationMapper.toResponse(getEntity(cle));
+    }
+
+    /**
+     * Lecture en repli silencieux : renvoie la valeur brute si la clé existe,
+     * sinon {@code defaut}. Utilisé par les traitements internes pour que toute
+     * modification depuis l'administration s'applique sans redémarrage.
+     */
+    @Transactional(readOnly = true)
+    public String lireValeur(String cle, String defaut) {
+        return configurationRepository.findByCle(cle)
+                .map(Configuration::getValeur)
+                .orElse(defaut);
+    }
+
+    /** Lecture d'un entier avec repli sur {@code defaut} si absent ou mal formé. */
+    @Transactional(readOnly = true)
+    public int lireEntier(String cle, int defaut) {
+        try {
+            return Integer.parseInt(lireValeur(cle, String.valueOf(defaut)).trim());
+        } catch (NumberFormatException e) {
+            return defaut;
+        }
+    }
+
+    /** Lecture d'un entier long avec repli sur {@code defaut} si absent ou mal formé. */
+    @Transactional(readOnly = true)
+    public long lireEntierLong(String cle, long defaut) {
+        try {
+            return Long.parseLong(lireValeur(cle, String.valueOf(defaut)).trim());
+        } catch (NumberFormatException e) {
+            return defaut;
+        }
+    }
+
+    /** Lecture d'une heure HH:mm avec repli si la clé est absente ou mal formée. */
+    @Transactional(readOnly = true)
+    public LocalTime lireHeure(String cle, LocalTime defaut) {
+        try {
+            return LocalTime.parse(lireValeur(cle, defaut.toString()).trim());
+        } catch (DateTimeParseException e) {
+            return defaut;
+        }
     }
 
     @Transactional
@@ -83,6 +127,7 @@ public class ConfigurationService {
                     }
                 }
                 case "DATE" -> java.time.LocalDate.parse(valeur);
+                case "TIME" -> LocalTime.parse(valeur);
                 case "DATETIME", "TIMESTAMP" -> java.time.LocalDateTime.parse(valeur);
                 default -> {
                 }
