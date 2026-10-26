@@ -5,4 +5,10 @@ export {
   classeEtatEcheance,
   getLibelleEtatEcheance,
 } from './constants/labels'
-export type { CreateEcheancePayload, Echeance, EtatEcheance, UpdateEcheancePayload } from './types'
+export type {
+  CreateEcheancePayload,
+  Echeance,
+  EcheanceCible,
+  EtatEcheance,
+  UpdateEcheancePayload,
+} from './types'

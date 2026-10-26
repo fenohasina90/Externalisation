@@ -4,7 +4,9 @@ import com.cabex.backend.audit.action.AuditActions;
 import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.configuration.service.ConfigurationKeys;
 import com.cabex.backend.configuration.service.ConfigurationService;
+import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.echeance.dto.CreateEcheanceRequest;
+import com.cabex.backend.echeance.dto.EcheanceCibleResponse;
 import com.cabex.backend.echeance.dto.EcheanceResponse;
 import com.cabex.backend.echeance.dto.UpdateEcheanceRequest;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
@@ -128,6 +130,17 @@ public class EcheanceGestionService {
         int joursAlerte = joursAlerte();
         return echeanceRepository.findAVenirPagine(aujourdHui, pageable)
                 .map(e -> EcheanceMapper.toEcheanceResponse(e, aujourdHui, joursAlerte));
+    }
+
+    @Transactional(readOnly = true)
+    public EcheanceCibleResponse getCible(Integer echeanceId) {
+        EcheancePaiement echeance = getEcheance(echeanceId);
+        DemandeService demande = echeance.getProposPaiement().getDemande();
+        return new EcheanceCibleResponse(
+                echeance.getId(),
+                echeance.getNumeroEcheance(),
+                demande.getId(),
+                demande.getReferenceDemande());
     }
 
     private void validerDateDansIntervalle(ProposPaiement propos, LocalDate date) {

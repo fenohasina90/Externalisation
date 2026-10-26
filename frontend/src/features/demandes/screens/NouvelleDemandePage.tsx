@@ -233,7 +233,7 @@ export function NouvelleDemandePage() {
     () => new Set(lignes.map((l) => l.serviceId).filter((id): id is number => id !== '')),
     [lignes],
   )
-  const aujourdhui = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  // const aujourdhui = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
   const setLigne = (index: number, patch: Partial<LigneSaisie>) => {
     setLignes((liste) => liste.map((l, i) => (i === index ? { ...l, ...patch } : l)))
@@ -263,9 +263,9 @@ export function NouvelleDemandePage() {
         return `Ligne ${i + 1} : tarif positif ou nul obligatoire`
       }
       if (!l.debutService || !l.finService) return `Ligne ${i + 1} : période obligatoire`
-      if (l.debutService < aujourdhui) {
-        return `Ligne ${i + 1} : le début doit être postérieur ou égal à aujourd'hui`
-      }
+      // if (l.debutService < aujourdhui) {
+      //   return `Ligne ${i + 1} : le début doit être postérieur ou égal à aujourd'hui`
+      // }
       if (l.finService <= l.debutService) {
         return `Ligne ${i + 1} : la fin doit être strictement postérieure au début`
       }
@@ -584,7 +584,7 @@ export function NouvelleDemandePage() {
                           Début <span className="required">*</span>
                           <input
                             type="date"
-                            min={aujourdhui}
+                            // min={aujourdhui}
                             value={l.debutService}
                             onChange={(e) => setLigne(i, { debutService: e.target.value })}
                           />
@@ -593,7 +593,7 @@ export function NouvelleDemandePage() {
                           Fin <span className="required">*</span>
                           <input
                             type="date"
-                            min={l.debutService || aujourdhui}
+                            min={l.debutService}
                             value={l.finService}
                             onChange={(e) => setLigne(i, { finService: e.target.value })}
                           />

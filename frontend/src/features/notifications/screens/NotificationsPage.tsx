@@ -5,6 +5,7 @@ import { messageErreur } from '@/constants/messages'
 import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { useAuth } from '@/features/auth/hooks/useAuth'
 import { demandesApi } from '@/features/demandes/services/demandes.service'
+import { echeancesApi } from '@/features/echeances/services/echeances.service'
 import { NotificationsList } from '../components'
 import { TYPE_META, typesVisibles } from '../constants'
 import { useNotificationsList } from '../hooks'
@@ -192,7 +193,12 @@ export function NotificationsPage() {
           }
           break
         case 'ECHEANCE':
-          navigate('/paiements/echeanciers')
+          if (notification.referenceId) {
+            const echeance = await echeancesApi.get(notification.referenceId)
+            navigate(`/paiements/echeanciers/${encodeURIComponent(echeance.referenceDemande)}`)
+          } else {
+            navigate('/paiements/echeanciers')
+          }
           break
         case 'PAIEMENT':
           navigate('/paiements/historique')

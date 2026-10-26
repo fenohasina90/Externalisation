@@ -13,6 +13,14 @@ export interface Echeance {
   commentaire: string | null
 }
 
+/** Demande cible d'une échéance (navigation depuis une notification). */
+export interface EcheanceCible {
+  id: number
+  numeroEcheance: number
+  demandeId: number
+  referenceDemande: string
+}
+
 export interface CreateEcheancePayload {
   numeroEcheance: number
   dateEcheance: string

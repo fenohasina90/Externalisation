@@ -1,10 +1,21 @@
 import { buildQuery, http } from '@/api/http'
 import type { ApiPage, PageQuery } from '@/types'
-import type { CreateEcheancePayload, Echeance, UpdateEcheancePayload } from '../types'
+import type {
+  CreateEcheancePayload,
+  Echeance,
+  EcheanceCible,
+  UpdateEcheancePayload,
+} from '../types'
 
 export const echeancesApi = {
   async listByPlan(planId: number): Promise<Echeance[]> {
     const { data } = await http.get<Echeance[]>(`/plans-paiement/${planId}/echeances`)
+    return data
+  },
+
+  /** Demande associée à une échéance (ouverture de l'échéancier depuis une notification). */
+  async get(id: number): Promise<EcheanceCible> {
+    const { data } = await http.get<EcheanceCible>(`/echeances/${id}`)
     return data
   },
 
