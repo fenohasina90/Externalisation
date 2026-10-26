@@ -34,7 +34,7 @@ public class MontantEnLettres {
         if (montant < 1_000_000) {
             long milliers = montant / 1000;
             long reste = montant % 1000;
-            String debut = milliers == 1 ? "mille" : convertir(milliers) + " mille";
+            String debut = milliers == 1 ? "mille" : sansPluriel(convertir(milliers)) + " mille";
             return reste == 0 ? debut : debut + " " + convertir(reste);
         }
         if (montant < 1_000_000_000) {
@@ -78,5 +78,13 @@ public class MontantEnLettres {
             return "cent";
         }
         return reste == 0 ? debut : debut + " " + convertir(reste);
+    }
+
+    /** « cent » et « quatre-vingt » perdent leur « s » devant « mille ». */
+    private static String sansPluriel(String texte) {
+        if (texte.endsWith("cents") || texte.endsWith("vingts")) {
+            return texte.substring(0, texte.length() - 1);
+        }
+        return texte;
     }
 }

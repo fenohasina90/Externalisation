@@ -15,6 +15,7 @@ import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.notification.service.NotificationService;
 import com.cabex.backend.paiement.dto.CreatePaiementRequest;
 import com.cabex.backend.paiement.dto.ModePaiementResponse;
+import com.cabex.backend.paiement.dto.PaiementDetailResponse;
 import com.cabex.backend.paiement.dto.PaiementResponse;
 import com.cabex.backend.paiement.dto.UpdatePaiementRequest;
 import com.cabex.backend.paiement.entity.ModePaiement;
@@ -83,6 +84,15 @@ public class PaiementGestionService {
     @Transactional(readOnly = true)
     public PaiementResponse getById(Integer id) {
         return PaiementMapper.toResponse(getEntity(id));
+    }
+
+    @Transactional(readOnly = true)
+    public PaiementDetailResponse getByReference(String reference) {
+        Paiement paiement = paiementRepository
+                .findByReferencePaiementAndActifTrue(reference.trim())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Paiement", reference)));
+        return PaiementMapper.toDetailResponse(paiement);
     }
 
     @Transactional(readOnly = true)

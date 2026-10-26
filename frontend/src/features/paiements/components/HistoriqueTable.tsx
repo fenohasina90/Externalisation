@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { formatDate, formatMontantMGA } from '@/utils/format'
 import { telechargerBlob } from '@/utils/telechargement'
 import { Can } from '@/components/shared/Can'
@@ -43,6 +44,7 @@ export function HistoriqueTable({ items }: { items:Paiement[] }) {
           <th>Mode de paiement</th>
           <th>Utilisateur</th>
           <th>Réf. virement</th>
+          <th>Détail</th>
           <th>Reçu</th>
         </tr>
       </thead>
@@ -59,6 +61,14 @@ export function HistoriqueTable({ items }: { items:Paiement[] }) {
             </td>
             <td>{p.createdByName ?? '—'}</td>
             <td className="text-secondary">{p.referenceVirement ?? '—'}</td>
+            <td>
+              <Link
+                to={`/paiements/historique/${encodeURIComponent(p.referencePaiement)}`}
+                className="btn-link"
+              >
+                Voir détail ›
+              </Link>
+            </td>
             <td>
               <Can permission="DOCUMENT_PAIEMENT_VIEW">
                 <button

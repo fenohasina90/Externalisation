@@ -33,6 +33,7 @@ import {
   EcheanciersPage,
   HistoriquePaiementsPage,
   NouveauPaiementPage,
+  PaiementDetailPage,
   PaiementsPage,
 } from '@/features/paiements'
 import { PlansPaiementPage } from '@/features/plan-paiement'
@@ -206,6 +207,14 @@ function App() {
             element={
               <RequirePermission permission="PAIEMENT_VIEW">
                 <HistoriquePaiementsPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/paiements/historique/:reference"
+            element={
+              <RequirePermission permission="PAIEMENT_VIEW">
+                <PaiementDetailPage />
               </RequirePermission>
             }
           />

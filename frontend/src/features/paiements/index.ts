@@ -3,6 +3,7 @@ export { NouveauPaiementPage } from './screens/NouveauPaiementPage'
 export { EcheanciersPage } from './screens/EcheanciersPage'
 export { EcheancierDetailPage } from './screens/EcheancierDetailPage'
 export { HistoriquePaiementsPage } from './screens/HistoriquePaiementsPage'
+export { PaiementDetailPage } from './screens/PaiementDetailPage'
 export {
   EcheancePill,
   HistoriqueTable,
@@ -36,6 +37,7 @@ export type {
   EtatEcheance,
   ModePaiement,
   Paiement,
+  PaiementDetail,
   PlanPaiement,
   PlanParLigne,
   SituationPlan,

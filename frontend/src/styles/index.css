@@ -2721,6 +2721,57 @@ button.form-etapes__pastille:hover {
   font-weight: 700;
 }
 
+/* Détail d'un paiement : reprise du reçu PDF */
+.recu-hero {
+  background: var(--success);
+  color: #fff;
+  text-align: center;
+  padding: 22px 18px;
+  border-radius: var(--radius);
+}
+
+.recu-hero__label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+.recu-hero__montant {
+  margin-top: 6px;
+  font-size: 32px;
+  font-weight: 800;
+}
+
+.recu-lettres {
+  padding: 14px 16px;
+  border-left: 4px solid var(--success);
+  border-radius: 10px;
+  background: var(--highlight-bg);
+  font-size: 14px;
+}
+
+.recu-lettres span {
+  display: block;
+  font-size: 12px;
+  color: var(--text-light);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.recu-lettres b {
+  display: block;
+  margin-top: 4px;
+}
+
+.recu-pied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .info-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

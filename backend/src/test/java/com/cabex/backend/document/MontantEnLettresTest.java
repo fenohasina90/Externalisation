@@ -22,6 +22,9 @@ class MontantEnLettresTest {
         assertEquals("deux cent un", MontantEnLettres.convertir(201));
         assertEquals("mille", MontantEnLettres.convertir(1000));
         assertEquals("deux mille", MontantEnLettres.convertir(2000));
+        assertEquals("trois cent mille", MontantEnLettres.convertir(300_000));
+        assertEquals("quatre-vingt mille", MontantEnLettres.convertir(80_000));
+        assertEquals("un million trois cent mille", MontantEnLettres.convertir(1_300_000));
     }
 
     @Test

@@ -49,6 +49,17 @@ export interface Paiement {
   createdByName: string | null
 }
 
+/** Détail d'un paiement : informations du reçu PDF (échéance, montants, montant en lettres). */
+export interface PaiementDetail extends Paiement {
+  numeroEcheance: number | null
+  dateEcheance: string | null
+  nomService: string | null
+  montantAttendu: number | null
+  montantPayeEcheance: number | null
+  resteAPayer: number | null
+  montantEnLettres: string | null
+}
+
 export interface CreatePaiementPayload {
   demandeId: number
   echeanceId: number

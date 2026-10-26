@@ -18,6 +18,8 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
 
     Optional<Paiement> findByIdAndActifTrue(Integer id);
 
+    Optional<Paiement> findByReferencePaiementAndActifTrue(String referencePaiement);
+
     Optional<Paiement> findByReferencePaiement(String referencePaiement);
 
     boolean existsByReferencePaiement(String referencePaiement);

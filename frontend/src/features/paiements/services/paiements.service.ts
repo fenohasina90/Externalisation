@@ -4,6 +4,7 @@ import type {
   CreatePaiementPayload,
   ModePaiement,
   Paiement,
+  PaiementDetail,
   UpdatePaiementPayload,
 } from '../types'
 
@@ -26,6 +27,14 @@ export const paiementsApi = {
 
   async get(id: number): Promise<Paiement> {
     const { data } = await http.get<Paiement>(`/paiements/${id}`)
+    return data
+  },
+
+  /** Détail par référence (PAY-2026-00020) : informations du reçu PDF. */
+  async getByReference(reference: string): Promise<PaiementDetail> {
+    const { data } = await http.get<PaiementDetail>(
+      `/paiements/reference/${encodeURIComponent(reference)}`,
+    )
     return data
   },
 

@@ -6,6 +6,7 @@ import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { useAuth } from '@/features/auth/hooks/useAuth'
 import { demandesApi } from '@/features/demandes/services/demandes.service'
 import { echeancesApi } from '@/features/echeances/services/echeances.service'
+import { paiementsApi } from '@/features/paiements/services/paiements.service'
 import { NotificationsList } from '../components'
 import { TYPE_META, typesVisibles } from '../constants'
 import { useNotificationsList } from '../hooks'
@@ -201,7 +202,12 @@ export function NotificationsPage() {
           }
           break
         case 'PAIEMENT':
-          navigate('/paiements/historique')
+          if (notification.referenceId) {
+            const paiement = await paiementsApi.get(notification.referenceId)
+            navigate(`/paiements/historique/${encodeURIComponent(paiement.referencePaiement)}`)
+          } else {
+            navigate('/paiements/historique')
+          }
           break
         case 'PASSWORD_RESET':
           navigate('/administration/reinitialisations')
