@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTaillePagination } from '@/hooks/useTaillePagination'
 import type { Role, Utilisateur } from '@/features/auth/types'
 import { useAuth } from '@/features/auth/hooks/useAuth'
@@ -34,7 +34,12 @@ export function UtilisateursPage() {
     useUtilisateursList(PAGE_SIZE)
 
   const { data: roles } = useApi<Role[]>(() => rolesApi.list(), [])
-  const optionsRoles = (roles ?? []).map((r) => ({ id: r.id, nom: r.nomRole }))
+  // Référence stable : un nouveau tableau à chaque rendu remonterait le formulaire
+  // de la modale et effacerait les saisies en cours.
+  const optionsRoles = useMemo(
+    () => (roles ?? []).map((r) => ({ id: r.id, nom: r.nomRole })),
+    [roles],
+  )
 
   const actifs = items.filter((u) => u.actif).length
   const inactifs = items.length - actifs
