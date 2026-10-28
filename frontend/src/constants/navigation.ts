@@ -186,14 +186,14 @@ export function navigationPour(
 
   const demandesItem: NavItem = {
     ...demandes,
-    hint: lectureSeuleDemandes ? 'lecture seule' : undefined,
+    hint: lectureSeuleDemandes ? '' : undefined,
   }
   const rapportsItem: NavItem = {
     ...rapports,
     hint: rapportDemandes && !rapportFinancier
-      ? 'demandes'
+      ? ''
       : !rapportDemandes && rapportFinancier
-        ? 'financier'
+        ? ''
         : undefined,
   }
 

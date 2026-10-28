@@ -57,9 +57,19 @@ export function UtilisateurFormModal({ open, utilisateur, roles, onClose, onSave
             password: '',
             roleId: utilisateur.role.id,
           }
-        : { ...emptyForm, roleId: roles[0]?.id ?? 0 },
+        : emptyForm,
     )
     setError(null)
+  }, [open, utilisateur])
+
+  // Rôle par défaut en création : ne complète que si rien n'est sélectionné,
+  // sans écraser les autres champs (les roles arrivent après l'ouverture).
+  useEffect(() => {
+    if (!open || utilisateur !== null) return
+    const premierRole = roles[0]?.id
+    if (premierRole === undefined) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setForm((f) => (f.roleId === 0 ? { ...f, roleId: premierRole } : f))
   }, [open, utilisateur, roles])
 
   if (!open) return null
