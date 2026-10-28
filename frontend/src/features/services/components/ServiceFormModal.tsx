@@ -1,20 +1,22 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
-import type { CreateServicePayload, Service, UpdateServicePayload } from '../types'
+import type { CreateServicePayload, Domaine, Service, UpdateServicePayload } from '../types'
 
 interface Props {
   open: boolean
   /** Service à modifier, null pour une création (code auto-généré, actif par défaut). */
   service: Service | null
+  /** Liste des domaines proposés pour le choix du domaine du service. */
+  domaines?: Domaine[]
   onClose: () => void
   onSave: (payload: CreateServicePayload | UpdateServicePayload, id?: number) => Promise<void>
 }
 
-const emptyForm = { nomService: '', typeService: 'STANDARD', description: '' }
+const emptyForm = { nomService: '', typeService: 'STANDARD', description: '', domaineId: '' }
 
 type FormState = typeof emptyForm
 
 /** Modale Ajouter / Modifier un service (sans champ statut ni code). */
-export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
+export function ServiceFormModal({ open, service, domaines = [], onClose, onSave }: Props) {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -33,11 +35,12 @@ export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
             nomService: service.nomService,
             typeService: service.typeService ?? 'STANDARD',
             description: service.description ?? '',
+            domaineId: service.domaineId != null ? String(service.domaineId) : '',
           }
         : emptyForm,
     )
     setError(null)
-  }, [open, service])
+  }, [open, service, domaines])
 
   if (!open) return null
 
@@ -55,10 +58,11 @@ export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
     setSaving(true)
     setError(null)
     try {
-      const payload = {
+      const payload: CreateServicePayload | UpdateServicePayload = {
         nomService: form.nomService.trim(),
         typeService: form.typeService,
         description: form.description.trim() || null,
+        domaineId: form.domaineId.trim() ? Number(form.domaineId) : null,
       }
       await onSave(payload, service?.id)
     } catch (err) {
@@ -112,9 +116,28 @@ export function ServiceFormModal({ open, service, onClose, onSave }: Props) {
 
           {!service && (
             <p className="modal-subtitle form-grid__full" style={{ margin: 0 }}>
-              Le code sera généré automatiquement (SRV-0001, …).
+              Le code sera généré automatiquement au format SRV-CODE_DOMAINE-XXXX.
             </p>
           )}
+
+            <label className="field form-grid__full">
+              Domaine
+              <select
+                name="domaineId"
+                value={form.domaineId}
+                onChange={handleChange}
+              >
+                <option value="">Aucun (code SRV-XXXX)</option>
+                {domaines.map((d) => (
+                  <option key={d.id} value={String(d.id)}>
+                    {d.nomDomaine} ({d.codeDomaine})
+                  </option>
+                ))}
+              </select>
+              <span className="form-help">
+                Le domaine détermine le préfixe du code de service (ex. SRV-COMP-0007).
+              </span>
+            </label>
 
             <label className="field form-grid__full">
               Type de service

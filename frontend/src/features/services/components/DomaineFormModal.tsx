@@ -7,10 +7,10 @@ interface Props {
   domaine: Domaine | null
   onClose: () => void
   /** Création : actif par défaut. Modification : statut conservé (géré par l'action Activer/Désactiver). */
-  onSave: (payload: { nomDomaine: string }, id?: number) => Promise<void>
+  onSave: (payload: { nomDomaine: string; codeDomaine: string }, id?: number) => Promise<void>
 }
 
-const emptyForm = { nomDomaine: '' }
+const emptyForm = { nomDomaine: '', codeDomaine: '' }
 
 type FormState = typeof emptyForm
 
@@ -28,7 +28,7 @@ export function DomaineFormModal({ open, domaine, onClose, onSave }: Props) {
       setSaving(false)
       return
     }
-    setForm(domaine ? { nomDomaine: domaine.nomDomaine } : emptyForm)
+    setForm(domaine ? { nomDomaine: domaine.nomDomaine, codeDomaine: domaine.codeDomaine ?? '' } : emptyForm)
     setError(null)
   }, [open, domaine])
 
@@ -45,10 +45,17 @@ export function DomaineFormModal({ open, domaine, onClose, onSave }: Props) {
       setError('Le nom du domaine est obligatoire')
       return
     }
+    if (!form.codeDomaine.trim()) {
+      setError('Le code domaine est obligatoire')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
-      await onSave({ nomDomaine: form.nomDomaine.trim() }, domaine?.id)
+      await onSave({
+        nomDomaine: form.nomDomaine.trim(),
+        codeDomaine: form.codeDomaine.trim().toUpperCase(),
+      }, domaine?.id)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Échec de l'enregistrement")
     } finally {
@@ -89,6 +96,21 @@ export function DomaineFormModal({ open, domaine, onClose, onSave }: Props) {
                 placeholder="Ex. Comptabilité"
                 required
               />
+            </label>
+
+            <label className="field form-grid__full">
+              Code domaine <span className="required">*</span>
+              <input
+                name="codeDomaine"
+                value={form.codeDomaine}
+                onChange={handleChange}
+                placeholder="Ex. COMP"
+                required
+                maxLength="50"
+              />
+              <span className="form-help">
+                Saisi manuellement, utilisé pour préfixer le code des services liés (ex. SRV-COMP-0007).
+              </span>
             </label>
           </div>
 

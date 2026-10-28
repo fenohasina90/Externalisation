@@ -24,12 +24,12 @@ export const domainesApi = {
     return data
   },
 
-  async create(payload: { nomDomaine: string }): Promise<Domaine> {
+  async create(payload: { nomDomaine: string; codeDomaine: string }): Promise<Domaine> {
     const { data } = await http.post<Domaine>('/domaines', payload)
     return data
   },
 
-  async update(id: number, payload: { nomDomaine: string }): Promise<Domaine> {
+  async update(id: number, payload: { nomDomaine: string; codeDomaine: string }): Promise<Domaine> {
     const { data } = await http.put<Domaine>(`/domaines/${id}`, payload)
     return data
   },
@@ -44,10 +44,10 @@ export const domainesApi = {
 export const servicesApi = {
   async list(
     page: PageQuery,
-    filters: { actif?: boolean; typeService?: TypeService } = {},
+    filters: { actif?: boolean; typeService?: TypeService; domaineId?: number } = {},
   ): Promise<ApiPage<Service>> {
     const { data } = await http.get<ApiPage<Service>>('/services', {
-      params: buildQuery({ actif: filters.actif, typeService: filters.typeService }, page),
+      params: buildQuery({ actif: filters.actif, typeService: filters.typeService, domaineId: filters.domaineId }, page),
     })
     return data
   },

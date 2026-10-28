@@ -48,14 +48,14 @@ class ServiceGestionServiceTest {
     void premierCodeSrv0001() {
         when(serviceRepository.findAllCodes()).thenReturn(List.of());
 
-        assertEquals("SRV-0001", serviceGestionService.genererCode());
+        assertEquals("SRV-0001", serviceGestionService.genererCode(null));
     }
 
     @Test
     void suiteApresLeMaxExistant() {
         when(serviceRepository.findAllCodes()).thenReturn(List.of("SRV-0001", "SRV-0007"));
 
-        assertEquals("SRV-0008", serviceGestionService.genererCode());
+        assertEquals("SRV-0008", serviceGestionService.genererCode(null));
     }
 
     @Test
@@ -64,7 +64,30 @@ class ServiceGestionServiceTest {
         when(serviceRepository.existsByCodeService("SRV-0004")).thenReturn(true);
         when(serviceRepository.existsByCodeService("SRV-0005")).thenReturn(false);
 
-        assertEquals("SRV-0005", serviceGestionService.genererCode());
+        assertEquals("SRV-0005", serviceGestionService.genererCode(null));
+    }
+
+    @Test
+    void premierCodeAvecDomaine() {
+        when(serviceRepository.findAllCodes()).thenReturn(List.of());
+
+        assertEquals("SRV-COMP-0001", serviceGestionService.genererCode("COMP"));
+    }
+
+    @Test
+    void codeAvecDomaineSequenceParDomaine() {
+        when(serviceRepository.findAllCodes()).thenReturn(List.of("SRV-COMP-0007", "SRV-COMP-0012", "SRV-FISC-0003"));
+
+        assertEquals("SRV-COMP-0013", serviceGestionService.genererCode("COMP"));
+    }
+
+    @Test
+    void codeAvecDomaineCollisionResolue() {
+        when(serviceRepository.findAllCodes()).thenReturn(List.of("SRV-COMP-0001"));
+        when(serviceRepository.existsByCodeService("SRV-COMP-0002")).thenReturn(true);
+        when(serviceRepository.existsByCodeService("SRV-COMP-0003")).thenReturn(false);
+
+        assertEquals("SRV-COMP-0003", serviceGestionService.genererCode("COMP"));
     }
 
     @Test
@@ -107,11 +130,11 @@ class ServiceGestionServiceTest {
     void getAllFiltreTypeNormalise() {
         Service service = Service.builder().id(1).nomService("Transaction immobilière")
                 .codeService("SRV-0025").typeService("TRANSACTION_IMMOBILIERE").actif(true).build();
-        when(serviceRepository.rechercher(null, null, "TRANSACTION_IMMOBILIERE",
+        when(serviceRepository.rechercher(null, null, "TRANSACTION_IMMOBILIERE", null,
                 PageRequest.of(0, 8)))
                 .thenReturn(new PageImpl<>(List.of(service), PageRequest.of(0, 8), 1));
 
-        var page = serviceGestionService.getAll(null, null, " transaction_immobiliere ",
+        var page = serviceGestionService.getAll(null, null, " transaction_immobiliere ", null,
                 PageRequest.of(0, 8));
 
         assertEquals(1, page.getTotalElements());
@@ -120,10 +143,10 @@ class ServiceGestionServiceTest {
 
     @Test
     void getAllSansTypeNeFiltrePas() {
-        when(serviceRepository.rechercher(null, null, null, PageRequest.of(0, 8)))
+        when(serviceRepository.rechercher(null, null, null, null, PageRequest.of(0, 8)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 8), 0));
 
-        var page = serviceGestionService.getAll(null, null, "  ", PageRequest.of(0, 8));
+        var page = serviceGestionService.getAll(null, null, "  ", null, PageRequest.of(0, 8));
 
         assertTrue(page.isEmpty());
     }
@@ -131,7 +154,7 @@ class ServiceGestionServiceTest {
     @Test
     void getAllTypeInvalide400() {
         var ex = assertThrows(BusinessException.class,
-                () -> serviceGestionService.getAll(null, null, "INCONNU", PageRequest.of(0, 8)));
+                () -> serviceGestionService.getAll(null, null, "INCONNU", null, PageRequest.of(0, 8)));
 
         assertEquals(ErrorMessages.formatInvalide("type de service"), ex.getMessage());
     }

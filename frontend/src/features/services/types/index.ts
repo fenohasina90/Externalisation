@@ -1,9 +1,9 @@
 export interface Domaine {
   id: number
   nomDomaine: string
+  codeDomaine: string
   description: string | null
   actif: boolean
-  nombreSocietes: number
 }
 
 export type TypeService = 'STANDARD' | 'CREATION' | 'TRANSACTION_IMMOBILIERE'
@@ -30,16 +30,20 @@ export interface Service {
   typeService: TypeService | string | null
   description: string | null
   actif: boolean
+  domaineId: number | null
+  codeDomaine: string | null
 }
 
 export interface CreateServicePayload {
   nomService: string
   typeService?: string | null
   description?: string | null
+  domaineId?: number | null
 }
 
 export type UpdateServicePayload = {
   nomService: string
   typeService?: string | null
   description?: string | null
+  domaineId?: number | null
 }
