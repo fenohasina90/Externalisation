@@ -39,6 +39,10 @@ public class Service {
     @Builder.Default
     private Boolean actif = true;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "domaine_id")
+    private DomaineService domaine;
+
     @Column(name = "archived_at")
     private LocalDateTime archivedAt;
 

@@ -46,7 +46,6 @@ class SocieteServiceTest {
     @Mock private PaiementRepository paiementRepository;
     @Mock private EcheancePaiementRepository echeanceRepository;
     @Mock private PieceJointeRepository pieceJointeRepository;
-    @Mock private DomaineServiceRepository domaineRepository;
     @Mock private RisqueService risqueService;
     @Mock private AuditService auditService;
     @Mock private ConfigurationService configurationService;
@@ -58,7 +57,7 @@ class SocieteServiceTest {
         societeService = new SocieteService(
                 societeRepository, responsableRepository, demandeRepository,
                 historiqueRepository, paiementRepository, echeanceRepository,
-                pieceJointeRepository, domaineRepository, risqueService, auditService,
+                pieceJointeRepository, risqueService, auditService,
                 configurationService);
     }
 
@@ -73,13 +72,13 @@ class SocieteServiceTest {
     @Test
     void listeExposeArchiveEtResponsable() {
         Societe atlas = societe(1, "Atlas Conseil", true, false);
-        when(societeRepository.rechercher(isNull(), isNull(), isNull(), isNull(), any()))
+        when(societeRepository.rechercher(isNull(), isNull(), isNull(), any()))
                 .thenReturn(new PageImpl<>(List.of(atlas)));
         when(societeRepository.compterDemandesParSociete()).thenReturn(List.of());
         when(responsableRepository.findBySocieteIdInOrderByIdAsc(List.of(1))).thenReturn(List.of(
                 ClientResponsable.builder().id(1).societe(atlas).nomClient("Amina Neme").actif(true).build()));
 
-        var page = societeService.getAll(null, null, null, null, PageRequest.of(0, 8));
+        var page = societeService.getAll(null, null, null, PageRequest.of(0, 8));
 
         assertEquals(1, page.getTotalElements());
         assertFalse(page.getContent().get(0).archive());
@@ -89,13 +88,13 @@ class SocieteServiceTest {
 
     @Test
     void filtreArchiveTransmis() {
-        when(societeRepository.rechercher(isNull(), isNull(), isNull(), eq(true), any()))
+        when(societeRepository.rechercher(isNull(), isNull(), eq(true), any()))
                 .thenReturn(new PageImpl<>(List.of()));
         when(societeRepository.compterDemandesParSociete()).thenReturn(List.of());
 
-        societeService.getAll(null, null, null, true, PageRequest.of(0, 8));
+        societeService.getAll(null, null, true, PageRequest.of(0, 8));
 
-        verify(societeRepository).rechercher(isNull(), isNull(), isNull(), eq(true), any());
+        verify(societeRepository).rechercher(isNull(), isNull(), eq(true), any());
     }
 
     @Test
@@ -104,7 +103,7 @@ class SocieteServiceTest {
 
         var ex = assertThrows(DuplicateResourceException.class,
                 () -> societeService.create(new CreateSocieteRequest(
-                        "Atlas Conseil", null, null, null, null, null, null, null, null, 1)));
+                        "Atlas Conseil", null, null, null, null, null, null, null, null)));
         assertEquals(ErrorMessages.referenceDejaUtilisee("Atlas Conseil"), ex.getMessage());
         verify(societeRepository, never()).save(any());
     }

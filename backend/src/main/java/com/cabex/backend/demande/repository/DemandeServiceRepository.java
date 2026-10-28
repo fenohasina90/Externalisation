@@ -47,10 +47,10 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
      * </ul>
      * Les prédicats sont mutuellement exclusifs par construction.
      */
-    @EntityGraph(attributePaths = {"societe", "societe.domaine", "commercial", "clientResponsable"})
+    @EntityGraph(attributePaths = {"societe", "commercial", "clientResponsable"})
     @Query("""
         SELECT d FROM DemandeService d
-        LEFT JOIN d.societe s LEFT JOIN s.domaine dom LEFT JOIN d.commercial c
+        LEFT JOIN d.societe s LEFT JOIN d.commercial c
         WHERE (:recherche IS NULL OR (
                 LOWER(d.referenceDemande) LIKE LOWER(CONCAT('%', :recherche, '%'))
              OR (s IS NOT NULL AND LOWER(s.nomSociete) LIKE LOWER(CONCAT('%', :recherche, '%')))
@@ -59,7 +59,6 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
           AND (:serviceId IS NULL OR EXISTS (
                 SELECT 1 FROM LigneService l
                 WHERE l.demande = d AND l.service.id = :serviceId))
-          AND (:domaineId IS NULL OR dom.id = :domaineId)
           AND (:commercialId IS NULL OR c.id = :commercialId)
           AND (:dateDebut IS NULL OR EXISTS (
                 SELECT 1 FROM LigneService l
@@ -121,7 +120,6 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
     Page<DemandeService> rechercher(@Param("recherche") String recherche,
                                     @Param("societeId") Integer societeId,
                                     @Param("serviceId") Integer serviceId,
-                                    @Param("domaineId") Integer domaineId,
                                     @Param("commercialId") Integer commercialId,
                                     @Param("statut") String statut,
                                     @Param("dateDebut") LocalDate dateDebut,
@@ -159,19 +157,17 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
 
     @Query("""
         SELECT COALESCE(SUM(l.tarif), 0) FROM DemandeService d JOIN d.lignes l
-        LEFT JOIN d.societe s LEFT JOIN s.domaine dom LEFT JOIN d.commercial c
+        LEFT JOIN d.societe s LEFT JOIN d.commercial c
         WHERE (:dateDebut IS NULL OR l.debutService >= :dateDebut)
           AND (:dateFin IS NULL OR l.finService <= :dateFin)
           AND (:societeId IS NULL OR s.id = :societeId)
           AND (:serviceId IS NULL OR l.service.id = :serviceId)
-          AND (:domaineId IS NULL OR dom.id = :domaineId)
           AND (:commercialId IS NULL OR c.id = :commercialId)
         """)
     BigDecimal sommeTarifTotal(@Param("dateDebut") LocalDate dateDebut,
                                @Param("dateFin") LocalDate dateFin,
                                @Param("societeId") Integer societeId,
                                @Param("serviceId") Integer serviceId,
-                               @Param("domaineId") Integer domaineId,
                                @Param("commercialId") Integer commercialId);
 
     @Query("""

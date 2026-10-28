@@ -40,7 +40,7 @@ class ServiceControllerTest {
 
     private ServiceResponse service() {
         return new ServiceResponse(1, "Audit comptable", "SRV-0001", "STANDARD",
-                "Vérification des comptes", true);
+                "Vérification des comptes", true, null, null);
     }
 
     @Test

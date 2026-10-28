@@ -115,7 +115,7 @@ class DemandeSituationTest {
 
     private long count(String situation) {
         return demandeRepository
-                .rechercher(null, null, null, null, null, null, null, null, null,
+                .rechercher(null, null, null, null, null, null, null, null,
                         situation, AUJOURDHUI, Pageable.unpaged())
                 .getTotalElements();
     }
@@ -174,9 +174,9 @@ class DemandeSituationTest {
         jeuDeDonnees();
 
         var premierePage = demandeRepository.rechercher(null, null, null, null, null, null,
-                null, null, null, null, AUJOURDHUI, Pageable.ofSize(2));
+                null, null, null, AUJOURDHUI, Pageable.ofSize(2));
         var toutes = demandeRepository.rechercher(null, null, null, null, null, null,
-                null, null, null, "PAYE", AUJOURDHUI, Pageable.unpaged());
+                null, null, "PAYE", AUJOURDHUI, Pageable.unpaged());
 
         assertTrue(premierePage.getTotalPages() > 1, "jeu de test trop petit pour être paginé");
         assertEquals(1, toutes.getTotalElements());
@@ -212,7 +212,7 @@ class DemandeSituationTest {
         assertEquals(SituationPaiement.EN_RETARD, affichee);
 
         var filtrees = demandeRepository.rechercher(null, null, null, null, null, null,
-                null, null, null, affichee, AUJOURDHUI, Pageable.unpaged());
+                null, null, affichee, AUJOURDHUI, Pageable.unpaged());
         assertTrue(filtrees.getContent().stream()
                         .anyMatch(d -> "DEM-2026-00030".equals(d.getReferenceDemande())),
                 "la demande multi-services doit ressortir dans le filtre de sa situation affichée");

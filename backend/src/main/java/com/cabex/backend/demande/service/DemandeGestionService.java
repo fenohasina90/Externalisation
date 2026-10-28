@@ -112,7 +112,7 @@ public class DemandeGestionService {
 
     @Transactional(readOnly = true)
     public Page<DemandeResponse> getAll(String recherche, Integer societeId, Integer serviceId,
-                                        Integer domaineId, Integer commercialId, String statut,
+                                        Integer commercialId, String statut,
                                         LocalDate dateDebut, LocalDate dateFin,
                                         Boolean actif, String situation, Pageable pageable) {
         Pageable tri = pageable.getSort().isSorted()
@@ -120,7 +120,7 @@ public class DemandeGestionService {
                 : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                         Sort.by(Sort.Order.desc("dateDemande"), Sort.Order.desc("id")));
         Page<DemandeService> page = demandeRepository.rechercher(recherche, societeId, serviceId,
-                domaineId, commercialId, statut, dateDebut, dateFin, actif, situation,
+                commercialId, statut, dateDebut, dateFin, actif, situation,
                 LocalDate.now(), tri);
 
         List<DemandeService> demandes = page.getContent();

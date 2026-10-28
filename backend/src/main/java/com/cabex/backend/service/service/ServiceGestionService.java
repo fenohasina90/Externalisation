@@ -9,8 +9,10 @@ import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.service.dto.CreateServiceRequest;
 import com.cabex.backend.service.dto.ServiceResponse;
 import com.cabex.backend.service.dto.UpdateServiceRequest;
+import com.cabex.backend.service.entity.DomaineService;
 import com.cabex.backend.service.entity.Service;
 import com.cabex.backend.service.mapper.ServiceMapper;
+import com.cabex.backend.service.repository.DomaineServiceRepository;
 import com.cabex.backend.service.repository.ServiceRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,11 +24,14 @@ import java.time.LocalDateTime;
 public class ServiceGestionService {
 
     private final ServiceRepository serviceRepository;
+    private final DomaineServiceRepository domaineRepository;
     private final AuditService auditService;
 
     public ServiceGestionService(ServiceRepository serviceRepository,
+                          DomaineServiceRepository domaineRepository,
                           AuditService auditService) {
         this.serviceRepository = serviceRepository;
+        this.domaineRepository = domaineRepository;
         this.auditService = auditService;
     }
 
@@ -62,6 +67,7 @@ public class ServiceGestionService {
                 .codeService(genererCode())
                 .typeService(normaliserType(request.typeService()))
                 .description(request.description())
+                .domaine(getDomaine(request.domaineId()))
                 .actif(true)
                 .build();
         service = serviceRepository.save(service);
@@ -77,6 +83,7 @@ public class ServiceGestionService {
         service.setNomService(request.nomService().trim());
         service.setTypeService(normaliserType(request.typeService()));
         service.setDescription(request.description());
+        service.setDomaine(getDomaine(request.domaineId()));
         Service saved = serviceRepository.save(service);
         auditService.log(AuditActions.UPDATE, "SERVICE", "Service", saved.getId().longValue(), null, "nom=" + saved.getNomService());
         return ServiceMapper.toResponse(saved);
@@ -97,6 +104,15 @@ public class ServiceGestionService {
         return serviceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Service", id)));
+    }
+
+    private DomaineService getDomaine(Integer id) {
+        if (id == null) {
+            return null;
+        }
+        return domaineRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Domaine", id)));
     }
 
     /**

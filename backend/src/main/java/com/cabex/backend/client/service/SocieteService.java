@@ -39,8 +39,6 @@ import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.cabex.backend.paiement.repository.PaiementRepository;
 import com.cabex.backend.security.SecurityUtils;
-import com.cabex.backend.service.entity.DomaineService;
-import com.cabex.backend.service.repository.DomaineServiceRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -63,7 +61,6 @@ public class SocieteService {
     private final PaiementRepository paiementRepository;
     private final EcheancePaiementRepository echeanceRepository;
     private final PieceJointeRepository pieceJointeRepository;
-    private final DomaineServiceRepository domaineRepository;
     private final RisqueService risqueService;
     private final AuditService auditService;
     private final ConfigurationService configurationService;
@@ -75,7 +72,6 @@ public class SocieteService {
                           PaiementRepository paiementRepository,
                           EcheancePaiementRepository echeanceRepository,
                           PieceJointeRepository pieceJointeRepository,
-                          DomaineServiceRepository domaineRepository,
                           RisqueService risqueService,
                           AuditService auditService,
                           ConfigurationService configurationService) {
@@ -86,7 +82,6 @@ public class SocieteService {
         this.paiementRepository = paiementRepository;
         this.echeanceRepository = echeanceRepository;
         this.pieceJointeRepository = pieceJointeRepository;
-        this.domaineRepository = domaineRepository;
         this.risqueService = risqueService;
         this.auditService = auditService;
         this.configurationService = configurationService;
@@ -99,13 +94,12 @@ public class SocieteService {
     }
 
     @Transactional(readOnly = true)
-    public Page<SocieteResponse> getAll(String recherche, Boolean actif, Integer domaineId,
-                                        Boolean archive, Pageable pageable) {
+    public Page<SocieteResponse> getAll(String recherche, Boolean actif, Boolean archive, Pageable pageable) {
         Map<Integer, Integer> nbParSociete = new java.util.HashMap<>();
         for (Object[] o : societeRepository.compterDemandesParSociete()) {
             nbParSociete.put((Integer) o[0], ((Number) o[1]).intValue());
         }
-        Page<Societe> page = societeRepository.rechercher(recherche, actif, domaineId, archive, pageable);
+        Page<Societe> page = societeRepository.rechercher(recherche, actif, archive, pageable);
         Map<Integer, String> responsableParSociete = new java.util.HashMap<>();
         if (!page.getContent().isEmpty()) {
             List<Integer> ids = page.getContent().stream().map(Societe::getId).toList();
@@ -127,7 +121,7 @@ public class SocieteService {
                 .toList();
 
         List<DemandeService> demandes = demandeRepository
-                .rechercher(null, id, null, null, null, null, null, null, null, null, null,
+                .rechercher(null, id, null, null, null, null, null, null, null, null,
                         Pageable.unpaged()).getContent();
 
         List<DemandeFicheResponse> demandesFiche = demandes.stream()
@@ -144,8 +138,6 @@ public class SocieteService {
                 .map(list -> new ServiceUtiliseResponse(
                         list.get(0).getService().getId(),
                         list.get(0).getService().getNomService(),
-                        societe.getDomaine() != null ? societe.getDomaine().getId() : null,
-                        societe.getDomaine() != null ? societe.getDomaine().getNomDomaine() : null,
                         list.size()))
                 .toList();
 
@@ -268,7 +260,6 @@ public class SocieteService {
                 .dateCreation(request.dateCreation())
                 .nombrePersonnel(request.nombrePersonnel())
                 .chiffreAffaireMensuel(request.chiffreAffaireMensuel())
-                .domaine(getDomaine(request.domaineId()))
                 .actif(true)
                 .build();
         Societe saved = societeRepository.save(societe);
@@ -288,7 +279,6 @@ public class SocieteService {
         societe.setDateCreation(request.dateCreation());
         societe.setNombrePersonnel(request.nombrePersonnel());
         societe.setChiffreAffaireMensuel(request.chiffreAffaireMensuel());
-        societe.setDomaine(getDomaine(request.domaineId()));
         Societe saved = societeRepository.save(societe);
         auditService.log(AuditActions.UPDATE, "CLIENT", "Societe", saved.getId().longValue(), null, "nom=" + saved.getNomSociete());
         return SocieteMapper.toResponse(saved);
@@ -340,12 +330,6 @@ public class SocieteService {
         }
         HistoriqueDemande dernier = historiques.get(historiques.size() - 1);
         return dernier.getStatut() != null ? dernier.getStatut().getStatut() : "EN_ATTENTE";
-    }
-
-    private DomaineService getDomaine(Integer id) {
-        return domaineRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        ErrorMessages.introuvable("Domaine", id)));
     }
 
     private Societe getEntity(Integer id) {

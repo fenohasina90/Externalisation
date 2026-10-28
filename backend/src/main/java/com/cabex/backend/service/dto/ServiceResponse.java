@@ -6,6 +6,8 @@ public record ServiceResponse(
         String codeService,
         String typeService,
         String description,
-        Boolean actif
+        Boolean actif,
+        Integer domaineId,
+        String codeDomaine
 ) {
 }

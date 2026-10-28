@@ -70,7 +70,7 @@ public class RapportService {
                 total,
                 encaisse,
                 total.subtract(encaisse).max(BigDecimal.ZERO),
-                echeanceRepository.sommeEnRetardFiltree(LocalDate.now(), f.clientId(), f.serviceId(), f.domaineId()),
+                echeanceRepository.sommeEnRetardFiltree(LocalDate.now(), f.clientId(), f.serviceId()),
                 echeanceRepository.countEnRetard(LocalDate.now())
         );
     }
@@ -81,9 +81,9 @@ public class RapportService {
         BigDecimal total = sommeTarif(demandes);
         BigDecimal encaisse = fin(f);
         BigDecimal reste = total.subtract(encaisse).max(BigDecimal.ZERO);
-        BigDecimal enRetard = echeanceRepository.sommeEnRetardFiltree(LocalDate.now(), f.clientId(), f.serviceId(), f.domaineId());
+        BigDecimal enRetard = echeanceRepository.sommeEnRetardFiltree(LocalDate.now(), f.clientId(), f.serviceId());
         List<RapportFinancierMode> parMode = paiementRepository
-                .sommeParMode(f.dateDebut(), f.dateFin(), f.clientId(), f.serviceId(), f.domaineId())
+                .sommeParMode(f.dateDebut(), f.dateFin(), f.clientId(), f.serviceId())
                 .stream()
                 .map(o -> new RapportFinancierMode((String) o[0], toBigDecimal(o[1])))
                 .sorted(Comparator.comparing(RapportFinancierMode::mode))
@@ -150,7 +150,7 @@ public class RapportService {
     @Transactional(readOnly = true)
     public List<RapportPaiementLigne> paiements(RapportFilter f) {
         return paiementRepository.rechercherRapport(f.dateDebut(), f.dateFin(), f.clientId(),
-                        f.serviceId(), f.domaineId(), f.commercialId())
+                        f.serviceId(), f.commercialId())
                 .stream()
                 .map(this::toPaiementLigne)
                 .toList();
@@ -260,18 +260,18 @@ public class RapportService {
     }
 
     private List<DemandeService> demandesFiltrees(RapportFilter f) {
-        return demandeRepository.rechercher(null, f.clientId(), f.serviceId(), f.domaineId(),
-                        f.commercialId(), f.statut(), f.dateDebut(), f.dateFin(), null, null, null,
+        return demandeRepository.rechercher(null, f.clientId(), f.serviceId(), f.commercialId(),
+                        f.statut(), f.dateDebut(), f.dateFin(), null, null, null,
                 Pageable.unpaged())
                 .getContent();
     }
 
     private BigDecimal fin(RapportFilter f) {
-        return paiementRepository.sommePayee(f.dateDebut(), f.dateFin(), f.clientId(), f.serviceId(), f.domaineId());
+        return paiementRepository.sommePayee(f.dateDebut(), f.dateFin(), f.clientId(), f.serviceId());
     }
 
     private BigDecimal fin(RapportFilter f, Integer clientId) {
-        return paiementRepository.sommePayee(f.dateDebut(), f.dateFin(), clientId, f.serviceId(), f.domaineId());
+        return paiementRepository.sommePayee(f.dateDebut(), f.dateFin(), clientId, f.serviceId());
     }
 
     private BigDecimal sommeTarif(List<DemandeService> list) {

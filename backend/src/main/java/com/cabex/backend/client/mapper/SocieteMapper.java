@@ -32,9 +32,7 @@ public class SocieteMapper {
                 societe.getArchivedAt() != null,
                 responsablePrincipal,
                 nombreDemandes,
-                societe.getCreatedAt(),
-                societe.getDomaine() != null ? societe.getDomaine().getId() : null,
-                societe.getDomaine() != null ? societe.getDomaine().getNomDomaine() : null
+                societe.getCreatedAt()
         );
     }
 

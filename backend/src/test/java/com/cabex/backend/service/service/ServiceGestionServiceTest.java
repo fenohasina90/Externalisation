@@ -6,6 +6,7 @@ import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.service.dto.CreateServiceRequest;
 import com.cabex.backend.service.entity.Service;
+import com.cabex.backend.service.repository.DomaineServiceRepository;
 import com.cabex.backend.service.repository.ServiceRepository;
 import com.cabex.backend.service.service.ServiceGestionService;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,13 +33,15 @@ class ServiceGestionServiceTest {
     @Mock
     private ServiceRepository serviceRepository;
     @Mock
+    private DomaineServiceRepository domaineRepository;
+    @Mock
     private AuditService auditService;
 
     private ServiceGestionService serviceGestionService;
 
     @BeforeEach
     void setUp() {
-        serviceGestionService = new ServiceGestionService(serviceRepository, auditService);
+        serviceGestionService = new ServiceGestionService(serviceRepository, domaineRepository, auditService);
     }
 
     @Test
@@ -76,7 +79,7 @@ class ServiceGestionServiceTest {
         });
 
         var reponse = serviceGestionService.create(
-                new CreateServiceRequest("Audit comptable", null, null));
+                new CreateServiceRequest("Audit comptable", null, null, null));
 
         assertEquals("SRV-0002", reponse.codeService());
         verify(auditService).log(eq("CREATE"), eq("SERVICE"), eq("Service"),
@@ -145,7 +148,7 @@ class ServiceGestionServiceTest {
         });
 
         var reponse = serviceGestionService.create(
-                new CreateServiceRequest("Création d'entreprise", "creation", null));
+                new CreateServiceRequest("Création d'entreprise", "creation", null, null));
 
         assertEquals("CREATION", reponse.typeService());
     }
@@ -154,7 +157,7 @@ class ServiceGestionServiceTest {
     void createTypeInvalide400() {
         var ex = assertThrows(BusinessException.class,
                 () -> serviceGestionService.create(
-                        new CreateServiceRequest("X", "INCONNU", null)));
+                        new CreateServiceRequest("X", "INCONNU", null, null)));
         assertEquals(ErrorMessages.formatInvalide("type de service"), ex.getMessage());
         verify(serviceRepository, never()).save(any());
     }
@@ -171,7 +174,7 @@ class ServiceGestionServiceTest {
         });
 
         var reponse = serviceGestionService.create(
-                new CreateServiceRequest("Audit comptable", null, null));
+                new CreateServiceRequest("Audit comptable", null, null, null));
 
         assertEquals("STANDARD", reponse.typeService());
     }

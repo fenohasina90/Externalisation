@@ -48,11 +48,11 @@ public class RapportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(required = false) Integer clientId,
             @RequestParam(required = false) Integer serviceId,
-            @RequestParam(required = false) Integer domaineId,
+
             @RequestParam(required = false) Integer commercialId,
             @RequestParam(required = false) String statut,
             @RequestParam(required = false) String format) {
-        RapportFilter f = RapportFilter.of(dateDebut, dateFin, clientId, serviceId, domaineId, commercialId, statut);
+        RapportFilter f = RapportFilter.of(dateDebut, dateFin, clientId, serviceId, commercialId, statut);
         if (format != null && !format.isBlank()) {
             return export("general", f, format);
         }
@@ -67,11 +67,11 @@ public class RapportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(required = false) Integer clientId,
             @RequestParam(required = false) Integer serviceId,
-            @RequestParam(required = false) Integer domaineId,
+
             @RequestParam(required = false) Integer commercialId,
             @RequestParam(required = false) String statut,
             @RequestParam(required = false) String format) {
-        RapportFilter f = RapportFilter.of(dateDebut, dateFin, clientId, serviceId, domaineId, commercialId, statut);
+        RapportFilter f = RapportFilter.of(dateDebut, dateFin, clientId, serviceId, commercialId, statut);
         if (format != null && !format.isBlank()) {
             return export("financier", f, format);
         }
@@ -86,11 +86,11 @@ public class RapportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(required = false) Integer clientId,
             @RequestParam(required = false) Integer serviceId,
-            @RequestParam(required = false) Integer domaineId,
+
             @RequestParam(required = false) Integer commercialId,
             @RequestParam(required = false) String statut,
             @RequestParam(required = false) String format) {
-        RapportFilter f = RapportFilter.of(dateDebut, dateFin, clientId, serviceId, domaineId, commercialId, statut);
+        RapportFilter f = RapportFilter.of(dateDebut, dateFin, clientId, serviceId, commercialId, statut);
         if (format != null && !format.isBlank()) {
             return export("clients", f, format);
         }
@@ -105,11 +105,11 @@ public class RapportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(required = false) Integer clientId,
             @RequestParam(required = false) Integer serviceId,
-            @RequestParam(required = false) Integer domaineId,
+
             @RequestParam(required = false) Integer commercialId,
             @RequestParam(required = false) String statut,
             @RequestParam(required = false) String format) {
-        RapportFilter f = RapportFilter.of(dateDebut, dateFin, clientId, serviceId, domaineId, commercialId, statut);
+        RapportFilter f = RapportFilter.of(dateDebut, dateFin, clientId, serviceId, commercialId, statut);
         if (format != null && !format.isBlank()) {
             return export("services", f, format);
         }
@@ -124,11 +124,11 @@ public class RapportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(required = false) Integer clientId,
             @RequestParam(required = false) Integer serviceId,
-            @RequestParam(required = false) Integer domaineId,
+
             @RequestParam(required = false) Integer commercialId,
             @RequestParam(required = false) String statut,
             @RequestParam(required = false) String format) {
-        RapportFilter f = RapportFilter.of(dateDebut, dateFin, clientId, serviceId, domaineId, commercialId, statut);
+        RapportFilter f = RapportFilter.of(dateDebut, dateFin, clientId, serviceId, commercialId, statut);
         if (format != null && !format.isBlank()) {
             return export("demandes", f, format);
         }
@@ -143,11 +143,11 @@ public class RapportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(required = false) Integer clientId,
             @RequestParam(required = false) Integer serviceId,
-            @RequestParam(required = false) Integer domaineId,
+
             @RequestParam(required = false) Integer commercialId,
             @RequestParam(required = false) String statut,
             @RequestParam(required = false) String format) {
-        RapportFilter f = RapportFilter.of(dateDebut, dateFin, clientId, serviceId, domaineId, commercialId, statut);
+        RapportFilter f = RapportFilter.of(dateDebut, dateFin, clientId, serviceId, commercialId, statut);
         if (format != null && !format.isBlank()) {
             return export("paiements", f, format);
         }

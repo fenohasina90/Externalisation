@@ -35,7 +35,7 @@ class DomaineControllerTest {
     private DomaineGestionService domaineService;
 
     private DomaineResponse domaine() {
-        return new DomaineResponse(1, "Comptabilité", null, true, 14L);
+        return new DomaineResponse(1, "Comptabilité", "COMPTA", null, true);
     }
 
     @Test
@@ -60,7 +60,7 @@ class DomaineControllerTest {
         mockMvc.perform(get("/api/domaines").param("recherche", "compta"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].nomDomaine").value("Comptabilité"))
-                .andExpect(jsonPath("$.content[0].nombreSocietes").value(14))
+                .andExpect(jsonPath("$.content[0].codeDomaine").value("COMPTA"))
                 .andExpect(jsonPath("$.totalElements").value(1));
     }
 
@@ -72,10 +72,11 @@ class DomaineControllerTest {
         mockMvc.perform(post("/api/domaines")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nomDomaine":"Comptabilité"}
+                                {"nomDomaine":"Comptabilité","codeDomaine":"COMPTA"}
                                 """))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.nomDomaine").value("Comptabilité"));
+                .andExpect(jsonPath("$.nomDomaine").value("Comptabilité"))
+                .andExpect(jsonPath("$.codeDomaine").value("COMPTA"));
     }
 
     @Test
@@ -93,7 +94,7 @@ class DomaineControllerTest {
     @WithMockUser(authorities = {"DOMAINE_UPDATE"})
     void patchActivationOk200() throws Exception {
         when(domaineService.toggleActivation(eq(1), eq(false)))
-                .thenReturn(new DomaineResponse(1, "Comptabilité", null, false, 14L));
+                .thenReturn(new DomaineResponse(1, "Comptabilité", "COMPTA", null, false));
 
         mockMvc.perform(patch("/api/domaines/1/activation")
                         .contentType(MediaType.APPLICATION_JSON)

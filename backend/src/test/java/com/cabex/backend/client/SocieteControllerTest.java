@@ -38,7 +38,7 @@ class SocieteControllerTest {
     private SocieteResponse societe() {
         return new SocieteResponse(1, "Atlas Conseil", "Services financiers",
                 "+261 34 12 345 67", "contact@atlas-conseil.mg", null, null, null, null, null,
-                true, false, "Amina Neme", 15, null, 1, "Comptabilité");
+                true, false, "Amina Neme", 15, null);
     }
 
     @Test
@@ -57,7 +57,7 @@ class SocieteControllerTest {
     @Test
     @WithMockUser(authorities = {"CLIENT_VIEW"})
     void getOk200() throws Exception {
-        when(societeService.getAll(isNull(), isNull(), isNull(), isNull(), any()))
+        when(societeService.getAll(isNull(), isNull(), isNull(), any()))
                 .thenReturn(new PageImpl<>(List.of(societe()), PageRequest.of(0, 8), 1));
 
         mockMvc.perform(get("/api/clients"))
@@ -76,7 +76,7 @@ class SocieteControllerTest {
         mockMvc.perform(post("/api/clients")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nomSociete":"Atlas Conseil","domaineId":1}
+                                {"nomSociete":"Atlas Conseil"}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.nomSociete").value("Atlas Conseil"));
@@ -88,7 +88,7 @@ class SocieteControllerTest {
         mockMvc.perform(post("/api/clients")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nomSociete":"  ","domaineId":1}
+                                {"nomSociete":"  "}
                                 """))
                 .andExpect(status().isBadRequest());
     }
