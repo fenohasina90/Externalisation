@@ -71,7 +71,9 @@ public class SecurityConfig {
                         // passer ; l'autorisation initiale reste appliquée au contrôleur.
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
-                        .anyRequest().authenticated())
+                        // .anyRequest().authenticated())
+                        .requestMatchers("/api/**").authenticated()
+                        .anyRequest().permitAll())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, e) ->
                                 writeError(response, HttpStatus.UNAUTHORIZED, "Authentification requise", request.getRequestURI()))
