@@ -26,7 +26,7 @@ export interface PageRequest {
 export interface PageQuery {
   page: number
   size: number
-  recherche: string | null
+  recherche?: string | null;
 }
 
 export type NomRole = 'SUPER_ADMIN' | 'ADMIN' | 'ACCUEIL' | 'ECONOMAT'

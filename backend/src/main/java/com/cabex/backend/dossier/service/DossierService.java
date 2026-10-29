@@ -53,7 +53,7 @@ public class DossierService {
         DossierCreation dossier = appliquer(new DossierCreation(), demande, request);
         DossierCreation saved = dossierRepository.save(dossier);
         auditService.log(AuditActions.CREATE, "DOSSIER", "DossierCreation",
-                Long.valueOf(saved.getId()), null, "demande=" + demande.getReferenceDemande());
+                Long.valueOf(saved.getId()), null, demande.getReferenceDemande());
         return DossierMapper.toResponse(saved);
     }
 
@@ -64,8 +64,8 @@ public class DossierService {
         DossierCreation updated = appliquer(dossier, demande, request.versCreation());
         DossierCreation saved = dossierRepository.save(updated);
         auditService.log(AuditActions.UPDATE, "DOSSIER", "DossierCreation",
-                Long.valueOf(saved.getId()), "demande=" + demande.getReferenceDemande(),
-                "demande=" + demande.getReferenceDemande());
+                Long.valueOf(saved.getId()), demande.getReferenceDemande(),
+                demande.getReferenceDemande());
         return DossierMapper.toResponse(saved);
     }
 

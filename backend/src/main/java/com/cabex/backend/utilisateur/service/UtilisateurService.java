@@ -122,7 +122,7 @@ public class UtilisateurService {
         utilisateur.setUpdatedAt(LocalDateTime.now());
         Utilisateur saved = utilisateurRepository.save(utilisateur);
         auditService.log(AuditActions.UPDATE, "UTILISATEUR", "Utilisateur",
-                Long.valueOf(saved.getId()), "actif=" + previousActif, "actif=" + actif);
+                Long.valueOf(saved.getId()), "actif : " + previousActif, "actif : " + actif);
         return UtilisateurMapper.toResponse(saved);
     }
 

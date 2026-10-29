@@ -114,11 +114,11 @@ export function ServiceFormModal({ open, service, domaines = [], onClose, onSave
               />
             </label>
 
-          {!service && (
+          {/* {!service && (
             <p className="modal-subtitle form-grid__full" style={{ margin: 0 }}>
               Le code sera généré automatiquement au format SRV-CODE_DOMAINE-XXXX.
             </p>
-          )}
+          )} */}
 
             <label className="field form-grid__full">
               Domaine
@@ -134,9 +134,9 @@ export function ServiceFormModal({ open, service, domaines = [], onClose, onSave
                   </option>
                 ))}
               </select>
-              <span className="form-help">
+              {/* <span className="form-help">
                 Le domaine détermine le préfixe du code de service (ex. SRV-COMP-0007).
-              </span>
+              </span> */}
             </label>
 
             <label className="field form-grid__full">
@@ -150,9 +150,9 @@ export function ServiceFormModal({ open, service, domaines = [], onClose, onSave
                 <option value="CREATION">Création d&apos;entreprise ou de société</option>
                 <option value="TRANSACTION_IMMOBILIERE">Transaction immobilière</option>
               </select>
-              <span className="form-help">
+              {/* <span className="form-help">
                 Les services de création et de transaction immobilière portent une fiche dédiée.
-              </span>
+              </span> */}
             </label>
 
             <label className="field form-grid__full">

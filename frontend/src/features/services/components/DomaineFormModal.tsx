@@ -106,11 +106,13 @@ export function DomaineFormModal({ open, domaine, onClose, onSave }: Props) {
                 onChange={handleChange}
                 placeholder="Ex. COMP"
                 required
-                maxLength="50"
+                // maxLength="50"
               />
+              {/*
               <span className="form-help">
                 Saisi manuellement, utilisé pour préfixer le code des services liés (ex. SRV-COMP-0007).
               </span>
+              */}
             </label>
           </div>
 

@@ -263,7 +263,7 @@ public class SocieteService {
                 .actif(true)
                 .build();
         Societe saved = societeRepository.save(societe);
-        auditService.log(AuditActions.CREATE, "CLIENT", "Societe", saved.getId().longValue(), null, "nom=" + saved.getNomSociete());
+        auditService.log(AuditActions.CREATE, "CLIENT", "Societe", saved.getId().longValue(), null, saved.getNomSociete());
         return SocieteMapper.toResponse(saved);
     }
 
@@ -280,7 +280,7 @@ public class SocieteService {
         societe.setNombrePersonnel(request.nombrePersonnel());
         societe.setChiffreAffaireMensuel(request.chiffreAffaireMensuel());
         Societe saved = societeRepository.save(societe);
-        auditService.log(AuditActions.UPDATE, "CLIENT", "Societe", saved.getId().longValue(), null, "nom=" + saved.getNomSociete());
+        auditService.log(AuditActions.UPDATE, "CLIENT", "Societe", saved.getId().longValue(), null, saved.getNomSociete());
         return SocieteMapper.toResponse(saved);
     }
 
@@ -290,7 +290,7 @@ public class SocieteService {
         societe.setActif(!archive);
         societe.setArchivedAt(archive ? LocalDateTime.now() : null);
         Societe saved = societeRepository.save(societe);
-        auditService.log(archive ? AuditActions.ARCHIVE : AuditActions.UPDATE, "CLIENT", "Societe", saved.getId().longValue(), "actif=" + !archive, "actif=" + saved.getActif());
+        auditService.log(archive ? AuditActions.ARCHIVE : AuditActions.UPDATE, "CLIENT", "Societe", saved.getId().longValue(), "actif : " + !archive, "actif : " + saved.getActif());
         return SocieteMapper.toResponse(saved);
     }
 

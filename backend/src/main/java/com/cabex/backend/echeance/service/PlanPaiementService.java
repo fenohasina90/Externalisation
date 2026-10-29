@@ -180,7 +180,7 @@ public class PlanPaiementService {
 
         auditService.log(AuditActions.CREATE, "PAIEMENT", "PlanPaiement",
                 Long.valueOf(propos.getId()), null,
-                "demande=" + demande.getReferenceDemande() + ", ligne=" + ligne.getId());
+                demande.getReferenceDemande() + " : " + ligne.getId());
         return toResponse(propos);
     }
 
@@ -224,8 +224,8 @@ public class PlanPaiementService {
 
         ProposPaiement saved = proposRepository.save(propos);
         auditService.log(AuditActions.UPDATE, "PAIEMENT", "PlanPaiement",
-                Long.valueOf(saved.getId()), "demande=" + saved.getDemande().getReferenceDemande(),
-                "demande=" + saved.getDemande().getReferenceDemande());
+                Long.valueOf(saved.getId()), saved.getDemande().getReferenceDemande(),
+                saved.getDemande().getReferenceDemande());
         return toResponse(saved);
     }
 

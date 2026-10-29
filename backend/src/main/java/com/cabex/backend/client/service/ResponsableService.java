@@ -71,7 +71,7 @@ public class ResponsableService {
                 .build();
         ClientResponsable saved = responsableRepository.save(responsable);
         auditService.log(AuditActions.CREATE, "CLIENT", "ClientResponsable",
-                Long.valueOf(saved.getId()), null, "nom=" + saved.getNomClient());
+                Long.valueOf(saved.getId()), null, saved.getNomClient());
         return ResponsableMapper.toResponse(saved);
     }
 
@@ -84,7 +84,7 @@ public class ResponsableService {
         responsable.setFonction(request.fonction());
         ClientResponsable saved = responsableRepository.save(responsable);
         auditService.log(AuditActions.UPDATE, "CLIENT", "ClientResponsable",
-                Long.valueOf(saved.getId()), null, "nom=" + saved.getNomClient());
+                Long.valueOf(saved.getId()), null, saved.getNomClient());
         return ResponsableMapper.toResponse(saved);
     }
 
@@ -95,7 +95,7 @@ public class ResponsableService {
         responsable.setActif(actif);
         ClientResponsable saved = responsableRepository.save(responsable);
         auditService.log(AuditActions.UPDATE, "CLIENT", "ClientResponsable",
-                Long.valueOf(saved.getId()), "actif=" + previousActif, "actif=" + actif);
+                Long.valueOf(saved.getId()), "actif : " + previousActif, "actif : " + actif);
         return ResponsableMapper.toResponse(saved);
     }
 
@@ -106,7 +106,7 @@ public class ResponsableService {
         responsable.setActif(false);
         responsableRepository.save(responsable);
         auditService.log(AuditActions.DELETE, "CLIENT", "ClientResponsable",
-                Long.valueOf(responsable.getId()), "nom=" + nom, null);
+                Long.valueOf(responsable.getId()), nom, null);
     }
 
     private ClientResponsable getEntity(Integer id) {

@@ -6,8 +6,6 @@ import { Alert, Spinner } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
 import type { ApiPage } from '@/types'
 import { responsablesApi } from '@/features/responsables/services/responsables.service'
-import { domainesApi } from '@/features/services/services/services.service'
-import type { Domaine } from '@/features/services/types'
 import { ClientFormModal, ClientsTable } from '../components'
 import { clientsApi, type TriClients } from '../services/clients.service'
 import { useClientsList, type StatutClientFilter } from '../hooks/useClientsList'
@@ -26,21 +24,6 @@ export function ClientsPage() {
   const [actionError, setActionError] = useState<string | null>(null)
 
   const liste = useClientsList({ size: PAGE_SIZE })
-
-  const { data: domaines, reload: reloadDomaines } = useApi<ApiPage<Domaine>>(
-    () => domainesApi.list({ page: 0, size: 100, recherche: null }, {}),
-    [],
-  )
-  const optionsDomaines = (domaines?.content ?? []).map((d) => ({ id: d.id, nom: d.nomDomaine }))
-
-  /** Domaine existant sélectionné, sinon créé à la volée lors de la création du client. */
-  const resolveDomaine = async (nom: string): Promise<number> => {
-    const exact = optionsDomaines.find((d) => d.nom.toLowerCase() === nom.trim().toLowerCase())
-    if (exact) return exact.id
-    const cree = await domainesApi.create({ nomDomaine: nom.trim() })
-    reloadDomaines()
-    return cree.id
-  }
 
   const { data: totalPage } = useApi<ApiPage<Societe>>(
     () => clientsApi.list({ page: 0, size: 1, recherche: null }),
@@ -251,22 +234,6 @@ export function ClientsPage() {
               />
             </label>
             <label className="field filter-field">
-              Domaine
-              <select
-                value={liste.domaineId ?? ''}
-                onChange={(e) =>
-                  liste.setDomaineId(e.target.value === '' ? null : Number(e.target.value))
-                }
-              >
-                <option value="">Tous</option>
-                {optionsDomaines.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.nom}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field filter-field">
               Statut
               <select
                 value={liste.statut}
@@ -389,8 +356,6 @@ export function ClientsPage() {
       <ClientFormModal
         open={modalOpen}
         client={editing}
-        domaines={optionsDomaines}
-        resolveDomaine={resolveDomaine}
         onClose={() => {
           setModalOpen(false)
           setEditing(null)

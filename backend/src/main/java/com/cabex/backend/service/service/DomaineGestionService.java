@@ -56,7 +56,7 @@ public class DomaineGestionService {
                 .build();
         DomaineService saved = domaineRepository.save(domaine);
         auditService.log(AuditActions.CREATE, "SERVICE", "Domaine", saved.getId().longValue(), null,
-                "nom=" + saved.getNomDomaine() + ", code=" + saved.getCodeDomaine());
+                saved.getCodeDomaine() + " : " + saved.getNomDomaine());
         return DomaineMapper.toResponse(saved);
     }
 
@@ -76,7 +76,7 @@ public class DomaineGestionService {
         domaine.setDescription(request.description());
         DomaineService saved = domaineRepository.save(domaine);
         auditService.log(AuditActions.UPDATE, "SERVICE", "Domaine", saved.getId().longValue(), null,
-                "nom=" + saved.getNomDomaine() + ", code=" + saved.getCodeDomaine());
+                saved.getCodeDomaine() + " : " + saved.getNomDomaine());
         return DomaineMapper.toResponse(saved);
     }
 
@@ -86,7 +86,7 @@ public class DomaineGestionService {
         boolean previousActif = domaine.getActif();
         domaine.setActif(actif);
         DomaineService saved = domaineRepository.save(domaine);
-        auditService.log(AuditActions.UPDATE, "SERVICE", "Domaine", saved.getId().longValue(), "actif=" + previousActif, "actif=" + actif);
+        auditService.log(AuditActions.UPDATE, "SERVICE", "Domaine", saved.getId().longValue(), "actif : " + previousActif, "actif : " + actif);
         return DomaineMapper.toResponse(saved);
     }
 
@@ -96,7 +96,7 @@ public class DomaineGestionService {
         String nom = domaine.getNomDomaine();
         domaine.setActif(false);
         domaineRepository.save(domaine);
-        auditService.log(AuditActions.DELETE, "SERVICE", "Domaine", domaine.getId().longValue(), "nom=" + nom, null);
+        auditService.log(AuditActions.DELETE, "SERVICE", "Domaine", domaine.getId().longValue(), nom, null);
     }
 
     private DomaineService getEntity(Integer id) {

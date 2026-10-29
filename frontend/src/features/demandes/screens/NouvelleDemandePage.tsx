@@ -65,7 +65,6 @@ export function NouvelleDemandePage() {
   const [responsableId, setResponsableId] = useState<number | null>(null)
   const [responsableTexte, setResponsableTexte] = useState('')
   const [commercialId, setCommercialId] = useState<number | ''>('')
-  const [domaineId, setDomaineId] = useState('')
   const [dateDemande, setDateDemande] = useState(() => new Date().toISOString().slice(0, 10))
   const [commentaire, setCommentaire] = useState('')
   const [mode, setMode] = useState<ModeFacturation>('PAR_SERVICE')
@@ -135,10 +134,6 @@ export function NouvelleDemandePage() {
           : tous
     return filtres.map((r) => ({ id: r.id, label: r.nomClient }))
   }, [pageResponsables, societeId, creationSansSociete])
-  const optionsDomaines = useMemo(
-    () => (pageDomaines?.content ?? []).map((d) => ({ id: d.id, nom: d.nomDomaine })),
-    [pageDomaines],
-  )
 
   const [clientModalOpen, setClientModalOpen] = useState(false)
   const [responsableModalOpen, setResponsableModalOpen] = useState(false)
@@ -158,26 +153,6 @@ export function NouvelleDemandePage() {
       })
     }
     setServiceModalLigne(null)
-  }
-
-  /** Déduit un code domaine à partir du nom (ex. "Comptabilité" → "COMPT"). */
-  const codeDomaineDepuisNom = (nom: string): string => {
-    return nom
-      .trim()
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, '')
-      .slice(0, 6) || 'DOM'
-  }
-
-  const resolveDomaine = async (nom: string): Promise<number> => {
-    const exact = optionsDomaines.find((d) => d.nom.toLowerCase() === nom.trim().toLowerCase())
-    if (exact) return exact.id
-    const cree = await domainesApi.create({
-      nomDomaine: nom.trim(),
-      codeDomaine: codeDomaineDepuisNom(nom),
-    })
-    reloadDomaines()
-    return cree.id
   }
 
   const texteClientPropre = clientTexte.trim()
@@ -694,9 +669,6 @@ export function NouvelleDemandePage() {
       <ClientFormModal
         open={clientModalOpen}
         client={null}
-        domaines={optionsDomaines}
-        resolveDomaine={resolveDomaine}
-        onCreerDomaine={resolveDomaine}
         onClose={() => setClientModalOpen(false)}
         onSave={handleSaveClient}
       />

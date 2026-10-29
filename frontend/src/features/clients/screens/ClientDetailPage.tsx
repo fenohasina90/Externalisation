@@ -1,19 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Alert, Spinner } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
 import { auditApi, type AuditFiltres } from '@/features/administration/services/administration.service'
 import type { AuditEntry } from '@/features/administration/types'
 import { formatDate, formatDateHeure, formatMontantMGA, formatTailleOctets } from '@/utils/format'
 import { getLibelleActionAudit } from '@/features/administration/constants/labels'
-import { ClientFormModal } from '../components'
 import { clientsApi } from '../services/clients.service'
-import { responsablesApi } from '@/features/responsables/services/responsables.service'
-import { domainesApi } from '@/features/services/services/services.service'
-import type { Domaine } from '@/features/services/types'
-import type { ApiPage } from '@/types'
-import type { CreateSocietePayload, Societe, SocieteDetail } from '../types'
+import type { Societe, SocieteDetail } from '../types'
 import { codeSociete, idDepuisCodeSociete, statutSociete } from '../types'
 
 type Onglet = 'informations' | 'demandes' | 'paiements' | 'documents' | 'historique'
@@ -53,8 +47,6 @@ export function ClientDetailPage() {
   const navigate = useNavigate()
   const societeId = resoudreIdClient(reference)
   const [onglet, setOnglet] = useState<Onglet>('informations')
-  const [editOpen, setEditOpen] = useState(false)
-  const [confirmArchive, setConfirmArchive] = useState(false)
   const [pageDemandes, setPageDemandes] = useState(0)
   const [pagePaiements, setPagePaiements] = useState(0)
 
@@ -62,16 +54,10 @@ export function ClientDetailPage() {
     data: detail,
     loading,
     error,
-    reload,
   } = useApi<SocieteDetail>(() => {
     if (societeId === null) return Promise.reject(new Error('Référence client invalide.'))
     return clientsApi.getDetail(societeId)
   }, [societeId])
-
-  const { data: domaines, reload: reloadDomaines } = useApi<ApiPage<Domaine>>(
-    () => domainesApi.list({ page: 0, size: 100, recherche: null }, {}),
-    [],
-  )
 
   const client: Societe | null = detail?.societe ?? null
 
@@ -100,39 +86,6 @@ export function ClientDetailPage() {
       ? Math.round((synthese.montantPaye / synthese.montantTotal) * 100)
       : 0
   const pctReste = synthese ? 100 - pctPaye : 0
-
-  const resolveDomaine = async (nom: string): Promise<number> => {
-    const cherche = nom.trim().toLowerCase();
-    const existants = (domaines?.content ?? []).map((d) => ({ id: d.id, nom: d.nomDomaine }));
-    const exact = existants.find((d) => d.nom.toLowerCase() === cherche);
-    if (exact) return exact.id;
-    const cree = await domainesApi.create({ nomDomaine: nom.trim() });
-    reloadDomaines();
-    return cree.id;
-  };
-
-  const handleEditSave = async (payload: CreateSocietePayload & { responsable: string }) => {
-    if (!client) return
-    const { responsable, ...societe } = payload
-    await clientsApi.update(client.id, societe)
-    const premier = detail?.responsables?.[0] ?? null
-    if (premier) {
-      if (responsable !== premier.nomClient) {
-        await responsablesApi.update(premier.id, { nomClient: responsable })
-      }
-    } else {
-      await responsablesApi.create({ societeId: client.id, nomClient: responsable })
-    }
-    setEditOpen(false)
-    reload()
-  }
-
-  const handleArchive = async () => {
-    if (!client) return
-    await clientsApi.archive(client.id, true)
-    setConfirmArchive(false)
-    reload()
-  }
 
   const telecharger = async (pieceId: number, nom: string | null) => {
     const blob = await clientsApi.telechargerPiece(pieceId)
@@ -183,22 +136,6 @@ export function ClientDetailPage() {
           <p>
             {codeSociete(client.id)} · {client.activite || '—'}
           </p>
-        </div>
-        <div className="actions">
-          <button type="button" className="btn-ghost" onClick={() => setEditOpen(true)}>
-            Modifier
-          </button>
-          {statut !== 'Archivé' && (
-            <button type="button" className="btn-ghost" onClick={() => setConfirmArchive(true)}>
-              Archiver
-            </button>
-          )}
-          <Link to={`/demandes/nouveau?client=${encodeURIComponent(client.nomSociete)}`} className="btn-primary">
-            <svg className="sv" viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Nouvelle demande
-          </Link>
         </div>
       </header>
 
@@ -647,27 +584,6 @@ export function ClientDetailPage() {
         </section>
       )}
 
-      <ClientFormModal
-        open={editOpen}
-        client={client}
-        domaines={(domaines?.content ?? []).map((d) => ({ id: d.id, nom: d.nomDomaine }))}
-        resolveDomaine={resolveDomaine}
-        onClose={() => setEditOpen(false)}
-        onSave={handleEditSave}
-      />
-
-      <ConfirmDialog
-        open={confirmArchive}
-        titre="Archiver ce client ?"
-        message={`« ${client.nomSociete} » sera masqué des listes courantes. Ses demandes et son historique sont conservés.`}
-        confirmer="Archiver"
-        ton="danger"
-        onAnnuler={() => setConfirmArchive(false)}
-        onConfirmer={() => {
-          setConfirmArchive(false)
-          void handleArchive()
-        }}
-      />
     </div>
   )
 }
