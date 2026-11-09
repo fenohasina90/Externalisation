@@ -16,6 +16,14 @@ export const LIBELLES_CATEGORIE_LIGNE: Record<CategorieLigne, string> = {
 export const getLibelleCategorieLigne = (categorie: string | null | undefined): string =>
   LIBELLES_CATEGORIE_LIGNE[categorie as CategorieLigne] ?? categorie ?? 'Externalisation'
 
+export const LIBELLES_TYPE_PRESTATION: Record<string, string> = {
+  PRESTATION: 'Prestation',
+  ABONNEMENT_MENSUEL: 'Abonnement mensuel',
+}
+
+export const getLibelleTypePrestation = (type: string | null | undefined): string =>
+  LIBELLES_TYPE_PRESTATION[type as string] ?? type ?? '—'
+
 export const getLibelleStatutDemande = (statut: string): string =>
   LIBELLES_STATUT_DEMANDE[statut as StatutDemande] ?? statut
 

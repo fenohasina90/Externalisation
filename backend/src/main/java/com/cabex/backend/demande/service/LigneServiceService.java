@@ -61,6 +61,10 @@ public class LigneServiceService {
     public static final String CATEGORIE_EXTERNALISATION = "EXTERNALISATION";
     public static final String CATEGORIE_DEBOURS = "DEBOURS";
 
+    /** Sous-types pour EXTERNALISATION + service STANDARD. */
+    public static final String PRESTATION = "PRESTATION";
+    public static final String ABONNEMENT_MENSUEL = "ABONNEMENT_MENSUEL";
+
     private static final String DEMANDE_EN_ATTENTE = "EN_ATTENTE";
 
     private static final Map<String, Integer> ORDRE_LIGNE = Map.of(
@@ -161,6 +165,8 @@ public class LigneServiceService {
         if (request.tarif().signum() < 0) {
             throw new BusinessException(ErrorMessages.TARIF_POSITIF);
         }
+        String typePrestation = normaliserTypePrestation(
+                CATEGORIE_EXTERNALISATION, service, request.typePrestation());
 
         LigneService ligne = LigneService.builder()
                 .demande(demande)
@@ -169,6 +175,7 @@ public class LigneServiceService {
                 .debutService(request.debutService())
                 .finService(request.finService())
                 .categorie(CATEGORIE_EXTERNALISATION)
+                .typePrestation(typePrestation)
                 .build();
         ligne = ligneRepository.save(ligne);
 
@@ -196,6 +203,8 @@ public class LigneServiceService {
                 || request.debutService() != null || request.finService() != null) {
             throw new BusinessException(ErrorMessages.DEBOURS_SERVICE_INTERDIT);
         }
+        // DEBOURS : type de prestation interdit (null obligatoire).
+        normaliserTypePrestation(CATEGORIE_DEBOURS, null, request.typePrestation());
 
         LigneService ligne = LigneService.builder()
                 .demande(demande)
@@ -350,6 +359,14 @@ public class LigneServiceService {
         exigerFactureNonValidee(ligne);
 
         StringBuilder details = new StringBuilder();
+        if (request.typePrestation() != null && !request.typePrestation().isBlank()) {
+            // Service déjà chargé via la ligne (proxy LAZY dans la transaction).
+            Service svc = ligne.getService();
+            String type = normaliserTypePrestation(
+                    CATEGORIE_EXTERNALISATION, svc, request.typePrestation());
+            details.append("type=").append(ligne.getTypePrestation()).append("→").append(type);
+            ligne.setTypePrestation(type);
+        }
         if (request.tarif() != null) {
             if (request.tarif().signum() < 0) {
                 throw new BusinessException(ErrorMessages.TARIF_POSITIF);
@@ -584,6 +601,41 @@ public class LigneServiceService {
             throw new BusinessException(ErrorMessages.CATEGORIE_DEMANDE_INVALIDE);
         }
         return normalisee;
+    }
+
+    public static boolean estStandard(Service service) {
+        return service != null && service.getTypeService() != null
+                && "STANDARD".equalsIgnoreCase(service.getTypeService().trim());
+    }
+
+    /**
+     * Valide/normalise le sous-type d'une ligne EXTERNALISATION.
+     * STANDARD → PRESTATION (défaut) ou ABONNEMENT_MENSUEL.
+     * CREATION / TRANSACTION → null obligatoire.
+     * doit être appelé après chargement du service.
+     */
+    public static String normaliserTypePrestation(String categorie, Service service,
+                                                  String typePrestation) {
+        if (CATEGORIE_DEBOURS.equalsIgnoreCase(categorie)) {
+            if (typePrestation != null && !typePrestation.isBlank()) {
+                throw new BusinessException(ErrorMessages.TYPE_PRESTATION_INTERDIT);
+            }
+            return null;
+        }
+        if (!estStandard(service)) {
+            if (typePrestation != null && !typePrestation.isBlank()) {
+                throw new BusinessException(ErrorMessages.TYPE_PRESTATION_INTERDIT);
+            }
+            return null;
+        }
+        if (typePrestation == null || typePrestation.isBlank()) {
+            return PRESTATION;
+        }
+        String normalise = typePrestation.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!PRESTATION.equals(normalise) && !ABONNEMENT_MENSUEL.equals(normalise)) {
+            throw new BusinessException(ErrorMessages.TYPE_PRESTATION_INVALIDE);
+        }
+        return normalise;
     }
 
     private void exigerFactureNonValidee(LigneService ligne) {

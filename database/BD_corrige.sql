@@ -1524,6 +1524,9 @@ CREATE TABLE ligne_service (
 
     montant_debours DECIMAL(15,2) NULL,
 
+    -- Sous-type STANDARD (EXTERNALISATION uniquement) : PRESTATION / ABONNEMENT_MENSUEL
+    type_prestation VARCHAR(30) NULL,
+
     facture_id INT NULL,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1553,7 +1556,10 @@ CREATE TABLE ligne_service (
         CHECK (tarif IS NULL OR tarif >= 0),
 
     CONSTRAINT chk_ligne_montant_debours
-        CHECK (montant_debours IS NULL OR montant_debours > 0)
+        CHECK (montant_debours IS NULL OR montant_debours > 0),
+
+    CONSTRAINT chk_ligne_type_prestation
+        CHECK (type_prestation IS NULL OR type_prestation IN ('PRESTATION', 'ABONNEMENT_MENSUEL'))
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_ligne_demande
@@ -1561,6 +1567,9 @@ ON ligne_service(demande_id);
 
 CREATE INDEX idx_ligne_categorie
 ON ligne_service(categorie);
+
+CREATE INDEX idx_ligne_type_prestation
+ON ligne_service(type_prestation);
 
 CREATE INDEX idx_ligne_service
 ON ligne_service(service_id);

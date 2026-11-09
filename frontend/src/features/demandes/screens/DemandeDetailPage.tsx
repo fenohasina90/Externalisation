@@ -18,6 +18,7 @@ import type { Echeance } from '@/features/echeances/types'
 import { echeancesApi } from '@/features/echeances/services/echeances.service'
 import { ServiceFormModal } from '@/features/services/components/ServiceFormModal'
 import { PiecesJointes } from '@/features/documents'
+import { getLibelleTypePrestation } from '../constants/labels'
 import { ChangerStatutModal, DemandeStepper, DossierEntrepriseDetail,
   DossierTransactionImmobiliereDetail, StatutDemandePill } from '../components'
 import type { Demande, Facture, HistoriqueDemande, HistoriqueLigne, LigneService,
@@ -775,6 +776,9 @@ function LigneCard({
         </strong>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span className={`pill ${estDebours ? 'pill warning' : 'pill wt'}`}>● {estDebours ? 'Débours' : 'Externalisation'}</span>
+          {!estDebours && ligne.typeService === 'STANDARD' && ligne.typePrestation && (
+            <span className="pill info">● {getLibelleTypePrestation(ligne.typePrestation)}</span>
+          )}
           <LignePill statut={ligne.statut} />
         </div>
       </div>

@@ -40,6 +40,8 @@ interface LigneSaisie {
   debutService: string
   finService: string
   designationDebours: string
+  /** STANDARD : PRESTATION ou ABONNEMENT_MENSUEL. */
+  typePrestation: string
 }
 
 const LIGNE_VIDE: LigneSaisie = {
@@ -50,6 +52,7 @@ const LIGNE_VIDE: LigneSaisie = {
   debutService: '',
   finService: '',
   designationDebours: '',
+  typePrestation: 'PRESTATION',
 }
 
 /**
@@ -312,6 +315,11 @@ export function NouvelleDemandePage() {
                 finService: l.finService,
                 categorie: 'EXTERNALISATION' as const,
                 designationDebours: null,
+                // Une valeur est envoyée même hors STANDARD : le backend
+                // la refuse si elle ne correspond pas (garde explicite).
+                typePrestation: typesServices.get(l.serviceId as number) === 'STANDARD'
+                  ? (l.typePrestation || 'PRESTATION')
+                  : null,
               },
         )
         const creee = await demandesApi.create({
@@ -664,6 +672,18 @@ export function NouvelleDemandePage() {
 
                         
 
+                        {typesServices.get(l.serviceId as number) === 'STANDARD' && (
+                          <label className="field">
+                            Type de prestation <span className="required">*</span>
+                            <select
+                              value={l.typePrestation}
+                              onChange={(e) => setLigne(i, { typePrestation: e.target.value })}
+                            >
+                              <option value="PRESTATION">Prestation</option>
+                              <option value="ABONNEMENT_MENSUEL">Abonnement mensuel</option>
+                            </select>
+                          </label>
+                        )}
                         <label className="field">
                           Tarif (MGA) <span className="required">*</span>
                           <input

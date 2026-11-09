@@ -20,6 +20,10 @@ import java.util.Set;
  * avec tarif/période/facture/plan) ou DEBOURS (désignation + montant validé,
  * statut EN_ATTENTE, NON_PAYEE, PARTIEL, PAYEE, sans service catalogue).
  * Une demande peut mélanger les deux catégories.
+ *
+ * <p>Pour une ligne EXTERNALISATION de service STANDARD, le sous-type
+ * {@code typePrestation} est PRESTATION ou ABONNEMENT_MENSUEL.
+ * Pour les lignes DEBOURS ou CREATION / TRANSACTION_IMMOBILIERE, il est NULL.
  */
 @Entity
 @Table(name = "ligne_service")
@@ -66,6 +70,13 @@ public class LigneService {
     /** Montant du débours validé (DEBOURS uniquement, NULL tant que non validé). */
     @Column(name = "montant_debours", precision = 15, scale = 2)
     private BigDecimal montantDebours;
+
+    /**
+     * Sous-type pour EXTERNALISATION + service STANDARD :
+     * PRESTATION ou ABONNEMENT_MENSUEL. NULL sinon (DEBOURS, CREATION, TRANSACTION).
+     */
+    @Column(name = "type_prestation", length = 30)
+    private String typePrestation;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "facture_id")

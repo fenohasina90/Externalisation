@@ -152,7 +152,8 @@ public class DemandeMapper {
                 resteAPayer,
                 l.getCategorie() != null ? l.getCategorie() : "EXTERNALISATION",
                 l.getDesignationDebours(),
-                l.getMontantDebours()
+                l.getMontantDebours(),
+                l.getTypePrestation()
         );
     }
 

@@ -248,7 +248,7 @@ public class DemandeGestionService {
             lignesDemandees = List.of(new CreateLigneRequest(
                     request.serviceId(), request.tarif(),
                     request.debutService(), request.finService(),
-                    LigneServiceService.CATEGORIE_EXTERNALISATION, null));
+                    LigneServiceService.CATEGORIE_EXTERNALISATION, null, null));
         }
 
         // Validation de la catégorie de chaque ligne (EXTERNALISATION / DEBOURS).
@@ -262,6 +262,8 @@ public class DemandeGestionService {
                         || ligne.debutService() != null || ligne.finService() != null) {
                     throw new BusinessException(ErrorMessages.DEBOURS_SERVICE_INTERDIT);
                 }
+                LigneServiceService.normaliserTypePrestation(
+                        categorie, null, ligne.typePrestation());
             } else {
                 if (ligne.designationDebours() != null && !ligne.designationDebours().isBlank()) {
                     throw new BusinessException(
@@ -350,6 +352,8 @@ public class DemandeGestionService {
             Service service = serviceRepository.findById(ligne.serviceId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             ErrorMessages.introuvable("Service", ligne.serviceId())));
+            String typePrestation = LigneServiceService.normaliserTypePrestation(
+                    categorie, service, ligne.typePrestation());
             LigneService creee = LigneService.builder()
                     .demande(demande)
                     .service(service)
@@ -357,6 +361,7 @@ public class DemandeGestionService {
                     .debutService(ligne.debutService())
                     .finService(ligne.finService())
                     .categorie(LigneServiceService.CATEGORIE_EXTERNALISATION)
+                    .typePrestation(typePrestation)
                     .build();
             creee = ligneRepository.save(creee);
             ligneServiceService.ajouterHistoriqueCreation(creee,

@@ -20,6 +20,7 @@ public record LigneServiceResponse(
         BigDecimal resteAPayer,
         String categorie,
         String designationDebours,
-        BigDecimal montantDebours
+        BigDecimal montantDebours,
+        String typePrestation
 ) {
 }

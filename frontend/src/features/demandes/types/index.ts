@@ -77,7 +77,11 @@ export interface LigneService {
   designationDebours: string | null
   /** Montant du débours validé (DEBOURS uniquement, null tant que non validé). */
   montantDebours: number | null
+  /** Sous-type STANDARD : PRESTATION ou ABONNEMENT_MENSUEL (EXTERNALISATION uniquement). */
+  typePrestation: TypePrestation | string | null
 }
+
+export type TypePrestation = 'PRESTATION' | 'ABONNEMENT_MENSUEL'
 
 export interface CreateLignePayload {
   /** EXTERNALISATION : requis. DEBOURS : null. */
@@ -90,6 +94,8 @@ export interface CreateLignePayload {
   categorie?: CategorieLigne | string | null
   /** DEBOURS : requis. EXTERNALISATION : null. */
   designationDebours?: string | null
+  /** STANDARD : PRESTATION (défaut) ou ABONNEMENT_MENSUEL. */
+  typePrestation?: TypePrestation | string | null
 }
 
 export interface ValiderMontantDeboursPayload {
@@ -102,6 +108,8 @@ export interface UpdateLignePayload {
   finService?: string | null
   /** DEBOURS en EN_ATTENTE uniquement. */
   designationDebours?: string | null
+  /** STANDARD : PRESTATION ou ABONNEMENT_MENSUEL. */
+  typePrestation?: TypePrestation | string | null
 }
 
 export interface HistoriqueLigne {

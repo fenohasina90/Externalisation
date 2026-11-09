@@ -128,6 +128,12 @@ public final class ErrorMessages {
     public static final String DEBOURS_STATUT_AUTOMATIQUE =
             "Le statut d'un débours est automatiquement déterminé (validation du montant puis paiements)";
 
+    // Lignes EXTERNALISATION STANDARD : PRESTATION / ABONNEMENT_MENSUEL
+    public static final String TYPE_PRESTATION_INVALIDE =
+            "Le type doit être PRESTATION ou ABONNEMENT_MENSUEL";
+    public static final String TYPE_PRESTATION_INTERDIT =
+            "Le type de prestation ne s'applique qu'aux lignes EXTERNALISATION de service STANDARD";
+
     // Général
     public static final String ERREUR_INTERNE = "Une erreur interne est survenue. Veuillez réessayer.";
 }

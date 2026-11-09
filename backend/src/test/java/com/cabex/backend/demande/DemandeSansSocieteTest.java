@@ -98,7 +98,7 @@ class DemandeSansSocieteTest {
                 java.util.List.of(new CreateLigneRequest(
                         serviceId, new BigDecimal("700000"),
                         LocalDate.of(2026, 9, 1), LocalDate.of(2027, 2, 28),
-                        "EXTERNALISATION", null)),
+                        "EXTERNALISATION", null, null)),
                 "PAR_SERVICE");
     }
 
@@ -129,10 +129,10 @@ class DemandeSansSocieteTest {
                 java.util.List.of(
                         new CreateLigneRequest(21, new BigDecimal("700000"),
                                 LocalDate.of(2026, 9, 1), LocalDate.of(2027, 2, 28),
-                                "EXTERNALISATION", null),
+                                "EXTERNALISATION", null, null),
                         new CreateLigneRequest(1, new BigDecimal("700000"),
                                 LocalDate.of(2026, 9, 1), LocalDate.of(2027, 2, 28),
-                                "EXTERNALISATION", null)),
+                                "EXTERNALISATION", null, null)),
                 "PAR_SERVICE");
 
         var ex = assertThrows(BusinessException.class, () -> service.create(requeteMixte));

@@ -28,6 +28,13 @@ public record CreateLigneRequest(
         /**
          * Désignation du débours. Requise si DEBOURS, null si EXTERNALISATION.
          */
-        String designationDebours
+        String designationDebours,
+
+        /**
+         * Sous-type pour EXTERNALISATION + service STANDARD :
+         * PRESTATION (défaut si null) ou ABONNEMENT_MENSUEL.
+         * Interdit (null) pour DEBOURS / CREATION / TRANSACTION.
+         */
+        String typePrestation
 ) {
 }

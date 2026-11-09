@@ -94,7 +94,7 @@ class LigneServiceTest {
     private CreateLigneRequest requete(Integer serviceId, String tarif) {
         return new CreateLigneRequest(serviceId, new BigDecimal(tarif),
                 LocalDate.of(2026, 10, 18), LocalDate.of(2026, 12, 16),
-                "EXTERNALISATION", null);
+                "EXTERNALISATION", null, null);
     }
 
     @Test
@@ -189,7 +189,7 @@ class LigneServiceTest {
         when(ligneRepository.findById(1)).thenReturn(Optional.of(ligne));
 
         var reponse = service.modifier(1, new UpdateLigneRequest(
-                new BigDecimal("2500000"), null, null, null));
+                new BigDecimal("2500000"), null, null, null, null));
 
         assertEquals(new BigDecimal("2500000"), reponse.tarif());
         verify(factureService).actualiserPourDemande(17);
@@ -199,7 +199,7 @@ class LigneServiceTest {
     void ligneInexistante404() {
         when(ligneRepository.findById(999)).thenReturn(Optional.empty());
         assertThrows(ResourceNotFoundException.class,
-                () -> service.modifier(999, new UpdateLigneRequest(null, null, null, null)));
+                () -> service.modifier(999, new UpdateLigneRequest(null, null, null, null, null)));
     }
 
     @Test
@@ -227,7 +227,7 @@ class LigneServiceTest {
         when(ligneRepository.findById(1)).thenReturn(Optional.of(ligne));
 
         assertThrows(BusinessException.class, () -> service.modifier(1,
-                new UpdateLigneRequest(new BigDecimal("2500000"), null, null, null)));
+                new UpdateLigneRequest(new BigDecimal("2500000"), null, null, null, null)));
         assertThrows(BusinessException.class, () -> service.retirer(1));
     }
 }

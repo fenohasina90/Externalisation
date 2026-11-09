@@ -8,6 +8,8 @@ public record UpdateLigneRequest(
         LocalDate debutService,
         LocalDate finService,
         /** Désignation (DEBOURS en EN_ATTENTE uniquement). */
-        String designationDebours
+        String designationDebours,
+        /** Sous-type PRESTATION / ABONNEMENT_MENSUEL (EXTERNALISATION + STANDARD). */
+        String typePrestation
 ) {
 }
