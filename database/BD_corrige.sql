@@ -20,6 +20,9 @@ DROP TABLE IF EXISTS echeance_paiement;
 DROP TABLE IF EXISTS propos_paiement;
 DROP TABLE IF EXISTS historique_ligne_service;
 DROP TABLE IF EXISTS ligne_service;
+DROP TABLE IF EXISTS facture_validee;
+DROP TABLE IF EXISTS facture_proforma;
+-- Ancien nom (rétro-compatibilité)
 DROP TABLE IF EXISTS facture;
 DROP TABLE IF EXISTS dossier_transaction_immobiliere;
 DROP TABLE IF EXISTS dossier_associe;
@@ -1451,25 +1454,22 @@ VALUES
 );
 
 -- =========================================================
--- 32. FACTURES (PROFORMA PUIS VALIDÉES)
+-- 32. FACTURES PROFORMA puis VALIDÉES (deux tables)
 -- =========================================================
 
-CREATE TABLE facture (
+CREATE TABLE facture_proforma (
     id INT AUTO_INCREMENT PRIMARY KEY,
 
+    -- Référence PROFORMA : PRO-DDMMYYYY-XXXXX (toujours visible)
     reference_facture VARCHAR(100) NOT NULL UNIQUE,
 
     demande_id INT NOT NULL,
 
     mode_facturation ENUM('UNIQUE', 'PAR_SERVICE') NOT NULL DEFAULT 'PAR_SERVICE',
 
-    montant DECIMAL(15,2) NOT NULL,
+    montant DECIMAL(15,2) NOT NULL COMMENT 'Montant proforma',
 
     statut VARCHAR(50) NOT NULL DEFAULT 'PROFORMA',
-
-    valide_par INT NULL,
-
-    valide_le DATETIME NULL,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -1481,20 +1481,59 @@ CREATE TABLE facture (
         REFERENCES demande_service(id)
         ON DELETE RESTRICT,
 
-    CONSTRAINT fk_facture_valide_par
-        FOREIGN KEY (valide_par)
-        REFERENCES utilisateur(id)
-        ON DELETE SET NULL,
-
     CONSTRAINT chk_facture_montant
         CHECK (montant >= 0)
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_facture_demande
-ON facture(demande_id);
+ON facture_proforma(demande_id);
 
 CREATE INDEX idx_facture_reference
-ON facture(reference_facture);
+ON facture_proforma(reference_facture);
+
+CREATE TABLE facture_validee (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    -- Référence VALIDÉE : XXXXXEXT/TNR/YYYY
+    reference_facture_validee VARCHAR(50) NOT NULL UNIQUE,
+
+    -- NULL pour une validée sans proforma (débours)
+    facture_proforma_id INT NULL UNIQUE,
+
+    demande_id INT NOT NULL,
+
+    montant DECIMAL(15,2) NOT NULL COMMENT 'Montant validé (peut différer du proforma)',
+
+    valide_par INT NULL,
+
+    valide_le DATETIME NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_facture_validee_proforma
+        FOREIGN KEY (facture_proforma_id)
+        REFERENCES facture_proforma(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_facture_validee_demande
+        FOREIGN KEY (demande_id)
+        REFERENCES demande_service(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_facture_validee_valide_par
+        FOREIGN KEY (valide_par)
+        REFERENCES utilisateur(id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT chk_facture_validee_montant
+        CHECK (montant >= 0)
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_facture_validee_demande
+ON facture_validee(demande_id);
 
 -- =========================================================
 -- 33. LIGNES DE SERVICE (UN SERVICE AU SEIN D'UNE DEMANDE)
@@ -1546,7 +1585,7 @@ CREATE TABLE ligne_service (
 
     CONSTRAINT fk_ligne_facture
         FOREIGN KEY (facture_id)
-        REFERENCES facture(id)
+        REFERENCES facture_proforma(id)
         ON DELETE SET NULL,
 
     CONSTRAINT chk_ligne_dates

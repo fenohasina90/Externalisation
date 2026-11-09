@@ -38,6 +38,7 @@ import static org.mockito.Mockito.*;
 class FactureServiceTest {
 
     @Mock private FactureRepository factureRepository;
+    @Mock private com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository;
     @Mock private LigneServiceRepository ligneRepository;
     @Mock private HistoriqueLigneServiceRepository historiqueLigneRepository;
     @Mock private DemandeServiceRepository demandeRepository;
@@ -50,7 +51,7 @@ class FactureServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new FactureService(factureRepository, ligneRepository,
+        service = new FactureService(factureRepository, factureValideeRepository, ligneRepository,
                 historiqueLigneRepository, demandeRepository, historiqueDemandeRepository,
                 statutDemandeRepository, utilisateurRepository, auditService);
         lenient().when(historiqueDemandeRepository.findFirstByDemandeIdOrderByIdDesc(any()))
@@ -61,13 +62,26 @@ class FactureServiceTest {
                         .statut(inv.getArgument(0)).build()));
         lenient().when(factureRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(ligneRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        lenient().when(factureRepository.countByReferenceFactureStartingWith(anyString()))
+        lenient().when(factureRepository.countByAnneeDemande(anyInt()))
                 .thenReturn(0L);
+        lenient().when(factureValideeRepository.countByReferenceFactureValideeEndingWith(anyString()))
+                .thenReturn(0L);
+        lenient().when(factureValideeRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        java.util.concurrent.atomic.AtomicReference<com.cabex.backend.facture.entity.FactureValidee> sauvee =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        lenient().when(factureValideeRepository.save(any())).thenAnswer(inv -> {
+            var v = (com.cabex.backend.facture.entity.FactureValidee) inv.getArgument(0);
+            sauvee.set(v);
+            return v;
+        });
+        lenient().when(factureValideeRepository.findByFactureProformaId(anyInt()))
+                .thenAnswer(inv -> sauvee.get() != null ? java.util.Optional.of(sauvee.get()) : java.util.Optional.empty());
     }
 
     private DemandeService demande() {
         return DemandeService.builder().id(17)
-                .referenceDemande("DEM-2026-00017").actif(true).build();
+                .referenceDemande("DEM-2026-00017").actif(true)
+                .dateDemande(java.time.LocalDate.of(2026, 9, 18)).build();
     }
 
     private LigneService ligne(Integer id, DemandeService demande, String tarif) {
@@ -88,8 +102,11 @@ class FactureServiceTest {
         var factures = service.genererPourDemande(17, "UNIQUE");
 
         assertEquals(1, factures.size());
-        assertEquals(new BigDecimal("21000000"), factures.get(0).montant());
+        assertEquals(new BigDecimal("21000000"), factures.get(0).montantProforma());
+        assertNull(factures.get(0).montantValidee());
         assertEquals("PROFORMA", factures.get(0).statut());
+        assertEquals("PRO-18092026-00001", factures.get(0).referenceFacture());
+        assertNull(factures.get(0).referenceFactureValidee());
     }
 
     @Test
@@ -129,8 +146,29 @@ class FactureServiceTest {
         var reponse = service.valider(1, null);
 
         assertEquals("VALIDEE", reponse.statut());
+        assertEquals("PRO-2026-00001", reponse.referenceFacture());
+        assertNotNull(reponse.referenceFactureValidee());
+        assertTrue(reponse.referenceFactureValidee().endsWith("EXT/TNR/" + java.time.LocalDate.now().getYear()));
         assertEquals("VALIDE", ligne.getStatut());
         verify(historiqueLigneRepository).save(any());
+    }
+
+    @Test
+    void validerMontantDifferentDuProformaOk() {
+        DemandeService demande = demande();
+        Facture facture = Facture.builder().id(1).demande(demande)
+                .referenceFacture("PRO-18092026-00001").montant(new BigDecimal("2000000"))
+                .statut("PROFORMA").build();
+        LigneService ligne = ligne(1, demande, "2000000");
+        ligne.setFacture(facture);
+        when(factureRepository.findById(1)).thenReturn(Optional.of(facture));
+        when(ligneRepository.findByDemandeId(17)).thenReturn(List.of(ligne));
+
+        var reponse = service.valider(1, null, new BigDecimal("1950000"));
+
+        assertEquals(new BigDecimal("2000000"), reponse.montantProforma());
+        assertEquals(new BigDecimal("1950000"), reponse.montantValidee());
+        verify(factureValideeRepository).save(argThat(v -> new BigDecimal("1950000").equals(v.getMontant())));
     }
 
     @Test

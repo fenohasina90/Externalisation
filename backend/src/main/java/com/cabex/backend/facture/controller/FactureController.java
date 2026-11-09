@@ -58,10 +58,13 @@ public class FactureController {
 
     @PutMapping("/factures/{id}/valider")
     @PreAuthorize("hasAuthority('FACTURE_VALIDATE')")
-    @Operation(summary = "Valider une facture proforma")
+    @Operation(summary = "Valider une facture proforma",
+            description = "Crée la facture validée (nouvelle référence XXXXXEXT/TNR/YYYY) avec un montant propre, qui peut différer du montant proforma")
     public ResponseEntity<FactureResponse> valider(@PathVariable Integer id,
                                                    @RequestBody(required = false) ValiderFactureRequest request) {
         return ResponseEntity.ok(factureService.valider(
-                id, request != null ? request.commentaire() : null));
+                id,
+                request != null ? request.commentaire() : null,
+                request != null ? request.montant() : null));
     }
 }

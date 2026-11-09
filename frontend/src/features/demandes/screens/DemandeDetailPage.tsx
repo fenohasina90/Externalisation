@@ -418,6 +418,7 @@ function FacturesTab({
 }) {
   const [confirmValidation, setConfirmValidation] = useState(false)
   const [validationEnCours, setValidationEnCours] = useState(false)
+  const [montantValideSaisi, setMontantValideSaisi] = useState('')
   const proformas = factures.filter((f) => f.statut === 'PROFORMA')
   const toutesLignes = factures.flatMap((f) =>
     f.lignes.map((l) => ({ ...l, referenceFacture: f.referenceFacture })),
@@ -429,13 +430,15 @@ function FacturesTab({
     setValidationEnCours(true)
     try {
       for (const f of proformas) {
-        await facturesApi.valider(f.id, null)
+        const montant = proformas.length === 1 && montantValideSaisi.trim() !== '' ? Number(montantValideSaisi) : null
+        await facturesApi.valider(f.id, null, montant)
       }
       onMessage(
         proformas.length === 1
           ? `Facture ${proformas[0].referenceFacture} validée.`
           : `${proformas.length} factures validées.`,
       )
+      setMontantValideSaisi('')
       onChange()
     } catch (err) {
       onErreur(err instanceof Error ? err.message : 'Échec de la validation')
@@ -519,7 +522,8 @@ function FacturesTab({
         <section key={f.id} className="card card-pad">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <strong>
-              {f.referenceFacture} — {formatMontantMGA(f.montant)}
+              Proforma {f.referenceFacture} — {formatMontantMGA(f.montantProforma ?? f.montant)}
+              {f.montantValidee != null && ` → validée ${formatMontantMGA(f.montantValidee)}`}
             </strong>
             <span className={f.statut === 'VALIDEE' ? 'pill ok' : 'pill wt'}>
               ● {f.statut === 'VALIDEE' ? 'Validée' : 'Proforma'}
@@ -527,6 +531,7 @@ function FacturesTab({
           </div>
           <p className="section-note">
             Mode {f.modeFacturation === 'UNIQUE' ? 'unique' : 'par service'}
+            {f.referenceFactureValidee ? ` — réf. validée : ${f.referenceFactureValidee}` : ''}
             {f.valideParNom ? ` — validée par ${f.valideParNom}` : ''}
             {f.valideLe ? ` le ${formatDate(f.valideLe.slice(0, 10))}` : ''}
           </p>
@@ -545,6 +550,20 @@ function FacturesTab({
           proformas.length === 1
             ? `La facture ${proformas[0]?.referenceFacture ?? ''} sera validée et le service figé (ni modification, ni retrait).`
             : `Les ${proformas.length} factures proforma seront validées et les services concernés seront figés.`
+        }
+        details={
+          proformas.length === 1 && proformas[0] ? (
+            <label className="field" style={{ marginTop: 12 }}>
+              Montant validé (MGA) — vide = proforma ({formatMontantMGA(proformas[0].montantProforma ?? proformas[0].montant)})
+              <input
+                type="number"
+                min={0}
+                value={montantValideSaisi}
+                onChange={(e) => setMontantValideSaisi(e.target.value)}
+                placeholder="Ex. 1950000"
+              />
+            </label>
+          ) : undefined
         }
         confirmer="Valider"
         ton="success"

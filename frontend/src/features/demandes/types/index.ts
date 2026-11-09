@@ -140,10 +140,18 @@ export interface FactureLigne {
 
 export interface Facture {
   id: number
+  /** Référence PROFORMA : PRO-DDMMYYYY-XXXXX (toujours visible). */
   referenceFacture: string
+  /** Référence VALIDÉE : XXXXXEXT/TNR/YYYY (null tant que proforma). */
+  referenceFactureValidee: string | null
   demandeId: number
   referenceDemande: string
   modeFacturation: ModeFacturation | string
+  /** Montant proforma. */
+  montantProforma: number
+  /** Montant validé (peut différer du proforma). */
+  montantValidee: number | null
+  /** Compat : montant proforma. */
   montant: number
   statut: StatutFacture | string
   valideParId: number | null

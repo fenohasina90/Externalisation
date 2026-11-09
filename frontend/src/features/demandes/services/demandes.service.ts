@@ -150,8 +150,8 @@ export const facturesApi = {
     return data
   },
 
-  async valider(id: number, commentaire?: string | null): Promise<Facture> {
-    const { data } = await http.put<Facture>(`/factures/${id}/valider`, { commentaire: commentaire ?? null })
+  async valider(id: number, commentaire?: string | null, montant?: number | null): Promise<Facture> {
+    const { data } = await http.put<Facture>(`/factures/${id}/valider`, { commentaire: commentaire ?? null, montant: montant ?? null })
     return data
   },
 

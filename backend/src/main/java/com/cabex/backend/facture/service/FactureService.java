@@ -49,6 +49,7 @@ public class FactureService {
     private static final String DEMANDE_EN_ATTENTE = "EN_ATTENTE";
 
     private final FactureRepository factureRepository;
+    private final com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository;
     private final LigneServiceRepository ligneRepository;
     private final HistoriqueLigneServiceRepository historiqueLigneRepository;
     private final DemandeServiceRepository demandeRepository;
@@ -58,6 +59,7 @@ public class FactureService {
     private final AuditService auditService;
 
     public FactureService(FactureRepository factureRepository,
+                          com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository,
                           LigneServiceRepository ligneRepository,
                           HistoriqueLigneServiceRepository historiqueLigneRepository,
                           DemandeServiceRepository demandeRepository,
@@ -66,6 +68,7 @@ public class FactureService {
                           UtilisateurRepository utilisateurRepository,
                           AuditService auditService) {
         this.factureRepository = factureRepository;
+        this.factureValideeRepository = factureValideeRepository;
         this.ligneRepository = ligneRepository;
         this.historiqueLigneRepository = historiqueLigneRepository;
         this.demandeRepository = demandeRepository;
@@ -222,17 +225,41 @@ public class FactureService {
 
     @Transactional
     public FactureResponse valider(Integer factureId, String commentaire) {
+        return valider(factureId, commentaire, null);
+    }
+
+    @Transactional
+    public FactureResponse valider(Integer factureId, String commentaire, BigDecimal montantValide) {
         Facture facture = getFacture(factureId);
         if (!FACTURE_PROFORMA.equals(facture.getStatut())) {
             throw new BusinessException(
                     "Seule une facture proforma peut être validée (statut actuel : "
                             + facture.getStatut() + ")");
         }
+        if (factureValideeRepository.existsByFactureProformaId(facture.getId())) {
+            throw new BusinessException("Cette facture proforma a déjà été validée");
+        }
+        BigDecimal montantFinal = montantValide != null ? montantValide : facture.getMontant();
+        if (montantFinal == null || montantFinal.signum() < 0) {
+            throw new BusinessException("Le montant validé doit être supérieur ou nul");
+        }
         Utilisateur validateur = currentUtilisateur();
         facture.setStatut(FACTURE_VALIDEE);
-        facture.setValidePar(validateur);
-        facture.setValideLe(LocalDateTime.now());
         facture = factureRepository.save(facture);
+
+        LocalDateTime valideLe = LocalDateTime.now();
+        com.cabex.backend.facture.entity.FactureValidee validee =
+                com.cabex.backend.facture.entity.FactureValidee.builder()
+                        .referenceFactureValidee(genererReferenceValidee(valideLe.getYear()))
+                        .factureProforma(facture)
+                        .demande(facture.getDemande())
+                        .montant(montantFinal)
+                        .validePar(validateur)
+                        .valideLe(valideLe)
+                        .build();
+        factureValideeRepository.save(validee);
+        // Recharge pour toResponse (relation LAZY factureValidee).
+        facture = getFacture(factureId);
 
         List<LigneService> lignes = ligneRepository.findByDemandeId(facture.getDemande().getId());
         for (LigneService ligne : lignes) {
@@ -248,7 +275,10 @@ public class FactureService {
             }
         }
         DemandeService demande = facture.getDemande();
-        ajouterHistoriqueDemande(demande, "Facture validée : " + facture.getReferenceFacture());
+        ajouterHistoriqueDemande(demande,
+                "Facture validée : proforma " + facture.getReferenceFacture()
+                        + " → validée " + validee.getReferenceFactureValidee()
+                        + " (" + montantFinal + ")");
 
         auditService.log(AuditActions.STATUS_CHANGE, "FACTURE", "Facture",
                 Long.valueOf(facture.getId()), FACTURE_PROFORMA, FACTURE_VALIDEE);
@@ -269,25 +299,31 @@ public class FactureService {
                         l.getFinService(),
                         l.getStatut()))
                 .toList();
+        com.cabex.backend.facture.entity.FactureValidee validee =
+                facture.getId() != null
+                        ? factureValideeRepository.findByFactureProformaId(facture.getId()).orElse(null)
+                        : null;
         return new com.cabex.backend.facture.dto.FactureResponse(
                 facture.getId(),
                 facture.getReferenceFacture(),
+                validee != null ? validee.getReferenceFactureValidee() : null,
                 facture.getDemande() != null ? facture.getDemande().getId() : null,
                 facture.getDemande() != null ? facture.getDemande().getReferenceDemande() : null,
                 facture.getModeFacturation(),
                 facture.getMontant(),
+                validee != null ? validee.getMontant() : null,
                 facture.getStatut(),
-                facture.getValidePar() != null ? facture.getValidePar().getId() : null,
-                facture.getValidePar() != null
-                        ? facture.getValidePar().getPrenom() + " " + facture.getValidePar().getNom()
+                validee != null && validee.getValidePar() != null ? validee.getValidePar().getId() : null,
+                validee != null && validee.getValidePar() != null
+                        ? validee.getValidePar().getPrenom() + " " + validee.getValidePar().getNom()
                         : null,
-                facture.getValideLe(),
+                validee != null ? validee.getValideLe() : null,
                 lignes);
     }
 
     private Facture creerFacture(DemandeService demande, String mode, BigDecimal montant) {
         return Facture.builder()
-                .referenceFacture(genererReference(java.time.LocalDate.now().getYear()))
+                .referenceFacture(genererReferenceProforma(demande))
                 .demande(demande)
                 .modeFacturation(mode)
                 .montant(montant)
@@ -321,14 +357,38 @@ public class FactureService {
         }
     }
 
-    private String genererReference(int annee) {
-        String prefix = "PRO-" + annee + "-";
-        long seq = factureRepository.countByReferenceFactureStartingWith(prefix) + 1;
+    /**
+     * Référence proforma : PRO-DDMMYYYY-XXXXX.
+     * La date est celle de la demande, XXXXX se réinitialise chaque année.
+     */
+    private String genererReferenceProforma(DemandeService demande) {
+        java.time.LocalDate date = demande.getDateDemande() != null
+                ? demande.getDateDemande() : java.time.LocalDate.now();
+        String dd = String.format("%02d", date.getDayOfMonth());
+        String mm = String.format("%02d", date.getMonthValue());
+        String aaaa = String.valueOf(date.getYear());
+        String prefix = "PRO-" + dd + mm + aaaa + "-";
+        long seq = factureRepository.countByAnneeDemande(date.getYear()) + 1;
         String reference;
         do {
             reference = prefix + String.format("%05d", seq);
             seq++;
         } while (factureRepository.existsByReferenceFacture(reference));
+        return reference;
+    }
+
+    /** Référence validée : XXXXXEXT/TNR/YYYY, XXXXX réinitialisé chaque année. */
+    private String genererReferenceValidee(int annee) {
+        String suffixe = "EXT/TNR/" + annee;
+        long seq = factureValideeRepository.countByReferenceFactureValideeEndingWith(suffixe) + 1;
+        String reference;
+        do {
+            if (seq > 99999) {
+                throw new BusinessException("Limite de numéros de facture atteinte pour " + annee);
+            }
+            reference = String.format("%05d", seq) + suffixe;
+            seq++;
+        } while (factureValideeRepository.existsByReferenceFactureValidee(reference));
         return reference;
     }
 
