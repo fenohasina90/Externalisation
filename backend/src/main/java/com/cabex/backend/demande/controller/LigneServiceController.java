@@ -4,6 +4,7 @@ import com.cabex.backend.demande.dto.CreateLigneRequest;
 import com.cabex.backend.demande.dto.HistoriqueLigneResponse;
 import com.cabex.backend.demande.dto.LigneServiceResponse;
 import com.cabex.backend.demande.dto.UpdateLigneRequest;
+import com.cabex.backend.demande.dto.ValiderMontantDeboursRequest;
 import com.cabex.backend.demande.service.LigneServiceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -14,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -75,5 +77,24 @@ public class LigneServiceController {
     public ResponseEntity<List<HistoriqueLigneResponse>> historique(@PathVariable Integer demandeId,
                                                                     @PathVariable Integer ligneId) {
         return ResponseEntity.ok(ligneService.historiqueParLigne(ligneId));
+    }
+
+    @PatchMapping("/{ligneId}/valider-montant-debours")
+    @PreAuthorize("hasAuthority('DEMANDE_STATUS_UPDATE')")
+    @Operation(summary = "Valider le montant d'une ligne DEBOURS",
+            description = "Réservé aux lignes DEBOURS en EN_ATTENTE : saisit le montant et fait passer la ligne à NON_PAYEE (NON_PAYEE → PARTIEL → PAYEE ensuite automatiquement par les paiements)")
+    public ResponseEntity<LigneServiceResponse> validerMontantDebours(@PathVariable Integer demandeId,
+                                                                      @PathVariable Integer ligneId,
+                                                                      @Valid @RequestBody ValiderMontantDeboursRequest request) {
+        return ResponseEntity.ok(ligneService.validerMontantDebours(ligneId, request));
+    }
+
+    @PatchMapping("/{ligneId}/annuler-debours")
+    @PreAuthorize("hasAuthority('DEMANDE_STATUS_UPDATE')")
+    @Operation(summary = "Annuler une ligne DEBOURS en EN_ATTENTE",
+            description = "DEBOURS uniquement, uniquement depuis EN_ATTENTE (EN_ATTENTE → ANNULEE)")
+    public ResponseEntity<LigneServiceResponse> annulerDebours(@PathVariable Integer demandeId,
+                                                               @PathVariable Integer ligneId) {
+        return ResponseEntity.ok(ligneService.annulerDebours(ligneId));
     }
 }

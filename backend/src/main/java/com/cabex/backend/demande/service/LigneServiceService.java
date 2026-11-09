@@ -6,6 +6,7 @@ import com.cabex.backend.demande.dto.CreateLigneRequest;
 import com.cabex.backend.demande.dto.HistoriqueLigneResponse;
 import com.cabex.backend.demande.dto.LigneServiceResponse;
 import com.cabex.backend.demande.dto.UpdateLigneRequest;
+import com.cabex.backend.demande.dto.ValiderMontantDeboursRequest;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.HistoriqueDemande;
 import com.cabex.backend.demande.entity.HistoriqueLigneService;
@@ -50,6 +51,15 @@ public class LigneServiceService {
     public static final String LIGNE_EN_ATTENTE = "EN_ATTENTE";
     public static final String LIGNE_EN_COURS = "EN_COURS";
     public static final String LIGNE_TERMINE = "TERMINE";
+    public static final String LIGNE_ANNULEE = "ANNULEE";
+
+    /** Statuts DEBOURS (par ligne, VARCHAR libre). */
+    public static final String LIGNE_NON_PAYEE = "NON_PAYEE";
+    public static final String LIGNE_PARTIEL = "PARTIEL";
+    public static final String LIGNE_PAYEE = "PAYEE";
+
+    public static final String CATEGORIE_EXTERNALISATION = "EXTERNALISATION";
+    public static final String CATEGORIE_DEBOURS = "DEBOURS";
 
     private static final String DEMANDE_EN_ATTENTE = "EN_ATTENTE";
 
@@ -70,6 +80,7 @@ public class LigneServiceService {
     private final UtilisateurRepository utilisateurRepository;
     private final AuditService auditService;
     private final FactureService factureService;
+    private final com.cabex.backend.paiement.repository.PaiementRepository paiementRepository;
 
     public LigneServiceService(LigneServiceRepository ligneRepository,
                                HistoriqueLigneServiceRepository historiqueLigneRepository,
@@ -80,7 +91,8 @@ public class LigneServiceService {
                                ProposPaiementRepository proposRepository,
                                UtilisateurRepository utilisateurRepository,
                                AuditService auditService,
-                               FactureService factureService) {
+                               FactureService factureService,
+                               com.cabex.backend.paiement.repository.PaiementRepository paiementRepository) {
         this.ligneRepository = ligneRepository;
         this.historiqueLigneRepository = historiqueLigneRepository;
         this.demandeRepository = demandeRepository;
@@ -91,6 +103,7 @@ public class LigneServiceService {
         this.utilisateurRepository = utilisateurRepository;
         this.auditService = auditService;
         this.factureService = factureService;
+        this.paiementRepository = paiementRepository;
     }
 
     @Transactional(readOnly = true)
@@ -127,6 +140,20 @@ public class LigneServiceService {
     public LigneServiceResponse ajouter(Integer demandeId, CreateLigneRequest request) {
         DemandeService demande = verifierDemande(demandeId);
         exigerEnAttente(demande);
+        String categorie = normaliserCategorie(request.categorie());
+
+        if (CATEGORIE_DEBOURS.equals(categorie)) {
+            return ajouterDebours(demande, request);
+        }
+        if (request.designationDebours() != null && !request.designationDebours().isBlank()) {
+            throw new BusinessException(
+                    "La désignation du débours ne s'applique qu'aux lignes DEBOURS");
+        }
+
+        if (request.serviceId() == null || request.tarif() == null
+                || request.debutService() == null || request.finService() == null) {
+            throw new BusinessException(ErrorMessages.DONNEES_OBLIGATOIRES);
+        }
         Service service = verifierService(request.serviceId());
         verifierCoherenceTypeSolo(demande, service);
         verifierDoublonService(demandeId, request.serviceId(), null);
@@ -141,6 +168,7 @@ public class LigneServiceService {
                 .tarif(request.tarif())
                 .debutService(request.debutService())
                 .finService(request.finService())
+                .categorie(CATEGORIE_EXTERNALISATION)
                 .build();
         ligne = ligneRepository.save(ligne);
 
@@ -159,9 +187,165 @@ public class LigneServiceService {
         return toResponse(ligne);
     }
 
+    private LigneServiceResponse ajouterDebours(DemandeService demande,
+                                                CreateLigneRequest request) {
+        if (request.designationDebours() == null || request.designationDebours().isBlank()) {
+            throw new BusinessException(ErrorMessages.DESIGNATION_DEBOURS_OBLIGATOIRE);
+        }
+        if (request.serviceId() != null || request.tarif() != null
+                || request.debutService() != null || request.finService() != null) {
+            throw new BusinessException(ErrorMessages.DEBOURS_SERVICE_INTERDIT);
+        }
+
+        LigneService ligne = LigneService.builder()
+                .demande(demande)
+                .categorie(CATEGORIE_DEBOURS)
+                .designationDebours(request.designationDebours().trim())
+                .statut(LIGNE_EN_ATTENTE)
+                .build();
+        ligne = ligneRepository.save(ligne);
+
+        ajouterHistoriqueLigne(ligne, LIGNE_EN_ATTENTE,
+                "Débours ajouté (EN_ATTENTE) : " + ligne.getDesignationDebours(), "MANUEL");
+        ajouterHistoriqueDemande(demande,
+                "Débours ajouté : " + ligne.getDesignationDebours());
+
+        auditService.log(AuditActions.CREATE, "DEMANDE", "LigneService",
+                Long.valueOf(ligne.getId()), null,
+                demande.getReferenceDemande() + ", débours : " + ligne.getDesignationDebours());
+
+        return toResponse(ligne);
+    }
+
+    /**
+     * Bouton « Valider le montant » d'une ligne DEBOURS.
+     * EN_ATTENTE → NON_PAYEE, montant figé sur la ligne.
+     */
+    @Transactional
+    public LigneServiceResponse validerMontantDebours(
+            Integer ligneId, ValiderMontantDeboursRequest request) {
+        LigneService ligne = getLigne(ligneId);
+        if (!estDebours(ligne)) {
+            throw new BusinessException(ErrorMessages.DEBOURS_UNIQUEMENT);
+        }
+        if (!LIGNE_EN_ATTENTE.equals(ligne.getStatut())) {
+            throw new BusinessException(
+                    "Le montant ne peut être validé que quand la ligne est EN_ATTENTE");
+        }
+        if (ligne.getMontantDebours() != null) {
+            throw new BusinessException(ErrorMessages.DEBOURS_MONTANT_DEJA_VALIDE);
+        }
+        BigDecimal montant = request != null ? request.montantDebours() : null;
+        if (montant == null || montant.signum() <= 0) {
+            throw new BusinessException(ErrorMessages.MONTANT_DEBOURS_POSITIF);
+        }
+
+        ligne.setMontantDebours(montant);
+        ligne.setStatut(LIGNE_NON_PAYEE);
+        ligneRepository.save(ligne);
+
+        ajouterHistoriqueLigne(ligne, LIGNE_NON_PAYEE,
+                "Montant du débours validé : " + montant.toPlainString(), "MANUEL");
+        ajouterHistoriqueDemande(ligne.getDemande(),
+                "Montant du débours validé (ligne " + ligne.getId() + ") : "
+                        + montant.toPlainString());
+
+        auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "LigneService",
+                Long.valueOf(ligne.getId()), LIGNE_EN_ATTENTE, LIGNE_NON_PAYEE);
+
+        return toResponse(ligne);
+    }
+
+    /**
+     * Annulation d'une ligne DEBOURS : EN_ATTENTE → ANNULEE uniquement.
+     */
+    @Transactional
+    public LigneServiceResponse annulerDebours(Integer ligneId) {
+        LigneService ligne = getLigne(ligneId);
+        if (!estDebours(ligne)) {
+            throw new BusinessException(ErrorMessages.DEBOURS_UNIQUEMENT);
+        }
+        if (!LIGNE_EN_ATTENTE.equals(ligne.getStatut())) {
+            throw new BusinessException(ErrorMessages.TRANSITION_STATUT_INTERDITE);
+        }
+
+        ligne.setStatut(LIGNE_ANNULEE);
+        ligneRepository.save(ligne);
+
+        ajouterHistoriqueLigne(ligne, LIGNE_ANNULEE,
+                "Débours annulé (EN_ATTENTE → ANNULEE)", "MANUEL");
+        ajouterHistoriqueDemande(ligne.getDemande(),
+                "Débours annulé (ligne " + ligne.getId() + ")");
+
+        auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "LigneService",
+                Long.valueOf(ligne.getId()), LIGNE_EN_ATTENTE, LIGNE_ANNULEE);
+
+        return toResponse(ligne);
+    }
+
+    /**
+     * Recalcule le statut automatique d'une ligne DEBOURS après un paiement :
+     * NON_PAYEE → PARTIEL → PAYEE (selon le total payé vs montant validé).
+     */
+    @Transactional
+    public void actualiserStatutDeboursApresPaiement(LigneService ligne) {
+        if (ligne == null || !estDebours(ligne)) {
+            return;
+        }
+        if (ligne.getMontantDebours() == null) {
+            return;
+        }
+        BigDecimal paye = paiementRepository.sommePayeeParLigne(ligne.getId());
+        if (paye == null) {
+            paye = BigDecimal.ZERO;
+        }
+        String cible;
+        if (paye.compareTo(BigDecimal.ZERO) == 0) {
+            cible = LIGNE_NON_PAYEE;
+        } else if (paye.compareTo(ligne.getMontantDebours()) >= 0) {
+            cible = LIGNE_PAYEE;
+        } else {
+            cible = LIGNE_PARTIEL;
+        }
+        String actuel = ligne.getStatut();
+        if (cible.equals(actuel)) {
+            return;
+        }
+        ligne.setStatut(cible);
+        ligneRepository.save(ligne);
+
+        ajouterHistoriqueLigne(ligne, cible,
+                "Statut du débours mis à jour (payé : " + paye.toPlainString()
+                        + " / " + ligne.getMontantDebours().toPlainString() + ")", "AUTO");
+        ajouterHistoriqueDemande(ligne.getDemande(),
+                "Débours ligne " + ligne.getId() + " : " + cible + " (payé : "
+                        + paye.toPlainString() + ")");
+
+        auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "LigneService",
+                Long.valueOf(ligne.getId()), actuel, cible);
+    }
+
     @Transactional
     public LigneServiceResponse modifier(Integer ligneId, UpdateLigneRequest request) {
         LigneService ligne = getLigne(ligneId);
+        // DEBOURS : seule la désignation est modifiable, en EN_ATTENTE.
+        if (estDebours(ligne)) {
+            if (!LIGNE_EN_ATTENTE.equals(ligne.getStatut())) {
+                throw new BusinessException(
+                        "Le débours ne peut être modifié que quand il est EN_ATTENTE");
+            }
+            if (request.designationDebours() != null && !request.designationDebours().isBlank()) {
+                ligne.setDesignationDebours(request.designationDebours().trim());
+            }
+            ligne = ligneRepository.save(ligne);
+            ajouterHistoriqueLigne(ligne, ligne.getStatut(),
+                    "Débours modifié : " + ligne.getDesignationDebours(), "MANUEL");
+            ajouterHistoriqueDemande(ligne.getDemande(),
+                    "Débours modifié (ligne " + ligne.getId() + ")");
+            auditService.log(AuditActions.UPDATE, "DEMANDE", "LigneService",
+                    Long.valueOf(ligne.getId()), null, ligne.getDesignationDebours());
+            return toResponse(ligne);
+        }
         exigerEnAttente(ligne.getDemande());
         exigerFactureNonValidee(ligne);
 
@@ -202,6 +386,24 @@ public class LigneServiceService {
     public void retirer(Integer ligneId) {
         LigneService ligne = getLigne(ligneId);
         DemandeService demande = ligne.getDemande();
+        // DEBOURS : retrait (annulation par suppression) uniquement en EN_ATTENTE.
+        // Préférer annulerDebours (statut ANNULEE) dans le nouveau workflow.
+        if (estDebours(ligne)) {
+            if (!LIGNE_EN_ATTENTE.equals(ligne.getStatut())) {
+                throw new BusinessException(
+                        "Un débours ne peut être retiré que quand il est EN_ATTENTE (utilisez annuler sinon)");
+            }
+            if (ligneRepository.countByDemandeId(demande.getId()) <= 1) {
+                throw new BusinessException("Une demande contient au moins une ligne : retrait impossible");
+            }
+            String designation = ligne.getDesignationDebours();
+            ligneRepository.delete(ligne);
+            ajouterHistoriqueDemande(demande, "Débours retiré : " + designation);
+            auditService.log(AuditActions.DELETE, "DEMANDE", "LigneService",
+                    Long.valueOf(ligneId), demande.getReferenceDemande(),
+                    "débours retiré : " + designation);
+            return;
+        }
         exigerEnAttente(demande);
         exigerFactureNonValidee(ligne);
         if (ligneRepository.countByDemandeId(demande.getId()) <= 1) {
@@ -225,7 +427,8 @@ public class LigneServiceService {
      */
     @Transactional
     public void ajouterHistoriqueCreation(LigneService ligne, String commentaire) {
-        ajouterHistoriqueLigne(ligne, LIGNE_CREE, commentaire, "MANUEL");
+        String statut = (ligne.getStatut() != null) ? ligne.getStatut() : LIGNE_CREE;
+        ajouterHistoriqueLigne(ligne, statut, commentaire, "MANUEL");
     }
 
     /**
@@ -235,6 +438,9 @@ public class LigneServiceService {
     @Transactional
     public boolean avancerStatut(LigneService ligne, String nouveauStatut, String commentaire,
                                  String origine) {
+        if (estDebours(ligne)) {
+            return false;
+        }
         int actuel = ORDRE_LIGNE.getOrDefault(
                 ligne.getStatut() != null ? ligne.getStatut() : LIGNE_CREE, 0);
         int cible = ORDRE_LIGNE.getOrDefault(nouveauStatut, -1);
@@ -261,13 +467,28 @@ public class LigneServiceService {
                     .map(e -> e.getMontantPaye() != null ? e.getMontantPaye() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add));
         }
+        BigDecimal debours = paiementRepository.sommePayeeParLigne(ligneId);
+        if (debours != null) {
+            total = total.add(debours);
+        }
         return total;
+    }
+
+    /** Montant attendu d'une ligne (tarif EXTERNALISATION ou montant DEBOURS validé). */
+    static BigDecimal montantLigne(LigneService ligne) {
+        if (ligne == null) {
+            return BigDecimal.ZERO;
+        }
+        if (estDebours(ligne)) {
+            return ligne.getMontantDebours() != null ? ligne.getMontantDebours() : BigDecimal.ZERO;
+        }
+        return ligne.getTarif() != null ? ligne.getTarif() : BigDecimal.ZERO;
     }
 
     @Transactional(readOnly = true)
     public BigDecimal montantTotalDemande(Integer demandeId) {
         return ligneRepository.findByDemandeId(demandeId).stream()
-                .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
+                .map(LigneServiceService::montantLigne)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
@@ -276,8 +497,8 @@ public class LigneServiceService {
     }
 
     private LigneServiceResponse toResponse(LigneService ligne, BigDecimal paye) {
-        BigDecimal tarif = ligne.getTarif() != null ? ligne.getTarif() : BigDecimal.ZERO;
-        return DemandeMapper.toLigneResponse(ligne, paye, tarif.subtract(paye).max(BigDecimal.ZERO));
+        BigDecimal attendu = montantLigne(ligne);
+        return DemandeMapper.toLigneResponse(ligne, paye, attendu.subtract(paye).max(BigDecimal.ZERO));
     }
 
     private void verifierDoublonService(Integer demandeId, Integer serviceId, Integer ligneExclue) {
@@ -345,6 +566,24 @@ public class LigneServiceService {
             throw new BusinessException(
                     "Les services ne peuvent être modifiés que quand la demande est EN_ATTENTE");
         }
+    }
+
+    public static boolean estDebours(LigneService ligne) {
+        return ligne != null
+                && CATEGORIE_DEBOURS.equalsIgnoreCase(
+                        ligne.getCategorie() != null ? ligne.getCategorie().trim() : null);
+    }
+
+    public static String normaliserCategorie(String categorie) {
+        if (categorie == null || categorie.isBlank()) {
+            return CATEGORIE_EXTERNALISATION;
+        }
+        String normalisee = categorie.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!CATEGORIE_EXTERNALISATION.equals(normalisee)
+                && !CATEGORIE_DEBOURS.equals(normalisee)) {
+            throw new BusinessException(ErrorMessages.CATEGORIE_DEMANDE_INVALIDE);
+        }
+        return normalisee;
     }
 
     private void exigerFactureNonValidee(LigneService ligne) {

@@ -10,6 +10,8 @@ import java.time.LocalDate;
 public record UpdatePaiementRequest(
         Integer echeanceId,
 
+        Integer ligneServiceId,
+
         @NotNull(message = "La date de paiement est obligatoire")
         LocalDate datePaiement,
 

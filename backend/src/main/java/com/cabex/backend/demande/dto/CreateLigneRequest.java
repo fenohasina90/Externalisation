@@ -1,21 +1,33 @@
 package com.cabex.backend.demande.dto;
 
-import jakarta.validation.constraints.NotNull;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record CreateLigneRequest(
-        @NotNull(message = "Le service est obligatoire")
+        /**
+         * Service du catalogue. Requis si catégorie EXTERNALISATION,
+         * interdit si DEBOURS (validation côté service).
+         */
         Integer serviceId,
 
-        @NotNull(message = "Le tarif est obligatoire")
+        /**
+         * Tarif figé. Requis si EXTERNALISATION, null si DEBOURS
+         * (le montant est saisi ensuite via « Valider le montant »).
+         */
         BigDecimal tarif,
 
-        @NotNull(message = "La date de début est obligatoire")
         LocalDate debutService,
 
-        @NotNull(message = "La date de fin est obligatoire")
-        LocalDate finService
+        LocalDate finService,
+
+        /**
+         * Catégorie de la ligne : EXTERNALISATION (défaut si null) ou DEBOURS.
+         */
+        String categorie,
+
+        /**
+         * Désignation du débours. Requise si DEBOURS, null si EXTERNALISATION.
+         */
+        String designationDebours
 ) {
 }

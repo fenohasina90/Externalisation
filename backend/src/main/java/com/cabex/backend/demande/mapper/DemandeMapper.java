@@ -149,7 +149,10 @@ public class DemandeMapper {
                 l.getFacture() != null ? l.getFacture().getId() : null,
                 l.getFacture() != null ? l.getFacture().getReferenceFacture() : null,
                 montantPaye,
-                resteAPayer
+                resteAPayer,
+                l.getCategorie() != null ? l.getCategorie() : "EXTERNALISATION",
+                l.getDesignationDebours(),
+                l.getMontantDebours()
         );
     }
 

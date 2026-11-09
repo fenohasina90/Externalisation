@@ -17,6 +17,9 @@ public record LigneServiceResponse(
         Integer factureId,
         String referenceFacture,
         BigDecimal montantPaye,
-        BigDecimal resteAPayer
+        BigDecimal resteAPayer,
+        String categorie,
+        String designationDebours,
+        BigDecimal montantDebours
 ) {
 }

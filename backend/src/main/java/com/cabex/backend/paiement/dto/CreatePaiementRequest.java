@@ -11,8 +11,17 @@ public record CreatePaiementRequest(
         @NotNull(message = "La demande est obligatoire")
         Integer demandeId,
 
-        @NotNull(message = "L'échéance est obligatoire")
+        /**
+         * Échéance liée au paiement. Requise pour une ligne EXTERNALISATION,
+         * interdite (null) pour une ligne DEBOURS. Validation côté service.
+         */
         Integer echeanceId,
+
+        /**
+         * Ligne DEBOURS payée. Requise pour un paiement DEBOURS,
+         * null pour EXTERNALISATION (dérivée de l'échéance).
+         */
+        Integer ligneServiceId,
 
         @NotNull(message = "Le mode de paiement est obligatoire")
         Integer modePaiementId,

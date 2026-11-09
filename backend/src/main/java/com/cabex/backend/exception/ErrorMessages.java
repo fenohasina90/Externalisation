@@ -106,6 +106,28 @@ public final class ErrorMessages {
     public static final String DOSSIER_TRANSACTION_SITUATION_TERRAIN_INVALIDE =
             "La situation du terrain fournie est invalide";
 
+    // Demandes DEBOURS
+    public static final String CATEGORIE_DEMANDE_INVALIDE =
+            "La catégorie de demande doit être EXTERNALISATION ou DEBOURS";
+    public static final String DESIGNATION_DEBOURS_OBLIGATOIRE =
+            "La désignation du débours est obligatoire pour une demande DEBOURS";
+    public static final String MONTANT_DEBOURS_POSITIF =
+            "Le montant du débours doit être supérieur à 0";
+    public static final String DEBOURS_MONTANT_DEJA_VALIDE =
+            "Le montant du débours a déjà été validé";
+    public static final String DEBOURS_MONTANT_NON_VALIDE =
+            "Le montant du débours n'a pas encore été validé";
+    public static final String DEBOURS_DEJA_PAYE =
+            "Ce débours est déjà intégralement payé";
+    public static final String DEBOURS_ECHEANCE_INTERDITE =
+            "Un paiement DEBOURS ne doit pas être rattaché à une échéance";
+    public static final String DEBOURS_SERVICE_INTERDIT =
+            "Une demande DEBOURS ne peut pas contenir de service";
+    public static final String DEBOURS_UNIQUEMENT =
+            "Cette action n'est réservée qu'aux demandes DEBOURS";
+    public static final String DEBOURS_STATUT_AUTOMATIQUE =
+            "Le statut d'un débours est automatiquement déterminé (validation du montant puis paiements)";
+
     // Général
     public static final String ERREUR_INTERNE = "Une erreur interne est survenue. Veuillez réessayer.";
 }

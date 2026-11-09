@@ -5,7 +5,9 @@ import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
+import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.service.DemandeGestionService;
+import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.echeance.entity.ProposPaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
@@ -51,6 +53,8 @@ public class PaiementGestionService {
     private final NotificationService notificationService;
     private final AuditService auditService;
     private final DemandeGestionService demandeGestionService;
+    private final LigneServiceRepository ligneRepository;
+    private final LigneServiceService ligneServiceService;
 
     public PaiementGestionService(PaiementRepository paiementRepository,
                                   DemandeServiceRepository demandeRepository,
@@ -59,7 +63,9 @@ public class PaiementGestionService {
                                   UtilisateurRepository utilisateurRepository,
                                   NotificationService notificationService,
                                   AuditService auditService,
-                                  DemandeGestionService demandeGestionService) {
+                                  DemandeGestionService demandeGestionService,
+                                  LigneServiceRepository ligneRepository,
+                                  LigneServiceService ligneServiceService) {
         this.paiementRepository = paiementRepository;
         this.demandeRepository = demandeRepository;
         this.modeRepository = modeRepository;
@@ -68,6 +74,8 @@ public class PaiementGestionService {
         this.notificationService = notificationService;
         this.auditService = auditService;
         this.demandeGestionService = demandeGestionService;
+        this.ligneRepository = ligneRepository;
+        this.ligneServiceService = ligneServiceService;
     }
 
     @Transactional(readOnly = true)
@@ -112,13 +120,16 @@ public class PaiementGestionService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Mode de paiement", request.modePaiementId())));
 
-        EcheancePaiement echeance = null;
-        if (request.echeanceId() != null) {
-            echeance = chargerEcheanceDeDemande(request.echeanceId(), demande);
-        } else {
+        // Paiement DEBOURS : rattaché à une ligne (ligneServiceId), sans échéance.
+        if (request.ligneServiceId() != null) {
+            return createDebours(request, demande, mode);
+        }
+        if (request.echeanceId() == null) {
             throw new BusinessException(
                     "L'échéance est obligatoire : rattachez le paiement à une échéance du service concerné");
         }
+
+        EcheancePaiement echeance = chargerEcheanceDeDemande(request.echeanceId(), demande);
 
         validerVirement(mode, request.referenceVirement());
         validerMontant(demande, echeance, request.montantPaye(), BigDecimal.ZERO, null);
@@ -153,11 +164,100 @@ public class PaiementGestionService {
         return PaiementMapper.toResponse(paiement);
     }
 
+    /** Paiement d'un débours : rattaché à la ligne, sans échéance. */
+    private PaiementResponse createDebours(CreatePaiementRequest request, DemandeService demande,
+                                           ModePaiement mode) {
+        if (request.echeanceId() != null) {
+            throw new BusinessException(ErrorMessages.DEBOURS_ECHEANCE_INTERDITE);
+        }
+        LigneService ligne = ligneRepository.findById(request.ligneServiceId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Ligne de service", request.ligneServiceId())));
+        if (ligne.getDemande() == null || ligne.getDemande().getId() == null
+                || !ligne.getDemande().getId().equals(demande.getId())) {
+            throw new BusinessException(
+                    "La ligne ne fait pas partie de la demande sélectionnée");
+        }
+        if (!LigneServiceService.estDebours(ligne)) {
+            throw new BusinessException(ErrorMessages.DEBOURS_UNIQUEMENT);
+        }
+        if (ligne.getMontantDebours() == null) {
+            throw new BusinessException(ErrorMessages.DEBOURS_MONTANT_NON_VALIDE);
+        }
+        String statut = ligne.getStatut();
+        if (LigneServiceService.LIGNE_EN_ATTENTE.equals(statut)) {
+            throw new BusinessException(ErrorMessages.DEBOURS_MONTANT_NON_VALIDE);
+        }
+        if (LigneServiceService.LIGNE_PAYEE.equals(statut)) {
+            throw new BusinessException(ErrorMessages.DEBOURS_DEJA_PAYE);
+        }
+        if (LigneServiceService.LIGNE_ANNULEE.equals(statut)) {
+            throw new BusinessException(ErrorMessages.TRANSITION_STATUT_INTERDITE);
+        }
+
+        validerVirement(mode, request.referenceVirement());
+        validerMontantDebours(ligne, request.montantPaye(), BigDecimal.ZERO);
+
+        Paiement paiement = Paiement.builder()
+                .referencePaiement(genererReference(LocalDate.now().getYear()))
+                .demande(demande)
+                .echeance(null)
+                .ligneService(ligne)
+                .modePaiement(mode)
+                .datePaiement(request.datePaiement())
+                .montantPaye(request.montantPaye())
+                .referenceVirement(request.referenceVirement())
+                .commentaire(request.commentaire())
+                .pieceJustificative(request.pieceJustificative())
+                .createdBy(currentUtilisateur())
+                .build();
+        paiement = paiementRepository.save(paiement);
+
+        ligneServiceService.actualiserStatutDeboursApresPaiement(ligne);
+
+        notificationService.notifierPaiementEnregistre(paiement);
+
+        auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
+                Long.valueOf(paiement.getId()), null,
+                paiement.getMontantPaye() + " : " + paiement.getReferencePaiement());
+
+        return PaiementMapper.toResponse(paiement);
+    }
+
     @Transactional
     public PaiementResponse update(Integer id, UpdatePaiementRequest request) {
         Paiement paiement = getEntity(id);
         DemandeService demande = paiement.getDemande();
         ModePaiement mode = paiement.getModePaiement();
+
+        // DEBOURS : paiement rattaché à une ligne, pas d'échéance.
+        if (paiement.getLigneService() != null) {
+            if (request.echeanceId() != null) {
+                throw new BusinessException(ErrorMessages.DEBOURS_ECHEANCE_INTERDITE);
+            }
+            // Un paiement DEBOURS ne peut pas changer de ligne.
+            if (request.ligneServiceId() != null
+                    && !request.ligneServiceId().equals(paiement.getLigneService().getId())) {
+                throw new BusinessException(
+                        "Un paiement DEBOURS ne peut pas être déplacé vers une autre ligne");
+            }
+            validerVirement(mode, request.referenceVirement());
+            validerMontantDebours(paiement.getLigneService(), request.montantPaye(), paiement.getMontantPaye());
+
+            paiement.setDatePaiement(request.datePaiement());
+            paiement.setMontantPaye(request.montantPaye());
+            paiement.setReferenceVirement(request.referenceVirement());
+            paiement.setCommentaire(request.commentaire());
+
+            PaiementResponse response = PaiementMapper.toResponse(paiementRepository.save(paiement));
+            ligneServiceService.actualiserStatutDeboursApresPaiement(paiement.getLigneService());
+            auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
+                    paiement.getId().longValue(), paiement.getMontantPaye()
+                            + " : " + paiement.getReferencePaiement(),
+                    request.montantPaye()
+                            + (request.referenceVirement() != null ? " : " + request.referenceVirement() : ""));
+            return response;
+        }
 
         EcheancePaiement nouvelleEcheance = null;
         if (request.echeanceId() != null) {
@@ -201,6 +301,9 @@ public class PaiementGestionService {
         paiement.setActif(false);
         paiement.setArchivedAt(LocalDateTime.now());
         paiementRepository.save(paiement);
+        if (paiement.getLigneService() != null) {
+            ligneServiceService.actualiserStatutDeboursApresPaiement(paiement.getLigneService());
+        }
         auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
                 Long.valueOf(id), "supprimé (archivé) : " + ref, null);
     }
@@ -210,6 +313,29 @@ public class PaiementGestionService {
                 && (referenceVirement == null || referenceVirement.isBlank())) {
             throw new BusinessException(
                     "La référence du virement est obligatoire pour un paiement par virement");
+        }
+    }
+
+    /**
+     * Plafond DEBOURS par ligne : montant du débours moins somme déjà payée
+     * sur cette ligne (+ l'ancien montant si on modifie un paiement existant).
+     */
+    private void validerMontantDebours(LigneService ligne, BigDecimal montant,
+                                       BigDecimal ancienMontant) {
+        if (montant == null || montant.signum() <= 0) {
+            throw new BusinessException("Le montant doit être supérieur à 0");
+        }
+        BigDecimal dejaPayer = paiementRepository.sommePayeeParLigne(ligne.getId());
+        if (dejaPayer == null) {
+            dejaPayer = BigDecimal.ZERO;
+        }
+        BigDecimal total = ligne.getMontantDebours() != null
+                ? ligne.getMontantDebours() : BigDecimal.ZERO;
+        BigDecimal reste = total.subtract(dejaPayer)
+                .add(ancienMontant != null ? ancienMontant : BigDecimal.ZERO);
+        if (montant.compareTo(reste) > 0) {
+            throw new BusinessException(
+                    "Le montant ne peut pas dépasser le reste à payer (" + reste + ")");
         }
     }
 

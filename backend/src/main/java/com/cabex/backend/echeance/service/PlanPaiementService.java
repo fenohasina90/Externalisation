@@ -124,6 +124,10 @@ public class PlanPaiementService {
     public PlanPaiementResponse createForLigne(Integer ligneId, CreatePlanPaiementRequest request) {
         LigneService ligne = getLigne(ligneId);
         DemandeService demande = ligne.getDemande();
+        if (LigneServiceService.estDebours(ligne)) {
+            throw new BusinessException(
+                    "Les lignes DEBOURS n'ont pas de plan de paiement (paiement direct)");
+        }
 
         if (ligne.getFacture() == null
                 || !"VALIDEE".equals(ligne.getFacture().getStatut())) {

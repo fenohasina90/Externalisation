@@ -1,6 +1,7 @@
 package com.cabex.backend.paiement.entity;
 
 import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
 import jakarta.persistence.*;
@@ -35,6 +36,10 @@ public class Paiement {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "echeance_id")
     private EcheancePaiement echeance;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ligne_service_id")
+    private LigneService ligneService;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "mode_paiement_id", nullable = false)

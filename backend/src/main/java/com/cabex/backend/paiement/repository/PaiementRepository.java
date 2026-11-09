@@ -32,6 +32,10 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
     @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.demande.id = :demandeId AND p.actif = true")
     BigDecimal sommePayeeParDemande(@Param("demandeId") Integer demandeId);
 
+    /** Somme payée sur une ligne DEBOURS (paiements directs ligne_service_id). */
+    @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.ligneService.id = :ligneId AND p.actif = true")
+    BigDecimal sommePayeeParLigne(@Param("ligneId") Integer ligneId);
+
     /** Montants payés par demande, en une seule requête pour toute une page. */
     @Query("""
         SELECT p.demande.id, COALESCE(SUM(p.montantPaye), 0)

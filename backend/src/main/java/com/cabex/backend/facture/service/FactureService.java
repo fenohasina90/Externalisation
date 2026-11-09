@@ -107,9 +107,11 @@ public class FactureService {
             throw new BusinessException(
                     "Des factures existent déjà : modifiez les lignes de service pour les actualiser");
         }
-        List<LigneService> lignes = ligneRepository.findByDemandeIdOrderByIdAsc(demandeId);
+        // Seules les lignes EXTERNALISATION génèrent une proforma.
+        List<LigneService> lignes = ligneRepository.findByDemandeIdOrderByIdAsc(demandeId)
+                .stream().filter(l -> !LigneServiceService.estDebours(l)).toList();
         if (lignes.isEmpty()) {
-            throw new BusinessException("Une demande contient au moins un service");
+            return List.of();
         }
 
         List<Facture> crees = new ArrayList<>();
@@ -163,7 +165,8 @@ public class FactureService {
                         "La facture " + facture.getReferenceFacture() + " est déjà validée : modification impossible");
             }
         }
-        List<LigneService> lignes = ligneRepository.findByDemandeIdOrderByIdAsc(demandeId);
+        List<LigneService> lignes = ligneRepository.findByDemandeIdOrderByIdAsc(demandeId)
+                .stream().filter(l -> !LigneServiceService.estDebours(l)).toList();
         if (factures.size() == 1 && MODE_UNIQUE.equals(factures.get(0).getModeFacturation())) {
             Facture unique = factures.get(0);
             BigDecimal total = BigDecimal.ZERO;
