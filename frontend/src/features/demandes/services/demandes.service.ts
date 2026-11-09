@@ -13,6 +13,7 @@ import type {
   Statut,
   UpdateDemandePayload,
   UpdateLignePayload,
+  ValiderMontantDeboursPayload,
 } from '../types'
 import type { Dossier, DossierPayload } from '../types/dossier'
 import type { DossierTransactionImmobiliere, DossierTransactionPayload } from '../types/dossierTransaction'
@@ -105,6 +106,27 @@ export const lignesApi = {
   async historique(demandeId: number, ligneId: number): Promise<HistoriqueLigne[]> {
     const { data } = await http.get<HistoriqueLigne[]>(
       `/demandes/${demandeId}/services/${ligneId}/historique`,
+    )
+    return data
+  },
+
+  /** Bouton « Valider le montant » : EN_ATTENTE → NON_PAYEE (DEBOURS uniquement). */
+  async validerMontantDebours(
+    demandeId: number,
+    ligneId: number,
+    payload: ValiderMontantDeboursPayload,
+  ): Promise<LigneService> {
+    const { data } = await http.patch<LigneService>(
+      `/demandes/${demandeId}/services/${ligneId}/valider-montant-debours`,
+      payload,
+    )
+    return data
+  },
+
+  /** Annulation d'une ligne DEBOURS en EN_ATTENTE (EN_ATTENTE → ANNULEE). */
+  async annulerDebours(demandeId: number, ligneId: number): Promise<LigneService> {
+    const { data } = await http.patch<LigneService>(
+      `/demandes/${demandeId}/services/${ligneId}/annuler-debours`,
     )
     return data
   },

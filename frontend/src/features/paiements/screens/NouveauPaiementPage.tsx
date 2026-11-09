@@ -34,6 +34,7 @@ export function NouveauPaiementPage() {
   const [params] = useSearchParams()
   const location = useLocation()
   const referenceParam = params.get('demande')
+  const ligneIdParam = params.get('ligne')
   const echeanceIdParam =
     (location.state as { echeanceId?: number } | null)?.echeanceId ?? NaN
 
@@ -50,6 +51,11 @@ export function NouveauPaiementPage() {
   const { data: modes } = useModesPaiement()
 
   const echeances = useMemo(() => reglatable?.echeances ?? [], [reglatable])
+  const deboursList = useMemo(() => reglatable?.debours ?? [], [reglatable])
+  const [typeReglement, setTypeReglement] = useState<'ECHEANCE' | 'DEBOURS'>('ECHEANCE')
+  const [ligneDeboursChoisie, setLigneDeboursChoisie] = useState<number | null>(
+    ligneIdParam ? Number(ligneIdParam) : null,
+  )
   const [echeanceChoisie, setEcheanceChoisie] = useState<number | null>(
     Number.isFinite(echeanceIdParam) ? echeanceIdParam : null,
   )
@@ -103,29 +109,38 @@ export function NouveauPaiementPage() {
     [echeances, echeanceId],
   )
 
+  const deboursChoisi = useMemo(
+    () => deboursList.find((d) => d.ligneId === ligneDeboursChoisie) ?? null,
+    [deboursList, ligneDeboursChoisie],
+  )
+  const estDeboursSelectionne = typeReglement === 'DEBOURS' && deboursChoisi !== null
+
   const montant =
     montantSaisi && montantSaisi.echeanceId === echeanceId
       ? montantSaisi.montant
-      : (choisie?.echeance.reste ?? 0)
+      : (estDeboursSelectionne ? (deboursChoisi?.reste ?? 0) : (choisie?.echeance.reste ?? 0))
 
   // Mode effectif : le premier disponible tant que l'utilisateur n'a pas choisi.
   const modeChoisi = modes?.find((m) => m.id === modeId) ?? modes?.[0] ?? null
   const estVirement = modeChoisi?.code?.toUpperCase() === VIREMENT
 
-  const attendu = choisie?.echeance.montantAttendu ?? 0
-  const dejaPaye = choisie?.echeance.montantPaye ?? 0
-  const reste = choisie?.echeance.reste ?? 0
+  const attendu = estDeboursSelectionne ? (deboursChoisi?.montantDebours ?? 0) : (choisie?.echeance.montantAttendu ?? 0)
+  const dejaPaye = estDeboursSelectionne ? (deboursChoisi?.montantPaye ?? 0) : (choisie?.echeance.montantPaye ?? 0)
+  const reste = estDeboursSelectionne ? (deboursChoisi?.reste ?? 0) : (choisie?.echeance.reste ?? 0)
+  const cible = estDeboursSelectionne ? null : choisie
   const apresPaiement = reste - montant
   const tauxEcheance = attendu > 0 ? Math.min(100, Math.round((dejaPaye / attendu) * 100)) : 0
 
   const montantDepasse = montant > reste
   const dateHorsPeriode =
-    Boolean(choisie) &&
+    !estDeboursSelectionne &&
+    Boolean(cible) &&
     Boolean(datePaiement) &&
-    ((choisie!.debutService !== null && datePaiement < choisie!.debutService) ||
-      (choisie!.finService !== null && datePaiement > choisie!.finService))
+    ((cible!.debutService !== null && datePaiement < cible!.debutService) ||
+      (cible!.finService !== null && datePaiement > cible!.finService))
+  const cibleValide = estDeboursSelectionne ? Boolean(deboursChoisi) : Boolean(cible)
   const champValide =
-    Boolean(choisie) &&
+    Boolean(cibleValide) &&
     Boolean(modeChoisi) &&
     Boolean(datePaiement) &&
     montant > 0 &&
@@ -142,7 +157,11 @@ export function NouveauPaiementPage() {
       setError('Sélectionnez une demande.')
       return
     }
-    if (!choisie) {
+    if (typeReglement === 'DEBOURS' && !deboursChoisi) {
+      setError('Sélectionnez un débours à régler.')
+      return
+    }
+    if (typeReglement === 'ECHEANCE' && !choisie) {
       setError('Sélectionnez une échéance à régler.')
       return
     }
@@ -164,7 +183,7 @@ export function NouveauPaiementPage() {
     }
     if (dateHorsPeriode) {
       setError(
-        `Le paiement doit être effectué entre le début et la fin du service (${formatDate(choisie!.debutService)} – ${formatDate(choisie!.finService)}).`,
+        `Le paiement doit être effectué entre le début et la fin du service (${formatDate(cible!.debutService)} – ${formatDate(cible!.finService)}).`,
       )
       return
     }
@@ -177,7 +196,7 @@ export function NouveauPaiementPage() {
   }
 
   async function confirmerEnregistrement() {
-    if (!choisie || !modeChoisi || !demandeId) return
+    if ((!estDeboursSelectionne && !choisie) || !modeChoisi || !demandeId) return
 
     setSubmitting(true)
     try {
@@ -185,7 +204,8 @@ export function NouveauPaiementPage() {
       if (!paiement) {
         const cree = await paiementsApi.create({
           demandeId,
-          echeanceId: choisie.echeance.id,
+          echeanceId: estDeboursSelectionne ? null : choisie!.echeance.id,
+          ligneServiceId: estDeboursSelectionne ? deboursChoisi!.ligneId : null,
           modePaiementId: modeChoisi.id,
           datePaiement,
           montantPaye: montant,
@@ -205,7 +225,7 @@ export function NouveauPaiementPage() {
         await documentsApi.uploadPaiement(paiement.id, fichier, null)
       }
 
-      navigate(`/paiements/echeanciers/${choisie.referenceDemande}`)
+      navigate(estDeboursSelectionne ? `/demandes/${reglatable?.demande?.referenceDemande ?? referenceParam ?? ''}` : `/paiements/echeanciers/${choisie!.referenceDemande}`)
     } catch (err) {
       setErreurEnregistrement(messageErreur(err))
       setSubmitting(false)
@@ -245,7 +265,7 @@ export function NouveauPaiementPage() {
                 </div>
               )}
 
-              <h3>1 · Demande et échéance</h3>
+              <h3>1 · Demande et règlement</h3>
               <div className="form-grid">
                 <label className="field form-grid__full">
                   Demande <span className="required">*</span>
@@ -275,6 +295,21 @@ export function NouveauPaiementPage() {
                   </span>
                 </label>
 
+                <div className="field form-grid__full">
+                  <span className="field-label">Type de règlement</span>
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input type="radio" name="typeReglement" checked={typeReglement === 'ECHEANCE'} onChange={() => setTypeReglement('ECHEANCE')} />
+                      Échéance (Externalisation)
+                    </label>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input type="radio" name="typeReglement" checked={typeReglement === 'DEBOURS'} onChange={() => setTypeReglement('DEBOURS')} disabled={deboursList.length === 0} />
+                      Débours (ligne)
+                    </label>
+                  </div>
+                </div>
+
+                {typeReglement === 'ECHEANCE' ? (
                 <label className="field form-grid__full">
                   Échéance <span className="required">*</span>
                   <select
@@ -299,16 +334,39 @@ export function NouveauPaiementPage() {
                     restent dues sont listées.
                   </span>
                 </label>
+                ) : (
+                <label className="field form-grid__full">
+                  Débours <span className="required">*</span>
+                  <select
+                    value={ligneDeboursChoisie ?? ''}
+                    onChange={(e) => setLigneDeboursChoisie(e.target.value ? Number(e.target.value) : null)}
+                    required
+                  >
+                    <option value="">— Choisir —</option>
+                    {deboursList.map((d) => (
+                      <option key={d.ligneId} value={d.ligneId}>
+                        {d.designation} — reste {formatMontantMGA(d.reste)}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="form-help">Lignes DEBOURS non soldées (Non payé / Partiel).</span>
+                </label>
+                )}
               </div>
 
-              {demandeId && !chargement && echeances.length === 0 && (
+              {demandeId && !chargement && typeReglement === 'ECHEANCE' && echeances.length === 0 && deboursList.length === 0 && (
                 <Alert tone="warning">
                   Cette demande n&apos;a aucune échéance non soldée. Un plan de paiement doit être
                   établi — et sa facture validée — avant tout règlement.
                 </Alert>
               )}
+              {demandeId && !chargement && typeReglement === 'DEBOURS' && deboursList.length === 0 && (
+                <Alert tone="warning">
+                  Cette demande n&apos;a aucun débours à régler (montant validé avec reste dû).
+                </Alert>
+              )}
 
-              {choisie && (
+              {cibleValide && (
                 <>
                   <h3 style={{ marginTop: 24 }}>2 · Règlement</h3>
                   <div className="form-grid">
@@ -318,14 +376,14 @@ export function NouveauPaiementPage() {
                       <input
                         type="date"
                         value={datePaiement}
-                        min={choisie.debutService ?? undefined}
-                        max={choisie.finService ?? undefined}
+                        min={cible?.debutService ?? undefined}
+                        max={cible?.finService ?? undefined}
                         onChange={(e) => setDatePaiement(e.target.value)}
                         required
                       />
                       <span className="form-help">
-                        {choisie.debutService || choisie.finService
-                          ? `Période du service : ${formatDate(choisie.debutService)} – ${formatDate(choisie.finService)}.`
+                        {cible?.debutService || cible?.finService
+                          ? `Période du service : ${formatDate(cible?.debutService)} – ${formatDate(cible?.finService)}.`
                           : 'La date doit être comprise dans la période du service.'}
                       </span>
                     </label>
@@ -356,7 +414,7 @@ export function NouveauPaiementPage() {
                         </button>
                       </div>
                       <span className="form-help">
-                        Reste à payer sur l&apos;échéance : {formatMontantMGA(reste)}.
+                        Reste à payer : {formatMontantMGA(reste)}.
                       </span>
                     </div>
 
@@ -453,25 +511,27 @@ export function NouveauPaiementPage() {
           <h3>Récapitulatif</h3>
           <div className="rc">
             <span>Client</span>
-            <strong>{choisie?.nomSociete ?? '—'}</strong>
+            <strong>{choisie?.nomSociete ?? reglatable?.demande?.nomSociete ?? '—'}</strong>
           </div>
           <div className="rc">
             <span>Demande</span>
-            <strong>{choisie?.referenceDemande ?? '—'}</strong>
+            <strong>{choisie?.referenceDemande ?? reglatable?.demande?.referenceDemande ?? '—'}</strong>
           </div>
           <div className="rc">
-            <span>Service</span>
-            <strong>{choisie?.ligneLabel ?? '—'}</strong>
+            <span>{estDeboursSelectionne ? 'Débours' : 'Service'}</span>
+            <strong>{estDeboursSelectionne ? deboursChoisi?.designation ?? '—' : choisie?.ligneLabel ?? '—'}</strong>
           </div>
           <div className="rc">
             <span>Échéance</span>
             <strong>
-              {choisie
+              {estDeboursSelectionne
+                ? '— (sans échéance)'
+                : choisie
                 ? `N° ${choisie.echeance.numeroEcheance} - ${formatDate(choisie.echeance.dateEcheance)}`
                 : '—'}
             </strong>
           </div>
-          {choisie && (
+          {choisie && !estDeboursSelectionne && (
             <div style={{ margin: '4px 0 8px' }}>
               <EcheancePill statut={choisie.echeance.statut} />
             </div>
@@ -490,10 +550,10 @@ export function NouveauPaiementPage() {
             <strong style={{ color: 'var(--danger)' }}>{formatMontantMGA(reste)}</strong>
           </div>
 
-          {choisie && (
+          {cibleValide && (
             <div className="progression" style={{ marginTop: 4 }}>
               <div className="progression__label" style={{ marginBottom: 0 }}>
-                <span>Échéance réglée</span>
+                <span>{estDeboursSelectionne ? 'Débours réglé' : 'Échéance réglée'}</span>
                 <strong>{tauxEcheance} %</strong>
               </div>
               <div
@@ -513,8 +573,8 @@ export function NouveauPaiementPage() {
             {montant <= 0
               ? 'saisissez un montant supérieur à 0.'
               : apresPaiement <= 0
-                ? `échéance n° ${choisie?.echeance.numeroEcheance} soldée (0 MGA).`
-                : `reste ${formatMontantMGA(apresPaiement)} sur l'échéance n° ${choisie?.echeance.numeroEcheance}.`}
+                ? estDeboursSelectionne ? `débours « ${deboursChoisi?.designation ?? ''} » soldé (0 MGA).` : `échéance n° ${choisie?.echeance.numeroEcheance} soldée (0 MGA).`
+                : estDeboursSelectionne ? `reste ${formatMontantMGA(apresPaiement)} sur le débours « ${deboursChoisi?.designation ?? ''} ».` : `reste ${formatMontantMGA(apresPaiement)} sur l'échéance n° ${choisie?.echeance.numeroEcheance}.`}
           </div>
 
           {(montantDepasse || dateHorsPeriode) && (
@@ -527,7 +587,7 @@ export function NouveauPaiementPage() {
             </div>
           )}
 
-          {choisie && (
+          {cibleValide && (
             <div style={{ marginTop: 14 }}>
               <div className="rc">
                 <span>Mode</span>
@@ -543,12 +603,14 @@ export function NouveauPaiementPage() {
                 <span>Date</span>
                 <strong>{datePaiement ? formatDate(datePaiement) : '—'}</strong>
               </div>
+              {!estDeboursSelectionne && choisie && (
               <Link
                 to={`/paiements/echeanciers/${choisie.referenceDemande}`}
                 className="btn-link success"
               >
                 Voir l&apos;échéancier ›
               </Link>
+              )}
             </div>
           )}
         </aside>
@@ -558,7 +620,9 @@ export function NouveauPaiementPage() {
         open={confirmation}
         titre="Confirmer l'enregistrement du paiement"
         message={
-          choisie
+          estDeboursSelectionne
+            ? `Ce règlement sera imputé sur le débours « ${deboursChoisi?.designation ?? ''} » de la demande ${reglatable?.demande?.referenceDemande ?? ''}. L'opération est définitive : le reçu PDF pourra être téléchargé depuis l'historique.`
+          : choisie
             ? `Ce règlement sera imputé sur l'échéance n° ${choisie.echeance.numeroEcheance} du service « ${choisie.ligneLabel} » de la demande ${choisie.referenceDemande}. L'opération est définitive : le reçu PDF pourra être téléchargé depuis l'historique.`
             : ''
         }
@@ -574,25 +638,24 @@ export function NouveauPaiementPage() {
         }}
         onConfirmer={() => void confirmerEnregistrement()}
         details={
-          choisie ? (
+          cibleValide ? (
             <div style={{ marginTop: 14 }}>
               <div className="rc">
                 <span>Demande</span>
-                <strong>{choisie.referenceDemande}</strong>
+                <strong>{choisie?.referenceDemande ?? reglatable?.demande?.referenceDemande ?? ''}</strong>
               </div>
               <div className="rc">
                 <span>Client</span>
-                <strong>{choisie.nomSociete ?? '—'}</strong>
+                <strong>{choisie?.nomSociete ?? reglatable?.demande?.nomSociete ?? '—'}</strong>
               </div>
               <div className="rc">
-                <span>Service</span>
-                <strong>{choisie.ligneLabel}</strong>
+                <span>{estDeboursSelectionne ? 'Débours' : 'Service'}</span>
+                <strong>{estDeboursSelectionne ? deboursChoisi?.designation ?? '' : choisie?.ligneLabel ?? ''}</strong>
               </div>
               <div className="rc">
                 <span>Échéance</span>
                 <strong>
-                  N° {choisie.echeance.numeroEcheance} —{' '}
-                  {formatDate(choisie.echeance.dateEcheance)}
+                  {estDeboursSelectionne ? '—' : choisie ? `N° ${choisie.echeance.numeroEcheance} — ${formatDate(choisie.echeance.dateEcheance)}` : '—'}
                 </strong>
               </div>
               <div className="rc">

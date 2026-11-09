@@ -708,6 +708,9 @@ CREATE TABLE paiement (
 
     echeance_id INT NULL,
 
+    -- Ligne DEBOURS payée (NULL pour EXTERNALISATION via échéance)
+    ligne_service_id INT NULL,
+
     mode_paiement_id INT NOT NULL,
 
     date_paiement DATE NOT NULL,
@@ -740,6 +743,11 @@ CREATE TABLE paiement (
         REFERENCES echeance_paiement(id)
         ON DELETE SET NULL,
 
+    CONSTRAINT fk_paiement_ligne
+        FOREIGN KEY (ligne_service_id)
+        REFERENCES ligne_service(id)
+        ON DELETE SET NULL,
+
     CONSTRAINT fk_paiement_mode
         FOREIGN KEY (mode_paiement_id)
         REFERENCES mode_paiement(id)
@@ -765,6 +773,9 @@ ON paiement(date_paiement);
 
 CREATE INDEX idx_paiement_mode
 ON paiement(mode_paiement_id);
+
+CREATE INDEX idx_paiement_ligne
+ON paiement(ligne_service_id);
 
 -- =========================================================
 -- 19. PIECES JOINTES
@@ -1494,15 +1505,24 @@ CREATE TABLE ligne_service (
 
     demande_id INT NOT NULL,
 
-    service_id INT NOT NULL,
+    -- NULL pour les lignes DEBOURS (sans service catalogue)
+    service_id INT NULL,
 
-    tarif DECIMAL(15,2) NOT NULL,
+    tarif DECIMAL(15,2) NULL,
 
-    debut_service DATE NOT NULL,
+    debut_service DATE NULL,
 
-    fin_service DATE NOT NULL,
+    fin_service DATE NULL,
 
     statut VARCHAR(50) NULL,
+
+    -- Catégorie par ligne : EXTERNALISATION ou DEBOURS
+    categorie VARCHAR(30) NOT NULL DEFAULT 'EXTERNALISATION',
+
+    -- DEBOURS uniquement (NULL pour EXTERNALISATION)
+    designation_debours VARCHAR(255) NULL,
+
+    montant_debours DECIMAL(15,2) NULL,
 
     facture_id INT NULL,
 
@@ -1527,14 +1547,20 @@ CREATE TABLE ligne_service (
         ON DELETE SET NULL,
 
     CONSTRAINT chk_ligne_dates
-        CHECK (fin_service >= debut_service),
+        CHECK (fin_service IS NULL OR debut_service IS NULL OR fin_service >= debut_service),
 
     CONSTRAINT chk_ligne_tarif
-        CHECK (tarif >= 0)
+        CHECK (tarif IS NULL OR tarif >= 0),
+
+    CONSTRAINT chk_ligne_montant_debours
+        CHECK (montant_debours IS NULL OR montant_debours > 0)
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_ligne_demande
 ON ligne_service(demande_id);
+
+CREATE INDEX idx_ligne_categorie
+ON ligne_service(categorie);
 
 CREATE INDEX idx_ligne_service
 ON ligne_service(service_id);

@@ -62,7 +62,10 @@ export interface PaiementDetail extends Paiement {
 
 export interface CreatePaiementPayload {
   demandeId: number
-  echeanceId: number
+  /** EXTERNALISATION : requis. DEBOURS : null. */
+  echeanceId?: number | null
+  /** DEBOURS : ligne payée. EXTERNALISATION : null (dérivée de l'échéance). */
+  ligneServiceId?: number | null
   modePaiementId: number
   datePaiement: string
   montantPaye: number
@@ -73,6 +76,7 @@ export interface CreatePaiementPayload {
 
 export interface UpdatePaiementPayload {
   echeanceId?: number | null
+  ligneServiceId?: number | null
   datePaiement: string
   montantPaye: number
   referenceVirement?: string | null

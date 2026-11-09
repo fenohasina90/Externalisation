@@ -1,4 +1,4 @@
-import type { SituationPaiement, StatutDemande } from '../types'
+import type { CategorieLigne, SituationPaiement, StatutDemande } from '../types'
 
 export const LIBELLES_STATUT_DEMANDE: Record<StatutDemande, string> = {
   EN_ATTENTE: 'EN ATTENTE',
@@ -7,6 +7,14 @@ export const LIBELLES_STATUT_DEMANDE: Record<StatutDemande, string> = {
   TERMINEE: 'TERMINÉE',
   ANNULEE: 'ANNULÉE',
 }
+
+export const LIBELLES_CATEGORIE_LIGNE: Record<CategorieLigne, string> = {
+  EXTERNALISATION: 'Externalisation',
+  DEBOURS: 'Débours',
+}
+
+export const getLibelleCategorieLigne = (categorie: string | null | undefined): string =>
+  LIBELLES_CATEGORIE_LIGNE[categorie as CategorieLigne] ?? categorie ?? 'Externalisation'
 
 export const getLibelleStatutDemande = (statut: string): string =>
   LIBELLES_STATUT_DEMANDE[statut as StatutDemande] ?? statut

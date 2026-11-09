@@ -48,6 +48,12 @@ export type StatutLigneService =
   | 'EN_ATTENTE'
   | 'EN_COURS'
   | 'TERMINE'
+  | 'NON_PAYEE'
+  | 'PARTIEL'
+  | 'PAYEE'
+  | 'ANNULEE'
+
+export type CategorieLigne = 'EXTERNALISATION' | 'DEBOURS'
 
 export interface LigneService {
   id: number
@@ -56,27 +62,46 @@ export interface LigneService {
   serviceId: number | null
   nomService: string | null
   typeService: string | null
-  tarif: number
-  debutService: string
-  finService: string
+  /** Tarif EXTERNALISATION (null pour DEBOURS). */
+  tarif: number | null
+  debutService: string | null
+  finService: string | null
   statut: StatutLigneService | string | null
   factureId: number | null
   referenceFacture: string | null
   montantPaye: number
   resteAPayer: number
+  /** Catégorie par ligne : EXTERNALISATION ou DEBOURS. */
+  categorie: CategorieLigne | string
+  /** Désignation du débours (DEBOURS uniquement). */
+  designationDebours: string | null
+  /** Montant du débours validé (DEBOURS uniquement, null tant que non validé). */
+  montantDebours: number | null
 }
 
 export interface CreateLignePayload {
-  serviceId: number
-  tarif: number
-  debutService: string
-  finService: string
+  /** EXTERNALISATION : requis. DEBOURS : null. */
+  serviceId?: number | null
+  /** EXTERNALISATION : requis. DEBOURS : null. */
+  tarif?: number | null
+  debutService?: string | null
+  finService?: string | null
+  /** EXTERNALISATION (défaut) ou DEBOURS. */
+  categorie?: CategorieLigne | string | null
+  /** DEBOURS : requis. EXTERNALISATION : null. */
+  designationDebours?: string | null
+}
+
+export interface ValiderMontantDeboursPayload {
+  montantDebours: number
 }
 
 export interface UpdateLignePayload {
   tarif?: number | null
   debutService?: string | null
   finService?: string | null
+  /** DEBOURS en EN_ATTENTE uniquement. */
+  designationDebours?: string | null
 }
 
 export interface HistoriqueLigne {

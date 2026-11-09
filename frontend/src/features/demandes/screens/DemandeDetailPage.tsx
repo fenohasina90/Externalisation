@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Can } from '@/components/shared/Can'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { FormEtapes } from '@/components/shared/FormEtapes'
@@ -43,14 +43,25 @@ const LIBELLES_LIGNE: Record<string, string> = {
   EN_ATTENTE: 'En attente',
   EN_COURS: 'En cours',
   TERMINE: 'Terminé',
+  NON_PAYEE: 'Non payé',
+  PARTIEL: 'Partiel',
+  PAYEE: 'Payé',
+  ANNULEE: 'Annulée',
+}
+
+/** Libellé d'affichage d'une ligne (service ou désignation du débours). */
+function libelleLigne(ligne: LigneService): string {
+  if (ligne.categorie === 'DEBOURS') return ligne.designationDebours ?? 'Débours'
+  return ligne.nomService ?? '—'
 }
 
 function LignePill({ statut }: { statut: string | null }) {
   if (!statut) return <span className="pill wt">● En préparation</span>
   const classe =
     statut === 'EN_COURS' ? 'pill info'
-    : statut === 'TERMINE' ? 'pill ok'
-    : statut === 'VALIDE' ? 'pill ok'
+    : statut === 'TERMINE' || statut === 'VALIDE' || statut === 'PAYEE' ? 'pill ok'
+    : statut === 'ANNULEE' ? 'pill danger'
+    : statut === 'PARTIEL' || statut === 'NON_PAYEE' ? 'pill warning'
     : 'pill wt'
   return <span className={classe}>● {LIBELLES_LIGNE[statut] ?? statut}</span>
 }
@@ -565,6 +576,8 @@ function ServicesTab({
   const toutFige = (demande.lignes ?? []).length > 0
     && (demande.lignes ?? []).every((l) => fige(l))
   const [ajoutOuvert, setAjoutOuvert] = useState(false)
+  const [validationDebours, setValidationDebours] = useState<LigneService | null>(null)
+  const [annulationDebours, setAnnulationDebours] = useState<LigneService | null>(null)
   const [edition, setEdition] = useState<LigneService | null>(null)
   const contientTypeSolo = (demande.lignes ?? []).some((l) =>
     estTypeServiceSolo(l.typeService),
@@ -572,6 +585,36 @@ function ServicesTab({
   const [retrait, setRetrait] = useState<LigneService | null>(null)
   const [planPour, setPlanPour] = useState<LigneService | null>(null)
   const [traitement, setTraitement] = useState(false)
+
+  const handleValiderDebours = async (montant: number) => {
+    if (!validationDebours) return
+    setTraitement(true)
+    try {
+      await lignesApi.validerMontantDebours(demande.id, validationDebours.id, { montantDebours: montant })
+      setValidationDebours(null)
+      onMessage('Montant du débours validé.')
+      onChange()
+    } catch (err) {
+      onErreur(err instanceof Error ? err.message : 'Échec de la validation du montant')
+    } finally {
+      setTraitement(false)
+    }
+  }
+
+  const handleAnnulerDebours = async () => {
+    if (!annulationDebours) return
+    setTraitement(true)
+    try {
+      await lignesApi.annulerDebours(demande.id, annulationDebours.id)
+      setAnnulationDebours(null)
+      onMessage('Débours annulé.')
+      onChange()
+    } catch (err) {
+      onErreur(err instanceof Error ? err.message : 'Échec de la validation du montant')
+    } finally {
+      setTraitement(false)
+    }
+  }
 
   const handleRetrait = async () => {
     if (!retrait) return
@@ -595,18 +638,20 @@ function ServicesTab({
           key={ligne.id}
           demandeId={demande.id}
           ligne={ligne}
-          modifiable={modifiable && !fige(ligne)}
-          planEtablissable={statutFacture.get(ligne.factureId ?? -1) === 'VALIDEE'}
+          modifiable={ligne.categorie === 'DEBOURS' ? ligne.statut === 'EN_ATTENTE' : modifiable && !fige(ligne)}
+          planEtablissable={ligne.categorie !== 'DEBOURS' && statutFacture.get(ligne.factureId ?? -1) === 'VALIDEE'}
           onEdit={() => setEdition(ligne)}
           onRemove={() => setRetrait(ligne)}
           onPlan={() => setPlanPour(ligne)}
+          onValiderDebours={() => setValidationDebours(ligne)}
+          onAnnulerDebours={() => setAnnulationDebours(ligne)}
         />
       ))}
       {modifiable && !toutFige && !contientTypeSolo && (
         <Can permission="DEMANDE_UPDATE">
           <div>
             <button type="button" className="btn-ghost" onClick={() => setAjoutOuvert(true)}>
-              + Ajouter un service
+              + Ajouter une ligne
             </button>
           </div>
         </Can>
@@ -646,6 +691,23 @@ function ServicesTab({
         onConfirmer={() => void handleRetrait()}
       />
 
+      <ValiderMontantDeboursModal
+        ligne={validationDebours}
+        onClose={() => setValidationDebours(null)}
+        onConfirm={(montant) => void handleValiderDebours(montant)}
+        onErreur={onErreur}
+      />
+
+      <ConfirmDialog
+        open={annulationDebours !== null}
+        titre="Annuler ce débours ?"
+        message={`Le débours « ${annulationDebours?.designationDebours ?? ''} » (ligne ${annulationDebours?.id ?? ''}) sera annulé. Cette action n est possible que pendant « En attente ».`}
+        confirmer="Annuler le débours"
+        ton="danger"
+        onAnnuler={() => setAnnulationDebours(null)}
+        onConfirmer={() => void handleAnnulerDebours()}
+      />
+
       <PlanModal
         ligne={planPour}
         onClose={() => setPlanPour(null)}
@@ -669,6 +731,8 @@ function LigneCard({
   onEdit,
   onRemove,
   onPlan,
+  onValiderDebours,
+  onAnnulerDebours,
 }: {
   demandeId: number
   ligne: LigneService
@@ -678,6 +742,8 @@ function LigneCard({
   onEdit: () => void
   onRemove: () => void
   onPlan: () => void
+  onValiderDebours: () => void
+  onAnnulerDebours: () => void
 }) {
   const { data: plan } = useApi<PlanPaiement | null>(
     () => planPaiementApi.getByLigne(ligne.id).catch(() => null),
@@ -696,18 +762,42 @@ function LigneCard({
       ),
     [echeances],
   )
+  const navigate = useNavigate()
   const [voirEcheances, setVoirEcheances] = useState(true)
   const [voirHistorique, setVoirHistorique] = useState(false)
+  const estDebours = ligne.categorie === 'DEBOURS'
 
   return (
     <section className="card card-pad">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <strong>
-          {ligne.nomService ?? '—'} — {formatMontantMGA(ligne.tarif)}
+          {libelleLigne(ligne)} — {formatMontantMGA(ligne.tarif ?? ligne.montantDebours ?? 0)}
         </strong>
-        <LignePill statut={ligne.statut} />
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span className={`pill ${estDebours ? 'pill warning' : 'pill wt'}`}>● {estDebours ? 'Débours' : 'Externalisation'}</span>
+          <LignePill statut={ligne.statut} />
+        </div>
       </div>
       <div className="info-grid" style={{ marginTop: 8 }}>
+        {estDebours ? (
+          <>
+            <div className="info-item">
+              <span>Désignation</span>
+              <b>{ligne.designationDebours ?? '—'}</b>
+            </div>
+            <div className="info-item">
+              <span>Montant validé</span>
+              <b>{ligne.montantDebours ? formatMontantMGA(ligne.montantDebours) : '— (non validé)'}</b>
+            </div>
+            <div className="info-item">
+              <span>Payé / Reste</span>
+              <b>
+                {formatMontantMGA(ligne.montantPaye)} / {formatMontantMGA(ligne.resteAPayer)}
+              </b>
+            </div>
+          </>
+        ) : (
+          <>
         <div className="info-item">
           <span>Période</span>
           <b>
@@ -724,18 +814,42 @@ function LigneCard({
           <span>Facture</span>
           <b>{ligne.referenceFacture ?? '—'}</b>
         </div>
+          </>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-        <button type="button" className="btn-ghost" onClick={() => setVoirEcheances((v) => !v)}>
-          Échéances {voirEcheances ? '▴' : '▾'}
-        </button>
+        {!estDebours && (
+          <button type="button" className="btn-ghost" onClick={() => setVoirEcheances((v) => !v)}>
+            Échéances {voirEcheances ? '▴' : '▾'}
+          </button>
+        )}
         <button type="button" className="btn-ghost" onClick={() => setVoirHistorique((v) => !v)}>
           Historique {voirHistorique ? '▴' : '▾'}
         </button>
+        {estDebours && ligne.statut === 'EN_ATTENTE' && (
+          <Can permission="DEMANDE_STATUS_UPDATE">
+            <button type="button" className="btn-primary" onClick={onValiderDebours}>
+              Valider le montant
+            </button>
+            <button type="button" className="btn-ghost" onClick={onAnnulerDebours}>
+              Annuler le débours
+            </button>
+          </Can>
+        )}
+        {estDebours && (ligne.statut === 'NON_PAYEE' || ligne.statut === 'PARTIEL') && (
+          <Can permission="PAIEMENT_CREATE">
+            <button type="button" className="btn-primary" onClick={() => navigate(`/paiements/nouveau?demande=${encodeURIComponent(ligne.referenceDemande)}&ligne=${ligne.id}`)}>
+              Enregistrer un paiement
+            </button>
+          </Can>
+        )}
+        {estDebours && ligne.statut === 'PAYEE' && (
+          <span className="pill ok">● Débours soldé</span>
+        )}
       </div>
 
-      {plan && voirEcheances && (
+      {!estDebours && plan && voirEcheances && (
         <div className="table-scroll-container no-global-scroll" style={{ marginTop: 8 }}>
           <div className="table-wrap">
             <table className="table">
@@ -767,8 +881,11 @@ function LigneCard({
           </div>
         </div>
       )}
-      {!plan && voirEcheances && (
+      {!estDebours && !plan && voirEcheances && (
         <p className="section-note">Aucun plan de paiement pour ce service.</p>
+      )}
+      {estDebours && voirEcheances && (
+        <p className="section-note">Débours : paiement direct, sans échéance ni plan de paiement.</p>
       )}
 
       {voirHistorique && <LigneHistorique demandeId={demandeId} ligneId={ligne.id} />}
@@ -785,7 +902,7 @@ function LigneCard({
           </div>
         </Can>
       )}
-      {!plan && planEtablissable && (
+      {!estDebours && !plan && planEtablissable && (
         <Can permission="DEMANDE_UPDATE">
           <div style={{ marginTop: 8 }}>
             <button type="button" className="btn-primary" onClick={onPlan}>
@@ -794,7 +911,7 @@ function LigneCard({
           </div>
         </Can>
       )}
-      {!plan && !planEtablissable && (
+      {!estDebours && !plan && !planEtablissable && (
         <p className="section-note">Le plan sera établissable après validation de la facture.</p>
       )}
     </section>
@@ -866,6 +983,8 @@ function LigneFormModal({
   const [tarif, setTarif] = useState('')
   const [debut, setDebut] = useState('')
   const [fin, setFin] = useState('')
+  const [categorie, setCategorie] = useState<'EXTERNALISATION' | 'DEBOURS'>('EXTERNALISATION')
+  const [designation, setDesignation] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
   const [enregistrement, setEnregistrement] = useState(false)
   const [serviceModalOpen, setServiceModalOpen] = useState(false)
@@ -882,9 +1001,11 @@ function LigneFormModal({
     setCleVue(cle)
     if (open) {
       setServiceId(ligne?.serviceId ?? '')
-      setTarif(ligne ? String(ligne.tarif) : '')
+      setTarif(ligne?.tarif != null ? String(ligne.tarif) : '')
       setDebut(ligne?.debutService ?? '')
       setFin(ligne?.finService ?? '')
+      setCategorie((ligne?.categorie as 'EXTERNALISATION' | 'DEBOURS') ?? 'EXTERNALISATION')
+      setDesignation(ligne?.designationDebours ?? '')
       setErreur(null)
     }
   }
@@ -899,6 +1020,32 @@ function LigneFormModal({
   }
 
   const handleSubmit = async () => {
+    if (categorie === 'DEBOURS') {
+      if (!designation.trim()) {
+        setErreur('La désignation du débours est obligatoire')
+        return
+      }
+      setEnregistrement(true)
+      setErreur(null)
+      try {
+        if (ligne) {
+          await lignesApi.update(demandeId, ligne.id, { designationDebours: designation.trim() })
+        } else {
+          await lignesApi.create(demandeId, {
+            categorie: 'DEBOURS',
+            designationDebours: designation.trim(),
+          })
+        }
+        onSaved()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Échec de la validation'
+        setErreur(message)
+        onErreur(message)
+      } finally {
+        setEnregistrement(false)
+      }
+      return
+    }
     if (serviceId === '' && !ligne) {
       setErreur('Le service est obligatoire')
       return
@@ -953,6 +1100,8 @@ function LigneFormModal({
           tarif: Number(tarif),
           debutService: debut,
           finService: fin,
+          categorie: 'EXTERNALISATION',
+          designationDebours: null,
         })
       }
       onSaved()
@@ -987,6 +1136,22 @@ function LigneFormModal({
             </div>
           )}
           <div className="form-grid form-grid--2">
+            {!ligne && (
+              <label className="field form-grid__full">
+                Catégorie <span className="required">*</span>
+                <select value={categorie} onChange={(e) => setCategorie(e.target.value as 'EXTERNALISATION' | 'DEBOURS')}>
+                  <option value="EXTERNALISATION">Externalisation (service catalogue)</option>
+                  <option value="DEBOURS">Débours (désignation + montant à valider)</option>
+                </select>
+              </label>
+            )}
+            {categorie === 'DEBOURS' ? (
+              <label className="field form-grid__full">
+                Désignation du débours <span className="required">*</span>
+                <input value={designation} onChange={(e) => setDesignation(e.target.value)} maxLength={255} placeholder="Ex. Déplacement, timbres, divers…" />
+              </label>
+            ) : (
+            <>
             {!ligne && (
               <label className="field form-grid__full">
                 Service <span className="required">*</span>
@@ -1030,6 +1195,8 @@ function LigneFormModal({
               Fin <span className="required">*</span>
               <input type="date" min={debut || aujourdhui} value={fin} onChange={(e) => setFin(e.target.value)} />
             </label>
+            </>
+            )}
           </div>
           <footer className="modal-footer">
             <button type="button" className="btn-ghost" onClick={onClose} disabled={enregistrement}>
@@ -1047,6 +1214,68 @@ function LigneFormModal({
         onClose={() => setServiceModalOpen(false)}
         onSave={(payload) => handleSaveService(payload as { nomService: string })}
       />
+    </div>
+  )
+}
+
+function ValiderMontantDeboursModal({
+  ligne,
+  onClose,
+  onConfirm,
+  onErreur,
+}: {
+  ligne: LigneService | null
+  onClose: () => void
+  onConfirm: (montant: number) => void
+  onErreur: (message: string | null) => void
+}) {
+  const [montant, setMontant] = useState('')
+  const [erreur, setErreur] = useState<string | null>(null)
+
+  const cle = ligne ? `valider-${ligne.id}` : 'ferme'
+  const [cleVue, setCleVue] = useState<string | null>(null)
+  if (cleVue !== cle) {
+    setCleVue(cle)
+    if (ligne) {
+      setMontant('')
+      setErreur(null)
+    }
+  }
+
+  if (!ligne) return null
+
+  const submit = () => {
+    const valeur = Number(montant)
+    if (!montant || !Number.isFinite(valeur) || valeur <= 0) {
+      setErreur('Le montant doit être supérieur à 0')
+      return
+    }
+    if (erreur) setErreur(null)
+    onConfirm(valeur)
+    // onErreur used by parent for API failures
+    void onErreur
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Valider le montant du débours">
+        <header className="modal-header">
+          <h3 className="modal-title">Valider le montant</h3>
+          <button type="button" className="btn-ghost" onClick={onClose} aria-label="Fermer">✕</button>
+        </header>
+        <div className="modal-body">
+          {erreur && <div className="alert alert-danger" role="alert">{erreur}</div>}
+          <p className="section-note">Débours : « {ligne.designationDebours ?? ''} ». Le montant validé fait passer la ligne à « Non payé » (paiements partiel / payé ensuite).</p>
+          <label className="field">
+            Montant du débours (MGA) <span className="required">*</span>
+            <input type="number" min={0} value={montant} onChange={(e) => setMontant(e.target.value)} placeholder="Ex. 500000" />
+          </label>
+          <footer className="modal-footer">
+            <button type="button" className="btn-ghost" onClick={onClose}>Annuler</button>
+            <button type="button" className="btn-primary" onClick={submit}>Valider le montant</button>
+          </footer>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1081,7 +1310,10 @@ function PlanModal({
 
   if (!ligne) return null
 
-  const montantTotal = ligne.tarif
+  const montantTotal = ligne.tarif ?? 0
+  const debutService = ligne.debutService ?? ''
+  const finService = ligne.finService ?? ''
+  const nomLigne = libelleLigne(ligne)
   const sommeSaisie = tranches.reduce((s, t) => s + (Number(t.montant) || 0), 0)
   const resteASaisir = Math.round((montantTotal - sommeSaisie) * 100) / 100
 
@@ -1114,8 +1346,8 @@ function PlanModal({
     }
     for (const [i, t] of tranches.entries()) {
       if (!t.date) return `Échéance ${i + 1} : date obligatoire`
-      if (t.date < ligne.debutService || t.date > ligne.finService) {
-        return `Échéance ${i + 1} : doit rester dans la période du service (${ligne.debutService} → ${ligne.finService})`
+      if (t.date < debutService || t.date > finService) {
+        return `Échéance ${i + 1} : doit rester dans la période du service (${debutService} → ${finService})`
       }
       if (!t.montant || Number(t.montant) <= 0 || Number.isNaN(Number(t.montant))) {
         return `Échéance ${i + 1} : montant strictement positif obligatoire`
@@ -1133,8 +1365,8 @@ function PlanModal({
     setErreur(null)
     try {
       await planPaiementApi.createForLigne(ligne.id, {
-        dateDebut: ligne.debutService,
-        dateFin: ligne.finService,
+        dateDebut: debutService,
+        dateFin: finService,
         montantTotal,
         nombreEcheances: tranches.length,
         commentaire: null,
@@ -1160,7 +1392,7 @@ function PlanModal({
         aria-label="Établir le plan de paiement"
       >
         <header className="modal-header">
-          <h3 className="modal-title">Plan de paiement — {ligne.nomService}</h3>
+          <h3 className="modal-title">Plan de paiement — {nomLigne}</h3>
           <button type="button" className="btn-ghost" onClick={onClose} aria-label="Fermer">
             ✕
           </button>
@@ -1184,11 +1416,11 @@ function PlanModal({
                 <div className="form-grid form-grid--2">
                   <label className="field">
                     Début du service
-                    <input type="date" value={ligne.debutService} disabled />
+                    <input type="date" value={debutService} disabled />
                   </label>
                   <label className="field">
                     Fin du service
-                    <input type="date" value={ligne.finService} disabled />
+                    <input type="date" value={finService} disabled />
                   </label>
                   <label className="field">
                     Montant total (MGA)
@@ -1223,7 +1455,7 @@ function PlanModal({
                     </div>
                     <p className="section-note" style={{ margin: '4px 0 0' }}>
                       Les dates doivent rester dans la période du service (
-                      {formatDate(ligne.debutService)} → {formatDate(ligne.finService)}).
+                      {formatDate(debutService)} → {formatDate(finService)}).
                     </p>
                   </div>
                   {tranches.map((t, i) => (
@@ -1232,8 +1464,8 @@ function PlanModal({
                         Échéance {i + 1} — date <span className="required">*</span>
                         <input
                           type="date"
-                          min={ligne.debutService}
-                          max={ligne.finService}
+                          min={debutService}
+                          max={finService}
                           value={t.date}
                           onChange={(e) => setTranche(i, { date: e.target.value })}
                         />
@@ -1389,13 +1621,13 @@ function PaiementsTab({ demande }: { demande: Demande }) {
       {lignes.map((l) => (
         <section key={l.id} className="card card-pad">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <strong>{l.nomService ?? '—'}</strong>
+            <strong>{libelleLigne(l)}</strong>
             <LignePill statut={l.statut} />
           </div>
           <div className="info-grid" style={{ marginTop: 8 }}>
             <div className="info-item">
-              <span>Tarif</span>
-              <b>{formatMontantMGA(l.tarif)}</b>
+              <span>{l.categorie === 'DEBOURS' ? 'Montant validé' : 'Tarif'}</span>
+              <b>{formatMontantMGA(l.tarif ?? l.montantDebours ?? 0)}</b>
             </div>
             <div className="info-item">
               <span>Payé</span>

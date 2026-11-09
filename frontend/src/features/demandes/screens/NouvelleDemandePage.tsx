@@ -33,19 +33,23 @@ const LABEL_CREATION = "Création d'entreprise (sans société)"
 const OPTION_SERVICE_AUTRE = 'autre'
 
 interface LigneSaisie {
+  categorie: 'EXTERNALISATION' | 'DEBOURS'
   serviceId: number | ''
   domaineId: string
   tarif: string
   debutService: string
   finService: string
+  designationDebours: string
 }
 
 const LIGNE_VIDE: LigneSaisie = {
+  categorie: 'EXTERNALISATION',
   serviceId: '',
   domaineId: '',
   tarif: '',
   debutService: '',
   finService: '',
+  designationDebours: '',
 }
 
 /**
@@ -105,6 +109,8 @@ export function NouvelleDemandePage() {
   )
 
   const total = lignes.reduce((somme, l) => somme + (Number(l.tarif) || 0), 0)
+  const lignesDebours = lignes.filter((l) => l.categorie === 'DEBOURS')
+  const lignesExte = lignes.filter((l) => l.categorie !== 'DEBOURS')
 
   const optionsClients = useMemo(
     () => [
@@ -254,10 +260,14 @@ export function NouvelleDemandePage() {
       }
       return null
     }
-    if (lignes.length === 0) return 'Ajoutez au moins un service'
+    if (lignes.length === 0) return 'Ajoutez au moins une ligne'
     const vus = new Set<number>()
     let typeSolo = false
     for (const [i, l] of lignes.entries()) {
+      if (l.categorie === 'DEBOURS') {
+        if (!l.designationDebours.trim()) return `Ligne ${i + 1} : désignation du débours obligatoire`
+        continue
+      }
       if (l.serviceId === '') return `Ligne ${i + 1} : service obligatoire`
       if (vus.has(l.serviceId)) return 'Un service ne peut pas être sélectionné deux fois'
       vus.add(l.serviceId)
@@ -285,13 +295,25 @@ export function NouvelleDemandePage() {
     try {
       let cible = demandeCreee
       if (!cible) {
-        const payloadLignes = lignes.map((l) => ({
-          serviceId: l.serviceId as number,
-          domaineId: l.domaineId ? Number(l.domaineId) : null,
-          tarif: Number(l.tarif),
-          debutService: l.debutService,
-          finService: l.finService,
-        }))
+        const payloadLignes = lignes.map((l) =>
+          l.categorie === 'DEBOURS'
+            ? {
+                serviceId: null,
+                tarif: null,
+                debutService: null,
+                finService: null,
+                categorie: 'DEBOURS' as const,
+                designationDebours: l.designationDebours.trim(),
+              }
+            : {
+                serviceId: l.serviceId as number,
+                tarif: Number(l.tarif),
+                debutService: l.debutService,
+                finService: l.finService,
+                categorie: 'EXTERNALISATION' as const,
+                designationDebours: null,
+              },
+        )
         const creee = await demandesApi.create({
           societeId,
           clientResponsableId: responsableId,
@@ -358,9 +380,15 @@ export function NouvelleDemandePage() {
       ],
     },
     {
-      titre: 'Services',
+      titre: 'Lignes',
       lignes: [
         ...lignes.map((ligne, index) => {
+          if (ligne.categorie === 'DEBOURS') {
+            return {
+              label: `Débours ${index + 1} : ${ligne.designationDebours.trim() || '—'}`,
+              valeur: 'Montant à « Valider » sur la ligne',
+            }
+          }
           const nom =
             ligne.serviceId !== ''
               ? nomsServices.get(ligne.serviceId as number)
@@ -380,7 +408,8 @@ export function NouvelleDemandePage() {
             valeur: [tarif, periode].filter(Boolean).join(' · '),
           }
         }),
-        { label: 'Montant total', valeur: formatMontantMGA(total) },
+        { label: 'Montant total (hors débours non validés)', valeur: formatMontantMGA(total) },
+        { label: 'Débours', valeur: `${lignesDebours.length} ligne${lignesDebours.length > 1 ? 's' : ''}${lignesExte.length > 0 ? ` / ${lignesExte.length} service${lignesExte.length > 1 ? 's' : ''}` : ''}` },
       ],
     },
   ]
@@ -539,7 +568,7 @@ export function NouvelleDemandePage() {
                   {lignes.map((l, i) => (
                     <div key={i} className="card card-pad" style={{ background: 'var(--c-bg)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong>Service {i + 1}</strong>
+                        <strong>{l.categorie === 'DEBOURS' ? `Débours ${i + 1}` : `Service ${i + 1}`}</strong>
                         {lignes.length > 1 && (
                           <button
                             type="button"
@@ -551,7 +580,33 @@ export function NouvelleDemandePage() {
                         )}
                       </div>
                       <div className="form-grid form-grid--2" style={{ marginTop: 8 }}>
-
+                        <label className="field form-grid__full">
+                          Catégorie <span className="required">*</span>
+                          <select
+                            value={l.categorie}
+                            onChange={(e) => setLigne(i, { categorie: e.target.value as 'EXTERNALISATION' | 'DEBOURS' })}
+                          >
+                            <option value="EXTERNALISATION">Externalisation (service catalogue)</option>
+                            <option value="DEBOURS">Débours (désignation + montant à valider)</option>
+                          </select>
+                          <span className="form-help">
+                            {l.categorie === 'DEBOURS'
+                              ? 'Statut initial « En attente », puis « Non payé » à la validation du montant.'
+                              : 'Service du catalogue avec tarif et période.'}
+                          </span>
+                        </label>
+                        {l.categorie === 'DEBOURS' ? (
+                          <label className="field form-grid__full">
+                            Désignation du débours <span className="required">*</span>
+                            <input
+                              value={l.designationDebours}
+                              onChange={(e) => setLigne(i, { designationDebours: e.target.value })}
+                              placeholder="Ex. Déplacement, timbres, divers…"
+                              maxLength={255}
+                            />
+                          </label>
+                        ) : (
+                        <>
 
                         {/* Service (colonne gauche) */}
                         {/* Domaine + Service (côte à côte) */}
@@ -638,6 +693,8 @@ export function NouvelleDemandePage() {
                             onChange={(e) => setLigne(i, { finService: e.target.value })}
                           />
                         </label>
+                        </>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -647,7 +704,7 @@ export function NouvelleDemandePage() {
                     style={{ alignSelf: 'flex-start' }}
                     onClick={() => setLignes((liste) => [...liste, { ...LIGNE_VIDE }])}
                   >
-                    + Ajouter un service
+                    + Ajouter une ligne
                   </button>
                 </div>
               )
