@@ -18,7 +18,7 @@ export function DomainesTable({ items, loading = false, onEdit, onToggleActif }:
       <thead>
         <tr>
           <th>Nom du domaine</th>
-          <th>Nombre de sociétés associées</th>
+          <th>Code domaine</th>
           <th>Statut</th>
           <th>Actions</th>
         </tr>
@@ -27,7 +27,7 @@ export function DomainesTable({ items, loading = false, onEdit, onToggleActif }:
         {items.map((d) => (
           <tr key={d.id}>
             <td className="fw-700">{d.nomDomaine}</td>
-            <td className="cell-number">{d.nombreSocietes}</td>
+            <td className="text-secondary">{d.codeDomaine ?? '—'}</td>
             <td>
               {d.actif ? (
                 <span className="pill ok">Actif</span>

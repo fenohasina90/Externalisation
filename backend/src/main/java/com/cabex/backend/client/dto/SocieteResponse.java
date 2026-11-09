@@ -19,8 +19,6 @@ public record SocieteResponse(
         Boolean archive,
         String responsablePrincipal,
         Integer nombreDemandes,
-        LocalDateTime createdAt,
-        Integer domaineId,
-        String nomDomaine
+        LocalDateTime createdAt
 ) {
 }

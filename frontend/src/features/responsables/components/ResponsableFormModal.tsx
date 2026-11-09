@@ -176,7 +176,8 @@ export function ResponsableFormModal({ open, responsable, societeDefaut, onClose
             </div>
 
             <label className="field">
-              Nom <span className="required">*</span>
+              Nom 
+              {/* <span className="required">*</span> */}
               <input
                 name="nomClient"
                 value={form.nomClient}
@@ -197,7 +198,7 @@ export function ResponsableFormModal({ open, responsable, societeDefaut, onClose
             </label>
 
             <label className="field">
-              Téléphone
+              Téléphone du responsable
               <input
                 name="contact"
                 value={form.contact}
@@ -207,7 +208,8 @@ export function ResponsableFormModal({ open, responsable, societeDefaut, onClose
             </label>
 
             <label className="field form-grid__full">
-              Email <span className="required">*</span>
+              Email du responsable
+              {/* <span className="required">*</span> */}
               <input
                 type="email"
                 name="email"

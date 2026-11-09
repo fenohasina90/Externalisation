@@ -55,7 +55,7 @@ public class DossierTransactionImmobiliereService {
                 appliquer(new DossierTransactionImmobiliere(), demande, request);
         DossierTransactionImmobiliere saved = dossierRepository.save(dossier);
         auditService.log(AuditActions.CREATE, "DOSSIER", "DossierTransactionImmobiliere",
-                Long.valueOf(saved.getId()), null, "demande=" + demande.getReferenceDemande());
+                Long.valueOf(saved.getId()), null, demande.getReferenceDemande());
         return DossierTransactionImmobiliereMapper.toResponse(saved);
     }
 
@@ -68,8 +68,8 @@ public class DossierTransactionImmobiliereService {
                 appliquer(dossier, demande, request.versCreation());
         DossierTransactionImmobiliere saved = dossierRepository.save(updated);
         auditService.log(AuditActions.UPDATE, "DOSSIER", "DossierTransactionImmobiliere",
-                Long.valueOf(saved.getId()), "demande=" + demande.getReferenceDemande(),
-                "demande=" + demande.getReferenceDemande());
+                Long.valueOf(saved.getId()), demande.getReferenceDemande(),
+                demande.getReferenceDemande());
         return DossierTransactionImmobiliereMapper.toResponse(saved);
     }
 

@@ -9,8 +9,10 @@ import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.service.dto.CreateServiceRequest;
 import com.cabex.backend.service.dto.ServiceResponse;
 import com.cabex.backend.service.dto.UpdateServiceRequest;
+import com.cabex.backend.service.entity.DomaineService;
 import com.cabex.backend.service.entity.Service;
 import com.cabex.backend.service.mapper.ServiceMapper;
+import com.cabex.backend.service.repository.DomaineServiceRepository;
 import com.cabex.backend.service.repository.ServiceRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,18 +24,21 @@ import java.time.LocalDateTime;
 public class ServiceGestionService {
 
     private final ServiceRepository serviceRepository;
+    private final DomaineServiceRepository domaineRepository;
     private final AuditService auditService;
 
     public ServiceGestionService(ServiceRepository serviceRepository,
+                          DomaineServiceRepository domaineRepository,
                           AuditService auditService) {
         this.serviceRepository = serviceRepository;
+        this.domaineRepository = domaineRepository;
         this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
     public Page<ServiceResponse> getAll(String recherche, Boolean actif, String typeService,
-                                        Pageable pageable) {
-        return serviceRepository.rechercher(recherche, actif, normaliserTypeFiltre(typeService), pageable)
+                                        Integer domaineId, Pageable pageable) {
+        return serviceRepository.rechercher(recherche, actif, normaliserTypeFiltre(typeService), domaineId, pageable)
                 .map(ServiceMapper::toResponse);
     }
 
@@ -57,16 +62,18 @@ public class ServiceGestionService {
             throw new DuplicateResourceException(ErrorMessages.referenceDejaUtilisee(request.nomService().trim()));
         }
 
+        DomaineService domaine = getDomaine(request.domaineId());
         Service service = Service.builder()
                 .nomService(request.nomService().trim())
-                .codeService(genererCode())
+                .codeService(genererCode(domaine != null ? domaine.getCodeDomaine() : null))
                 .typeService(normaliserType(request.typeService()))
                 .description(request.description())
+                .domaine(domaine)
                 .actif(true)
                 .build();
         service = serviceRepository.save(service);
 
-        auditService.log(AuditActions.CREATE, "SERVICE", "Service", service.getId().longValue(), null, "nom=" + service.getNomService());
+        auditService.log(AuditActions.CREATE, "SERVICE", "Service", service.getId().longValue(), null, service.getCodeService() + " : " + service.getNomService());
 
         return ServiceMapper.toResponse(service);
     }
@@ -77,8 +84,9 @@ public class ServiceGestionService {
         service.setNomService(request.nomService().trim());
         service.setTypeService(normaliserType(request.typeService()));
         service.setDescription(request.description());
+        service.setDomaine(getDomaine(request.domaineId()));
         Service saved = serviceRepository.save(service);
-        auditService.log(AuditActions.UPDATE, "SERVICE", "Service", saved.getId().longValue(), null, "nom=" + saved.getNomService());
+        auditService.log(AuditActions.UPDATE, "SERVICE", "Service", saved.getId().longValue(), null, saved.getCodeService() + " : " + saved.getNomService());
         return ServiceMapper.toResponse(saved);
     }
 
@@ -89,7 +97,7 @@ public class ServiceGestionService {
         service.setActif(!archive);
         service.setArchivedAt(archive ? LocalDateTime.now() : null);
         Service saved = serviceRepository.save(service);
-        auditService.log(archive ? AuditActions.ARCHIVE : AuditActions.UPDATE, "SERVICE", "Service", saved.getId().longValue(), "actif=" + previousActif, "actif=" + saved.getActif());
+        auditService.log(archive ? AuditActions.ARCHIVE : AuditActions.UPDATE, "SERVICE", "Service", saved.getId().longValue(), "actif : " + previousActif, "actif : " + saved.getActif());
         return ServiceMapper.toResponse(saved);
     }
 
@@ -97,6 +105,15 @@ public class ServiceGestionService {
         return serviceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Service", id)));
+    }
+
+    private DomaineService getDomaine(Integer id) {
+        if (id == null) {
+            return null;
+        }
+        return domaineRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Domaine", id)));
     }
 
     /**
@@ -129,31 +146,40 @@ public class ServiceGestionService {
     }
 
     /**
-     * Génère le prochain code libre (SRV-0001, SRV-0002, …).
-     * Le test d'existence final protège des doublons en cas d'accès
-     * concurrents (la colonne reste UNIQUE en base).
+     * Génère le prochain code libre au format {@code SRV-{codeDomaine}-XXXX}
+     * (ex. {@code SRV-COMP-0007} pour le domaine dont le code est COMP).
+     * Si aucun domaine n'est renseigné, le format historique {@code SRV-XXXX}
+     * est conservé.
+     * Le test d'existence final protège des doublons en cas d'accès concurrents
+     * (la colonne reste UNIQUE en base).
      */
-    String genererCode() {
+    String genererCode(String codeDomaine) {
+        String prefix;
+        if (codeDomaine == null || codeDomaine.isBlank()) {
+            prefix = "SRV-";
+        } else {
+            prefix = "SRV-" + codeDomaine.trim().toUpperCase(java.util.Locale.ROOT) + "-";
+        }
         int max = 0;
         for (String code : serviceRepository.findAllCodes()) {
             if (code == null) {
                 continue;
             }
             java.util.regex.Matcher m = java.util.regex.Pattern
-                    .compile("^SRV-(\\d+)$", java.util.regex.Pattern.CASE_INSENSITIVE)
+                    .compile("^" + java.util.regex.Pattern.quote(prefix) + "(\\d+)$", java.util.regex.Pattern.CASE_INSENSITIVE)
                     .matcher(code.trim());
             if (m.matches()) {
                 max = Math.max(max, Integer.parseInt(m.group(1)));
             }
         }
-        String candidat = suivant(max + 1);
+        String candidat = prefix + suivant(max + 1);
         while (serviceRepository.existsByCodeService(candidat)) {
-            candidat = suivant(++max + 1);
+            candidat = prefix + suivant(++max + 1);
         }
         return candidat;
     }
 
     private String suivant(int numero) {
-        return "SRV-" + String.format("%04d", numero);
+        return String.format("%04d", numero);
     }
 }

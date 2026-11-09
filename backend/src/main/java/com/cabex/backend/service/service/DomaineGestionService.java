@@ -16,8 +16,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
-
 @Service
 public class DomaineGestionService {
 
@@ -31,12 +29,8 @@ public class DomaineGestionService {
 
     @Transactional(readOnly = true)
     public Page<DomaineResponse> getAll(String recherche, Boolean actif, Pageable pageable) {
-        Map<Object, Long> nbParDomaine = new java.util.HashMap<>();
-        for (Object[] o : domaineRepository.compterSocietesParDomaine()) {
-            nbParDomaine.put(o[0], (long) o[1]);
-        }
         return domaineRepository.rechercher(recherche, actif, pageable)
-                .map(d -> DomaineMapper.toResponse(d, nbParDomaine.getOrDefault(d.getId(), 0L)));
+                .map(DomaineMapper::toResponse);
     }
 
     @Transactional(readOnly = true)
@@ -47,26 +41,42 @@ public class DomaineGestionService {
     @Transactional
     public DomaineResponse create(CreateDomaineRequest request) {
         String nom = request.nomDomaine().trim();
+        String code = request.codeDomaine().trim();
         if (domaineRepository.existsByNomDomaine(nom)) {
             throw new DuplicateResourceException(ErrorMessages.referenceDejaUtilisee(nom));
         }
+        if (domaineRepository.existsByCodeDomaine(code)) {
+            throw new DuplicateResourceException(ErrorMessages.referenceDejaUtilisee(code));
+        }
         DomaineService domaine = DomaineService.builder()
                 .nomDomaine(nom)
+                .codeDomaine(code)
                 .description(request.description())
                 .actif(true)
                 .build();
         DomaineService saved = domaineRepository.save(domaine);
-        auditService.log(AuditActions.CREATE, "SERVICE", "Domaine", saved.getId().longValue(), null, "nom=" + saved.getNomDomaine());
+        auditService.log(AuditActions.CREATE, "SERVICE", "Domaine", saved.getId().longValue(), null,
+                saved.getCodeDomaine() + " : " + saved.getNomDomaine());
         return DomaineMapper.toResponse(saved);
     }
 
     @Transactional
     public DomaineResponse update(Integer id, UpdateDomaineRequest request) {
         DomaineService domaine = getEntity(id);
-        domaine.setNomDomaine(request.nomDomaine().trim());
+        String nom = request.nomDomaine().trim();
+        String code = request.codeDomaine().trim();
+        if (!nom.equals(domaine.getNomDomaine()) && domaineRepository.existsByNomDomaine(nom)) {
+            throw new DuplicateResourceException(ErrorMessages.referenceDejaUtilisee(nom));
+        }
+        if (!code.equals(domaine.getCodeDomaine()) && domaineRepository.existsByCodeDomaineAndIdNot(code, id)) {
+            throw new DuplicateResourceException(ErrorMessages.referenceDejaUtilisee(code));
+        }
+        domaine.setNomDomaine(nom);
+        domaine.setCodeDomaine(code);
         domaine.setDescription(request.description());
         DomaineService saved = domaineRepository.save(domaine);
-        auditService.log(AuditActions.UPDATE, "SERVICE", "Domaine", saved.getId().longValue(), null, "nom=" + saved.getNomDomaine());
+        auditService.log(AuditActions.UPDATE, "SERVICE", "Domaine", saved.getId().longValue(), null,
+                saved.getCodeDomaine() + " : " + saved.getNomDomaine());
         return DomaineMapper.toResponse(saved);
     }
 
@@ -76,7 +86,7 @@ public class DomaineGestionService {
         boolean previousActif = domaine.getActif();
         domaine.setActif(actif);
         DomaineService saved = domaineRepository.save(domaine);
-        auditService.log(AuditActions.UPDATE, "SERVICE", "Domaine", saved.getId().longValue(), "actif=" + previousActif, "actif=" + actif);
+        auditService.log(AuditActions.UPDATE, "SERVICE", "Domaine", saved.getId().longValue(), "actif : " + previousActif, "actif : " + actif);
         return DomaineMapper.toResponse(saved);
     }
 
@@ -86,7 +96,7 @@ public class DomaineGestionService {
         String nom = domaine.getNomDomaine();
         domaine.setActif(false);
         domaineRepository.save(domaine);
-        auditService.log(AuditActions.DELETE, "SERVICE", "Domaine", domaine.getId().longValue(), "nom=" + nom, null);
+        auditService.log(AuditActions.DELETE, "SERVICE", "Domaine", domaine.getId().longValue(), nom, null);
     }
 
     private DomaineService getEntity(Integer id) {

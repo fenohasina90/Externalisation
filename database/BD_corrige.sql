@@ -138,6 +138,8 @@ CREATE TABLE domaine_service (
 
     nom_domaine VARCHAR(150) NOT NULL UNIQUE,
 
+    code_domaine VARCHAR(50) NOT NULL UNIQUE,
+
     description VARCHAR(255),
 
     actif BOOLEAN NOT NULL DEFAULT TRUE,
@@ -161,8 +163,6 @@ CREATE TABLE societe (
 
     chiffre_affaire_mensuel DECIMAL(15,2),
 
-    domaine_id INT NOT NULL,
-
     actif BOOLEAN NOT NULL DEFAULT TRUE,
 
     archived_at DATETIME NULL,
@@ -178,11 +178,6 @@ CREATE TABLE societe (
             OR nombre_personnel > 0
         ),
 
-    CONSTRAINT fk_societe_domaine
-        FOREIGN KEY (domaine_id)
-        REFERENCES domaine_service(id)
-        ON DELETE RESTRICT,
-
     CONSTRAINT chk_societe_ca
         CHECK (
             chiffre_affaire_mensuel IS NULL
@@ -195,9 +190,6 @@ ON societe(nom_societe);
 
 CREATE INDEX idx_societe_actif
 ON societe(actif);
-
-CREATE INDEX idx_societe_domaine
-ON societe(domaine_id);
 
 -- =========================================================
 -- 7. RESPONSABLE CLIENT
@@ -272,6 +264,8 @@ CREATE TABLE services (
 
     code_service VARCHAR(50) NOT NULL UNIQUE COMMENT 'Code unique auto-généré (SRV-0001, …)',
 
+    domaine_id INT NULL COMMENT 'Domaine auquel appartient le service (lien domaine <> service)',
+
     type_service VARCHAR(30) NOT NULL DEFAULT 'STANDARD' COMMENT 'STANDARD, CREATION ou TRANSACTION_IMMOBILIERE',
 
     description TEXT,
@@ -286,7 +280,12 @@ CREATE TABLE services (
         ON UPDATE CURRENT_TIMESTAMP,
 
     CONSTRAINT chk_service_type
-        CHECK (type_service IN ('STANDARD', 'CREATION', 'TRANSACTION_IMMOBILIERE'))
+        CHECK (type_service IN ('STANDARD', 'CREATION', 'TRANSACTION_IMMOBILIERE')),
+
+    CONSTRAINT fk_service_domaine
+        FOREIGN KEY (domaine_id)
+        REFERENCES domaine_service(id)
+        ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_service_nom
@@ -297,6 +296,9 @@ ON services(code_service);
 
 CREATE INDEX idx_service_type
 ON services(type_service);
+
+CREATE INDEX idx_service_domaine
+ON services(domaine_id);
 
 -- =========================================================
 -- 11. STATUT DES DEMANDES

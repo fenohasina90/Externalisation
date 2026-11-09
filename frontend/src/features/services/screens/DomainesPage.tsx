@@ -26,9 +26,8 @@ export function DomainesPage() {
 
   const actifs = items.filter((d) => d.actif).length
   const pctActifs = total === 0 ? 0 : Math.round((actifs / total) * 100)
-  const societes = items.reduce((sum, d) => sum + (d.nombreSocietes ?? 0), 0)
 
-  const handleSave = async (payload: { nomDomaine: string }, id?: number) => {
+  const handleSave = async (payload: { nomDomaine: string; codeDomaine: string }, id?: number) => {
     if (id != null) {
       await domainesApi.update(id, payload)
     } else {
@@ -116,19 +115,6 @@ export function DomainesPage() {
           </div>
         </div>
 
-        <div className="card kpi-card">
-          <span className="kpi-tag">Au total</span>
-          <div className="kpi-icon">
-            <svg className="sv" viewBox="0 0 24 24">
-              <circle cx="9" cy="8" r="3.5" />
-              <path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.3c2 .7 3.5 2.6 3.5 5.2" />
-            </svg>
-          </div>
-          <div>
-            <div className="kpi-num">{societes}</div>
-            <div className="kpi-label">Sociétés associées</div>
-          </div>
-        </div>
       </section>
 
       <section className="card card-pad">

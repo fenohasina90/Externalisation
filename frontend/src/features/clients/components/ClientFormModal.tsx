@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from 'react'
-import { Autocomplete } from '@/components/ui'
+// import { Autocomplete } from '@/components/ui'
 import { FormEtapes } from '@/components/shared/FormEtapes'
 import type { CreateSocietePayload, Societe } from '../types'
 
@@ -14,11 +14,6 @@ interface Props {
   client: Societe | null
   /** Responsable principal actuel (édition). */
   responsableActuel?: string | null
-  domaines: DomaineOption[]
-  /** Résout un nom de domaine (sélection ou création si inexistant). */
-  resolveDomaine: (nom: string) => Promise<number>
-  /** Création immédiate depuis le pied de l'autocomplétion (défaut : resolveDomaine). */
-  onCreerDomaine?: (nom: string) => Promise<number>
   onClose: () => void
   onSave: (
     payload: CreateSocietePayload & { responsable: string },
@@ -29,7 +24,7 @@ interface Props {
 const emptyForm = {
   nomSociete: '',
   activite: '',
-  domaine: '',
+  // domaine: '',
   responsable: '',
   contact: '',
   email: '',
@@ -42,22 +37,22 @@ const emptyForm = {
 
 type FormState = typeof emptyForm
 
-function correspondExact(nom: string, domaines: DomaineOption[]): DomaineOption | null {
-  const cherche = nom.trim().toLowerCase()
-  if (!cherche) return null
-  return domaines.find((d) => d.nom.toLowerCase() === cherche) ?? null
-}
+// function correspondExact(nom: string, domaines: DomaineOption[]): DomaineOption | null {
+//   const cherche = nom.trim().toLowerCase()
+//   if (!cherche) return null
+//   return domaines.find((d) => d.nom.toLowerCase() === cherche) ?? null
+// }
 
 function formulaireInitial(
   client: Societe | null,
   responsableActuel: string | null | undefined,
-  domaines: DomaineOption[],
+  // domaines: DomaineOption[],
 ): FormState {
   if (!client) return { ...emptyForm }
   return {
     nomSociete: client.nomSociete,
     activite: client.activite ?? '',
-    domaine: domaines.find((d) => d.id === client.domaineId)?.nom ?? '',
+    // domaine: domaines.find((d) => d.id === client.domaineId)?.nom ?? '',
     responsable: responsableActuel ?? client.responsablePrincipal ?? '',
     contact: client.contact ?? '',
     email: client.email ?? '',
@@ -81,12 +76,12 @@ function formulaireInitial(
  * 2. détails de la société (facebook, adresse, date de création, personnel,
  *    chiffre d'affaires mensuel — tous facultatifs).
  */
-export function ClientFormModal({ open, client, responsableActuel, domaines, resolveDomaine, onCreerDomaine, onClose, onSave }: Props) {
+export function ClientFormModal({ open, client, responsableActuel, onClose, onSave }: Props) {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [domaineCree, setDomaineCree] = useState<string | null>(null)
-  const [creationDomaineEnCours, setCreationDomaineEnCours] = useState(false)
+  // const [domaineCree, setDomaineCree] = useState<string | null>(null)
+  // const [creationDomaineEnCours, setCreationDomaineEnCours] = useState(false)
   const [formKey, setFormKey] = useState<string | null>(null)
 
   // `key` remontée à chaque ouverture : réinitialise l'étape et le formulaire.
@@ -96,10 +91,10 @@ export function ClientFormModal({ open, client, responsableActuel, domaines, res
   if (formKey !== resetKey) {
     setFormKey(resetKey)
     if (open) {
-      setForm(formulaireInitial(client, responsableActuel, domaines))
+      setForm(formulaireInitial(client, responsableActuel))
       setError(null)
       setSaving(false)
-      setDomaineCree(null)
+      // setDomaineCree(null)
     }
   }
 
@@ -110,26 +105,26 @@ export function ClientFormModal({ open, client, responsableActuel, domaines, res
     setForm((f) => ({ ...f, [name]: value }))
   }
 
-  const domaineExiste = correspondExact(form.domaine, domaines) !== null
-  const texteDomainePropre = form.domaine.trim()
+  // const domaineExiste = correspondExact(form.domaine, domaines) !== null
+  // const texteDomainePropre = form.domaine.trim()
 
-  const handleCreerDomaine = async () => {
-    if (texteDomainePropre === '' || domaineExiste) return
-    setCreationDomaineEnCours(true)
-    try {
-      await (onCreerDomaine ?? resolveDomaine)(texteDomainePropre)
-      setDomaineCree(texteDomainePropre)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Échec de la création du domaine')
-    } finally {
-      setCreationDomaineEnCours(false)
-    }
-  }
+  // const handleCreerDomaine = async () => {
+  //   if (texteDomainePropre === '' || domaineExiste) return
+  //   setCreationDomaineEnCours(true)
+  //   try {
+  //     await (onCreerDomaine ?? resolveDomaine)(texteDomainePropre)
+  //     setDomaineCree(texteDomainePropre)
+  //   } catch (err) {
+  //     setError(err instanceof Error ? err.message : 'Échec de la création du domaine')
+  //   } finally {
+  //     setCreationDomaineEnCours(false)
+  //   }
+  // }
 
   /** Étape 1 : champs obligatoires de l'identité du client. */
   const validerInformations = (): string | null => {
     if (!form.nomSociete.trim()) return 'Le nom de la société est obligatoire'
-    if (!form.domaine.trim()) return 'Le domaine est obligatoire'
+    // if (!form.domaine.trim()) return 'Le domaine est obligatoire'
     if (!form.responsable.trim()) return 'Le responsable est obligatoire'
     return null
   }
@@ -165,7 +160,7 @@ export function ClientFormModal({ open, client, responsableActuel, domaines, res
     setSaving(true)
     setError(null)
     try {
-      const domaineId = await resolveDomaine(form.domaine.trim())
+      // const domaineId = await resolveDomaine(form.domaine.trim())
       await onSave(
         {
           nomSociete: form.nomSociete.trim(),
@@ -179,7 +174,7 @@ export function ClientFormModal({ open, client, responsableActuel, domaines, res
           chiffreAffaireMensuel: form.chiffreAffaireMensuel
             ? Number(form.chiffreAffaireMensuel)
             : null,
-          domaineId,
+          // domaineId,
           responsable: form.responsable.trim(),
         },
         client?.id,
@@ -241,50 +236,7 @@ export function ClientFormModal({ open, client, responsableActuel, domaines, res
                     />
                   </label>
 
-                  <label className="field">
-                    Activité
-                    <input
-                      name="activite"
-                      value={form.activite}
-                      onChange={handleChange}
-                      placeholder="Ex. Services financiers"
-                    />
-                  </label>
-
-                  <div className="field">
-                    <span className="field-label">
-                      Domaine <span className="required">*</span>
-                    </span>
-                    <Autocomplete
-                      value={form.domaine}
-                      placeholder="Ex. Services financiers"
-                      onTextChange={(texte) => setForm((f) => ({ ...f, domaine: texte }))}
-                      onPick={() => undefined}
-                    options={domaines.map((d) => ({ id: d.id, label: d.nom }))}
-                    footer={
-                      texteDomainePropre !== '' && !domaineExiste ? (
-                        domaineCree?.toLowerCase() === texteDomainePropre.toLowerCase() ? (
-                          <span className="autocomplete__hint">
-                            Domaine « {texteDomainePropre} » créé ✓
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn-link"
-                            disabled={creationDomaineEnCours}
-                            onClick={() => void handleCreerDomaine()}
-                          >
-                            {creationDomaineEnCours
-                              ? 'Création…'
-                              : `Créer « ${texteDomainePropre} » comme nouveau domaine`}
-                          </button>
-                        )
-                      ) : undefined
-                    }
-                  />
-                  </div>
-
-                  <label className="field">
+                  <label className="field form-grid__full">
                     Responsable <span className="required">*</span>
                     <input
                       name="responsable"
@@ -296,7 +248,18 @@ export function ClientFormModal({ open, client, responsableActuel, domaines, res
                   </label>
 
                   <label className="field">
-                    Contact
+                    Activité
+                    <input
+                      name="activite"
+                      value={form.activite}
+                      onChange={handleChange}
+                      placeholder="Ex. Services financiers"
+                    />
+                  </label>
+
+                  <div className="field">
+                    <label className="field">
+                    Contact du société
                     <input
                       type="tel"
                       name="contact"
@@ -305,9 +268,10 @@ export function ClientFormModal({ open, client, responsableActuel, domaines, res
                       placeholder="+261 34 00 000 00"
                     />
                   </label>
+                  </div>
 
                   <label className="field form-grid__full">
-                    Email
+                    Email du société
                     <input
                       type="email"
                       name="email"

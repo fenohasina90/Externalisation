@@ -41,13 +41,14 @@ public class ServiceController {
     @GetMapping
     @PreAuthorize("hasAuthority('SERVICE_VIEW')")
     @Operation(summary = "Lister / rechercher / filtrer les services",
-            description = "Pagination, recherche par nom ou code, filtres par actif et par type de service")
+            description = "Pagination, recherche par nom ou code, filtres par actif, type de service et domaine")
     public ResponseEntity<Page<ServiceResponse>> getAll(
             @RequestParam(value = "recherche", required = false) String recherche,
             @RequestParam(value = "actif", required = false) Boolean actif,
             @RequestParam(value = "typeService", required = false) String typeService,
+            @RequestParam(value = "domaineId", required = false) Integer domaineId,
             Pageable pageable) {
-        return ResponseEntity.ok(serviceService.getAll(recherche, actif, typeService, pageable));
+        return ResponseEntity.ok(serviceService.getAll(recherche, actif, typeService, domaineId, pageable));
     }
 
     @GetMapping("/{id}")

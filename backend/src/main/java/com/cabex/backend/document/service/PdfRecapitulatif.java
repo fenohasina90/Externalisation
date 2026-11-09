@@ -37,7 +37,7 @@ final class PdfRecapitulatif {
         bandeauReferences(doc, demande, st);
         cartesSociete(doc, demande, st);
         profilChiffre(doc, demande.getSociete(), st);
-        domaine(doc, demande.getSociete());
+        domaine(doc, demande);
         services(doc, demande, st);
         delai(doc, st);
         observation(doc, demande, st);
@@ -135,10 +135,17 @@ final class PdfRecapitulatif {
         doc.add(profil);
     }
 
-    private static void domaine(Document doc, Societe societe) {
+    private static void domaine(Document doc, DemandeService demande) {
         PdfComposants.section(doc, "Domaine");
-        String domaine = societe != null && societe.getDomaine() != null
-                ? societe.getDomaine().getNomDomaine() : "";
+        String domaine = "";
+        if (demande.getLignes() != null) {
+            for (LigneService ligne : demande.getLignes()) {
+                if (ligne.getService() != null && ligne.getService().getDomaine() != null) {
+                    domaine = ligne.getService().getDomaine().getNomDomaine();
+                    break;
+                }
+            }
+        }
         doc.add(casesDomaine(domaine, "Comptabilité", "Fiscale", "Audit interne"));
     }
 

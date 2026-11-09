@@ -8,22 +8,16 @@ public class DomaineMapper {
     private DomaineMapper() {
     }
 
-    public static DomaineResponse toResponse(DomaineService domaine, long nombreSocietes) {
+    public static DomaineResponse toResponse(DomaineService domaine) {
         if (domaine == null) {
             return null;
         }
         return new DomaineResponse(
                 domaine.getId(),
                 domaine.getNomDomaine(),
+                domaine.getCodeDomaine(),
                 domaine.getDescription(),
-                domaine.getActif(),
-                nombreSocietes
+                domaine.getActif()
         );
-    }
-
-    public static DomaineResponse toResponse(DomaineService domaine) {
-        return toResponse(domaine, domaine != null && domaine.getSocietes() != null
-                ? domaine.getSocietes().size()
-                : 0);
     }
 }

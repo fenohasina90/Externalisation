@@ -9,7 +9,8 @@ import {
   type StatutServiceFilter,
   type TypeServiceFilter,
 } from '../hooks/useServicesList'
-import { servicesApi } from '../services/services.service'
+import { domainesApi, servicesApi } from '../services/services.service'
+import type { Domaine } from '../types'
 import {
   TYPES_SERVICE,
   type CreateServicePayload,
@@ -30,6 +31,7 @@ export function ServicesPage() {
   const [detail, setDetail] = useState<Service | null>(null)
   const [confirmArchive, setConfirmArchive] = useState<Service | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [domainesList, setDomainesList] = useState<Domaine[]>([])
 
   const {
     items,
@@ -45,8 +47,17 @@ export function ServicesPage() {
     setStatut,
     typeService,
     setTypeService,
+    domaineId,
+    setDomaineId,
     reload,
   } = useServicesList(PAGE_SIZE)
+
+  // Chargement des domaines actifs pour le sélecteur du formulaire et le filtre.
+  useEffect(() => {
+    domainesApi.list({ page: 0, size: 200 }, { actif: true }).then((p) => {
+      setDomainesList(p.content)
+    })
+  }, [])
 
   const actifs = items.filter((s) => s.actif).length
   const archives = items.filter((s) => !s.actif).length
@@ -201,6 +212,20 @@ export function ServicesPage() {
               ))}
             </select>
           </label>
+          <label className="field filter-field">
+            Domaine
+            <select
+              value={domaineId}
+              onChange={(e) => setDomaineId(e.target.value)}
+            >
+              <option value="">Tous les domaines</option>
+              {domainesList.map((d) => (
+                <option key={d.id} value={String(d.id)}>
+                  {d.nomDomaine} ({d.codeDomaine})
+                </option>
+              ))}
+            </select>
+          </label>
           {/* <button type="submit" className="btn-primary">
             Rechercher
           </button> */}
@@ -267,6 +292,7 @@ export function ServicesPage() {
       <ServiceFormModal
         open={modalOpen}
         service={editing}
+        domaines={domainesList}
         onClose={() => {
           setModalOpen(false)
           setEditing(null)

@@ -170,10 +170,10 @@ export function AdministrationPage() {
         ))}
       </div>
 
-      <div className="alert alert-info" style={{ marginBottom: 0 }}>
+      {/* <div className="alert alert-info" style={{ marginBottom: 0 }}>
         Réservé aux administrateurs : chaque action sensible (création de compte, changement de
         rôle, réinitialisation) est enregistrée dans le journal d&apos;audit.
-      </div>
+      </div> */}
     </div>
   )
 }

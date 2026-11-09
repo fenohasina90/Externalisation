@@ -50,7 +50,7 @@ export function DossierEntrepriseDetail({ dossier, dateDemande, numeroIM }: Prop
               <b>{dateDemande}</b>
             </div>
             <div className="info-item">
-              <span>N° IM</span>
+              <span>N° IM du commercial</span>
               <b>{numeroIM}</b>
             </div>
             <div className="info-item">

@@ -112,10 +112,10 @@ public class DemandeMapper {
                 d.getClientResponsable() != null ? d.getClientResponsable().getNomClient() : null,
                 ref != null && ref.getService() != null ? ref.getService().getId() : null,
                 ref != null && ref.getService() != null ? ref.getService().getNomService() : null,
-                d.getSociete() != null && d.getSociete().getDomaine() != null
-                        ? d.getSociete().getDomaine().getId() : null,
-                d.getSociete() != null && d.getSociete().getDomaine() != null
-                        ? d.getSociete().getDomaine().getNomDomaine() : null,
+                ref != null && ref.getService() != null && ref.getService().getDomaine() != null
+                        ? ref.getService().getDomaine().getId() : null,
+                ref != null && ref.getService() != null && ref.getService().getDomaine() != null
+                        ? ref.getService().getDomaine().getNomDomaine() : null,
                 ref != null ? ref.getTarif() : null,
                 d.getCommentaire(),
                 statutActuel,

@@ -25,8 +25,8 @@ class SocieteRepositoryTest {
     private Societe societe(String nom, boolean actif, boolean archivee) {
         DomaineService domaine = domaineRepository.findAll().stream().findFirst()
                 .orElseGet(() -> domaineRepository.save(DomaineService.builder()
-                        .nomDomaine("Comptabilité").actif(true).build()));
-        Societe s = Societe.builder().nomSociete(nom).actif(actif).domaine(domaine).build();
+                        .nomDomaine("Comptabilité").codeDomaine("COMPTA").actif(true).build()));
+        Societe s = Societe.builder().nomSociete(nom).actif(actif).build();
         if (archivee) {
             s.setArchivedAt(LocalDateTime.now());
         }
@@ -40,12 +40,12 @@ class SocieteRepositoryTest {
         societe("Hélios Groupe", false, true);
 
         assertEquals(1, societeRepository
-                .rechercher(null, null, null, true, PageRequest.of(0, 8)).getTotalElements());
+                .rechercher(null, null, true, PageRequest.of(0, 8)).getTotalElements());
         assertEquals(2, societeRepository
-                .rechercher(null, null, null, false, PageRequest.of(0, 8)).getTotalElements());
+                .rechercher(null, null, false, PageRequest.of(0, 8)).getTotalElements());
         assertEquals(1, societeRepository
-                .rechercher(null, true, null, null, PageRequest.of(0, 8)).getTotalElements());
+                .rechercher(null, true, null, PageRequest.of(0, 8)).getTotalElements());
         assertEquals(3, societeRepository
-                .rechercher(null, null, null, null, PageRequest.of(0, 8)).getTotalElements());
+                .rechercher(null, null, null, PageRequest.of(0, 8)).getTotalElements());
     }
 }

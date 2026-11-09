@@ -140,7 +140,7 @@ public class FactureService {
         ajouterHistoriqueDemande(demande,
                 "Factures proforma générées (mode " + modeNormalise + ") : " + crees.size());
         auditService.log(AuditActions.CREATE, "FACTURE", "Facture",
-                null, null, "demande=" + demande.getReferenceDemande() + ", mode=" + modeNormalise);
+                null, null, demande.getReferenceDemande() + " : " + modeNormalise);
 
         return crees.stream().map(this::toResponse).toList();
     }

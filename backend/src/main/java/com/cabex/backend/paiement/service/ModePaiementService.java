@@ -55,7 +55,7 @@ public class ModePaiementService {
                 .build();
         ModePaiement saved = modeRepository.save(mode);
         auditService.log(AuditActions.CREATE, "PAIEMENT", "ModePaiement",
-                saved.getId().longValue(), null, "code=" + saved.getCode());
+                saved.getId().longValue(), null, saved.getCode());
         return PaiementMapper.toModeResponse(saved);
     }
 
@@ -71,7 +71,7 @@ public class ModePaiementService {
         mode.setLibelle(request.libelle().trim());
         ModePaiement saved = modeRepository.save(mode);
         auditService.log(AuditActions.UPDATE, "PAIEMENT", "ModePaiement",
-                saved.getId().longValue(), "code=" + ancien, "code=" + code);
+                saved.getId().longValue(), ancien, code);
         return PaiementMapper.toModeResponse(saved);
     }
 
@@ -82,7 +82,7 @@ public class ModePaiementService {
         mode.setActif(actif);
         ModePaiement saved = modeRepository.save(mode);
         auditService.log(AuditActions.UPDATE, "PAIEMENT", "ModePaiement",
-                saved.getId().longValue(), "actif=" + previous, "actif=" + actif);
+                saved.getId().longValue(), "actif : " + previous, "actif : " + actif);
         return PaiementMapper.toModeResponse(saved);
     }
 
@@ -92,7 +92,7 @@ public class ModePaiementService {
         mode.setActif(false);
         modeRepository.save(mode);
         auditService.log(AuditActions.DELETE, "PAIEMENT", "ModePaiement",
-                mode.getId().longValue(), "code=" + mode.getCode(), null);
+                mode.getId().longValue(), mode.getCode(), null);
     }
 
     private ModePaiement getEntity(Integer id) {

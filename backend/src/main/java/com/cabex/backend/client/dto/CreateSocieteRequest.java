@@ -36,9 +36,6 @@ public record CreateSocieteRequest(
         Integer nombrePersonnel,
 
         @PositiveOrZero(message = "Le chiffre d'affaire doit être positif ou nul")
-        BigDecimal chiffreAffaireMensuel,
-
-        @NotNull(message = "Le domaine est obligatoire")
-        Integer domaineId
+        BigDecimal chiffreAffaireMensuel
 ) {
 }

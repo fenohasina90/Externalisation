@@ -129,11 +129,11 @@ class PaiementRechercheTest {
 
         DomaineService domaine = domaineRepository.save(DomaineService.builder()
                 .nomDomaine("Conseil")
+                .codeDomaine("CONSEIL")
                 .actif(true)
                 .build());
         Societe atlas = societeRepository.save(Societe.builder()
                 .nomSociete("Atlas Conseil")
-                .domaine(domaine)
                 .actif(true)
                 .build());
 

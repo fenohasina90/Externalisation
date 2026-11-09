@@ -61,10 +61,10 @@ export function CommercialFormModal({ open, commercial, onClose, onSave }: Props
       setError('Le nom est obligatoire')
       return
     }
-    if (!form.email.trim()) {
-      setError("L'adresse e-mail est obligatoire")
-      return
-    }
+    // if (!form.email.trim()) {
+    //   setError("L'adresse e-mail est obligatoire")
+    //   return
+    // }
     setSaving(true)
     setError(null)
     try {
@@ -140,14 +140,14 @@ export function CommercialFormModal({ open, commercial, onClose, onSave }: Props
             </label>
 
             <label className="field form-grid__full">
-              Email <span className="required">*</span>
+              Email 
+              {/* <span className="required">*</span> */}
               <input
                 type="email"
                 name="email"
                 value={form.email}
                 onChange={handleChange}
                 placeholder="nom@cabinet-excellent.mg"
-                required
               />
             </label>
           </div>

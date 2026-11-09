@@ -154,7 +154,7 @@ public class LigneServiceService {
 
         auditService.log(AuditActions.CREATE, "DEMANDE", "LigneService",
                 Long.valueOf(ligne.getId()), null,
-                "demande=" + demande.getReferenceDemande() + ", service=" + service.getNomService());
+                demande.getReferenceDemande() + ", " + service.getNomService());
 
         return toResponse(ligne);
     }
@@ -216,7 +216,7 @@ public class LigneServiceService {
         factureService.actualiserPourDemande(demande.getId());
 
         auditService.log(AuditActions.DELETE, "DEMANDE", "LigneService",
-                Long.valueOf(ligneId), "demande=" + demande.getReferenceDemande(),
+                Long.valueOf(ligneId), demande.getReferenceDemande(),
                 "service retiré : " + nomService);
     }
 

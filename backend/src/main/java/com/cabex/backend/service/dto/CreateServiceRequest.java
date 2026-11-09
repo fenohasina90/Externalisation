@@ -11,6 +11,8 @@ public record CreateServiceRequest(
         @Size(max = 30, message = "Le type ne doit pas dépasser 30 caractères")
         String typeService,
 
-        String description
+        String description,
+
+        Integer domaineId
 ) {
 }

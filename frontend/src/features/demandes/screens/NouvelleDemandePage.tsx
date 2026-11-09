@@ -34,12 +34,19 @@ const OPTION_SERVICE_AUTRE = 'autre'
 
 interface LigneSaisie {
   serviceId: number | ''
+  domaineId: string
   tarif: string
   debutService: string
   finService: string
 }
 
-const LIGNE_VIDE: LigneSaisie = { serviceId: '', tarif: '', debutService: '', finService: '' }
+const LIGNE_VIDE: LigneSaisie = {
+  serviceId: '',
+  domaineId: '',
+  tarif: '',
+  debutService: '',
+  finService: '',
+}
 
 /**
  * Nouvelle demande multi-services branchée sur l'API :
@@ -127,20 +134,23 @@ export function NouvelleDemandePage() {
           : tous
     return filtres.map((r) => ({ id: r.id, label: r.nomClient }))
   }, [pageResponsables, societeId, creationSansSociete])
-  const optionsDomaines = useMemo(
-    () => (pageDomaines?.content ?? []).map((d) => ({ id: d.id, nom: d.nomDomaine })),
-    [pageDomaines],
-  )
 
   const [clientModalOpen, setClientModalOpen] = useState(false)
   const [responsableModalOpen, setResponsableModalOpen] = useState(false)
   const [serviceModalLigne, setServiceModalLigne] = useState<number | null>(null)
 
-  const handleSaveService = async (payload: { nomService: string }) => {
-    const cree = await servicesApi.create({ nomService: payload.nomService, typeService: 'STANDARD' })
+  const handleSaveService = async (payload: { nomService: string; domaineId?: number | null }) => {
+    const cree = await servicesApi.create({
+      nomService: payload.nomService,
+      typeService: 'STANDARD',
+      domaineId: payload.domaineId ?? null,
+    })
     reloadServices()
     if (serviceModalLigne !== null) {
-      setLigne(serviceModalLigne, { serviceId: cree.id })
+      setLigne(serviceModalLigne, {
+        serviceId: cree.id,
+        domaineId: payload.domaineId ? String(payload.domaineId) : '',
+      })
     }
     setServiceModalLigne(null)
   }
@@ -182,14 +192,6 @@ export function NouvelleDemandePage() {
       setResponsableId(null)
     }
     setErreur(null)
-  }
-
-  const resolveDomaine = async (nom: string): Promise<number> => {
-    const exact = optionsDomaines.find((d) => d.nom.toLowerCase() === nom.trim().toLowerCase())
-    if (exact) return exact.id
-    const cree = await domainesApi.create({ nomDomaine: nom.trim() })
-    reloadDomaines()
-    return cree.id
   }
 
   const handleSaveClient = async (payload: CreateSocietePayload & { responsable: string }) => {
@@ -285,6 +287,7 @@ export function NouvelleDemandePage() {
       if (!cible) {
         const payloadLignes = lignes.map((l) => ({
           serviceId: l.serviceId as number,
+          domaineId: l.domaineId ? Number(l.domaineId) : null,
           tarif: Number(l.tarif),
           debutService: l.debutService,
           finService: l.finService,
@@ -340,6 +343,10 @@ export function NouvelleDemandePage() {
         {
           label: 'Facturation',
           valeur: mode === 'PAR_SERVICE' ? 'Une facture par service' : 'Facture unique',
+        },
+        {
+          label: 'Référence',
+          valeur: demandeCreee?.reference ?? '— (générée à l’enregistrement)',
         },
         {
           label: 'Pièces jointes',
@@ -544,8 +551,34 @@ export function NouvelleDemandePage() {
                         )}
                       </div>
                       <div className="form-grid form-grid--2" style={{ marginTop: 8 }}>
-                        <label className="field form-grid__full">
-                          Service <span className="required">*</span>
+
+
+                        {/* Service (colonne gauche) */}
+                        {/* Domaine + Service (côte à côte) */}
+                        <label className="field">
+                          Domaine
+                          <select
+                            value={l.domaineId}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              setLigne(i, { domaineId: val })
+                              if (val === '') {
+                                setLigne(i, { serviceId: '' })
+                              }
+                            }}
+                          >
+                            <option value="">Tous les domaines</option>
+                            {(pageDomaines?.content ?? []).map((d) => (
+                              <option key={d.id} value={String(d.id)}>
+                                {d.nomDomaine}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="field">
+                          Service 
+                          {/* <span className="required">*</span> */}
                           <select
                             value={l.serviceId}
                             onChange={(e) => {
@@ -560,7 +593,11 @@ export function NouvelleDemandePage() {
                           >
                             <option value="">— Choisir —</option>
                             {(pageServices?.content ?? [])
-                              .filter((s) => s.id === l.serviceId || !selectionnes.has(s.id))
+                              .filter(
+                                (s) =>
+                                  (l.domaineId === '' || s.domaineId === Number(l.domaineId)) &&
+                                  (s.id === l.serviceId || !selectionnes.has(s.id)),
+                              )
                               .map((s) => (
                                 <option key={s.id} value={s.id}>
                                   {s.nomService}
@@ -569,6 +606,9 @@ export function NouvelleDemandePage() {
                             <option value={OPTION_SERVICE_AUTRE}>Autre (créer un service)</option>
                           </select>
                         </label>
+
+                        
+
                         <label className="field">
                           Tarif (MGA) <span className="required">*</span>
                           <input
@@ -629,9 +669,6 @@ export function NouvelleDemandePage() {
       <ClientFormModal
         open={clientModalOpen}
         client={null}
-        domaines={optionsDomaines}
-        resolveDomaine={resolveDomaine}
-        onCreerDomaine={resolveDomaine}
         onClose={() => setClientModalOpen(false)}
         onSave={handleSaveClient}
       />
@@ -655,8 +692,14 @@ export function NouvelleDemandePage() {
       <ServiceFormModal
         open={serviceModalLigne !== null}
         service={null}
+        domaines={pageDomaines?.content ?? []}
         onClose={() => setServiceModalLigne(null)}
-        onSave={(payload) => handleSaveService(payload as { nomService: string })}
+        onSave={(payload) =>
+          handleSaveService({
+            nomService: payload.nomService,
+            domaineId: payload.domaineId,
+          })
+        }
       />
     </div>
   )

@@ -215,7 +215,7 @@ public class DashboardService {
     @Transactional(readOnly = true)
     public PaiementDashboardResponse paiements(DashboardFilter filtre) {
         List<ModeMontantResponse> parMode = paiementRepository.sommeParMode(
-                        filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId(), null)
+                        filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
                 .stream()
                 .map(o -> new ModeMontantResponse(
                         (String) o[0], toBigDecimal(o[1])))
@@ -353,7 +353,7 @@ public class DashboardService {
 
     private BigDecimal sommePayee(DashboardFilter filtre) {
         BigDecimal montant = paiementRepository.sommePayee(
-                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId(), null);
+                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
         return montant == null ? BigDecimal.ZERO : montant;
     }
 

@@ -32,7 +32,7 @@ export interface CreateSocietePayload {
   dateCreation?: string | null
   nombrePersonnel?: number | null
   chiffreAffaireMensuel?: number | null
-  domaineId: number
+  // domaineId: number
 }
 
 export type UpdateSocietePayload = CreateSocietePayload

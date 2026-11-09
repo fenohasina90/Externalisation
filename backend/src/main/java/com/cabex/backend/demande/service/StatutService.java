@@ -54,7 +54,7 @@ public class StatutService {
                 .build();
         StatutDemande saved = statutRepository.save(statut);
         auditService.log(AuditActions.CREATE, "DEMANDE", "StatutDemande",
-                saved.getId().longValue(), null, "statut=" + saved.getStatut());
+                saved.getId().longValue(), null, "statut : " + saved.getStatut());
         return StatutMapper.toResponse(saved);
     }
 
@@ -73,7 +73,7 @@ public class StatutService {
         }
         StatutDemande saved = statutRepository.save(statut);
         auditService.log(AuditActions.UPDATE, "DEMANDE", "StatutDemande",
-                saved.getId().longValue(), "statut=" + ancien, "statut=" + nom);
+                saved.getId().longValue(), "statut : " + ancien, "statut : " + nom);
         return StatutMapper.toResponse(saved);
     }
 
@@ -84,7 +84,7 @@ public class StatutService {
         statut.setActif(actif);
         StatutDemande saved = statutRepository.save(statut);
         auditService.log(AuditActions.UPDATE, "DEMANDE", "StatutDemande",
-                saved.getId().longValue(), "actif=" + previous, "actif=" + actif);
+                saved.getId().longValue(), "actif : " + previous, "actif : " + actif);
         return StatutMapper.toResponse(saved);
     }
 
@@ -94,7 +94,7 @@ public class StatutService {
         statut.setActif(false);
         statutRepository.save(statut);
         auditService.log(AuditActions.DELETE, "DEMANDE", "StatutDemande",
-                statut.getId().longValue(), "statut=" + statut.getStatut(), null);
+                statut.getId().longValue(), "statut : " + statut.getStatut(), null);
     }
 
     private StatutDemande getEntity(Integer id) {

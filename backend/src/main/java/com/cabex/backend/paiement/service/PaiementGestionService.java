@@ -148,7 +148,7 @@ public class PaiementGestionService {
 
         auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
                 Long.valueOf(paiement.getId()), null,
-                "montant=" + paiement.getMontantPaye() + ", réf=" + paiement.getReferencePaiement());
+            paiement.getMontantPaye() + " : " + paiement.getReferencePaiement());
 
         return PaiementMapper.toResponse(paiement);
     }
@@ -184,10 +184,10 @@ public class PaiementGestionService {
 
         PaiementResponse response = PaiementMapper.toResponse(paiementRepository.save(paiement));
         auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
-                paiement.getId().longValue(), "montant=" + paiement.getMontantPaye()
-                        + ", réf=" + paiement.getReferencePaiement(),
-                "montant=" + request.montantPaye()
-                        + (request.referenceVirement() != null ? ", réf=" + request.referenceVirement() : ""));
+                paiement.getId().longValue(), paiement.getMontantPaye()
+                        + " : " + paiement.getReferencePaiement(),
+            request.montantPaye()
+                        + (request.referenceVirement() != null ? " : " + request.referenceVirement() : ""));
         return response;
     }
 
@@ -202,7 +202,7 @@ public class PaiementGestionService {
         paiement.setArchivedAt(LocalDateTime.now());
         paiementRepository.save(paiement);
         auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
-                Long.valueOf(id), "supprimé (archivé), réf=" + ref, null);
+                Long.valueOf(id), "supprimé (archivé) : " + ref, null);
     }
 
     private void validerVirement(ModePaiement mode, String referenceVirement) {

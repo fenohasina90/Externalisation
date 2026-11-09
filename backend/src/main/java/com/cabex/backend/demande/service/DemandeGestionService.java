@@ -112,7 +112,7 @@ public class DemandeGestionService {
 
     @Transactional(readOnly = true)
     public Page<DemandeResponse> getAll(String recherche, Integer societeId, Integer serviceId,
-                                        Integer domaineId, Integer commercialId, String statut,
+                                        Integer commercialId, String statut,
                                         LocalDate dateDebut, LocalDate dateFin,
                                         Boolean actif, String situation, Pageable pageable) {
         Pageable tri = pageable.getSort().isSorted()
@@ -120,7 +120,7 @@ public class DemandeGestionService {
                 : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                         Sort.by(Sort.Order.desc("dateDemande"), Sort.Order.desc("id")));
         Page<DemandeService> page = demandeRepository.rechercher(recherche, societeId, serviceId,
-                domaineId, commercialId, statut, dateDebut, dateFin, actif, situation,
+                commercialId, statut, dateDebut, dateFin, actif, situation,
                 LocalDate.now(), tri);
 
         List<DemandeService> demandes = page.getContent();
@@ -286,11 +286,12 @@ public class DemandeGestionService {
             throw new BusinessException("Un service ne peut pas être sélectionné deux fois dans une demande");
         }
 
+        LocalDate dateDemandeEffective = request.dateDemande() != null
+                ? request.dateDemande()
+                : LocalDate.now();
         DemandeService demande = DemandeService.builder()
-                .referenceDemande(genererReference(LocalDate.now().getYear()))
-                .dateDemande(request.dateDemande() != null
-                        ? request.dateDemande()
-                        : LocalDate.now())
+                .referenceDemande(genererReference(dateDemandeEffective))
+                .dateDemande(dateDemandeEffective)
                 .societe(societe)
                 .commercial(commercial)
                 .clientResponsable(responsable)
@@ -535,9 +536,18 @@ public class DemandeGestionService {
         return true;
     }
 
-    private String genererReference(int annee) {
-        String prefix = "DEM-" + annee + "-";
-        long seq = demandeRepository.countByReferenceDemandeStartingWith(prefix) + 1;
+    /**
+     * Génère une référence au format DEM-JJ-MM-AAAA-EXT-XXXXX.
+     * EXT-XXXXX se réinitialise chaque année (séquence par année).
+     * Exemple : 01/01/2026 → DEM-01-01-2026-EXT-00001.
+     */
+    private String genererReference(LocalDate dateDemande) {
+        int annee = dateDemande.getYear();
+        String jj = String.format("%02d", dateDemande.getDayOfMonth());
+        String mm = String.format("%02d", dateDemande.getMonthValue());
+        String aaaa = String.valueOf(annee);
+        String prefix = "DEM-" + jj + "" + mm + "" + aaaa + "EXT";
+        long seq = demandeRepository.countByAnnee(annee) + 1;
         String reference;
         do {
             reference = prefix + String.format("%05d", seq);

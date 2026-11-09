@@ -63,7 +63,7 @@ class DemandeRechercheTest {
                 .build());
 
         var page = demandeRepository.rechercher(
-                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
                 Pageable.unpaged());
 
         assertEquals(1, page.getTotalElements());
@@ -75,7 +75,7 @@ class DemandeRechercheTest {
         demandeAvecSociete();
 
         var page = demandeRepository.rechercher(
-                "DEM-2026-00021", null, null, null, null, null, null, null, null, null, null,
+                "DEM-2026-00021", null, null, null, null, null, null, null, null, null,
                 Pageable.unpaged());
 
         assertEquals(1, page.getTotalElements());
@@ -86,7 +86,7 @@ class DemandeRechercheTest {
         demandeAvecSociete();
 
         var page = demandeRepository.rechercher(
-                "atlas", null, null, null, null, null, null, null, null, null, null,
+                "atlas", null, null, null, null, null, null, null, null, null,
                 Pageable.unpaged());
 
         assertEquals(1, page.getTotalElements());
@@ -98,11 +98,11 @@ class DemandeRechercheTest {
     void rechercheSansSociete() {
         DomaineService domaine = domaineRepository.save(DomaineService.builder()
                 .nomDomaine("Formalités")
+                .codeDomaine("FORM")
                 .actif(true)
                 .build());
         Societe autre = societeRepository.save(Societe.builder()
                 .nomSociete("Globex France")
-                .domaine(domaine)
                 .actif(true)
                 .build());
         demandeRepository.save(DemandeService.builder()
@@ -119,7 +119,7 @@ class DemandeRechercheTest {
                 .build());
 
         var page = demandeRepository.rechercher(
-                "DEM-2026-00023", null, null, null, null, null, null, null, null, null, null,
+                "DEM-2026-00023", null, null, null, null, null, null, null, null, null,
                 Pageable.unpaged());
 
         assertEquals(1, page.getTotalElements());
@@ -129,11 +129,11 @@ class DemandeRechercheTest {
     private void demandeAvecSociete() {
         DomaineService domaine = domaineRepository.save(DomaineService.builder()
                 .nomDomaine("Conseil")
+                .codeDomaine("CONSEIL")
                 .actif(true)
                 .build());
         Societe atlas = societeRepository.save(Societe.builder()
                 .nomSociete("Atlas Conseil")
-                .domaine(domaine)
                 .actif(true)
                 .build());
         demandeRepository.save(DemandeService.builder()

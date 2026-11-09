@@ -49,7 +49,7 @@ public class CommercialService {
                 .actif(true)
                 .build();
         Commercial saved = commercialRepository.save(commercial);
-        auditService.log(AuditActions.CREATE, "COMMERCIAL", "Commercial", saved.getId().longValue(), null, "nom=" + saved.getNomCommercial());
+        auditService.log(AuditActions.CREATE, "COMMERCIAL", "Commercial", saved.getId().longValue(), null, saved.getNomCommercial());
         return CommercialMapper.toResponse(saved);
     }
 
@@ -93,7 +93,7 @@ public class CommercialService {
             commercial.setContact(request.contact());
         }
         Commercial saved = commercialRepository.save(commercial);
-        auditService.log(AuditActions.UPDATE, "COMMERCIAL", "Commercial", saved.getId().longValue(), null, "nom=" + saved.getNomCommercial());
+        auditService.log(AuditActions.UPDATE, "COMMERCIAL", "Commercial", saved.getId().longValue(), null, saved.getNomCommercial());
         return CommercialMapper.toResponse(saved);
     }
 
@@ -103,7 +103,7 @@ public class CommercialService {
         boolean previousActif = commercial.getActif();
         commercial.setActif(actif);
         Commercial saved = commercialRepository.save(commercial);
-        auditService.log(AuditActions.UPDATE, "COMMERCIAL", "Commercial", saved.getId().longValue(), "actif=" + previousActif, "actif=" + actif);
+        auditService.log(AuditActions.UPDATE, "COMMERCIAL", "Commercial", saved.getId().longValue(), "actif : " + previousActif, "actif : " + actif);
         return CommercialMapper.toResponse(saved);
     }
 
@@ -113,7 +113,7 @@ public class CommercialService {
         String nom = commercial.getNomCommercial();
         commercial.setActif(false);
         commercialRepository.save(commercial);
-        auditService.log(AuditActions.DELETE, "COMMERCIAL", "Commercial", commercial.getId().longValue(), "nom=" + nom, null);
+        auditService.log(AuditActions.DELETE, "COMMERCIAL", "Commercial", commercial.getId().longValue(), nom, null);
     }
 
     private Commercial getEntity(Integer id) {
