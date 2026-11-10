@@ -20,6 +20,7 @@ DROP TABLE IF EXISTS echeance_paiement;
 DROP TABLE IF EXISTS propos_paiement;
 DROP TABLE IF EXISTS historique_ligne_service;
 DROP TABLE IF EXISTS ligne_service;
+DROP TABLE IF EXISTS facture_validee_ligne;
 DROP TABLE IF EXISTS facture_validee;
 DROP TABLE IF EXISTS facture_proforma;
 -- Ancien nom (rétro-compatibilité)
@@ -1570,6 +1571,50 @@ ON facture_validee(facture_generale_id);
 
 CREATE INDEX idx_facture_validee_ligne
 ON facture_validee(ligne_service_id);
+
+-- =========================================================
+-- 32bis. LIGNES D'UNE FACTURE VALIDÉE (facture mensuelle d'abonnement)
+-- Une facture validée peut être multi-lignes (facture combinée du mois) :
+-- chaque ligne porte sa propre désignation et son montant ; la somme des
+-- lignes correspond au montant de la facture validée.
+-- =========================================================
+
+CREATE TABLE facture_validee_ligne (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    facture_validee_id INT NOT NULL,
+
+    -- Ligne de service incluse (abonnement lui-même, prestation incluse, débours inclus)
+    ligne_service_id INT NOT NULL,
+
+    -- Désignation figée au moment de la création de la facture
+    designation VARCHAR(255) NOT NULL,
+
+    -- Montant à facturer pour cette ligne (tarif mensuel pour l'abonnement,
+    -- reste dû pour les éléments inclus)
+    montant DECIMAL(15,2) NOT NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_facture_validee_ligne_facture
+        FOREIGN KEY (facture_validee_id)
+        REFERENCES facture_validee(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_facture_validee_ligne_ligne
+        FOREIGN KEY (ligne_service_id)
+        REFERENCES ligne_service(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_facture_validee_ligne_montant
+        CHECK (montant >= 0)
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_facture_validee_ligne_facture
+ON facture_validee_ligne(facture_validee_id);
+
+CREATE INDEX idx_facture_validee_ligne_ligne
+ON facture_validee_ligne(ligne_service_id);
 
 -- =========================================================
 -- 33. LIGNES DE SERVICE (UN SERVICE AU SEIN D'UNE DEMANDE)

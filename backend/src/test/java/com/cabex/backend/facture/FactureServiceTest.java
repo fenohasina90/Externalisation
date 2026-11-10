@@ -49,6 +49,7 @@ class FactureServiceTest {
     @Mock private AuditService auditService;
     @Mock private NotificationService notificationService;
     @Mock private com.cabex.backend.paiement.repository.PaiementRepository paiementRepository;
+    @Mock private com.cabex.backend.facture.repository.FactureValideeLigneRepository factureValideeLigneRepository;
 
     private FactureService service;
 
@@ -57,7 +58,7 @@ class FactureServiceTest {
         service = new FactureService(factureRepository, factureValideeRepository, ligneRepository,
                 historiqueLigneRepository, demandeRepository, historiqueDemandeRepository,
                 statutDemandeRepository, utilisateurRepository, auditService,
-                notificationService, paiementRepository);
+                notificationService, paiementRepository, factureValideeLigneRepository);
         lenient().when(historiqueDemandeRepository.findFirstByDemandeIdOrderByIdDesc(any()))
                 .thenReturn(Optional.of(HistoriqueDemande.builder()
                         .statut(StatutDemande.builder().statut("EN_ATTENTE").build()).build()));

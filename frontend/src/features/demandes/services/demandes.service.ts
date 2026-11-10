@@ -7,6 +7,7 @@ import type {
   Demande,
   Facture,
   FactureValidee,
+  InclusionDisponible,
   HistoriqueDemande,
   HistoriqueLigne,
   LigneService,
@@ -168,16 +169,25 @@ export const facturesValideesApi = {
     return data
   },
 
+  /** Éléments impayés (prestation / débours) de la même société, reprenables dans la facture du mois. */
+  async inclusionsDisponibles(demandeId: number): Promise<InclusionDisponible[]> {
+    const { data } = await http.get<InclusionDisponible[]>(
+      `/demandes/${demandeId}/factures-abonnement/inclusions-disponibles`,
+    )
+    return data
+  },
+
   /** Créer la facture du mois d'une ligne ABONNEMENT_MENSUEL (enfant de la facture générale validée). */
   async creerFactureAbonnement(
     demandeId: number,
     ligneServiceId: number,
     dateEmission: string,
     commentaire?: string | null,
+    inclusionLigneIds?: number[],
   ): Promise<FactureValidee> {
     const { data } = await http.post<FactureValidee>(
       `/demandes/${demandeId}/factures-abonnement`,
-      { ligneServiceId, dateEmission, commentaire: commentaire ?? null },
+      { ligneServiceId, dateEmission, commentaire: commentaire ?? null, inclusionLigneIds: inclusionLigneIds ?? [] },
     )
     return data
   },

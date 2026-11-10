@@ -56,6 +56,7 @@ class LigneServiceTest {
     @Mock private FactureService factureService;
     @Mock private com.cabex.backend.paiement.repository.PaiementRepository paiementRepository;
     @Mock private FactureValideeRepository factureValideeRepository;
+    @Mock private com.cabex.backend.facture.repository.FactureValideeLigneRepository factureValideeLigneRepository;
 
     private LigneServiceService service;
 
@@ -64,7 +65,8 @@ class LigneServiceTest {
         service = new LigneServiceService(ligneRepository, historiqueLigneRepository,
                 demandeRepository, historiqueDemandeRepository, statutDemandeRepository,
                 serviceRepository, proposRepository, utilisateurRepository,
-                auditService, factureService, paiementRepository, factureValideeRepository);
+                auditService, factureService, paiementRepository, factureValideeRepository,
+                factureValideeLigneRepository);
         lenient().when(paiementRepository.sommePayeeParFactureValidee(anyInt())).thenReturn(BigDecimal.ZERO);
         lenient().when(historiqueDemandeRepository.findFirstByDemandeIdOrderByIdDesc(any()))
                 .thenReturn(Optional.of(HistoriqueDemande.builder()

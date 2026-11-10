@@ -62,9 +62,31 @@ class FactureAbonnementPdfTest {
                 .factureGenerale(generale)
                 .ligneService(ligne)
                 .demande(demande)
-                .montant(new BigDecimal("1500000"))
+                .montant(new BigDecimal("1750000"))
                 .valideLe(LocalDateTime.of(2026, 11, 10, 0, 0))
                 .build();
+        com.cabex.backend.facture.entity.FactureValideeLigne ligneAbo =
+                com.cabex.backend.facture.entity.FactureValideeLigne.builder()
+                        .id(11)
+                        .factureValidee(duMois)
+                        .ligneService(ligne)
+                        .designation("Abonnement mensuel — Abonnement comptabilité")
+                        .montant(new BigDecimal("1500000"))
+                        .build();
+        LigneService debours = LigneService.builder().id(9).demande(demande)
+                .categorie("DEBOURS").statut("NON_PAYEE")
+                .designationDebours("Timbres postaux")
+                .montantDebours(new BigDecimal("250000"))
+                .build();
+        com.cabex.backend.facture.entity.FactureValideeLigne ligneDebours =
+                com.cabex.backend.facture.entity.FactureValideeLigne.builder()
+                        .id(12)
+                        .factureValidee(duMois)
+                        .ligneService(debours)
+                        .designation("Débours — Timbres postaux")
+                        .montant(new BigDecimal("250000"))
+                        .build();
+        duMois.setLignes(new java.util.HashSet<>(java.util.Set.of(ligneAbo, ligneDebours)));
 
         byte[] pdf = new PdfGenerator(configurationService).factureAbonnement(duMois);
 
@@ -88,5 +110,7 @@ class FactureAbonnementPdfTest {
         assertTrue(texte.contains("00001/EXT/TNR/2026"), "référence de la facture générale");
         assertTrue(texte.contains("PRO-01112026-00001"), "référence proforma");
         assertTrue(texte.contains("DEM-2026-00017"), "référence demande");
+        assertTrue(texte.contains("Abonnement mensuel"), "désignation abonnement");
+        assertTrue(texte.contains("Timbres postaux"), "désignation débours");
     }
 }

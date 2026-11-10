@@ -4,6 +4,7 @@ import com.cabex.backend.facture.dto.CreerFactureAbonnementRequest;
 import com.cabex.backend.facture.dto.FactureResponse;
 import com.cabex.backend.facture.dto.FactureValideeResponse;
 import com.cabex.backend.facture.dto.GenererFacturesRequest;
+import com.cabex.backend.facture.dto.InclusionDisponibleResponse;
 import com.cabex.backend.facture.dto.ValiderFactureRequest;
 import com.cabex.backend.facture.service.FactureService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -68,14 +69,26 @@ public class FactureController {
     @PostMapping("/demandes/{demandeId}/factures-abonnement")
     @PreAuthorize("hasAuthority('FACTURE_ABONNEMENT_CREATE')")
     @Operation(summary = "Créer la facture du mois d'un abonnement (enfant de la facture générale validée)",
-            description = "Montant = tarif mensuel de la ligne. La facture affiche les références : facture générale validée, facture proforma et demande. La date d'émission de la facture est saisie par l'utilisateur.")
+            description = "Montant = tarif mensuel + éléments inclus (prestation / débours impayés "
+                    + "de la même société, en clair dans la facture). La facture affiche les références "
+                    + ": facture générale validée, facture proforma et demande. "
+                    + "La date d'émission de la facture est saisie par l'utilisateur.")
     public ResponseEntity<FactureValideeResponse> creerFactureAbonnement(
             @PathVariable Integer demandeId,
             @Valid @RequestBody CreerFactureAbonnementRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(factureService.creerFactureMensuelleAbonnement(
                         demandeId, request.ligneServiceId(), request.dateEmission(),
-                        request.commentaire()));
+                        request.commentaire(), request.inclusionLigneIds()));
+    }
+
+    @GetMapping("/demandes/{demandeId}/factures-abonnement/inclusions-disponibles")
+    @PreAuthorize("hasAuthority('FACTURE_ABONNEMENT_CREATE')")
+    @Operation(summary = "Éléments impayés pouvant être repris dans la facture du mois",
+            description = "Lignes prestation ou débours non soldées des demandes EN_COURS de la même société (client).")
+    public ResponseEntity<List<InclusionDisponibleResponse>> inclusionsDisponibles(
+            @PathVariable Integer demandeId) {
+        return ResponseEntity.ok(factureService.inclusionsDisponibles(demandeId));
     }
 
     @PutMapping("/factures/{id}/valider")

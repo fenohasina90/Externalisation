@@ -141,6 +141,25 @@ export interface FactureLigne {
   statutLigne: string | null
 }
 
+/** Ligne d'une facture validée (désignation figée à la création). */
+export interface FactureValideeLigne {
+  id: number
+  ligneServiceId: number | null
+  designation: string
+  montant: number
+}
+
+/** Élément impayé pouvant être repris dans la facture du mois. */
+export interface InclusionDisponible {
+  ligneId: number
+  demandeId: number
+  referenceDemande: string
+  designation: string
+  /** PRESTATION ou DEBOURS. */
+  type: string
+  reste: number
+}
+
 /** Facture validée telle qu'utilisée pour les paiements. */
 export interface FactureValidee {
   id: number
@@ -161,6 +180,8 @@ export interface FactureValidee {
   type: 'GENERALE' | 'ABONNEMENT_MENSUEL' | 'DEBOURS' | string
   valideParNom: string | null
   valideLe: string | null
+  /** Lignes de la facture (facture combinée du mois) ; tableau vide sinon. */
+  lignes: FactureValideeLigne[]
 }
 
 export interface Facture {

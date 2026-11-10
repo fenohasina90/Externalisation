@@ -171,12 +171,12 @@ public class DemandeGestionService {
         BigDecimal montantPaye = paiementsParDemande.getOrDefault(demande.getId(), BigDecimal.ZERO);
         List<LigneService> lignes = lignesParDemande.getOrDefault(demande.getId(), List.of());
         BigDecimal montantTotal = lignes.stream()
-                .map(LigneServiceService::montantLigne)
+                .map(ligneServiceService::montantAttendu)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal reste = montantTotal.subtract(montantPaye).max(BigDecimal.ZERO);
         List<LigneServiceResponse> lignesReponse = lignes.stream()
                 .map(l -> {
-                    BigDecimal attendu = LigneServiceService.montantLigne(l);
+                    BigDecimal attendu = ligneServiceService.montantAttendu(l);
                     BigDecimal paye = paiementsParLigne.getOrDefault(l.getId(), BigDecimal.ZERO);
                     return DemandeMapper.toLigneResponse(l, paye,
                             attendu.subtract(paye).max(BigDecimal.ZERO));

@@ -2,6 +2,7 @@ package com.cabex.backend.facture.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Facture validée, telle qu'affichée à la saisie d'un paiement.
@@ -34,6 +35,8 @@ public record FactureValideeResponse(
         /** GENERALE (une proforma validée), ABONNEMENT_MENSUEL (facture du mois) ou DEBOURS. */
         String type,
         String valideParNom,
-        LocalDateTime valideLe
+        LocalDateTime valideLe,
+        /** Lignes de la facture (facture combinée du mois) ; vide sinon. */
+        List<FactureValideeLigneResponse> lignes
 ) {
 }

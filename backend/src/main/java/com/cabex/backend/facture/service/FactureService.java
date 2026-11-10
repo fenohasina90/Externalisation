@@ -19,7 +19,9 @@ import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.facture.dto.FactureLigneResponse;
 import com.cabex.backend.facture.dto.FactureResponse;
+import com.cabex.backend.facture.dto.FactureValideeLigneResponse;
 import com.cabex.backend.facture.dto.FactureValideeResponse;
+import com.cabex.backend.facture.dto.InclusionDisponibleResponse;
 import com.cabex.backend.facture.entity.Facture;
 import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.facture.repository.FactureRepository;
@@ -39,6 +41,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 
 /**
@@ -68,6 +72,7 @@ public class FactureService {
     private final AuditService auditService;
     private final NotificationService notificationService;
     private final com.cabex.backend.paiement.repository.PaiementRepository paiementRepository;
+    private final com.cabex.backend.facture.repository.FactureValideeLigneRepository factureValideeLigneRepository;
 
     public FactureService(FactureRepository factureRepository,
                           com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository,
@@ -79,7 +84,8 @@ public class FactureService {
                           UtilisateurRepository utilisateurRepository,
                           AuditService auditService,
                           NotificationService notificationService,
-                          com.cabex.backend.paiement.repository.PaiementRepository paiementRepository) {
+                          com.cabex.backend.paiement.repository.PaiementRepository paiementRepository,
+                          com.cabex.backend.facture.repository.FactureValideeLigneRepository factureValideeLigneRepository) {
         this.factureRepository = factureRepository;
         this.factureValideeRepository = factureValideeRepository;
         this.ligneRepository = ligneRepository;
@@ -91,6 +97,7 @@ public class FactureService {
         this.auditService = auditService;
         this.notificationService = notificationService;
         this.paiementRepository = paiementRepository;
+        this.factureValideeLigneRepository = factureValideeLigneRepository;
     }
 
     @Transactional(readOnly = true)
@@ -265,7 +272,8 @@ public class FactureService {
     public FactureValideeResponse creerFactureMensuelleAbonnement(Integer demandeId,
                                                                   Integer ligneServiceId,
                                                                   LocalDate dateEmission,
-                                                                  String commentaire) {
+                                                                  String commentaire,
+                                                                  List<Integer> inclusionLigneIds) {
         DemandeService demande = verifierDemande(demandeId);
         String statutDemande = statutActuelDemande(demandeId);
         if ("TERMINEE".equals(statutDemande) || "ANNULEE".equals(statutDemande)) {
@@ -298,10 +306,69 @@ public class FactureService {
         FactureValidee generale = factureValideeRepository.findByFactureProformaId(proforma.getId())
                 .orElseThrow(() -> new BusinessException(
                         "La facture validée associée à la proforma est introuvable"));
-        BigDecimal tarif = ligne.getTarif();
+        // Le montant appliqué est le montant de la facture validée (générale),
+        // pas le tarif saisi à la création de la demande.
+        BigDecimal tarif = generale.getMontant();
         if (tarif == null) {
-            throw new BusinessException("Le tarif mensuel de la ligne est manquant");
+            throw new BusinessException("Le montant de la facture validée est manquant");
         }
+
+        // --- Lignes de la facture combinée du mois -----------------------
+        List<com.cabex.backend.facture.entity.FactureValideeLigne> lignesFacture =
+                new ArrayList<>();
+        String nomServiceAbo = ligne.getService() != null ? ligne.getService().getNomService() : null;
+        lignesFacture.add(com.cabex.backend.facture.entity.FactureValideeLigne.builder()
+                .ligneService(ligne)
+                .designation("Abonnement mensuel"
+                        + (nomServiceAbo != null ? " — " + nomServiceAbo : ""))
+                .montant(tarif)
+                .build());
+        BigDecimal montantTotal = tarif;
+        List<String> inclusionsNote = new ArrayList<>();
+        List<Integer> idsVus = new ArrayList<>();
+        Integer societeId = demande.getSociete() != null ? demande.getSociete().getId() : null;
+        if (inclusionLigneIds != null) {
+            for (Integer inclusionId : inclusionLigneIds) {
+                if (inclusionId == null) {
+                    continue;
+                }
+                if (idsVus.contains(inclusionId)) {
+                    throw new BusinessException(
+                            "La ligne n° " + inclusionId + " est incluse deux fois dans la facture");
+                }
+                idsVus.add(inclusionId);
+                if (inclusionId.equals(ligne.getId())) {
+                    throw new BusinessException(
+                            "La ligne d'abonnement est déjà la ligne principale de la facture");
+                }
+                LigneService inclusion = ligneRepository.findById(inclusionId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                ErrorMessages.introuvable("Ligne de service", inclusionId)));
+                if (inclusion.getDemande() == null
+                        || inclusion.getDemande().getSociete() == null
+                        || !inclusion.getDemande().getSociete().getId().equals(societeId)) {
+                    throw new BusinessException(
+                            "L'élément n° " + inclusionId
+                                    + " n'appartient pas à la même société (client)");
+                }
+                InclusionDisponibleResponse candidat = inclusionPourLigne(inclusion,
+                        statutActuelDemande(inclusion.getDemande().getId()));
+                if (candidat == null) {
+                    throw new BusinessException(
+                            "L'élément n° " + inclusionId
+                                    + " n'est pas reprenable dans la facture "
+                                    + "(déjà soldé, ou demande terminée/annulée)");
+                }
+                lignesFacture.add(com.cabex.backend.facture.entity.FactureValideeLigne.builder()
+                        .ligneService(inclusion)
+                        .designation(candidat.designation())
+                        .montant(candidat.reste())
+                        .build());
+                inclusionsNote.add(candidat.designation() + " (" + candidat.reste() + ")");
+                montantTotal = montantTotal.add(candidat.reste());
+            }
+        }
+
         Utilisateur validateur = currentUtilisateur();
         // La date d'émission de la facture est celle saisie par l'utilisateur ;
         // created_at (timestamp automatique) garde l'horodatage réel de saisie.
@@ -312,16 +379,25 @@ public class FactureService {
                 .factureGenerale(generale)
                 .ligneService(ligne)
                 .demande(demande)
-                .montant(tarif)
+                .montant(montantTotal)
                 .validePar(validateur)
                 .valideLe(valideLe)
                 .build();
+        child.setLignes(new HashSet<>());
+        for (com.cabex.backend.facture.entity.FactureValideeLigne fvl : lignesFacture) {
+            fvl.setFactureValidee(child);
+            child.getLignes().add(fvl);
+        }
         child = factureValideeRepository.save(child);
         String note = "Facture mensuelle d'abonnement " + child.getReferenceFactureValidee()
                 + " — émise le " + dateEmission
                 + " — facture générale " + generale.getReferenceFactureValidee()
                 + ", proforma " + proforma.getReferenceFacture()
                 + ", demande " + demande.getReferenceDemande()
+                + (inclusionsNote.isEmpty()
+                        ? ""
+                        : " + " + inclusionsNote.size() + " élément(s) inclus : "
+                                + String.join(" ; ", inclusionsNote))
                 + (commentaire != null && !commentaire.isBlank() ? " — " + commentaire.trim() : "");
         ajouterHistoriqueLigne(ligne, ligne.getStatut(), note);
         ajouterHistoriqueDemande(demande, note);
@@ -329,6 +405,116 @@ public class FactureService {
                 child.getId() != null ? Long.valueOf(child.getId()) : null,
                 null, note);
         return toFactureValideeResponse(child);
+    }
+
+    /**
+     * Éléments impayés (prestation / débours) d'une demande pouvant être
+     * repris dans la facture mensuelle : demande EN_COURS, montant dû > 0.
+     */
+    @Transactional(readOnly = true)
+    public List<InclusionDisponibleResponse> inclusionsDisponibles(Integer demandeId) {
+        DemandeService demande = verifierDemande(demandeId);
+        if (demande.getSociete() == null) {
+            return List.of();
+        }
+        List<DemandeService> demandes = demandeRepository
+                .findBySocieteIdAndActifTrueOrderByIdAsc(demande.getSociete().getId());
+        List<InclusionDisponibleResponse> resultat = new ArrayList<>();
+        for (DemandeService d : demandes) {
+            String statut = statutActuelDemande(d.getId());
+            if ("TERMINEE".equals(statut) || "ANNULEE".equals(statut)) {
+                continue;
+            }
+            List<LigneService> lignes = ligneRepository.findByDemandeIdOrderByIdAsc(d.getId());
+            for (LigneService l : lignes) {
+                InclusionDisponibleResponse candidat = inclusionPourLigne(l, statut);
+                if (candidat != null) {
+                    resultat.add(candidat);
+                }
+            }
+        }
+        return resultat;
+    }
+
+    /** Calcule la part payable (le reste) d'une ligne, ou null si elle n'est pas reprenable. */
+    private InclusionDisponibleResponse inclusionPourLigne(LigneService inclusion,
+                                                            String statutDemande) {
+        if ("TERMINEE".equals(statutDemande) || "ANNULEE".equals(statutDemande)) {
+            return null;
+        }
+        if (!"EN_COURS".equals(inclusion.getStatut())
+                && !"PARTIEL".equals(inclusion.getStatut())
+                && !"NON_PAYEE".equals(inclusion.getStatut())) {
+            return null;
+        }
+        BigDecimal paye = paiementsPourLigne(inclusion);
+        String designation;
+        if (LigneServiceService.estDebours(inclusion)) {
+            designation = "Débours — "
+                    + (inclusion.getDesignationDebours() != null
+                            ? inclusion.getDesignationDebours()
+                            : "n° " + inclusion.getId());
+        } else if (LigneServiceService.CATEGORIE_EXTERNALISATION.equalsIgnoreCase(inclusion.getCategorie())
+                && LigneServiceService.PRESTATION.equalsIgnoreCase(inclusion.getTypePrestation())) {
+            String nomService = inclusion.getService() != null
+                    ? inclusion.getService().getNomService() : "Prestation";
+            designation = "Prestation — " + nomService;
+        } else {
+            return null;
+        }
+        BigDecimal attendu = attenduPourLigne(inclusion);
+        if (attendu == null) {
+            attendu = BigDecimal.ZERO;
+        }
+        BigDecimal reste = attendu.subtract(paye).max(BigDecimal.ZERO);
+        if (reste.signum() <= 0) {
+            return null;
+        }
+        return new InclusionDisponibleResponse(inclusion.getId(),
+                inclusion.getDemande().getId(),
+                inclusion.getDemande().getReferenceDemande(),
+                designation,
+                LigneServiceService.estDebours(inclusion) ? "DEBOURS" : "PRESTATION",
+                reste);
+    }
+
+    /** Montant attendu d'une ligne : montant de la facture validée liée (si créée), sinon tarif ou montant débours validé. */
+    private BigDecimal attenduPourLigne(LigneService l) {
+        if (LigneServiceService.estDebours(l)) {
+            return l.getMontantDebours() != null ? l.getMontantDebours() : BigDecimal.ZERO;
+        }
+        if (l.getFacture() != null) {
+            com.cabex.backend.facture.entity.FactureValidee fv = factureValideeRepository
+                    .findByFactureProformaId(l.getFacture().getId()).orElse(null);
+            if (fv != null && fv.getMontant() != null) {
+                return fv.getMontant();
+            }
+        }
+        return l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO;
+    }
+
+    /** Somme payée pour une ligne : facture générale de la proforma, factures directes (débours) et factures combinées. */
+    private BigDecimal paiementsPourLigne(LigneService ligne) {
+        BigDecimal paye = BigDecimal.ZERO;
+        if (ligne.getFacture() != null) {
+            com.cabex.backend.facture.entity.FactureValidee fv = factureValideeRepository
+                    .findByFactureProformaId(ligne.getFacture().getId()).orElse(null);
+            if (fv != null) {
+                BigDecimal s = paiementRepository.sommePayeeParFactureValidee(fv.getId());
+                paye = paye.add(s != null ? s : BigDecimal.ZERO);
+            }
+        }
+        List<Integer> lieesIds = factureValideeRepository.findByLigneServiceId(ligne.getId()).stream()
+                .filter(f -> f.getLignes() == null || f.getLignes().isEmpty())
+                .map(com.cabex.backend.facture.entity.FactureValidee::getId)
+                .toList();
+        if (!lieesIds.isEmpty()) {
+            BigDecimal s = paiementRepository.sommePayeeParFacturesValidees(lieesIds);
+            paye = paye.add(s != null ? s : BigDecimal.ZERO);
+        }
+        BigDecimal sCombi = factureValideeLigneRepository.sommePayeeViaFacturesCombinees(ligne.getId());
+        paye = paye.add(sCombi != null ? sCombi : BigDecimal.ZERO);
+        return paye;
     }
 
     /**
@@ -394,6 +580,18 @@ public class FactureService {
         } else {
             referenceProforma = null;
         }
+        List<FactureValideeLigneResponse> lignesResp = fv.getLignes() == null
+                ? List.of()
+                : fv.getLignes().stream()
+                        .sorted(Comparator.comparing(
+                                com.cabex.backend.facture.entity.FactureValideeLigne::getId,
+                                Comparator.nullsLast(Comparator.naturalOrder())))
+                        .map(l -> new FactureValideeLigneResponse(
+                                l.getId(),
+                                l.getLigneService() != null ? l.getLigneService().getId() : null,
+                                l.getDesignation(),
+                                l.getMontant()))
+                        .toList();
         return new FactureValideeResponse(
                 fv.getId(),
                 fv.getReferenceFactureValidee(),
@@ -410,7 +608,8 @@ public class FactureService {
                 type,
                 fv.getValidePar() != null
                         ? fv.getValidePar().getPrenom() + " " + fv.getValidePar().getNom() : null,
-                fv.getValideLe());
+                fv.getValideLe(),
+                lignesResp);
     }
 
     @Transactional

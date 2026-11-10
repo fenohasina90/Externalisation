@@ -9,6 +9,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Facture <b>validée</b> (table {@code facture_validee}), créée à la
@@ -21,6 +23,9 @@ import java.time.LocalDateTime;
  * Pour ABONNEMENT_MENSUEL, {@link #factureGenerale} peut pointer vers la
  * facture validée "générale" de l'abonnement (référence facture générale
  * validée dans l'interface).
+ *
+ * Une facture validée peut être multi-lignes (facture combinée du mois) :
+ * voir {@link FactureValideeLigne}.
  */
 @Entity
 @Table(name = "facture_validee")
@@ -67,6 +72,15 @@ public class FactureValidee {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "demande_id", nullable = false)
     private DemandeService demande;
+
+    /**
+     * Lignes de cette facture (facture combinée du mois d'un abonnement).
+     * Vide pour les factures classiques (proforma validée, débours direct).
+     */
+    @OneToMany(mappedBy = "factureValidee", fetch = FetchType.LAZY,
+            cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private Set<FactureValideeLigne> lignes = new HashSet<>();
 
     @Column(name = "montant", nullable = false, precision = 15, scale = 2)
     private BigDecimal montant;

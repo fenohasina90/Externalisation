@@ -15,6 +15,9 @@ import java.util.Optional;
 
 public interface DemandeServiceRepository extends JpaRepository<DemandeService, Integer> {
 
+    @Query("SELECT d FROM DemandeService d WHERE d.societe.id = :societeId AND d.actif = true ORDER BY d.id ASC")
+    List<DemandeService> findBySocieteIdAndActifTrueOrderByIdAsc(@Param("societeId") Integer societeId);
+
     Optional<DemandeService> findByReferenceDemande(String referenceDemande);
 
     boolean existsByReferenceDemande(String referenceDemande);

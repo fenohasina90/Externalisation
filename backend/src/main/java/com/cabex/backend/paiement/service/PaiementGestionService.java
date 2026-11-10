@@ -40,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -248,13 +249,12 @@ public class PaiementGestionService {
             }
         }
 
-        // Mettre à jour le statut de la ligne de service liée si c'est un paiement
-        // sur une ligne EXTERNALISATION ou DEBOURS.
-        LigneService ligneService = lignePourFactureValidee(factureValidee, demande);
-        if (ligneService != null) {
-            ligneServiceService.actualiserStatutApresPaiement(ligneService);
+        // Mettre à jour le statut des lignes liées (la facture peut couvrir
+        // plusieurs lignes d'une même société).
+        for (LigneService ligneLiee : lignePourFacturesValidees(factureValidee, demande)) {
+            ligneServiceService.actualiserStatutApresPaiement(ligneLiee);
             // La demande passe TERMINEE quand toutes ses lignes EXTERNALISATION sont soldées.
-            demandeGestionService.cloturerSiTerminee(demande.getId());
+            demandeGestionService.cloturerSiTerminee(ligneLiee.getDemande().getId());
         }
 
         notificationService.notifierPaiementEnregistre(paiement);
@@ -328,12 +328,11 @@ public class PaiementGestionService {
 
         PaiementResponse response = PaiementMapper.toResponse(paiementRepository.save(paiement));
 
-        // Mettre à jour le statut de la ligne liée si nécessaire.
-        LigneService ligneService = lignePourFactureValidee(factureValidee, demande);
-        if (ligneService != null) {
-            ligneServiceService.actualiserStatutApresPaiement(ligneService);
+        // Mettre à jour le statut des lignes liées.
+        for (LigneService ligneLiee : lignePourFacturesValidees(factureValidee, demande)) {
+            ligneServiceService.actualiserStatutApresPaiement(ligneLiee);
             // La demande passe TERMINEE quand toutes ses lignes EXTERNALISATION sont soldées.
-            demandeGestionService.cloturerSiTerminee(demande.getId());
+            demandeGestionService.cloturerSiTerminee(ligneLiee.getDemande().getId());
         }
 
         auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
@@ -370,17 +369,38 @@ public class PaiementGestionService {
             }
         }
 
-        // Mettre à jour le statut de la ligne liée.
-        LigneService ligneService = lignePourFactureValidee(paiement.getFactureValidee(),
-                paiement.getDemande());
-        if (ligneService != null) {
-            ligneServiceService.actualiserStatutApresPaiement(ligneService);
+        // Mettre à jour le statut des lignes liées.
+        for (LigneService ligneLiee : lignePourFacturesValidees(paiement.getFactureValidee(),
+                paiement.getDemande())) {
+            ligneServiceService.actualiserStatutApresPaiement(ligneLiee);
             // La demande passe TERMINEE quand toutes ses lignes EXTERNALISATION sont soldées.
-            demandeGestionService.cloturerSiTerminee(paiement.getDemande().getId());
+            demandeGestionService.cloturerSiTerminee(ligneLiee.getDemande().getId());
         }
 
         auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
                 Long.valueOf(id), "supprimé (archivé) : " + ref, null);
+    }
+
+    /**
+     * Lignes EXTERNALISATION ou DEBOURS concernées par la facture validée :
+     * toutes celles portées par la facture combinée (facture du mois multi-lignes),
+     * sinon la ligne de la proforma (facture générale) ou la ligne de débours.
+     */
+    private List<LigneService> lignePourFacturesValidees(com.cabex.backend.facture.entity.FactureValidee fv,
+                                                         DemandeService demande) {
+        if (fv == null) {
+            return List.of();
+        }
+        List<LigneService> lignes = new ArrayList<>();
+        if (fv.getLignes() != null && !fv.getLignes().isEmpty()) {
+            fv.getLignes().stream()
+                    .map(com.cabex.backend.facture.entity.FactureValideeLigne::getLigneService)
+                    .filter(java.util.Objects::nonNull)
+                    .forEach(lignes::add);
+            return lignes;
+        }
+        LigneService unique = lignePourFactureValidee(fv, demande);
+        return unique != null ? List.of(unique) : List.of();
     }
 
     /**

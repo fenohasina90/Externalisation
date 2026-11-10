@@ -79,6 +79,7 @@ class DemandeDeboursTest {
     @Mock private FactureService factureService2;
     @Mock private PaiementRepository paiementRepo2;
     @Mock private FactureValideeRepository factureValideeRepo2;
+    @Mock private com.cabex.backend.facture.repository.FactureValideeLigneRepository factureValideeLigneRepo2;
 
     private LigneServiceService ligneService;
 
@@ -93,7 +94,7 @@ class DemandeDeboursTest {
         ligneService = new LigneServiceService(ligneRepoLigne, historiqueLigneRepo,
                 demandeRepository, historiqueDemandeRepo2, statutRepo2, serviceRepo2,
                 proposRepo2, utilisateurRepository, auditService, factureService2,
-                paiementRepo2, factureValideeRepo2);
+                paiementRepo2, factureValideeRepo2, factureValideeLigneRepo2);
 
         lenient().when(statutRepository.findByStatut(anyString()))
                 .thenAnswer(inv -> Optional.of(StatutDemande.builder()

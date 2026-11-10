@@ -87,6 +87,7 @@ public class LigneServiceService {
     private final AuditService auditService;
     private final FactureService factureService;
     private final FactureValideeRepository factureValideeRepository;
+    private final com.cabex.backend.facture.repository.FactureValideeLigneRepository factureValideeLigneRepository;
     private final com.cabex.backend.paiement.repository.PaiementRepository paiementRepository;
 
     public LigneServiceService(LigneServiceRepository ligneRepository,
@@ -100,7 +101,8 @@ public class LigneServiceService {
                                AuditService auditService,
                                FactureService factureService,
                                com.cabex.backend.paiement.repository.PaiementRepository paiementRepository,
-                               FactureValideeRepository factureValideeRepository) {
+                               FactureValideeRepository factureValideeRepository,
+                               com.cabex.backend.facture.repository.FactureValideeLigneRepository factureValideeLigneRepository) {
         this.ligneRepository = ligneRepository;
         this.historiqueLigneRepository = historiqueLigneRepository;
         this.demandeRepository = demandeRepository;
@@ -113,6 +115,7 @@ public class LigneServiceService {
         this.factureService = factureService;
         this.paiementRepository = paiementRepository;
         this.factureValideeRepository = factureValideeRepository;
+        this.factureValideeLigneRepository = factureValideeLigneRepository;
     }
 
     @Transactional(readOnly = true)
@@ -370,12 +373,7 @@ public class LigneServiceService {
             return;
         }
         BigDecimal paye = montantPayeParLigne(ligne.getId());
-        BigDecimal attendu;
-        if (estDebours(ligne)) {
-            attendu = ligne.getMontantDebours() != null ? ligne.getMontantDebours() : BigDecimal.ZERO;
-        } else {
-            attendu = ligne.getTarif() != null ? ligne.getTarif() : BigDecimal.ZERO;
-        }
+        BigDecimal attendu = montantAttendu(ligne);
         String cible;
         boolean estDebours = estDebours(ligne);
         if (ABONNEMENT_MENSUEL.equalsIgnoreCase(ligne.getTypePrestation())) {
@@ -573,6 +571,7 @@ public class LigneServiceService {
             // Factures du mois de l'abonnement liées à cette ligne.
             List<Integer> enfantsIds = factureValideeRepository.findByLigneServiceId(ligne.getId())
                     .stream()
+                    .filter(f -> f.getLignes() == null || f.getLignes().isEmpty())
                     .map(com.cabex.backend.facture.entity.FactureValidee::getId)
                     .filter(id -> fv == null || !id.equals(fv.getId()))
                     .toList();
@@ -580,13 +579,24 @@ public class LigneServiceService {
                 BigDecimal sommeEnfants = paiementRepository.sommePayeeParFacturesValidees(enfantsIds);
                 somme = somme.add(sommeEnfants != null ? sommeEnfants : BigDecimal.ZERO);
             }
+            // Factures combinées du mois dont les lignes incluent cette ligne.
+            BigDecimal sommeCombi = factureValideeLigneRepository
+                    .sommePayeeViaFacturesCombinees(ligne.getId());
+            somme = somme.add(sommeCombi != null ? sommeCombi : BigDecimal.ZERO);
             if (fv != null || !enfantsIds.isEmpty()) {
                 return somme;
             }
         }
+        // Ligne incluse dans des factures combinées (ligne sans facture directe).
+        BigDecimal sommeCombi = factureValideeLigneRepository
+                .sommePayeeViaFacturesCombinees(ligne.getId());
+        if (sommeCombi != null && sommeCombi.signum() > 0) {
+            return sommeCombi;
+        }
         // Ligne liée directement à une facture validée (débours via la validation du montant).
         List<Integer> lieesIds = factureValideeRepository.findByLigneServiceId(ligne.getId())
                 .stream()
+                .filter(f -> f.getLignes() == null || f.getLignes().isEmpty())
                 .map(com.cabex.backend.facture.entity.FactureValidee::getId)
                 .toList();
         if (!lieesIds.isEmpty()) {
@@ -605,13 +615,26 @@ public class LigneServiceService {
         return BigDecimal.ZERO;
     }
 
-    /** Montant attendu d'une ligne (tarif EXTERNALISATION ou montant DEBOURS validé). */
-    static BigDecimal montantLigne(LigneService ligne) {
+    /**
+     * Montant attendu effectif d'une ligne : le montant de la facture validée
+     * (si la ligne est liée à une proforma validée), sinon le tarif
+     * EXTERNALISATION, sinon le montant DEBOURS validé. Toute la logique
+     * de reste à payer / clôture se base sur cette valeur.
+     */
+    public BigDecimal montantAttendu(LigneService ligne) {
         if (ligne == null) {
             return BigDecimal.ZERO;
         }
         if (estDebours(ligne)) {
             return ligne.getMontantDebours() != null ? ligne.getMontantDebours() : BigDecimal.ZERO;
+        }
+        if (ligne.getFacture() != null) {
+            com.cabex.backend.facture.entity.FactureValidee fv = factureValideeRepository
+                    .findByFactureProformaId(ligne.getFacture().getId())
+                    .orElse(null);
+            if (fv != null && fv.getMontant() != null) {
+                return fv.getMontant();
+            }
         }
         return ligne.getTarif() != null ? ligne.getTarif() : BigDecimal.ZERO;
     }
@@ -619,7 +642,7 @@ public class LigneServiceService {
     @Transactional(readOnly = true)
     public BigDecimal montantTotalDemande(Integer demandeId) {
         return ligneRepository.findByDemandeId(demandeId).stream()
-                .map(LigneServiceService::montantLigne)
+                .map(this::montantAttendu)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
@@ -628,7 +651,7 @@ public class LigneServiceService {
     }
 
     private LigneServiceResponse toResponse(LigneService ligne, BigDecimal paye) {
-        BigDecimal attendu = montantLigne(ligne);
+        BigDecimal attendu = montantAttendu(ligne);
         return DemandeMapper.toLigneResponse(ligne, paye, attendu.subtract(paye).max(BigDecimal.ZERO));
     }
 

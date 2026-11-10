@@ -22,7 +22,7 @@ import { PiecesJointes } from '@/features/documents'
 import { getLibelleTypePrestation } from '../constants/labels'
 import { ChangerStatutModal, DemandeStepper, DossierEntrepriseDetail,
   DossierTransactionImmobiliereDetail, StatutDemandePill } from '../components'
-import type { Demande, Facture, FactureValidee, HistoriqueDemande, HistoriqueLigne,
+import type { Demande, Facture, FactureValidee, InclusionDisponible, HistoriqueDemande, HistoriqueLigne,
   LigneService, StatutDemande } from '../types'
 import { dossierVersFormulaire, type Dossier } from '../types/dossier'
 import type { DossierTransactionImmobiliere } from '../types/dossierTransaction'
@@ -1816,11 +1816,16 @@ function FacturesAbonnementSection({
     () => (demande?.id ? facturesValideesApi.list(demande.id).catch(() => []) : Promise.resolve([])),
     [demande?.id],
   )
+  const { data: inclusionsDisponibles, reload: reloadInclusions } = useApi<InclusionDisponible[]>(
+    () => (demande?.id ? facturesValideesApi.inclusionsDisponibles(demande.id).catch(() => []) : Promise.resolve([])),
+    [demande?.id],
+  )
   const [creationEnCours, setCreationEnCours] = useState<number | null>(null)
   const [telechargement, setTelechargement] = useState<number | null>(null)
   const [cible, setCible] = useState<LigneService | null>(null)
   const [dateEmission, setDateEmission] = useState(() => new Date().toISOString().slice(0, 10))
   const [erreurDialog, setErreurDialog] = useState<string | null>(null)
+  const [selectionInclusions, setSelectionInclusions] = useState<Set<number>>(new Set())
 
   if (abonnementLignes.length === 0) {
     return null
@@ -1828,6 +1833,12 @@ function FacturesAbonnementSection({
 
   const ligneLabel = (l: LigneService) =>
     `${l.nomService ?? 'Abonnement'} · tarif mensuel ${formatMontantMGA(l.tarif ?? 0)}`
+
+  // Montant appliqué dans la facture du mois : le montant de la facture
+  // générale validée (référence pour le client), pas le tarif saisi.
+  const montantFactureMensuelle = cible
+    ? (facturesValidees ?? []).find((f) => f.type === 'GENERALE' && f.ligneServiceId === cible.id)?.montant ?? (cible.tarif ?? 0)
+    : 0
 
   const creer = async () => {
     if (!cible) {
@@ -1841,11 +1852,14 @@ function FacturesAbonnementSection({
     onErreur(null)
     onMessage(null)
     setErreurDialog(null)
+    const inclusionIds = Array.from(selectionInclusions)
     try {
       const fv = await facturesValideesApi.creerFactureAbonnement(
         demande.id,
         cible.id,
         dateEmission,
+        null,
+        inclusionIds,
       )
       onMessage(
         `Facture du mois créée (${dateEmission}) : ${fv.referenceFactureValidee}`
@@ -1853,7 +1867,9 @@ function FacturesAbonnementSection({
         + `${fv.referenceFactureProforma ? ` · proforma ${fv.referenceFactureProforma}` : ''})`,
       )
       setCible(null)
+      setSelectionInclusions(new Set())
       reload()
+      reloadInclusions()
     } catch (err) {
       setErreurDialog(messageErreur(err))
     } finally {
@@ -1922,6 +1938,8 @@ function FacturesAbonnementSection({
                   onClick={() => {
                     setErreurDialog(null)
                     setDateEmission(new Date().toISOString().slice(0, 10))
+                    setSelectionInclusions(new Set())
+                    reloadInclusions()
                     setCible(ligne)
                   }}
                 >
@@ -1969,6 +1987,37 @@ function FacturesAbonnementSection({
                           </td>
                         </tr>
                       ))}
+                      {enfants.map((f) =>
+                        (f.lignes ?? []).length > 1 && (
+                          <tr key={`l-${f.id}`}>
+                            <td colSpan={8}>
+                              <div style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 2,
+                                fontSize: 13,
+                                padding: '4px 0 4px 12px',
+                                borderLeft: '3px solid var(--vert, #10b981)',
+                              }}>
+                                <b>{f.referenceFactureValidee} — détail des lignes</b>
+                                {(f.lignes ?? []).map((l) => (
+                                  <div
+                                    key={l.id}
+                                    style={{
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      gap: 12,
+                                    }}
+                                  >
+                                    <span>{l.designation}</span>
+                                    <span className="fw-600">{formatMontantMGA(l.montant)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ),
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1981,27 +2030,95 @@ function FacturesAbonnementSection({
         open={cible !== null}
         titre="Créer la facture du mois"
         message={cible
-          ? `Facture du mois pour « ${cible.nomService ?? cible.libelleLigne ?? 'Abonnement mensuel'} » (tarif mensuel).`
+          ? `Facture du mois pour « ${cible.nomService ?? cible.libelleLigne ?? 'Abonnement mensuel'} ». Vous pouvez reprendre des prestations / débours impayés du même client dans la même facture.`
           : ''}
         confirmer="Créer la facture"
         ton="primary"
         enCours={creationEnCours !== null}
         erreur={erreurDialog}
         details={(
-          <label className="field" style={{ marginTop: 12 }}>
-            Date d&apos;émission <span className="required">*</span>
-            <input
-              type="date"
-              value={dateEmission}
-              onChange={(e) => setDateEmission(e.target.value)}
-              required
-              autoFocus
-            />
-          </label>
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <label className="field">
+              Date d&apos;émission <span className="required">*</span>
+              <input
+                type="date"
+                value={dateEmission}
+                onChange={(e) => setDateEmission(e.target.value)}
+                required
+                autoFocus
+              />
+            </label>
+            {(inclusionsDisponibles ?? []).length > 0 && (
+              <fieldset
+                style={{
+                  border: '1px solid var(--border, #e5e7eb)',
+                  borderRadius: 8,
+                  padding: 12,
+                }}
+              >
+                <legend style={{ padding: '0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)' }}>
+                  Reprendre des impayés dans cette facture (même société)
+                </legend>
+                {(inclusionsDisponibles ?? []).map((inc) => (
+                  <label
+                    key={inc.ligneId}
+                    style={{
+                      display: 'flex',
+                      gap: 8,
+                      alignItems: 'baseline',
+                      padding: '4px 0',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectionInclusions.has(inc.ligneId)}
+                      onChange={() => {
+                        setSelectionInclusions((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(inc.ligneId)) {
+                            next.delete(inc.ligneId)
+                          } else {
+                            next.add(inc.ligneId)
+                          }
+                          return next
+                        })
+                      }}
+                    />
+                    <span>
+                      <b>{inc.designation}</b>
+                      <span className="text-secondary"> · {inc.referenceDemande}</span>
+                      <br />
+                      <span className="text-secondary">
+                        reste dû : {formatMontantMGA(inc.reste)}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+                <div style={{ marginTop: 10, fontWeight: 600 }}>
+                  Total de la facture :{' '}
+                  <b>
+                    {formatMontantMGA(
+                      montantFactureMensuelle +
+                        (inclusionsDisponibles ?? [])
+                          .filter((inc) => selectionInclusions.has(inc.ligneId))
+                          .reduce((somme, inc) => somme + inc.reste, 0),
+                    )}
+                  </b>
+                </div>
+              </fieldset>
+            )}
+            {(inclusionsDisponibles ?? []).length === 0 && (
+              <p className="section-note" style={{ margin: 0 }}>
+                Aucun impayé prestation / débours pour les demandes en cours de ce client.
+              </p>
+            )}
+          </div>
         )}
         onAnnuler={() => {
           setCible(null)
           setErreurDialog(null)
+          setSelectionInclusions(new Set())
         }}
         onConfirmer={() => void creer()}
       />
