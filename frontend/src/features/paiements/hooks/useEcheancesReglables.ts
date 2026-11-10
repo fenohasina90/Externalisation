@@ -25,6 +25,8 @@ export interface DeboursReglable {
 export interface LigneDirecteReglable {
   ligneId: number
   ligneLabel: string
+  /** Nom du service catalogue (ex. « Abonnement comptabilité »). */
+  nomService: string | null
   typePrestation: string | null
   montantPaye: number
   resteAPayer: number
@@ -125,6 +127,7 @@ export function useEcheancesReglables(demandeId: number | null) {
               lignesDirectes.push({
                 ligneId: ligne.id,
                 ligneLabel: nom,
+                nomService: ligne.nomService,
                 typePrestation: ligne.typePrestation,
                 montantPaye: enfantOuvert.montantPaye,
                 resteAPayer: enfantOuvert.resteAPayer,
@@ -141,6 +144,7 @@ export function useEcheancesReglables(demandeId: number | null) {
               lignesDirectes.push({
                 ligneId: ligne.id,
                 ligneLabel: nom,
+                nomService: ligne.nomService,
                 typePrestation: ligne.typePrestation,
                 montantPaye: enfants.reduce((s, f) => s + f.montantPaye, 0),
                 resteAPayer: 0,
@@ -163,6 +167,7 @@ export function useEcheancesReglables(demandeId: number | null) {
             lignesDirectes.push({
               ligneId: ligne.id,
               ligneLabel: nom,
+              nomService: ligne.nomService,
               typePrestation: ligne.typePrestation,
               montantPaye: paye,
               resteAPayer: reste,
@@ -191,6 +196,7 @@ export function useEcheancesReglables(demandeId: number | null) {
             debutService: ligne.debutService,
             finService: ligne.finService,
             factureValideeId,
+            referenceFactureValidee: fvLigne?.referenceFactureValidee ?? null,
           })
         })
       })

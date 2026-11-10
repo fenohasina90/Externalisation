@@ -99,6 +99,8 @@ export interface EcheanceReglable {
   finService: string | null
   /** Facture validée de la ligne (proforma validée), liée au paiement. */
   factureValideeId: number | null
+  /** Référence de la facture validée (pour affichage). */
+  referenceFactureValidee: string | null
 }
 
 /** Plan d'une ligne de service avec son rattachement (utilisé par les écrans d'échéancier). */

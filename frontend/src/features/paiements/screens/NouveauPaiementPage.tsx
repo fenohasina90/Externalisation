@@ -120,6 +120,19 @@ export function NouveauPaiementPage() {
   const ligneDirecteSelectionnee = lignesDirectesList.find((d) => d.ligneId === ligneDirecteChoisie) ?? null
   const estDeboursSelectionne = typeReglement === 'DEBOURS' && deboursChoisi !== null
   const estLigneDirecteSelectionne = typeReglement === 'LIGNE_DIRECTE' && ligneDirecteSelectionnee !== null
+  // Libellé complet de la cible du règlement (nom du service inclus).
+  const libelleCible = estDeboursSelectionne
+    ? deboursChoisi?.designation ?? null
+    : estLigneDirecteSelectionne
+      ? ligneDirecteSelectionnee
+        ? `${ligneDirecteSelectionnee.nomService ?? ligneDirecteSelectionnee.ligneLabel} (${ligneDirecteSelectionnee.typePrestation === 'PRESTATION' ? 'Prestation' : 'Abonnement mensuel'})`
+        : null
+      : choisie?.ligneLabel ?? null
+  const referenceFactureCible = estDeboursSelectionne
+    ? deboursChoisi?.referenceFactureValidee ?? null
+    : estLigneDirecteSelectionne
+      ? ligneDirecteSelectionnee?.referenceFactureValidee ?? null
+      : choisie?.referenceFactureValidee ?? null
 
   const montant =
     montantSaisi && montantSaisi.echeanceId === echeanceId
@@ -409,7 +422,7 @@ export function NouveauPaiementPage() {
                     <option value="">— Choisir —</option>
                     {deboursList.map((d) => (
                       <option key={d.ligneId} value={d.ligneId}>
-                        {d.designation} — reste {formatMontantMGA(d.reste)}
+                        {d.designation}{d.referenceFactureValidee ? ` (facture ${d.referenceFactureValidee})` : ''} — reste {formatMontantMGA(d.reste)}
                       </option>
                     ))}
                   </select>
@@ -426,7 +439,7 @@ export function NouveauPaiementPage() {
                     <option value="">— Choisir —</option>
                     {lignesDirectesList.map((d) => (
                       <option key={d.ligneId} value={d.ligneId} disabled={d.factureMensuelleRequise}>
-                        {d.ligneLabel} ({d.typePrestation === 'PRESTATION' ? 'Prestation' : 'Abonnement mensuel'}) —{' '}
+                        {d.nomService ?? d.ligneLabel} ({d.typePrestation === 'PRESTATION' ? 'Prestation' : 'Abonnement mensuel'}) —{' '}
                         {d.factureMensuelleRequise
                           ? 'facture du mois à créer'
                           : `reste ${formatMontantMGA(d.resteAPayer)}`}
@@ -630,12 +643,18 @@ export function NouveauPaiementPage() {
           </div>
           <div className="rc">
             <span>{estDeboursSelectionne ? 'Débours' : 'Service'}</span>
-            <strong>{estDeboursSelectionne ? deboursChoisi?.designation ?? '—' : choisie?.ligneLabel ?? '—'}</strong>
+            <strong>{libelleCible ?? '—'}</strong>
           </div>
+          {referenceFactureCible && (
+            <div className="rc">
+              <span>Facture validée</span>
+              <strong>{referenceFactureCible}</strong>
+            </div>
+          )}
           <div className="rc">
             <span>Échéance</span>
             <strong>
-              {estDeboursSelectionne
+              {estDeboursSelectionne || estLigneDirecteSelectionne
                 ? '— (sans échéance)'
                 : choisie
                 ? `N° ${choisie.echeance.numeroEcheance} - ${formatDate(choisie.echeance.dateEcheance)}`
@@ -664,7 +683,7 @@ export function NouveauPaiementPage() {
           {cibleValide && (
             <div className="progression" style={{ marginTop: 4 }}>
               <div className="progression__label" style={{ marginBottom: 0 }}>
-                <span>{estDeboursSelectionne ? 'Débours réglé' : 'Échéance réglée'}</span>
+                <span>{estDeboursSelectionne ? 'Débours réglé' : estLigneDirecteSelectionne ? 'Ligne réglée' : 'Échéance réglée'}</span>
                 <strong>{tauxEcheance} %</strong>
               </div>
               <div
@@ -684,8 +703,16 @@ export function NouveauPaiementPage() {
             {montant <= 0
               ? 'saisissez un montant supérieur à 0.'
               : apresPaiement <= 0
-                ? estDeboursSelectionne ? `débours « ${deboursChoisi?.designation ?? ''} » soldé (0 MGA).` : `échéance n° ${choisie?.echeance.numeroEcheance} soldée (0 MGA).`
-                : estDeboursSelectionne ? `reste ${formatMontantMGA(apresPaiement)} sur le débours « ${deboursChoisi?.designation ?? ''} ».` : `reste ${formatMontantMGA(apresPaiement)} sur l'échéance n° ${choisie?.echeance.numeroEcheance}.`}
+                ? estDeboursSelectionne
+                  ? `débours « ${deboursChoisi?.designation ?? ''} » soldé (0 MGA).`
+                  : estLigneDirecteSelectionne
+                    ? `ligne « ${libelleCible ?? ''} » soldée (0 MGA).`
+                    : `échéance n° ${choisie?.echeance.numeroEcheance} soldée (0 MGA).`
+                : estDeboursSelectionne
+                  ? `reste ${formatMontantMGA(apresPaiement)} sur le débours « ${deboursChoisi?.designation ?? ''} ».`
+                  : estLigneDirecteSelectionne
+                    ? `reste ${formatMontantMGA(apresPaiement)} sur la ligne « ${libelleCible ?? ''} ».`
+                    : `reste ${formatMontantMGA(apresPaiement)} sur l'échéance n° ${choisie?.echeance.numeroEcheance}.`}
           </div>
 
           {(montantDepasse || dateHorsPeriode) && (
@@ -733,6 +760,8 @@ export function NouveauPaiementPage() {
         message={
           estDeboursSelectionne
             ? `Ce règlement sera imputé sur le débours « ${deboursChoisi?.designation ?? ''} » de la demande ${reglatable?.demande?.referenceDemande ?? ''}. L'opération est définitive : le reçu PDF pourra être téléchargé depuis l'historique.`
+          : estLigneDirecteSelectionne
+            ? `Ce règlement sera imputé sur la facture validée ${referenceFactureCible ?? ''} du service « ${libelleCible ?? ''} » de la demande ${reglatable?.demande?.referenceDemande ?? ''}. L'opération est définitive : le reçu PDF pourra être téléchargé depuis l'historique.`
           : choisie
             ? `Ce règlement sera imputé sur l'échéance n° ${choisie.echeance.numeroEcheance} du service « ${choisie.ligneLabel} » de la demande ${choisie.referenceDemande}. L'opération est définitive : le reçu PDF pourra être téléchargé depuis l'historique.`
             : ''
@@ -761,12 +790,18 @@ export function NouveauPaiementPage() {
               </div>
               <div className="rc">
                 <span>{estDeboursSelectionne ? 'Débours' : 'Service'}</span>
-                <strong>{estDeboursSelectionne ? deboursChoisi?.designation ?? '' : choisie?.ligneLabel ?? ''}</strong>
+                <strong>{libelleCible ?? ''}</strong>
               </div>
+              {referenceFactureCible && (
+                <div className="rc">
+                  <span>Facture validée</span>
+                  <strong>{referenceFactureCible}</strong>
+                </div>
+              )}
               <div className="rc">
                 <span>Échéance</span>
                 <strong>
-                  {estDeboursSelectionne ? '—' : choisie ? `N° ${choisie.echeance.numeroEcheance} — ${formatDate(choisie.echeance.dateEcheance)}` : '—'}
+                  {estDeboursSelectionne || estLigneDirecteSelectionne ? '—' : choisie ? `N° ${choisie.echeance.numeroEcheance} — ${formatDate(choisie.echeance.dateEcheance)}` : '—'}
                 </strong>
               </div>
               <div className="rc">
