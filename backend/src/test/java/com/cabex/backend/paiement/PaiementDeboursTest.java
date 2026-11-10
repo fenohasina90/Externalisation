@@ -97,7 +97,7 @@ class PaiementDeboursTest {
 
     private CreatePaiementRequest paiement(BigDecimal montant, Integer factureValideeId) {
         return new CreatePaiementRequest(17, factureValideeId, null, 1,
-                LocalDate.of(2026, 9, 10), montant, null, null, null);
+                LocalDate.of(2026, 9, 10), montant, null, null, null, null, null);
     }
 
     @Test

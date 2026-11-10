@@ -62,6 +62,14 @@ public class Paiement {
     @Column(name = "reference_virement", length = 150)
     private String referenceVirement;
 
+    /** Banque émettrice du chèque (mode CHÈQUE uniquement). */
+    @Column(name = "banque", length = 150)
+    private String banque;
+
+    /** Numéro de chèque (mode CHÈQUE uniquement). */
+    @Column(name = "numero_cheque", length = 100)
+    private String numeroCheque;
+
     @Column(name = "commentaire", columnDefinition = "TEXT")
     private String commentaire;
 

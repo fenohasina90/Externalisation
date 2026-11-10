@@ -7,7 +7,7 @@ import { useAuth } from '@/features/auth/hooks/useAuth'
 import { SelectionFichiers, documentsApi } from '@/features/documents'
 import { formatDate, formatMontantMGA } from '@/utils/format'
 import { telechargerBlob } from '@/utils/telechargement'
-import { VIREMENT } from '../constants/labels'
+import { CHEQUE, VIREMENT } from '../constants/labels'
 import { EcheancePill } from '../components'
 import { useDemandesReglables, useEcheancesReglables, useModesPaiement } from '../hooks'
 import { paiementsApi } from '../services/paiements.service'
@@ -66,6 +66,8 @@ export function NouveauPaiementPage() {
   const [datePaiement, setDatePaiement] = useState(aujourdhui)
   const [modeId, setModeId] = useState<number | null>(null)
   const [refVirement, setRefVirement] = useState('')
+  const [banque, setBanque] = useState('')
+  const [numeroCheque, setNumeroCheque] = useState('')
   const [commentaire, setCommentaire] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -146,6 +148,7 @@ export function NouveauPaiementPage() {
   // Mode effectif : le premier disponible tant que l'utilisateur n'a pas choisi.
   const modeChoisi = modes?.find((m) => m.id === modeId) ?? modes?.[0] ?? null
   const estVirement = modeChoisi?.code?.toUpperCase() === VIREMENT
+  const estCheque = modeChoisi?.code?.toUpperCase() === CHEQUE
 
   const attendu = estDeboursSelectionne
     ? (deboursChoisi?.montantDebours ?? 0)
@@ -189,7 +192,8 @@ export function NouveauPaiementPage() {
     montant > 0 &&
     !montantDepasse &&
     !dateHorsPeriode &&
-    (!estVirement || refVirement.trim().length > 0)
+    (!estVirement || refVirement.trim().length > 0) &&
+    (!estCheque || (banque.trim().length > 0 && numeroCheque.trim().length > 0))
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -252,6 +256,14 @@ export function NouveauPaiementPage() {
       setError('La référence du virement est obligatoire pour un virement.')
       return
     }
+    if (estCheque && !banque.trim()) {
+      setError('La banque est obligatoire pour un chèque.')
+      return
+    }
+    if (estCheque && !numeroCheque.trim()) {
+      setError('Le numéro de chèque est obligatoire pour un chèque.')
+      return
+    }
 
     setConfirmation(true)
   }
@@ -279,6 +291,8 @@ export function NouveauPaiementPage() {
           datePaiement,
           montantPaye: montant,
           referenceVirement: estVirement ? refVirement.trim() : null,
+          banque: estCheque ? banque.trim() : null,
+          numeroCheque: estCheque ? numeroCheque.trim() : null,
           commentaire: commentaire.trim() || null,
         })
         paiement = { id: cree.id, reference: cree.referencePaiement }
@@ -560,6 +574,10 @@ export function NouveauPaiementPage() {
                               onChange={() => {
                                 setModeId(m.id)
                                 if (m.code?.toUpperCase() !== VIREMENT) setRefVirement('')
+                                if (m.code?.toUpperCase() !== CHEQUE) {
+                                  setBanque('')
+                                  setNumeroCheque('')
+                                }
                               }}
                             />
                             {m.libelle}
@@ -585,6 +603,34 @@ export function NouveauPaiementPage() {
                           Obligatoire pour un règlement par virement (150 caractères maximum).
                         </span>
                       </label>
+                    )}
+                    {estCheque && (
+                      <>
+                        <label className="field">
+                          Banque <span className="required">*</span>
+                          <input
+                            value={banque}
+                            onChange={(e) => setBanque(e.target.value)}
+                            placeholder="Ex. BNI Madagascar"
+                            maxLength={150}
+                            required
+                          />
+                        </label>
+                        <label className="field">
+                          N° de chèque <span className="required">*</span>
+                          <input
+                            value={numeroCheque}
+                            onChange={(e) => setNumeroCheque(e.target.value)}
+                            placeholder="Ex. 00004521"
+                            maxLength={100}
+                            inputMode="numeric"
+                            required
+                          />
+                        </label>
+                        <p className="form-help form-grid__full" style={{ margin: 0 }}>
+                          Obligatoires pour un règlement par chèque : la banque émettrice et le numéro du chèque.
+                        </p>
+                      </>
                     )}
                   </div>
                 </>
@@ -737,6 +783,18 @@ export function NouveauPaiementPage() {
                   <strong>{refVirement.trim() || '—'}</strong>
                 </div>
               )}
+              {estCheque && (
+                <>
+                  <div className="rc">
+                    <span>Banque</span>
+                    <strong>{banque.trim() || '—'}</strong>
+                  </div>
+                  <div className="rc">
+                    <span>N° de chèque</span>
+                    <strong>{numeroCheque.trim() || '—'}</strong>
+                  </div>
+                </>
+              )}
               <div className="rc">
                 <span>Date</span>
                 <strong>{datePaiement ? formatDate(datePaiement) : '—'}</strong>
@@ -819,6 +877,18 @@ export function NouveauPaiementPage() {
                   <span>Réf. virement</span>
                   <strong>{refVirement.trim() || '—'}</strong>
                 </div>
+              )}
+              {estCheque && (
+                <>
+                  <div className="rc">
+                    <span>Banque</span>
+                    <strong>{banque.trim() || '—'}</strong>
+                  </div>
+                  <div className="rc">
+                    <span>N° de chèque</span>
+                    <strong>{numeroCheque.trim() || '—'}</strong>
+                  </div>
+                </>
               )}
               <div className="rc">
                 <span>Date</span>

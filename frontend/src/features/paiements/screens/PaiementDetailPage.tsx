@@ -140,10 +140,24 @@ export function PaiementDetailPage() {
               <ModePill code={paiement.libelleMode} />
             </b>
           </div>
-          <div className="rc">
-            <span>Référence virement</span>
-            <b>{paiement.referenceVirement ?? '—'}</b>
-          </div>
+          {paiement.referenceVirement && (
+            <div className="rc">
+              <span>Référence virement</span>
+              <b>{paiement.referenceVirement}</b>
+            </div>
+          )}
+          {paiement.banque && (
+            <div className="rc">
+              <span>Banque</span>
+              <b>{paiement.banque}</b>
+            </div>
+          )}
+          {paiement.numeroCheque && (
+            <div className="rc">
+              <span>N° de chèque</span>
+              <b>{paiement.numeroCheque}</b>
+            </div>
+          )}
         </div>
 
         <div className="card card-pad">

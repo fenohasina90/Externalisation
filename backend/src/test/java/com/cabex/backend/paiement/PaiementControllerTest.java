@@ -38,7 +38,7 @@ class PaiementControllerTest {
                 1, "00001/EXT/TNR/2026", "Déclarations fiscales et sociales",
                 null, null, null,
                 1, "Espèces", LocalDate.of(2026, 10, 22),
-                new BigDecimal("1300000.00"), null, null, null,
+                new BigDecimal("1300000.00"), null, null, null, null, null,
                 1, "Système Administrateur",
                 new BigDecimal("2000000.00"), new BigDecimal("1300000.00"),
                 new BigDecimal("700000.00"), "un million trois cent mille");

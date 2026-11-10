@@ -23,6 +23,7 @@ export {
   useSuiviPaiements,
 } from './hooks'
 export {
+  CHEQUE,
   LIBELLES_SITUATION,
   VIREMENT,
   classeMode,

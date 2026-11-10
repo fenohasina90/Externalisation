@@ -47,6 +47,7 @@ import java.util.Locale;
 public class PaiementGestionService {
 
     private static final String MODE_VIREMENT = "VIREMENT";
+    private static final String MODE_CHEQUE = "CHEQUE";
 
     private final PaiementRepository paiementRepository;
     private final DemandeServiceRepository demandeRepository;
@@ -211,7 +212,8 @@ public class PaiementGestionService {
 
         // Le montant payé ne peut pas dépasser le montant de la facture validée
         // (moins ce déjà payé sur cette facture).
-        validerVirement(mode, request.referenceVirement());
+        validerReferencesMode(mode, request.referenceVirement(),
+                request.banque(), request.numeroCheque());
         validerMontantFactureValidee(factureValidee, request.montantPaye(), BigDecimal.ZERO);
 
         Paiement paiement = Paiement.builder()
@@ -223,6 +225,8 @@ public class PaiementGestionService {
                 .datePaiement(request.datePaiement())
                 .montantPaye(request.montantPaye())
                 .referenceVirement(request.referenceVirement())
+                .banque(trimOuNull(request.banque()))
+                .numeroCheque(trimOuNull(request.numeroCheque()))
                 .commentaire(request.commentaire())
                 .pieceJustificative(request.pieceJustificative())
                 .createdBy(currentUtilisateur())
@@ -280,7 +284,8 @@ public class PaiementGestionService {
                     "Un paiement ne peut pas être déplacé vers une autre facture validée");
         }
 
-        validerVirement(mode, request.referenceVirement());
+        validerReferencesMode(mode, request.referenceVirement(),
+                request.banque(), request.numeroCheque());
         validerMontantFactureValidee(factureValidee, request.montantPaye(), paiement.getMontantPaye());
 
         // Échéance réglée : ajuster le montant payé de l'échéance selon le delta.
@@ -317,6 +322,8 @@ public class PaiementGestionService {
         paiement.setDatePaiement(request.datePaiement());
         paiement.setMontantPaye(request.montantPaye());
         paiement.setReferenceVirement(request.referenceVirement());
+        paiement.setBanque(trimOuNull(request.banque()));
+        paiement.setNumeroCheque(trimOuNull(request.numeroCheque()));
         paiement.setCommentaire(request.commentaire());
 
         PaiementResponse response = PaiementMapper.toResponse(paiementRepository.save(paiement));
@@ -409,11 +416,22 @@ public class PaiementGestionService {
         return null;
     }
 
-    private void validerVirement(ModePaiement mode, String referenceVirement) {
+    private void validerReferencesMode(ModePaiement mode, String referenceVirement,
+                                       String banque, String numeroCheque) {
         if (MODE_VIREMENT.equalsIgnoreCase(mode.getCode())
                 && (referenceVirement == null || referenceVirement.isBlank())) {
             throw new BusinessException(
                     "La référence du virement est obligatoire pour un paiement par virement");
+        }
+        if (MODE_CHEQUE.equalsIgnoreCase(mode.getCode())) {
+            if (banque == null || banque.isBlank()) {
+                throw new BusinessException(
+                        "La banque est obligatoire pour un paiement par chèque");
+            }
+            if (numeroCheque == null || numeroCheque.isBlank()) {
+                throw new BusinessException(
+                        "Le numéro de chèque est obligatoire pour un paiement par chèque");
+            }
         }
     }
 
@@ -453,6 +471,14 @@ public class PaiementGestionService {
             seq++;
         } while (paiementRepository.existsByReferencePaiement(reference));
         return reference;
+    }
+
+    private static String trimOuNull(String valeur) {
+        if (valeur == null) {
+            return null;
+        }
+        String trim = valeur.trim();
+        return trim.isEmpty() ? null : trim;
     }
 
     private Utilisateur currentUtilisateur() {

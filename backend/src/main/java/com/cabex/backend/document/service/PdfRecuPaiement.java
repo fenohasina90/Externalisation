@@ -95,12 +95,24 @@ final class PdfRecuPaiement {
                 {"Service", PdfFormats.valeur(service)},
                 {"Facture validée", PdfFormats.valeur(libelleFacture)}
         });
-        PdfPCell cReglement = PdfComposants.carte("Règlement", new String[][]{
-                {"Date de paiement", PdfFormats.valeurDate(paiement.getDatePaiement())},
-                {"Mode de paiement", PdfFormats.valeur(paiement.getModePaiement() != null
-                        ? paiement.getModePaiement().getLibelle() : null)},
-                {"Référence virement", PdfFormats.valeur(paiement.getReferenceVirement())}
-        });
+        java.util.List<String[]> lignesReglement = new java.util.ArrayList<>();
+        lignesReglement.add(new String[]{"Date de paiement", PdfFormats.valeurDate(paiement.getDatePaiement())});
+        lignesReglement.add(new String[]{"Mode de paiement",
+                PdfFormats.valeur(paiement.getModePaiement() != null
+                        ? paiement.getModePaiement().getLibelle() : null)});
+        if (notBlank(paiement.getReferenceVirement())) {
+            lignesReglement.add(new String[]{"Référence virement",
+                    PdfFormats.valeur(paiement.getReferenceVirement())});
+        }
+        if (notBlank(paiement.getBanque())) {
+            lignesReglement.add(new String[]{"Banque", PdfFormats.valeur(paiement.getBanque())});
+        }
+        if (notBlank(paiement.getNumeroCheque())) {
+            lignesReglement.add(new String[]{"N° de chèque",
+                    PdfFormats.valeur(paiement.getNumeroCheque())});
+        }
+        PdfPCell cReglement = PdfComposants.carte("Règlement",
+                lignesReglement.toArray(new String[0][]));
         PdfPCell cMontants = PdfComposants.carte("Montants de la facture", new String[][]{
                 {"Montant facture", PdfFormats.formatArgent(montantFacture(fv))},
                 {"Paiement du reçu", PdfFormats.formatArgent(montantPaye(paiement))},
@@ -133,6 +145,10 @@ final class PdfRecuPaiement {
         return attendu.subtract(
                         PdfFormats.montantOuZero(sommePayeeSurFacture(paiement, sommePayeeSurFacture)))
                 .max(BigDecimal.ZERO);
+    }
+
+    private static boolean notBlank(String valeur) {
+        return valeur != null && !valeur.isBlank();
     }
 
     private static void montantEnLettres(Document doc, Paiement paiement) {

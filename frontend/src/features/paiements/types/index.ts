@@ -45,6 +45,10 @@ export interface Paiement {
   datePaiement: string
   montantPaye: number
   referenceVirement: string | null
+  /** Banque émettrice du chèque (mode CHÈQUE, sinon null). */
+  banque: string | null
+  /** Numéro de chèque (mode CHÈQUE, sinon null). */
+  numeroCheque: string | null
   commentaire: string | null
   pieceJustificative: string | null
   createdById: number | null
@@ -75,6 +79,10 @@ export interface CreatePaiementPayload {
   datePaiement: string
   montantPaye: number
   referenceVirement?: string | null
+  /** Banque émettrice du chèque (mode CHÈQUE). */
+  banque?: string | null
+  /** Numéro de chèque (mode CHÈQUE). */
+  numeroCheque?: string | null
   commentaire?: string | null
   pieceJustificative?: string | null
 }
@@ -83,6 +91,8 @@ export interface UpdatePaiementPayload {
   datePaiement: string
   montantPaye: number
   referenceVirement?: string | null
+  banque?: string | null
+  numeroCheque?: string | null
   commentaire?: string | null
 }
 

@@ -724,6 +724,11 @@ CREATE TABLE paiement (
 
     reference_virement VARCHAR(150) NULL,
 
+    -- Chèque : banque et numéro de chèque (autres modes : NULL)
+    banque VARCHAR(150) NULL,
+
+    numero_cheque VARCHAR(100) NULL,
+
     commentaire TEXT,
 
     piece_justificative VARCHAR(255) NULL,
@@ -1041,7 +1046,8 @@ INSERT INTO mode_paiement
 (code, libelle)
 VALUES
 ('ESPECES', 'Espèces'),
-('VIREMENT', 'Virement bancaire');
+('VIREMENT', 'Virement bancaire'),
+('CHEQUE', 'Chèque');
 
 -- =========================================================
 -- 27. PERMISSIONS

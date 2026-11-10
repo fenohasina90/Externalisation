@@ -19,6 +19,10 @@ public record PaiementResponse(
         LocalDate datePaiement,
         BigDecimal montantPaye,
         String referenceVirement,
+        /** Banque émettrice du chèque (mode CHÈQUE, sinon null). */
+        String banque,
+        /** Numéro de chèque (mode CHÈQUE, sinon null). */
+        String numeroCheque,
         String commentaire,
         String pieceJustificative,
         Integer createdById,

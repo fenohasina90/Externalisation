@@ -20,6 +20,14 @@ public record UpdatePaiementRequest(
         @Size(max = 150, message = "La référence de virement ne doit pas dépasser 150 caractères")
         String referenceVirement,
 
+        /** Banque émettrice du chèque (mode CHÈQUE). */
+        @Size(max = 150, message = "La banque ne doit pas dépasser 150 caractères")
+        String banque,
+
+        /** Numéro de chèque (mode CHÈQUE). */
+        @Size(max = 100, message = "Le numéro de chèque ne doit pas dépasser 100 caractères")
+        String numeroCheque,
+
         String commentaire
 ) {
 }
