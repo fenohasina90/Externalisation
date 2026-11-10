@@ -79,6 +79,8 @@ export interface LigneService {
   montantDebours: number | null
   /** Sous-type STANDARD : PRESTATION ou ABONNEMENT_MENSUEL (EXTERNALISATION uniquement). */
   typePrestation: TypePrestation | string | null
+  /** Libellé affiché : "Prestation", "Abonnement mensuel" ou nom du service. */
+  libelleLigne: string | null
 }
 
 export type TypePrestation = 'PRESTATION' | 'ABONNEMENT_MENSUEL'
@@ -132,10 +134,33 @@ export interface FactureLigne {
   ligneServiceId: number
   serviceId: number | null
   nomService: string | null
+  libelleLigne: string | null
   tarif: number
   debutService: string
   finService: string
   statutLigne: string | null
+}
+
+/** Facture validée telle qu'utilisée pour les paiements. */
+export interface FactureValidee {
+  id: number
+  referenceFactureValidee: string
+  /** Référence proforma (null pour débours / factures du mois). */
+  referenceFactureProforma: string | null
+  /** Référence de la facture générale validée (factures du mois d'abonnement). */
+  referenceFactureGenerale: string | null
+  factureGeneraleId: number | null
+  demandeId: number
+  referenceDemande: string
+  ligneServiceId: number | null
+  libelleLigne: string | null
+  montant: number
+  montantPaye: number
+  resteAPayer: number
+  /** GENERALE (proforma validée) | ABONNEMENT_MENSUEL (facture du mois) | DEBOURS. */
+  type: 'GENERALE' | 'ABONNEMENT_MENSUEL' | 'DEBOURS' | string
+  valideParNom: string | null
+  valideLe: string | null
 }
 
 export interface Facture {
@@ -144,6 +169,8 @@ export interface Facture {
   referenceFacture: string
   /** Référence VALIDÉE : XXXXXEXT/TNR/YYYY (null tant que proforma). */
   referenceFactureValidee: string | null
+  /** ID de la facture validée liée — envoyée à l'API pour chaque paiement. */
+  factureValideeId: number | null
   demandeId: number
   referenceDemande: string
   modeFacturation: ModeFacturation | string

@@ -19,15 +19,24 @@ import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.facture.dto.FactureLigneResponse;
 import com.cabex.backend.facture.dto.FactureResponse;
+import com.cabex.backend.facture.dto.FactureValideeResponse;
 import com.cabex.backend.facture.entity.Facture;
+import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.facture.repository.FactureRepository;
+import com.cabex.backend.facture.repository.FactureValideeRepository;
+import com.cabex.backend.notification.service.NotificationService;
 import com.cabex.backend.security.SecurityUtils;
+import com.cabex.backend.utilisateur.entity.Utilisateur;
+import com.cabex.backend.utilisateur.repository.UtilisateurRepository;
+import com.cabex.backend.security.SecurityUtils;
+import com.cabex.backend.notification.service.NotificationService;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
 import com.cabex.backend.utilisateur.repository.UtilisateurRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,6 +66,8 @@ public class FactureService {
     private final StatutDemandeRepository statutDemandeRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final AuditService auditService;
+    private final NotificationService notificationService;
+    private final com.cabex.backend.paiement.repository.PaiementRepository paiementRepository;
 
     public FactureService(FactureRepository factureRepository,
                           com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository,
@@ -66,7 +77,9 @@ public class FactureService {
                           HistoriqueDemandeRepository historiqueDemandeRepository,
                           StatutDemandeRepository statutDemandeRepository,
                           UtilisateurRepository utilisateurRepository,
-                          AuditService auditService) {
+                          AuditService auditService,
+                          NotificationService notificationService,
+                          com.cabex.backend.paiement.repository.PaiementRepository paiementRepository) {
         this.factureRepository = factureRepository;
         this.factureValideeRepository = factureValideeRepository;
         this.ligneRepository = ligneRepository;
@@ -76,6 +89,8 @@ public class FactureService {
         this.statutDemandeRepository = statutDemandeRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.auditService = auditService;
+        this.notificationService = notificationService;
+        this.paiementRepository = paiementRepository;
     }
 
     @Transactional(readOnly = true)
@@ -223,6 +238,181 @@ public class FactureService {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Factures validées (proforma validée, facture du mois d'abonnement,
+    // facture débours)
+    // ------------------------------------------------------------------
+
+    /**
+     * Toutes les factures validées de la demande, avec le suivi des paiements
+     * (payé / reste à payer). Utilisée notamment par l'écran d'encaissement.
+     */
+    @Transactional(readOnly = true)
+    public List<FactureValideeResponse> listerFacturesValidees(Integer demandeId) {
+        verifierDemande(demandeId);
+        return factureValideeRepository.findByDemandeIdOrderByIdAsc(demandeId).stream()
+                .map(this::toFactureValideeResponse)
+                .toList();
+    }
+
+    /**
+     * Facture du mois d'un abonnement : facture validée enfant de la facture
+     * générale, montant = tarif mensuel de la ligne. Dans la facture, on voit :
+     * la référence de la facture générale validée, la référence de la facture
+     * proforma et la référence de la demande.
+     */
+    @Transactional
+    public FactureValideeResponse creerFactureMensuelleAbonnement(Integer demandeId,
+                                                                  Integer ligneServiceId,
+                                                                  LocalDate dateEmission,
+                                                                  String commentaire) {
+        DemandeService demande = verifierDemande(demandeId);
+        String statutDemande = statutActuelDemande(demandeId);
+        if ("TERMINEE".equals(statutDemande) || "ANNULEE".equals(statutDemande)) {
+            throw new BusinessException(
+                    "La demande est " + statutDemande + " : création de facture impossible");
+        }
+        if (dateEmission == null) {
+            throw new BusinessException("La date d'émission de la facture est obligatoire");
+        }
+        LigneService ligne = ligneRepository.findById(ligneServiceId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Ligne de service", ligneServiceId)));
+        if (ligne.getDemande() == null || !ligne.getDemande().getId().equals(demandeId)) {
+            throw new BusinessException("La ligne de service n'appartient pas à cette demande");
+        }
+        if (!LigneServiceService.CATEGORIE_EXTERNALISATION.equalsIgnoreCase(ligne.getCategorie())
+                || !LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(ligne.getTypePrestation())) {
+            throw new BusinessException(
+                    "Cette action est réservée aux lignes « Abonnement mensuel »");
+        }
+        if (!LigneServiceService.LIGNE_EN_COURS.equals(ligne.getStatut())) {
+            throw new BusinessException(
+                    "La facture du mois n'est disponible que pour un abonnement EN_COURS");
+        }
+        Facture proforma = ligne.getFacture();
+        if (proforma == null || !FACTURE_VALIDEE.equals(proforma.getStatut())) {
+            throw new BusinessException(
+                    "La facture proforma doit être validée avant de créer la facture du mois");
+        }
+        FactureValidee generale = factureValideeRepository.findByFactureProformaId(proforma.getId())
+                .orElseThrow(() -> new BusinessException(
+                        "La facture validée associée à la proforma est introuvable"));
+        BigDecimal tarif = ligne.getTarif();
+        if (tarif == null) {
+            throw new BusinessException("Le tarif mensuel de la ligne est manquant");
+        }
+        Utilisateur validateur = currentUtilisateur();
+        // La date d'émission de la facture est celle saisie par l'utilisateur ;
+        // created_at (timestamp automatique) garde l'horodatage réel de saisie.
+        LocalDateTime valideLe = dateEmission.atStartOfDay();
+        FactureValidee child = FactureValidee.builder()
+                .referenceFactureValidee(genererReferenceValidee(valideLe.getYear()))
+                .factureProforma(null)
+                .factureGenerale(generale)
+                .ligneService(ligne)
+                .demande(demande)
+                .montant(tarif)
+                .validePar(validateur)
+                .valideLe(valideLe)
+                .build();
+        child = factureValideeRepository.save(child);
+        String note = "Facture mensuelle d'abonnement " + child.getReferenceFactureValidee()
+                + " — émise le " + dateEmission
+                + " — facture générale " + generale.getReferenceFactureValidee()
+                + ", proforma " + proforma.getReferenceFacture()
+                + ", demande " + demande.getReferenceDemande()
+                + (commentaire != null && !commentaire.isBlank() ? " — " + commentaire.trim() : "");
+        ajouterHistoriqueLigne(ligne, ligne.getStatut(), note);
+        ajouterHistoriqueDemande(demande, note);
+        auditService.log(AuditActions.CREATE, "FACTURE", "FactureValidee",
+                child.getId() != null ? Long.valueOf(child.getId()) : null,
+                null, note);
+        return toFactureValideeResponse(child);
+    }
+
+    /**
+     * Facture validée créée à la validation d'une ligne DEBOURS
+     * (facture sans proforma, liée à la ligne de débours).
+     */
+    @Transactional
+    public FactureValidee creerFactureValideePourDebours(LigneService ligne, BigDecimal montant) {
+        Utilisateur validateur = currentUtilisateur();
+        LocalDateTime valideLe = LocalDateTime.now();
+        FactureValidee creee = FactureValidee.builder()
+                .referenceFactureValidee(genererReferenceValidee(valideLe.getYear()))
+                .factureProforma(null)
+                .ligneService(ligne)
+                .demande(ligne.getDemande())
+                .montant(montant)
+                .validePar(validateur)
+                .valideLe(valideLe)
+                .build();
+        return factureValideeRepository.save(creee);
+    }
+
+    private FactureValideeResponse toFactureValideeResponse(FactureValidee fv) {
+        BigDecimal paye = fv.getId() != null ? paiementRepository.sommePayeeParFactureValidee(fv.getId()) : BigDecimal.ZERO;
+        if (paye == null) {
+            paye = BigDecimal.ZERO;
+        }
+        BigDecimal montant = fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO;
+        BigDecimal reste = montant.subtract(paye).max(BigDecimal.ZERO);
+
+        LigneService ligne = fv.getLigneService();
+        // Pour une facture générale (proforma validée), la ligne vient de la proforma.
+        if (ligne == null && fv.getFactureProforma() != null
+                && fv.getFactureProforma().getDemande() != null) {
+            List<LigneService> lignesProforma = ligneRepository
+                    .findByDemandeIdOrderByIdAsc(fv.getFactureProforma().getDemande().getId()).stream()
+                    .filter(l -> l.getFacture() != null
+                            && l.getFacture().getId().equals(fv.getFactureProforma().getId()))
+                    .toList();
+            ligne = lignesProforma.isEmpty() ? null : lignesProforma.get(0);
+        }
+        String libelleLigne;
+        if (ligne != null && LigneServiceService.estDebours(ligne)) {
+            libelleLigne = ligne.getDesignationDebours() != null ? ligne.getDesignationDebours() : "Débours";
+        } else if (ligne != null) {
+            libelleLigne = DemandeMapper.libelleLigne(ligne);
+        } else {
+            libelleLigne = null;
+        }
+        String type;
+        if (fv.getFactureGenerale() != null) {
+            type = "ABONNEMENT_MENSUEL";
+        } else if (fv.getFactureProforma() == null) {
+            type = "DEBOURS";
+        } else {
+            type = "GENERALE";
+        }
+        String referenceProforma;
+        if (fv.getFactureProforma() != null) {
+            referenceProforma = fv.getFactureProforma().getReferenceFacture();
+        } else if (fv.getFactureGenerale() != null && fv.getFactureGenerale().getFactureProforma() != null) {
+            referenceProforma = fv.getFactureGenerale().getFactureProforma().getReferenceFacture();
+        } else {
+            referenceProforma = null;
+        }
+        return new FactureValideeResponse(
+                fv.getId(),
+                fv.getReferenceFactureValidee(),
+                referenceProforma,
+                fv.getFactureGenerale() != null ? fv.getFactureGenerale().getReferenceFactureValidee() : null,
+                fv.getFactureGenerale() != null ? fv.getFactureGenerale().getId() : null,
+                fv.getDemande() != null ? fv.getDemande().getId() : null,
+                fv.getDemande() != null ? fv.getDemande().getReferenceDemande() : null,
+                ligne != null ? ligne.getId() : null,
+                libelleLigne,
+                montant,
+                paye,
+                reste,
+                type,
+                fv.getValidePar() != null
+                        ? fv.getValidePar().getPrenom() + " " + fv.getValidePar().getNom() : null,
+                fv.getValideLe());
+    }
+
     @Transactional
     public FactureResponse valider(Integer factureId, String commentaire) {
         return valider(factureId, commentaire, null);
@@ -258,23 +448,57 @@ public class FactureService {
                         .valideLe(valideLe)
                         .build();
         factureValideeRepository.save(validee);
-        // Recharge pour toResponse (relation LAZY factureValidee).
-        facture = getFacture(factureId);
 
         List<LigneService> lignes = ligneRepository.findByDemandeId(facture.getDemande().getId());
+        DemandeService demande = facture.getDemande();
+
+        // Pour chaque ligne EXTERNALISATION de la demande liée à cette facture,
+        // passer le statut à EN_COURS (VALIDATION automatique après validation proforma).
+        boolean demandePasseEnCours = false;
+        String statutActuel = statutActuelDemande(demande.getId());
         for (LigneService ligne : lignes) {
             if (ligne.getFacture() != null && ligne.getFacture().getId().equals(facture.getId())) {
-                if (ligne.getStatut() == null) {
-                    ligne.setStatut(LigneServiceService.LIGNE_VALIDE);
+                if (LigneServiceService.CATEGORIE_EXTERNALISATION.equalsIgnoreCase(
+                        ligne.getCategorie())
+                        && (LigneServiceService.PRESTATION.equalsIgnoreCase(ligne.getTypePrestation())
+                        || LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(ligne.getTypePrestation()))) {
+                    // Pour PRESTATION et ABONNEMENT_MENSUEL : après validation de la facture
+                    // proforma, la ligne passe EN_COURS et la demande passe EN_COURS.
+                    ligne.setStatut(LigneServiceService.LIGNE_EN_COURS);
                     ligneRepository.save(ligne);
+                    ajouterHistoriqueLigne(ligne, LigneServiceService.LIGNE_EN_COURS,
+                            "Facture validée : " + facture.getReferenceFacture()
+                                    + " → service mis EN_COURS"
+                                    + (commentaire != null && !commentaire.isBlank()
+                                            ? " — " + commentaire : ""));
+                    if (!LigneServiceService.LIGNE_EN_COURS.equals(statutActuel)) {
+                        demandePasseEnCours = true;
+                    }
+                } else {
+                    if (ligne.getStatut() == null) {
+                        ligne.setStatut(LigneServiceService.LIGNE_VALIDE);
+                        ligneRepository.save(ligne);
+                    }
+                    ajouterHistoriqueLigne(ligne, LigneServiceService.LIGNE_VALIDE,
+                            "Facture validée : " + facture.getReferenceFacture()
+                                    + (commentaire != null && !commentaire.isBlank()
+                                            ? " — " + commentaire : ""));
                 }
-                ajouterHistoriqueLigne(ligne, LigneServiceService.LIGNE_VALIDE,
-                        "Facture validée : " + facture.getReferenceFacture()
-                                + (commentaire != null && !commentaire.isBlank()
-                                        ? " — " + commentaire : ""));
             }
         }
-        DemandeService demande = facture.getDemande();
+
+        if (demandePasseEnCours && !LigneServiceService.LIGNE_EN_COURS.equals(statutActuel)) {
+            StatutDemande statutEnCours = statutDemandeRepository.findByStatut(
+                    LigneServiceService.LIGNE_EN_COURS)
+                    .orElseThrow(() -> new BusinessException(ErrorMessages.STATUT_INVALIDE));
+            ajouterHistoriqueDemande(demande,
+                    "Demande passée EN_COURS après validation de la facture proforma "
+                            + facture.getReferenceFacture());
+            notificationService.notifierChangementStatut(demande, LigneServiceService.LIGNE_EN_COURS);
+            auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
+                    Long.valueOf(demande.getId()), statutActuel, LigneServiceService.LIGNE_EN_COURS);
+        }
+
         ajouterHistoriqueDemande(demande,
                 "Facture validée : proforma " + facture.getReferenceFacture()
                         + " → validée " + validee.getReferenceFactureValidee()
@@ -297,7 +521,8 @@ public class FactureService {
                         l.getTarif(),
                         l.getDebutService(),
                         l.getFinService(),
-                        l.getStatut()))
+                        l.getStatut(),
+                        com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(l)))
                 .toList();
         com.cabex.backend.facture.entity.FactureValidee validee =
                 facture.getId() != null
@@ -307,6 +532,7 @@ public class FactureService {
                 facture.getId(),
                 facture.getReferenceFacture(),
                 validee != null ? validee.getReferenceFactureValidee() : null,
+                validee != null ? validee.getId() : null,
                 facture.getDemande() != null ? facture.getDemande().getId() : null,
                 facture.getDemande() != null ? facture.getDemande().getReferenceDemande() : null,
                 facture.getModeFacturation(),
@@ -421,6 +647,12 @@ public class FactureService {
         return factureRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Facture", id)));
+    }
+
+    private String statutActuelDemande(Integer demandeId) {
+        return historiqueDemandeRepository.findFirstByDemandeIdOrderByIdDesc(demandeId)
+                .map(h -> h.getStatut() != null ? h.getStatut().getStatut() : null)
+                .orElse(null);
     }
 
     private DemandeService verifierDemande(Integer demandeId) {

@@ -6,6 +6,7 @@ import type {
   CreateLignePayload,
   Demande,
   Facture,
+  FactureValidee,
   HistoriqueDemande,
   HistoriqueLigne,
   LigneService,
@@ -158,6 +159,32 @@ export const facturesApi = {
   /** URL de téléchargement du PDF proforma. */
   proformaUrl(id: number): string {
     return `/api/factures/${id}/document/proforma`
+  },
+}
+
+export const facturesValideesApi = {
+  async list(demandeId: number): Promise<FactureValidee[]> {
+    const { data } = await http.get<FactureValidee[]>(`/demandes/${demandeId}/factures-validees`)
+    return data
+  },
+
+  /** Créer la facture du mois d'une ligne ABONNEMENT_MENSUEL (enfant de la facture générale validée). */
+  async creerFactureAbonnement(
+    demandeId: number,
+    ligneServiceId: number,
+    dateEmission: string,
+    commentaire?: string | null,
+  ): Promise<FactureValidee> {
+    const { data } = await http.post<FactureValidee>(
+      `/demandes/${demandeId}/factures-abonnement`,
+      { ligneServiceId, dateEmission, commentaire: commentaire ?? null },
+    )
+    return data
+  },
+
+  /** Télécharger le PDF de la facture mensuelle (références facture générale / proforma / demande). */
+  abonnementUrl(id: number): string {
+    return `/factures-validees/${id}/document/abonnement`
   },
 }
 

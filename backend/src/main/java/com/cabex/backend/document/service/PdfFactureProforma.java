@@ -157,8 +157,8 @@ final class PdfFactureProforma {
                                          LigneService ligne, boolean zebra) {
         Phrase designation = new Phrase();
         designation.setLeading(st.td.getSize() * 1.3f);
-        designation.add(new Chunk(PdfFormats.valeur(ligne.getService() != null
-                ? ligne.getService().getNomService() : null), st.tdGras));
+        designation.add(new Chunk(PdfFormats.valeur(com.cabex.backend.demande.mapper
+                .DemandeMapper.libelleLigne(ligne)), st.tdGras));
         PdfComposants.faCorps(table, st, designation, Element.ALIGN_LEFT, zebra);
         PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(ligne.getTarif()), st.td),
                 Element.ALIGN_RIGHT, zebra);

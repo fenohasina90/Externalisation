@@ -1,7 +1,7 @@
 import { useApi } from '@/hooks/useApi'
 import type { ApiPage } from '@/types'
-import { demandesApi } from '@/features/demandes/services/demandes.service'
-import type { Demande } from '@/features/demandes/types'
+import { demandesApi, facturesValideesApi } from '@/features/demandes/services/demandes.service'
+import type { Demande, FactureValidee } from '@/features/demandes/types'
 import { planPaiementApi } from '@/features/plan-paiement/services/plan-paiement.service'
 import { paiementsApi } from '../services/paiements.service'
 import type { EcheanceReglable, ModePaiement } from '../types'
@@ -15,6 +15,28 @@ export interface DeboursReglable {
   montantPaye: number
   reste: number
   statut: string | null
+  factureValideeId: number | null
+  referenceFactureValidee: string | null
+}
+
+/** Ligne EXTERNALISATION (PRESTATION / ABONNEMENT_MENSUEL) réglable directement :
+ *  pas de plan de paiement ni d'échéance, le règlement est lié à la facture validée
+ *  (facture générale pour PRESTATION, facture du mois pour ABONNEMENT_MENSUEL). */
+export interface LigneDirecteReglable {
+  ligneId: number
+  ligneLabel: string
+  typePrestation: string | null
+  montantPaye: number
+  resteAPayer: number
+  statut: string | null
+  factureValideeId: number | null
+  referenceFactureValidee: string | null
+  /** ABONNEMENT_MENSUEL : aucune facture du mois encore ouverte. */
+  factureMensuelleRequise?: boolean
+  referenceFactureGenerale?: string | null
+  referenceFactureProforma?: string | null
+  demandeId: number
+  referenceDemande: string
 }
 
 export interface DemandeReglable {
@@ -24,6 +46,9 @@ export interface DemandeReglable {
   echeances: EcheanceReglable[]
   /** Lignes DEBOURS réglables (NON_PAYEE / PARTIEL avec reste). */
   debours: DeboursReglable[]
+  /** Lignes EXTERNALISATION (PRESTATION / ABONNEMENT_MENSUEL) réglables directement
+   *  sur la facture validée (pas d'échéance ni de plan de paiement). */
+  lignesDirectes: LigneDirecteReglable[]
 }
 
 /**
@@ -33,32 +58,128 @@ export interface DemandeReglable {
 export function useEcheancesReglables(demandeId: number | null) {
   return useApi<DemandeReglable>(
     async () => {
-      if (!demandeId) return { demande: null, echeances: [], debours: [] }
+      if (!demandeId) return { demande: null, echeances: [], debours: [], lignesDirectes: [] }
       const demande = await demandesApi.get(demandeId)
       const lignes = demande.lignes ?? []
       const plans = await planPaiementApi.getByLignes(lignes.map((l) => l.id))
+      // Factures validées : proforma validées (facture générale), factures du mois
+      // d'abonnement et factures débours — avec payé / reste recalculés par le backend.
+      const facturesValidees = await facturesValideesApi.list(demandeId).catch(() => [])
+      const fvParLigne = new Map<number, FactureValidee[]>()
+      for (const fv of facturesValidees) {
+        if (fv.ligneServiceId != null) {
+          const arr = fvParLigne.get(fv.ligneServiceId) ?? []
+          arr.push(fv)
+          fvParLigne.set(fv.ligneServiceId, arr)
+        }
+      }
+      // Facture générale validée (type GENERALE) par ligne.
+      const fvGeneraleParLigne = new Map<number, FactureValidee>()
+      for (const fv of facturesValidees) {
+        if (fv.type === 'GENERALE' && fv.ligneServiceId != null
+            && !fvGeneraleParLigne.has(fv.ligneServiceId)) {
+          fvGeneraleParLigne.set(fv.ligneServiceId, fv)
+        }
+      }
+
       const echeances: EcheanceReglable[] = []
       const debours: DeboursReglable[] = []
+      const lignesDirectes: LigneDirecteReglable[] = []
+
       lignes.forEach((ligne, i) => {
+        const nom = ligne.libelleLigne ?? ligne.nomService ?? `Service ${ligne.serviceId ?? i + 1}`
+        const fvLigne = fvGeneraleParLigne.get(ligne.id) ?? null
+        const fvDeLaLigne = fvParLigne.get(ligne.id) ?? []
+
         if (ligne.categorie === 'DEBOURS') {
+          const fv = fvDeLaLigne.find((f) => f.type === 'DEBOURS') ?? null
           if (
             (ligne.statut === 'NON_PAYEE' || ligne.statut === 'PARTIEL') &&
-            ligne.montantDebours != null && ligne.resteAPayer > 0
+            ligne.resteAPayer > 0
           ) {
             debours.push({
               ligneId: ligne.id,
               designation: ligne.designationDebours ?? `Débours ${i + 1}`,
-              montantDebours: ligne.montantDebours,
+              montantDebours: ligne.montantDebours ?? 0,
               montantPaye: ligne.montantPaye,
               reste: ligne.resteAPayer,
               statut: ligne.statut,
+              factureValideeId: fv?.id ?? null,
+              referenceFactureValidee: fv?.referenceFactureValidee ?? null,
+            })
+          }
+          return
+        }
+        const estPrestationOuAbonnement =
+          ligne.typePrestation === 'PRESTATION' || ligne.typePrestation === 'ABONNEMENT_MENSUEL'
+        const estAbonnement = ligne.typePrestation === 'ABONNEMENT_MENSUEL'
+
+        if (estPrestationOuAbonnement) {
+          if (estAbonnement) {
+            // Facture du mois : la plus ancienne encore due est réglée d'abord.
+            const enfants = fvDeLaLigne
+              .filter((f) => f.type === 'ABONNEMENT_MENSUEL')
+              .sort((a, b) => a.id - b.id)
+            const enfantOuvert = enfants.find((f) => f.resteAPayer > 0) ?? null
+            if (enfantOuvert) {
+              lignesDirectes.push({
+                ligneId: ligne.id,
+                ligneLabel: nom,
+                typePrestation: ligne.typePrestation,
+                montantPaye: enfantOuvert.montantPaye,
+                resteAPayer: enfantOuvert.resteAPayer,
+                statut: ligne.statut,
+                factureValideeId: enfantOuvert.id,
+                referenceFactureValidee: enfantOuvert.referenceFactureValidee,
+                referenceFactureGenerale: enfantOuvert.referenceFactureGenerale,
+                referenceFactureProforma: enfantOuvert.referenceFactureProforma,
+                demandeId: demande.id,
+                referenceDemande: demande.referenceDemande,
+              })
+            } else {
+              // Aucune facture du mois ouverte : il faut la créer avant tout paiement.
+              lignesDirectes.push({
+                ligneId: ligne.id,
+                ligneLabel: nom,
+                typePrestation: ligne.typePrestation,
+                montantPaye: enfants.reduce((s, f) => s + f.montantPaye, 0),
+                resteAPayer: 0,
+                statut: ligne.statut,
+                factureValideeId: null,
+                referenceFactureValidee: null,
+                factureMensuelleRequise: true,
+                referenceFactureGenerale: fvLigne?.referenceFactureValidee ?? null,
+                referenceFactureProforma: fvLigne?.referenceFactureProforma ?? null,
+                demandeId: demande.id,
+                referenceDemande: demande.referenceDemande,
+              })
+            }
+            return
+          }
+          // PRESTATION : règlement direct sur la facture générale validée.
+          const reste = fvLigne ? fvLigne.resteAPayer : Math.max((ligne.tarif ?? 0) - (ligne.montantPaye ?? 0), 0)
+          const paye = fvLigne?.montantPaye ?? ligne.montantPaye ?? 0
+          if (fvLigne && reste > 0) {
+            lignesDirectes.push({
+              ligneId: ligne.id,
+              ligneLabel: nom,
+              typePrestation: ligne.typePrestation,
+              montantPaye: paye,
+              resteAPayer: reste,
+              statut: ligne.statut,
+              factureValideeId: fvLigne.id,
+              referenceFactureValidee: fvLigne.referenceFactureValidee,
+              referenceFactureGenerale: fvLigne.referenceFactureGenerale,
+              referenceFactureProforma: fvLigne.referenceFactureProforma,
+              demandeId: demande.id,
+              referenceDemande: demande.referenceDemande,
             })
           }
           return
         }
         const plan = plans.get(ligne.id)
         if (!plan) return
-        const nom = ligne.nomService ?? `Service ${ligne.serviceId ?? i + 1}`
+        const factureValideeId = fvLigne?.id ?? null
         echeancesOuvertes(plan.echeances ?? []).forEach((echeance) => {
           echeances.push({
             echeance,
@@ -69,22 +190,29 @@ export function useEcheancesReglables(demandeId: number | null) {
             nomSociete: demande.nomSociete,
             debutService: ligne.debutService,
             finService: ligne.finService,
+            factureValideeId,
           })
         })
       })
       // Les plans sont chargés service par service : on recolle les échéances
       // dans un ordre chronologique global pour le sélecteur de règlement.
       echeances.sort((a, b) => comparerEcheances(a.echeance, b.echeance))
-      return { demande, echeances, debours }
+      return { demande, echeances, debours, lignesDirectes }
     },
     [demandeId],
   )
 }
 
-/** Demandes candidates à un règlement (charge utile de l'écran de saisie). */
+/** Demandes candidates à un règlement (terminées et annulées exclues). */
 export function useDemandesReglables(size = 200) {
   return useApi<ApiPage<Demande>>(
-    () => demandesApi.list({ page: 0, size, recherche: null }, {}),
+    () =>
+      demandesApi.list({ page: 0, size, recherche: null }, {}).then((page) => ({
+        ...page,
+        content: page.content.filter(
+          (d) => d.statutActuel !== 'TERMINEE' && d.statutActuel !== 'ANNULEE',
+        ),
+      })),
     [size],
   )
 }

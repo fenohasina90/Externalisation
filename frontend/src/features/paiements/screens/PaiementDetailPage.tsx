@@ -113,7 +113,7 @@ export function PaiementDetailPage() {
         </div>
 
         <div className="card card-pad">
-          <h3>Service et échéance</h3>
+          <h3>Service et facture</h3>
           <div className="rc">
             <span>Service</span>
             <b>{paiement.nomService ?? '—'}</b>
@@ -121,6 +121,10 @@ export function PaiementDetailPage() {
           <div className="rc">
             <span>Échéance</span>
             <b>{libelleEcheance}</b>
+          </div>
+          <div className="rc">
+            <span>Facture validée</span>
+            <b>{paiement.referenceFactureValidee ?? '—'}</b>
           </div>
         </div>
 
@@ -143,19 +147,19 @@ export function PaiementDetailPage() {
         </div>
 
         <div className="card card-pad">
-          <h3>Montants de l&apos;échéance</h3>
+          <h3>Montants de la facture</h3>
           <div className="rc">
-            <span>Montant attendu</span>
-            <b>{formatMontantMGA(paiement.montantAttendu)}</b>
+            <span>Montant de la facture</span>
+            <b>{formatMontantMGA(paiement.montantFactureValidee)}</b>
           </div>
           <div className="rc">
-            <span>Montant payé</span>
-            <b>{formatMontantMGA(paiement.montantPayeEcheance)}</b>
+            <span>Total payé sur la facture</span>
+            <b>{formatMontantMGA(paiement.montantPayeSurFacture)}</b>
           </div>
           <div className="rc">
             <span>Reste à payer</span>
-            <b style={paiement.resteAPayer ? { color: 'var(--danger)' } : undefined}>
-              {formatMontantMGA(paiement.resteAPayer)}
+            <b style={paiement.resteAPayerFacture ? { color: 'var(--danger)' } : undefined}>
+              {formatMontantMGA(paiement.resteAPayerFacture)}
             </b>
           </div>
         </div>

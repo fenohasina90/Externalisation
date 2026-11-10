@@ -20,6 +20,8 @@ import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
+import com.cabex.backend.facture.entity.FactureValidee;
+import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.facture.service.FactureService;
 import com.cabex.backend.notification.service.NotificationService;
 import com.cabex.backend.paiement.repository.PaiementRepository;
@@ -76,6 +78,7 @@ class DemandeDeboursTest {
     @Mock private ProposPaiementRepository proposRepo2;
     @Mock private FactureService factureService2;
     @Mock private PaiementRepository paiementRepo2;
+    @Mock private FactureValideeRepository factureValideeRepo2;
 
     private LigneServiceService ligneService;
 
@@ -89,7 +92,8 @@ class DemandeDeboursTest {
 
         ligneService = new LigneServiceService(ligneRepoLigne, historiqueLigneRepo,
                 demandeRepository, historiqueDemandeRepo2, statutRepo2, serviceRepo2,
-                proposRepo2, utilisateurRepository, auditService, factureService2, paiementRepo2);
+                proposRepo2, utilisateurRepository, auditService, factureService2,
+                paiementRepo2, factureValideeRepo2);
 
         lenient().when(statutRepository.findByStatut(anyString()))
                 .thenAnswer(inv -> Optional.of(StatutDemande.builder()
@@ -101,7 +105,7 @@ class DemandeDeboursTest {
             d.setId(1);
             return d;
         });
-        lenient().when(paiementRepository.sommePayeeParDemande(anyInt()))
+        lenient().when(paiementRepository.sommePayeeParFactureValidee(anyInt()))
                 .thenReturn(BigDecimal.ZERO);
         lenient().when(ligneServiceService.montantTotalDemande(anyInt()))
                 .thenReturn(BigDecimal.ZERO);
@@ -193,11 +197,20 @@ class DemandeDeboursTest {
         return l;
     }
 
+    private FactureValidee factureValidee(Integer id, LigneService ligne, BigDecimal montant) {
+        FactureValidee fv = FactureValidee.builder().id(id)
+                .referenceFactureValidee("00001/EXT/TNR/2026")
+                .demande(ligne.getDemande())
+                .montant(montant).build();
+        lenient().when(factureValideeRepo2.findById(id)).thenReturn(Optional.of(fv));
+        return fv;
+    }
+
     @Test
     void validerMontantDeboursOkNonPayee() {
         ligneDebours(5, "EN_ATTENTE", null);
         lenient().when(ligneRepoLigne.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        lenient().when(paiementRepo2.sommePayeeParLigne(5)).thenReturn(BigDecimal.ZERO);
+        lenient().when(paiementRepo2.sommePayeeParFactureValidee(1)).thenReturn(BigDecimal.ZERO);
 
         var reponse = ligneService.validerMontantDebours(5,
                 new ValiderMontantDeboursRequest(new BigDecimal("500000")));
@@ -255,7 +268,11 @@ class DemandeDeboursTest {
     @Test
     void actualiserStatutDeboursPartiel() {
         LigneService l = ligneDebours(5, "NON_PAYEE", new BigDecimal("500000"));
-        lenient().when(paiementRepo2.sommePayeeParLigne(5)).thenReturn(new BigDecimal("200000"));
+        FactureValidee fv = factureValidee(1, l, new BigDecimal("500000"));
+        lenient().when(factureValideeRepo2.findByFactureProformaIdIsNullAndDemandeId(17))
+                .thenReturn(fv);
+        lenient().when(paiementRepo2.sommePayeeParFactureValidee(1))
+                .thenReturn(new BigDecimal("200000"));
         lenient().when(ligneRepoLigne.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ligneService.actualiserStatutDeboursApresPaiement(l);

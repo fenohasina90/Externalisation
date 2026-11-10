@@ -14,6 +14,7 @@ import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.facture.entity.Facture;
 import com.cabex.backend.facture.repository.FactureRepository;
 import com.cabex.backend.facture.service.FactureService;
+import com.cabex.backend.notification.service.NotificationService;
 import com.cabex.backend.service.entity.Service;
 import com.cabex.backend.utilisateur.repository.UtilisateurRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +47,8 @@ class FactureServiceTest {
     @Mock private StatutDemandeRepository statutDemandeRepository;
     @Mock private UtilisateurRepository utilisateurRepository;
     @Mock private AuditService auditService;
+    @Mock private NotificationService notificationService;
+    @Mock private com.cabex.backend.paiement.repository.PaiementRepository paiementRepository;
 
     private FactureService service;
 
@@ -53,7 +56,8 @@ class FactureServiceTest {
     void setUp() {
         service = new FactureService(factureRepository, factureValideeRepository, ligneRepository,
                 historiqueLigneRepository, demandeRepository, historiqueDemandeRepository,
-                statutDemandeRepository, utilisateurRepository, auditService);
+                statutDemandeRepository, utilisateurRepository, auditService,
+                notificationService, paiementRepository);
         lenient().when(historiqueDemandeRepository.findFirstByDemandeIdOrderByIdDesc(any()))
                 .thenReturn(Optional.of(HistoriqueDemande.builder()
                         .statut(StatutDemande.builder().statut("EN_ATTENTE").build()).build()));

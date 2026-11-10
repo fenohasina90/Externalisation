@@ -6,7 +6,11 @@ import com.cabex.backend.dossier.entity.DossierCreation;
 import com.cabex.backend.dossier.entity.DossierTransactionImmobiliere;
 import com.cabex.backend.echeance.entity.ProposPaiement;
 import com.cabex.backend.facture.entity.Facture;
+import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.paiement.entity.Paiement;
+
+import java.math.BigDecimal;
+
 import org.springframework.stereotype.Component;
 
 /**
@@ -17,7 +21,8 @@ import org.springframework.stereotype.Component;
  * <p>Point d'entrée du service ; la mise en page est déléguée aux générateurs
  * spécialisés ({@link PdfRecapitulatif}, {@link PdfFicheCreation},
  * {@link PdfFicheTransactionImmobiliere}, {@link PdfRecuPaiement},
- * {@link PdfPlanPaiement}, {@link PdfFactureProforma}) et la charte graphique
+ * {@link PdfPlanPaiement}, {@link PdfFactureProforma},
+ * {@link PdfFactureAbonnement}) et la charte graphique
  * est centralisée dans {@link PdfTheme}.</p>
  */
 @Component
@@ -53,8 +58,14 @@ public class PdfGenerator {
         return PdfFicheTransactionImmobiliere.generer(demande, dossier);
     }
 
+    /** Reçu de paiement standard. Le total payé sur la facture est recalculé si fourni. */
     public byte[] recuPaiement(Paiement paiement) {
-        return PdfRecuPaiement.generer(paiement);
+        return PdfRecuPaiement.generer(paiement, null);
+    }
+
+    /** Reçu de paiement avec le total exact des paiements actifs sur la facture. */
+    public byte[] recuPaiement(Paiement paiement, BigDecimal sommePayeeSurFacture) {
+        return PdfRecuPaiement.generer(paiement, sommePayeeSurFacture);
     }
 
     public byte[] planPaiement(ProposPaiement propos) {
@@ -66,5 +77,13 @@ public class PdfGenerator {
      */
     public byte[] factureProforma(Facture facture) {
         return generateurFacture.generer(facture);
+    }
+
+    /**
+     * Facture mensuelle d'un abonnement : références facture générale validée,
+     * facture proforma et demande.
+     */
+    public byte[] factureAbonnement(FactureValidee facture) {
+        return PdfFactureAbonnement.generer(facture);
     }
 }

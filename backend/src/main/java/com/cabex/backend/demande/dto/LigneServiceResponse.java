@@ -21,6 +21,7 @@ public record LigneServiceResponse(
         String categorie,
         String designationDebours,
         BigDecimal montantDebours,
-        String typePrestation
+        String typePrestation,
+        String libelleLigne
 ) {
 }

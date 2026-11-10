@@ -140,6 +140,14 @@ public class DocumentController {
         return pdfResponse(documentService.factureProforma(id), "facture-proforma-" + id + ".pdf");
     }
 
+    @GetMapping("/factures-validees/{id}/document/abonnement")
+    @PreAuthorize("hasAuthority('FACTURE_VIEW')")
+    @Operation(summary = "Générer la facture mensuelle d'abonnement (PDF)",
+            description = "Références affichées : facture générale validée, facture proforma et demande")
+    public ResponseEntity<byte[]> factureAbonnement(@PathVariable Integer id) {
+        return pdfResponse(documentService.factureAbonnement(id), "facture-abonnement-" + id + ".pdf");
+    }
+
     private ResponseEntity<byte[]> pdfResponse(byte[] contenu, String nomFichier) {
         String contentDisposition = "inline; filename*=UTF-8''"
                 + URLEncoder.encode(nomFichier, StandardCharsets.UTF_8);

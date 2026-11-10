@@ -128,11 +128,16 @@ public final class ErrorMessages {
     public static final String DEBOURS_STATUT_AUTOMATIQUE =
             "Le statut d'un débours est automatiquement déterminé (validation du montant puis paiements)";
 
+    public static final String PAIEMENT_SANS_FACTURE_VALIDEE =
+            "Le paiement doit être rattaché à une facture validée";
+
     // Lignes EXTERNALISATION STANDARD : PRESTATION / ABONNEMENT_MENSUEL
     public static final String TYPE_PRESTATION_INVALIDE =
             "Le type doit être PRESTATION ou ABONNEMENT_MENSUEL";
     public static final String TYPE_PRESTATION_INTERDIT =
             "Le type de prestation ne s'applique qu'aux lignes EXTERNALISATION de service STANDARD";
+    public static final String DEBUT_SERVICE_OBLIGATOIRE_ABONNEMENT =
+            "La date début est obligatoire pour un abonnement mensuel";
 
     // Général
     public static final String ERREUR_INTERNE = "Une erreur interne est survenue. Veuillez réessayer.";

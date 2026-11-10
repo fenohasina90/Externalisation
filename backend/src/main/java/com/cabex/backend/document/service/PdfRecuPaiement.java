@@ -1,7 +1,8 @@
 package com.cabex.backend.document.service;
 
 import com.cabex.backend.demande.entity.LigneService;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
+import com.cabex.backend.demande.mapper.DemandeMapper;
+import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
@@ -22,17 +23,21 @@ final class PdfRecuPaiement {
     }
 
     static byte[] generer(Paiement paiement) {
+        return generer(paiement, null);
+    }
+
+    static byte[] generer(Paiement paiement, BigDecimal sommePayeeSurFacture) {
         return PdfDocument.generer(PdfDocument.MiseEnPage.DOCUMENT, "Reçu de paiement",
                 "Reçu de paiement " + PdfFormats.valeur(paiement.getReferencePaiement()),
-                doc -> ecrire(doc, paiement),
+                doc -> ecrire(doc, paiement, sommePayeeSurFacture),
                 "Erreur de génération du reçu de paiement");
     }
 
-    private static void ecrire(Document doc, Paiement paiement) {
+    private static void ecrire(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture) {
         PdfComposants.titreDocument(doc, "Reçu de paiement",
                 "Référence paiement : " + PdfFormats.valeur(paiement.getReferencePaiement()));
         doc.add(bandeauMontant(paiement));
-        cartes(doc, paiement);
+        cartes(doc, paiement, sommePayeeSurFacture);
         montantEnLettres(doc, paiement);
         signatures(doc, paiement);
     }
@@ -60,18 +65,25 @@ final class PdfRecuPaiement {
         return bandeau;
     }
 
-    private static void cartes(Document doc, Paiement paiement) {
+    private static void cartes(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture) {
         String client = paiement.getDemande() != null && paiement.getDemande().getSociete() != null
                 ? paiement.getDemande().getSociete().getNomSociete() : null;
 
-        EcheancePaiement echeance = paiement.getEcheance();
-        LigneService ligne = echeance != null && echeance.getProposPaiement() != null
-                ? echeance.getProposPaiement().getLigneService() : null;
-        String service = ligne != null && ligne.getService() != null
-                ? ligne.getService().getNomService() : null;
-        String libelleEcheance = echeance != null
-                ? "N° " + echeance.getNumeroEcheance() + " — "
-                        + PdfFormats.valeurDate(echeance.getDateEcheance())
+        com.cabex.backend.facture.entity.FactureValidee fv = paiement.getFactureValidee();
+        LigneService ligne = fv != null && fv.getFactureProforma() != null
+                ? fv.getFactureProforma().getLignes().stream()
+                        .filter(l -> l.getDemande() != null
+                                && l.getDemande().getId().equals(paiement.getDemande().getId()))
+                        .findFirst().orElse(null)
+                : null;
+        String service = ligne != null
+                ? com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(ligne) : null;
+        String libelleFacture = fv != null
+                ? fv.getReferenceFactureValidee() != null
+                        ? fv.getReferenceFactureValidee()
+                        : fv.getFactureProforma() != null
+                                ? fv.getFactureProforma().getReferenceFacture()
+                                : null
                 : null;
 
         PdfPCell cClient = PdfComposants.carte("Client et demande", new String[][]{
@@ -79,9 +91,9 @@ final class PdfRecuPaiement {
                 {"Demande", PdfFormats.valeur(paiement.getDemande() != null
                         ? paiement.getDemande().getReferenceDemande() : null)}
         });
-        PdfPCell cService = PdfComposants.carte("Service et échéance", new String[][]{
+        PdfPCell cService = PdfComposants.carte("Service et facture", new String[][]{
                 {"Service", PdfFormats.valeur(service)},
-                {"Échéance", PdfFormats.valeur(libelleEcheance)}
+                {"Facture validée", PdfFormats.valeur(libelleFacture)}
         });
         PdfPCell cReglement = PdfComposants.carte("Règlement", new String[][]{
                 {"Date de paiement", PdfFormats.valeurDate(paiement.getDatePaiement())},
@@ -89,30 +101,38 @@ final class PdfRecuPaiement {
                         ? paiement.getModePaiement().getLibelle() : null)},
                 {"Référence virement", PdfFormats.valeur(paiement.getReferenceVirement())}
         });
-        PdfPCell cMontants = PdfComposants.carte("Montants de l'échéance", new String[][]{
-                {"Montant attendu", PdfFormats.formatArgent(montantAttendu(echeance))},
-                {"Montant payé", PdfFormats.formatArgent(montantPaye(echeance, paiement))},
-                {"Reste à payer", PdfFormats.formatArgent(reste(echeance, paiement))}
+        PdfPCell cMontants = PdfComposants.carte("Montants de la facture", new String[][]{
+                {"Montant facture", PdfFormats.formatArgent(montantFacture(fv))},
+                {"Paiement du reçu", PdfFormats.formatArgent(montantPaye(paiement))},
+                {"Total payé sur la facture", PdfFormats.formatArgent(sommePayeeSurFacture(paiement, sommePayeeSurFacture))},
+                {"Reste à payer", PdfFormats.formatArgent(reste(fv, paiement, sommePayeeSurFacture))}
         });
 
         PdfComposants.rangee(doc, 0.5f, cClient, cService);
         PdfComposants.rangee(doc, 0.5f, cReglement, cMontants);
     }
 
-    private static BigDecimal montantAttendu(EcheancePaiement echeance) {
-        return echeance != null ? echeance.getMontantAttendu() : null;
+    private static BigDecimal montantFacture(com.cabex.backend.facture.entity.FactureValidee fv) {
+        return fv != null ? fv.getMontant() : null;
     }
 
-    private static BigDecimal montantPaye(EcheancePaiement echeance, Paiement paiement) {
-        return echeance != null ? echeance.getMontantPaye() : paiement.getMontantPaye();
+    private static BigDecimal montantPaye(Paiement paiement) {
+        return paiement.getMontantPaye();
     }
 
-    private static BigDecimal reste(EcheancePaiement echeance, Paiement paiement) {
-        BigDecimal attendu = montantAttendu(echeance);
+    private static BigDecimal sommePayeeSurFacture(Paiement paiement, BigDecimal somme) {
+        return somme != null ? somme : paiement.getMontantPaye();
+    }
+
+    private static BigDecimal reste(com.cabex.backend.facture.entity.FactureValidee fv,
+                                    Paiement paiement, BigDecimal sommePayeeSurFacture) {
+        BigDecimal attendu = montantFacture(fv);
         if (attendu == null) {
             return null;
         }
-        return attendu.subtract(PdfFormats.montantOuZero(montantPaye(echeance, paiement)));
+        return attendu.subtract(
+                        PdfFormats.montantOuZero(sommePayeeSurFacture(paiement, sommePayeeSurFacture)))
+                .max(BigDecimal.ZERO);
     }
 
     private static void montantEnLettres(Document doc, Paiement paiement) {

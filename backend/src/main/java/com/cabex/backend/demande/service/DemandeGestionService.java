@@ -269,9 +269,24 @@ public class DemandeGestionService {
                     throw new BusinessException(
                             "La désignation du débours ne s'applique qu'aux lignes DEBOURS");
                 }
-                if (ligne.serviceId() == null || ligne.tarif() == null
-                        || ligne.debutService() == null || ligne.finService() == null) {
+                if (ligne.serviceId() == null || ligne.tarif() == null) {
                     throw new BusinessException(ErrorMessages.DONNEES_OBLIGATOIRES);
+                }
+                // Validation des dates selon le type de prestation :
+                // - PRESTATION : début et fin optionnels (tous deux peuvent être null)
+                // - ABONNEMENT_MENSUEL : début obligatoire, fin optionnel
+                // - Autre (null) : pas de contrainte ici, validée plus tard dans ajouter()
+                if (LigneServiceService.PRESTATION.equalsIgnoreCase(
+                        ligne.typePrestation() != null ? ligne.typePrestation() : null)) {
+                    // Pas de contrainte de dates pour PRESTATION.
+                } else if (LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(
+                        ligne.typePrestation() != null ? ligne.typePrestation() : null)) {
+                    if (ligne.debutService() == null) {
+                        throw new BusinessException(ErrorMessages.DEBUT_SERVICE_OBLIGATOIRE_ABONNEMENT);
+                    }
+                    // La date fin est optionnelle pour un abonnement mensuel.
+                } else {
+                    // Cas sans typePrestation précisé : pas de contrainte ici.
                 }
             }
         }
@@ -514,17 +529,21 @@ public class DemandeGestionService {
      */
     private void verifierPassageValidation(DemandeService demande) {
         List<LigneService> lignes = ligneRepository.findByDemandeId(demande.getId());
-        List<LigneService> externalisation = lignes.stream()
-                .filter(l -> !LigneServiceService.estDebours(l))
+        // Seules les lignes EXTERNALISATION STANDARD (pas DEBOURS, pas PRESTATION, pas ABONNEMENT_MENSUEL)
+        // nécessitent un plan de paiement et une facture validée.
+        List<LigneService> externalisationStandard = lignes.stream()
+                .filter(l -> !LigneServiceService.estDebours(l)
+                        && !LigneServiceService.PRESTATION.equalsIgnoreCase(l.getTypePrestation())
+                        && !LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(l.getTypePrestation()))
                 .toList();
-        if (externalisation.isEmpty()) {
+        if (externalisationStandard.isEmpty()) {
             throw new BusinessException("Une demande contient au moins un service");
         }
         if (!factureService.toutesValidees(demande.getId())) {
             throw new BusinessException(
                     "Toutes les factures de la demande doivent être validées avant le passage à VALIDATION");
         }
-        for (LigneService ligne : externalisation) {
+        for (LigneService ligne : externalisationStandard) {
             if (!proposRepository.existsByLigneServiceId(ligne.getId())) {
                 throw new BusinessException(
                         "Chaque service doit disposer de son plan de paiement avant le passage à VALIDATION");
@@ -614,6 +633,12 @@ public class DemandeGestionService {
             seq++;
         } while (demandeRepository.existsByReferenceDemande(reference));
         return reference;
+    }
+
+    /** Statut actuel de la demande (EN_ATTENTE / VALIDATION / EN_COURS / TERMINEE / ANNULEE). */
+    @Transactional(readOnly = true)
+    public String statutDemandeActuel(Integer demandeId) {
+        return statutActuel(demandeId);
     }
 
     private String statutActuel(Integer demandeId) {

@@ -1,8 +1,7 @@
 package com.cabex.backend.paiement.entity;
 
 import com.cabex.backend.demande.entity.DemandeService;
-import com.cabex.backend.demande.entity.LigneService;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
+import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
 import jakarta.persistence.*;
 import lombok.*;
@@ -33,13 +32,22 @@ public class Paiement {
     @JoinColumn(name = "demande_id", nullable = false)
     private DemandeService demande;
 
+    /**
+     * Facture validée liée au paiement. Toujours renseignée pour
+     * EXTERNALISATION et DEBOURS (un paiement est toujours rattaché
+     * à une facture validée).
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "facture_validee_id", nullable = false)
+    private FactureValidee factureValidee;
+
+    /**
+     * Échéance réglée (EXTERNALISATION avec plan de paiement).
+     * NULL pour DEBOURS / PRESTATION / ABONNEMENT_MENSUEL.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "echeance_id")
-    private EcheancePaiement echeance;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ligne_service_id")
-    private LigneService ligneService;
+    private com.cabex.backend.echeance.entity.EcheancePaiement echeance;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "mode_paiement_id", nullable = false)

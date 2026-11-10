@@ -709,10 +709,12 @@ CREATE TABLE paiement (
 
     demande_id INT NOT NULL,
 
-    echeance_id INT NULL,
+    -- Facture validée liée au paiement (toujours renseignée)
+    facture_validee_id INT NOT NULL,
 
-    -- Ligne DEBOURS payée (NULL pour EXTERNALISATION via échéance)
-    ligne_service_id INT NULL,
+    -- Échéance réglée (EXTERNALISATION avec plan de paiement).
+    -- NULL pour DEBOURS / PRESTATION / ABONNEMENT_MENSUEL.
+    echeance_id INT NULL,
 
     mode_paiement_id INT NOT NULL,
 
@@ -741,14 +743,14 @@ CREATE TABLE paiement (
         REFERENCES demande_service(id)
         ON DELETE RESTRICT,
 
+    CONSTRAINT fk_paiement_facture_validee
+        FOREIGN KEY (facture_validee_id)
+        REFERENCES facture_validee(id)
+        ON DELETE RESTRICT,
+
     CONSTRAINT fk_paiement_echeance
         FOREIGN KEY (echeance_id)
         REFERENCES echeance_paiement(id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT fk_paiement_ligne
-        FOREIGN KEY (ligne_service_id)
-        REFERENCES ligne_service(id)
         ON DELETE SET NULL,
 
     CONSTRAINT fk_paiement_mode
@@ -768,6 +770,9 @@ CREATE TABLE paiement (
 CREATE INDEX idx_paiement_demande
 ON paiement(demande_id);
 
+CREATE INDEX idx_paiement_facture_validee
+ON paiement(facture_validee_id);
+
 CREATE INDEX idx_paiement_echeance
 ON paiement(echeance_id);
 
@@ -777,8 +782,6 @@ ON paiement(date_paiement);
 CREATE INDEX idx_paiement_mode
 ON paiement(mode_paiement_id);
 
-CREATE INDEX idx_paiement_ligne
-ON paiement(ligne_service_id);
 
 -- =========================================================
 -- 19. PIECES JOINTES
@@ -1254,6 +1257,9 @@ VALUES
 ('FACTURE_VALIDATE', 'Valider une facture',
  'FACTURE', 'Valider une facture proforma'),
 
+('FACTURE_ABONNEMENT_CREATE', 'Créer la facture mensuelle d''abonnement',
+ 'FACTURE', 'Créer la facture du mois d''un abonnement (enfant de la facture générale validée)'),
+
 -- Sauvegarde (module hors ligne)
 ('BACKUP_VIEW', 'Consulter les sauvegardes',
  'SAUVEGARDE', 'Lister et télécharger les sauvegardes de la base'),
@@ -1365,7 +1371,8 @@ AND p.code_permission IN (
 
     'DOSSIER_VIEW',
 
-    'FACTURE_VIEW'
+    'FACTURE_VIEW',
+    'FACTURE_ABONNEMENT_CREATE'
 );
 
 -- =========================================================
@@ -1500,6 +1507,13 @@ CREATE TABLE facture_validee (
     -- NULL pour une validée sans proforma (débours)
     facture_proforma_id INT NULL UNIQUE,
 
+    -- Pour ABONNEMENT_MENSUEL : facture validée "générale" de l'abonnement.
+    -- NULL si cette facture est elle-même la générale (ou pour les cas simples).
+    facture_generale_id INT NULL,
+
+    -- Ligne DEBOURS concernée (NULL pour EXTERNALISATION)
+    ligne_service_id INT NULL,
+
     demande_id INT NOT NULL,
 
     montant DECIMAL(15,2) NOT NULL COMMENT 'Montant validé (peut différer du proforma)',
@@ -1518,6 +1532,16 @@ CREATE TABLE facture_validee (
         REFERENCES facture_proforma(id)
         ON DELETE RESTRICT,
 
+    CONSTRAINT fk_facture_validee_generale
+        FOREIGN KEY (facture_generale_id)
+        REFERENCES facture_validee(id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_facture_validee_ligne
+        FOREIGN KEY (ligne_service_id)
+        REFERENCES ligne_service(id)
+        ON DELETE SET NULL,
+
     CONSTRAINT fk_facture_validee_demande
         FOREIGN KEY (demande_id)
         REFERENCES demande_service(id)
@@ -1534,6 +1558,12 @@ CREATE TABLE facture_validee (
 
 CREATE INDEX idx_facture_validee_demande
 ON facture_validee(demande_id);
+
+CREATE INDEX idx_facture_validee_generale
+ON facture_validee(facture_generale_id);
+
+CREATE INDEX idx_facture_validee_ligne
+ON facture_validee(ligne_service_id);
 
 -- =========================================================
 -- 33. LIGNES DE SERVICE (UN SERVICE AU SEIN D'UNE DEMANDE)

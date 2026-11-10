@@ -8,9 +8,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record UpdatePaiementRequest(
-        Integer echeanceId,
-
-        Integer ligneServiceId,
+        Integer factureValideeId,
 
         @NotNull(message = "La date de paiement est obligatoire")
         LocalDate datePaiement,

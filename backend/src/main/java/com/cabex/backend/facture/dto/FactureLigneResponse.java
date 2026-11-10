@@ -10,6 +10,8 @@ public record FactureLigneResponse(
         BigDecimal tarif,
         LocalDate debutService,
         LocalDate finService,
-        String statutLigne
+        String statutLigne,
+        /** Désignation affichée : « Prestation », « Abonnement mensuel » ou nom du service. */
+        String libelleLigne
 ) {
 }

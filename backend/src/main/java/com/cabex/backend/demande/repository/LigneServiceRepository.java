@@ -37,14 +37,16 @@ public interface LigneServiceRepository extends JpaRepository<LigneService, Inte
 
     /**
      * Montant payé par ligne (EXTERNALISATION via échéances + DEBOURS via
-     * paiements directs ligne_service_id), en une seule requête.
+     * facture validee), en une seule requête.
      */
     @Query("""
         SELECT l.id, COALESCE(SUM(e.montantPaye), 0) + COALESCE(SUM(p.montantPaye), 0)
         FROM LigneService l
         LEFT JOIN ProposPaiement pp ON pp.ligneService = l
         LEFT JOIN pp.echeances e
-        LEFT JOIN Paiement p ON p.ligneService = l AND p.actif = true
+        LEFT JOIN l.facture f
+        LEFT JOIN f.factureValidee fv
+        LEFT JOIN Paiement p ON p.factureValidee = fv AND p.actif = true
         WHERE l.id IN :ligneIds
         GROUP BY l.id
         """)

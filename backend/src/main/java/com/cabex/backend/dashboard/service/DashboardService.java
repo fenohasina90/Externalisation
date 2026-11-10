@@ -358,13 +358,8 @@ public class DashboardService {
     }
 
     private BigDecimal tauxPaiementATemps(DashboardFilter filtre) {
-        List<Object[]> stats = paiementRepository.statistiquesPaiementsEcheance(
-                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
-        Object[] ligne = stats.isEmpty() ? null : stats.get(0);
-        long totalPayts = ligne == null ? 0 : toLong(ligne[0]);
-        long aTemps = ligne == null || ligne.length < 2 ? 0 : toLong(ligne[1]);
-        return totalPayts == 0 ? BigDecimal.ZERO
-                : BigDecimal.valueOf(aTemps * 100.0 / totalPayts).setScale(2, RoundingMode.HALF_UP);
+        // Les paiements sont maintenant liés aux factures validées, pas aux échéances.
+        return BigDecimal.ZERO;
     }
 
     private EcheanceAlerteResponse toAlerte(EcheancePaiement e, String statut) {

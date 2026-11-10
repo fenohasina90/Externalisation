@@ -35,7 +35,8 @@ class PaiementControllerTest {
     private static PaiementDetailResponse detail() {
         return new PaiementDetailResponse(
                 20, "PAY-2026-00020", 18, "DEM-2026-00018", 5, "Beta SA",
-                7, 1, LocalDate.of(2026, 10, 30), "Déclarations fiscales et sociales",
+                1, "00001/EXT/TNR/2026", "Déclarations fiscales et sociales",
+                null, null, null,
                 1, "Espèces", LocalDate.of(2026, 10, 22),
                 new BigDecimal("1300000.00"), null, null, null,
                 1, "Système Administrateur",
@@ -67,11 +68,11 @@ class PaiementControllerTest {
                 .andExpect(jsonPath("$.referenceDemande").value("DEM-2026-00018"))
                 .andExpect(jsonPath("$.nomSociete").value("Beta SA"))
                 .andExpect(jsonPath("$.nomService").value("Déclarations fiscales et sociales"))
-                .andExpect(jsonPath("$.numeroEcheance").value(1))
-                .andExpect(jsonPath("$.dateEcheance").value("2026-10-30"))
-                .andExpect(jsonPath("$.montantAttendu").value(2000000.0))
-                .andExpect(jsonPath("$.montantPayeEcheance").value(1300000.0))
-                .andExpect(jsonPath("$.resteAPayer").value(700000.0))
+                .andExpect(jsonPath("$.factureValideeId").value(1))
+                .andExpect(jsonPath("$.referenceFactureValidee").value("00001/EXT/TNR/2026"))
+                .andExpect(jsonPath("$.montantFactureValidee").value(2000000.0))
+                .andExpect(jsonPath("$.montantPayeSurFacture").value(1300000.0))
+                .andExpect(jsonPath("$.resteAPayerFacture").value(700000.0))
                 .andExpect(jsonPath("$.montantEnLettres").value("un million trois cent mille"))
                 .andExpect(jsonPath("$.createdByName").value("Système Administrateur"));
     }

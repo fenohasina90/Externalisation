@@ -1,6 +1,8 @@
 package com.cabex.backend.facture.controller;
 
+import com.cabex.backend.facture.dto.CreerFactureAbonnementRequest;
 import com.cabex.backend.facture.dto.FactureResponse;
+import com.cabex.backend.facture.dto.FactureValideeResponse;
 import com.cabex.backend.facture.dto.GenererFacturesRequest;
 import com.cabex.backend.facture.dto.ValiderFactureRequest;
 import com.cabex.backend.facture.service.FactureService;
@@ -54,6 +56,26 @@ public class FactureController {
                                                          @Valid @RequestBody GenererFacturesRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(factureService.genererPourDemande(demandeId, request.modeFacturation()));
+    }
+
+    @GetMapping("/demandes/{demandeId}/factures-validees")
+    @PreAuthorize("hasAuthority('FACTURE_VIEW')")
+    @Operation(summary = "Lister les factures validées d'une demande (suivi paiements)")
+    public ResponseEntity<List<FactureValideeResponse>> listerValidees(@PathVariable Integer demandeId) {
+        return ResponseEntity.ok(factureService.listerFacturesValidees(demandeId));
+    }
+
+    @PostMapping("/demandes/{demandeId}/factures-abonnement")
+    @PreAuthorize("hasAuthority('FACTURE_ABONNEMENT_CREATE')")
+    @Operation(summary = "Créer la facture du mois d'un abonnement (enfant de la facture générale validée)",
+            description = "Montant = tarif mensuel de la ligne. La facture affiche les références : facture générale validée, facture proforma et demande. La date d'émission de la facture est saisie par l'utilisateur.")
+    public ResponseEntity<FactureValideeResponse> creerFactureAbonnement(
+            @PathVariable Integer demandeId,
+            @Valid @RequestBody CreerFactureAbonnementRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(factureService.creerFactureMensuelleAbonnement(
+                        demandeId, request.ligneServiceId(), request.dateEmission(),
+                        request.commentaire()));
     }
 
     @PutMapping("/factures/{id}/valider")

@@ -277,11 +277,12 @@ export function NouvelleDemandePage() {
       if (!l.tarif || Number(l.tarif) < 0 || Number.isNaN(Number(l.tarif))) {
         return `Ligne ${i + 1} : tarif positif ou nul obligatoire`
       }
-      if (!l.debutService || !l.finService) return `Ligne ${i + 1} : période obligatoire`
+      // if (!l.debutService || !l.finService) return `Ligne ${i + 1} : période obligatoire`
       // if (l.debutService < aujourdhui) {
       //   return `Ligne ${i + 1} : le début doit être postérieur ou égal à aujourd'hui`
       // }
-      if (l.finService <= l.debutService) {
+      if (l.typePrestation !== 'PRESTATION' && l.debutService !== '' && l.finService !== ''
+          && l.finService <= l.debutService) {
         return `Ligne ${i + 1} : la fin doit être strictement postérieure au début`
       }
       if (estTypeServiceSolo(typesServices.get(l.serviceId))) typeSolo = true
@@ -696,21 +697,32 @@ export function NouvelleDemandePage() {
                         </label>
                         <span className="field" />
                         <label className="field">
-                          Début <span className="required">*</span>
+                          Début{
+                            l.typePrestation !== 'PRESTATION' ? (
+                              <span className="required">*</span>
+                            ) : null
+                          }
                           <input
                             type="date"
                             // min={aujourdhui}
                             value={l.debutService}
                             onChange={(e) => setLigne(i, { debutService: e.target.value })}
+                            placeholder="Ex. 2026-01-01"
+                            disabled={l.typePrestation === 'PRESTATION' ? false : false}
                           />
                         </label>
                         <label className="field">
-                          Fin <span className="required">*</span>
+                          Fin{
+                            l.typePrestation !== 'PRESTATION' ? (
+                              <span className="required">*</span>
+                            ) : null
+                          }
                           <input
                             type="date"
                             min={l.debutService}
                             value={l.finService}
                             onChange={(e) => setLigne(i, { finService: e.target.value })}
+                            placeholder="Ex. 2026-12-31"
                           />
                         </label>
                         </>

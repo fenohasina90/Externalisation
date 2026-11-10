@@ -24,6 +24,8 @@ import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
+import com.cabex.backend.facture.entity.FactureValidee;
+import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.facture.service.FactureService;
 import com.cabex.backend.service.entity.Service;
 import com.cabex.backend.service.repository.ServiceRepository;
@@ -84,6 +86,7 @@ public class LigneServiceService {
     private final UtilisateurRepository utilisateurRepository;
     private final AuditService auditService;
     private final FactureService factureService;
+    private final FactureValideeRepository factureValideeRepository;
     private final com.cabex.backend.paiement.repository.PaiementRepository paiementRepository;
 
     public LigneServiceService(LigneServiceRepository ligneRepository,
@@ -96,7 +99,8 @@ public class LigneServiceService {
                                UtilisateurRepository utilisateurRepository,
                                AuditService auditService,
                                FactureService factureService,
-                               com.cabex.backend.paiement.repository.PaiementRepository paiementRepository) {
+                               com.cabex.backend.paiement.repository.PaiementRepository paiementRepository,
+                               FactureValideeRepository factureValideeRepository) {
         this.ligneRepository = ligneRepository;
         this.historiqueLigneRepository = historiqueLigneRepository;
         this.demandeRepository = demandeRepository;
@@ -108,6 +112,7 @@ public class LigneServiceService {
         this.auditService = auditService;
         this.factureService = factureService;
         this.paiementRepository = paiementRepository;
+        this.factureValideeRepository = factureValideeRepository;
     }
 
     @Transactional(readOnly = true)
@@ -154,8 +159,7 @@ public class LigneServiceService {
                     "La désignation du débours ne s'applique qu'aux lignes DEBOURS");
         }
 
-        if (request.serviceId() == null || request.tarif() == null
-                || request.debutService() == null || request.finService() == null) {
+        if (request.serviceId() == null || request.tarif() == null) {
             throw new BusinessException(ErrorMessages.DONNEES_OBLIGATOIRES);
         }
         Service service = verifierService(request.serviceId());
@@ -164,6 +168,23 @@ public class LigneServiceService {
         verifierDates(request.debutService(), request.finService());
         if (request.tarif().signum() < 0) {
             throw new BusinessException(ErrorMessages.TARIF_POSITIF);
+        }
+        // Validation des dates selon le type de prestation :
+        // - PRESTATION : début et fin optionnels (tous deux peuvent être null)
+        // - ABONNEMENT_MENSUEL : début obligatoire, fin optionnel
+        // - Autre : début et fin requis
+        if (LigneServiceService.PRESTATION.equalsIgnoreCase(request.typePrestation())) {
+            // Pas de contrainte de dates pour PRESTATION.
+        } else if (LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(
+                request.typePrestation())) {
+            if (request.debutService() == null) {
+                throw new BusinessException(ErrorMessages.DEBUT_SERVICE_OBLIGATOIRE_ABONNEMENT);
+            }
+            // La date fin est optionnelle pour un abonnement mensuel.
+        } else {
+            if (request.debutService() == null || request.finService() == null) {
+                throw new BusinessException(ErrorMessages.DONNEES_OBLIGATOIRES);
+            }
         }
         String typePrestation = normaliserTypePrestation(
                 CATEGORIE_EXTERNALISATION, service, request.typePrestation());
@@ -252,6 +273,9 @@ public class LigneServiceService {
         ligne.setMontantDebours(montant);
         ligne.setStatut(LIGNE_NON_PAYEE);
         ligneRepository.save(ligne);
+        // Un paiement est toujours lié à une facture validée : la validation
+        // d'un débours crée sa facture validée (sans proforma).
+        factureService.creerFactureValideePourDebours(ligne, montant);
 
         ajouterHistoriqueLigne(ligne, LIGNE_NON_PAYEE,
                 "Montant du débours validé : " + montant.toPlainString(), "MANUEL");
@@ -304,7 +328,7 @@ public class LigneServiceService {
         if (ligne.getMontantDebours() == null) {
             return;
         }
-        BigDecimal paye = paiementRepository.sommePayeeParLigne(ligne.getId());
+        BigDecimal paye = montantPayeParLigne(ligne.getId());
         if (paye == null) {
             paye = BigDecimal.ZERO;
         }
@@ -328,6 +352,59 @@ public class LigneServiceService {
                         + " / " + ligne.getMontantDebours().toPlainString() + ")", "AUTO");
         ajouterHistoriqueDemande(ligne.getDemande(),
                 "Débours ligne " + ligne.getId() + " : " + cible + " (payé : "
+                        + paye.toPlainString() + ")");
+
+        auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "LigneService",
+                Long.valueOf(ligne.getId()), actuel, cible);
+    }
+
+    /**
+     * Recalcule le statut d'une ligne après un paiement :
+     * NON_PAYEE → PARTIEL → PAYEE (selon le total payé vs montant attendu).
+     * Pour EXTERNALISATION, le montant attendu est le tarif de la ligne.
+     * Pour DEBOURS, c'est le montant débours validé.
+     */
+    @Transactional
+    public void actualiserStatutApresPaiement(LigneService ligne) {
+        if (ligne == null) {
+            return;
+        }
+        BigDecimal paye = montantPayeParLigne(ligne.getId());
+        BigDecimal attendu;
+        if (estDebours(ligne)) {
+            attendu = ligne.getMontantDebours() != null ? ligne.getMontantDebours() : BigDecimal.ZERO;
+        } else {
+            attendu = ligne.getTarif() != null ? ligne.getTarif() : BigDecimal.ZERO;
+        }
+        String cible;
+        boolean estDebours = estDebours(ligne);
+        if (ABONNEMENT_MENSUEL.equalsIgnoreCase(ligne.getTypePrestation())) {
+            // Abonnement mensuel : les règlements du mois sont suivis sur la facture
+            // et sur la facture du mois ; la ligne reste EN_COURS. La demande est
+            // clôturée par changement de statut (TERMINEE).
+            return;
+        }
+        if (paye.compareTo(BigDecimal.ZERO) == 0) {
+            cible = estDebours ? LIGNE_NON_PAYEE : LIGNE_NON_PAYEE;
+        } else if (paye.compareTo(attendu) >= 0) {
+            // Pour EXTERNALISATION PRESTATION : passage à TERMINE quand totalement
+            // payé. Pour DEBOURS : passage à PAYEE.
+            cible = estDebours ? LIGNE_PAYEE : LIGNE_TERMINE;
+        } else {
+            cible = LIGNE_PARTIEL;
+        }
+        String actuel = ligne.getStatut();
+        if (cible.equals(actuel)) {
+            return;
+        }
+        ligne.setStatut(cible);
+        ligneRepository.save(ligne);
+
+        ajouterHistoriqueLigne(ligne, cible,
+                "Statut de ligne mis à jour (payé : " + paye.toPlainString()
+                        + " / " + attendu.toPlainString() + ")", "AUTO");
+        ajouterHistoriqueDemande(ligne.getDemande(),
+                "Ligne " + ligne.getId() + " : " + cible + " (payé : "
                         + paye.toPlainString() + ")");
 
         auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "LigneService",
@@ -366,6 +443,11 @@ public class LigneServiceService {
                     CATEGORIE_EXTERNALISATION, svc, request.typePrestation());
             details.append("type=").append(ligne.getTypePrestation()).append("→").append(type);
             ligne.setTypePrestation(type);
+            // Pour ABONNEMENT_MENSUEL, la date début est obligatoire.
+            if (ABONNEMENT_MENSUEL.equalsIgnoreCase(type)
+                    && (ligne.getDebutService() == null)) {
+                throw new BusinessException(ErrorMessages.DEBUT_SERVICE_OBLIGATOIRE_ABONNEMENT);
+            }
         }
         if (request.tarif() != null) {
             if (request.tarif().signum() < 0) {
@@ -475,20 +557,52 @@ public class LigneServiceService {
 
     @Transactional(readOnly = true)
     public BigDecimal montantPayeParLigne(Integer ligneId) {
-        BigDecimal total = BigDecimal.ZERO;
-        for (ProposPaiement plan : proposRepository.findByLigneServiceId(ligneId)) {
-            if (plan.getEcheances() == null) {
-                continue;
+        LigneService ligne = ligneRepository.findById(ligneId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Ligne de service", ligneId)));
+        if (ligne.getFacture() != null) {
+            com.cabex.backend.facture.entity.FactureValidee fv = factureValideeRepository
+                    .findByFactureProformaId(ligne.getFacture().getId()).orElse(null);
+            BigDecimal somme = BigDecimal.ZERO;
+            if (fv != null) {
+                somme = paiementRepository.sommePayeeParFactureValidee(fv.getId());
+                if (somme == null) {
+                    somme = BigDecimal.ZERO;
+                }
             }
-            total = total.add(plan.getEcheances().stream()
-                    .map(e -> e.getMontantPaye() != null ? e.getMontantPaye() : BigDecimal.ZERO)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+            // Factures du mois de l'abonnement liées à cette ligne.
+            List<Integer> enfantsIds = factureValideeRepository.findByLigneServiceId(ligne.getId())
+                    .stream()
+                    .map(com.cabex.backend.facture.entity.FactureValidee::getId)
+                    .filter(id -> fv == null || !id.equals(fv.getId()))
+                    .toList();
+            if (!enfantsIds.isEmpty()) {
+                BigDecimal sommeEnfants = paiementRepository.sommePayeeParFacturesValidees(enfantsIds);
+                somme = somme.add(sommeEnfants != null ? sommeEnfants : BigDecimal.ZERO);
+            }
+            if (fv != null || !enfantsIds.isEmpty()) {
+                return somme;
+            }
         }
-        BigDecimal debours = paiementRepository.sommePayeeParLigne(ligneId);
-        if (debours != null) {
-            total = total.add(debours);
+        // Ligne liée directement à une facture validée (débours via la validation du montant).
+        List<Integer> lieesIds = factureValideeRepository.findByLigneServiceId(ligne.getId())
+                .stream()
+                .map(com.cabex.backend.facture.entity.FactureValidee::getId)
+                .toList();
+        if (!lieesIds.isEmpty()) {
+            BigDecimal sommeLiee = paiementRepository.sommePayeeParFacturesValidees(lieesIds);
+            return sommeLiee != null ? sommeLiee : BigDecimal.ZERO;
         }
-        return total;
+        // Ligne DEBOURS sans proforma : chercher la facture validée liée à la demande
+        // et sans facture proforma (repli pour l'ancien modèle).
+        if (ligne.getDemande() != null) {
+            com.cabex.backend.facture.entity.FactureValidee fv = factureValideeRepository
+                    .findByFactureProformaIdIsNullAndDemandeId(ligne.getDemande().getId());
+            if (fv != null) {
+                return paiementRepository.sommePayeeParFactureValidee(fv.getId());
+            }
+        }
+        return BigDecimal.ZERO;
     }
 
     /** Montant attendu d'une ligne (tarif EXTERNALISATION ou montant DEBOURS validé). */

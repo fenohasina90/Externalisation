@@ -10,6 +10,9 @@ public record PaiementResponse(
         String referenceDemande,
         Integer societeId,
         String nomSociete,
+        Integer factureValideeId,
+        String referenceFactureValidee,
+        /** Échéance réglée (null pour DEBOURS / PRESTATION / ABONNEMENT). */
         Integer echeanceId,
         Integer modePaiementId,
         String libelleMode,

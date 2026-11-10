@@ -35,6 +35,7 @@ export function useEcheancierDemande(reference: string | undefined) {
       const plansParLigne: PlanParLigne[] = lignes.map((ligne, i) => ({
         ligneId: ligne.id,
         ligneLabel: labelLigne(ligne, i),
+        typePrestation: ligne.typePrestation ?? null,
         debutService: ligne.debutService,
         finService: ligne.finService,
         plan: plans.get(ligne.id) ?? null,

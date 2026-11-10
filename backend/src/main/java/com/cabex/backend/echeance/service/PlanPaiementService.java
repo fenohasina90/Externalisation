@@ -129,6 +129,13 @@ public class PlanPaiementService {
                     "Les lignes DEBOURS n'ont pas de plan de paiement (paiement direct)");
         }
 
+        if (LigneServiceService.PRESTATION.equalsIgnoreCase(ligne.getTypePrestation())
+                || LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(ligne.getTypePrestation())) {
+            throw new BusinessException(
+                    "Les lignes « " + ligne.getTypePrestation()
+                            + " » n'ont pas de plan de paiement ni d'échéance (paiement lié à la facture validée)");
+        }
+
         if (ligne.getFacture() == null
                 || !"VALIDEE".equals(ligne.getFacture().getStatut())) {
             throw new BusinessException(

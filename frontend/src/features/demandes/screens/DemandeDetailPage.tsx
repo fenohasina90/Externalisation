@@ -6,6 +6,7 @@ import { FormEtapes } from '@/components/shared/FormEtapes'
 import { Spinner } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
 import { http } from '@/api/http'
+import { messageErreur } from '@/constants/messages'
 import { useAuth } from '@/features/auth/hooks/useAuth'
 import { formatDate, formatMontantMGA } from '@/utils/format'
 import type { Commercial } from '@/features/commerciaux/types'
@@ -21,8 +22,8 @@ import { PiecesJointes } from '@/features/documents'
 import { getLibelleTypePrestation } from '../constants/labels'
 import { ChangerStatutModal, DemandeStepper, DossierEntrepriseDetail,
   DossierTransactionImmobiliereDetail, StatutDemandePill } from '../components'
-import type { Demande, Facture, HistoriqueDemande, HistoriqueLigne, LigneService,
-  StatutDemande } from '../types'
+import type { Demande, Facture, FactureValidee, HistoriqueDemande, HistoriqueLigne,
+  LigneService, StatutDemande } from '../types'
 import { dossierVersFormulaire, type Dossier } from '../types/dossier'
 import type { DossierTransactionImmobiliere } from '../types/dossierTransaction'
 import {
@@ -30,6 +31,7 @@ import {
   dossierApi,
   dossierTransactionApi,
   facturesApi,
+  facturesValideesApi,
   lignesApi,
 } from '../services/demandes.service'
 
@@ -53,7 +55,7 @@ const LIBELLES_LIGNE: Record<string, string> = {
 /** Libellé d'affichage d'une ligne (service ou désignation du débours). */
 function libelleLigne(ligne: LigneService): string {
   if (ligne.categorie === 'DEBOURS') return ligne.designationDebours ?? 'Débours'
-  return ligne.nomService ?? '—'
+  return ligne.libelleLigne ?? ligne.nomService ?? '—'
 }
 
 function LignePill({ statut }: { statut: string | null }) {
@@ -324,14 +326,21 @@ export function DemandeDetailPage() {
       )}
 
       {onglet === 'factures' && (
-        <FacturesTab
-          factures={factures ?? []}
-          traitement={traitement}
-          onTelecharger={(f) => void telechargerProforma(f)}
-          onErreur={setErreur}
-          onMessage={setMessage}
-          onChange={toutRecharger}
-        />
+        <>
+          <FacturesAbonnementSection
+            demande={demande}
+            onErreur={setErreur}
+            onMessage={setMessage}
+          />
+          <FacturesTab
+            factures={factures ?? []}
+            traitement={traitement}
+            onTelecharger={(f) => void telechargerProforma(f)}
+            onErreur={setErreur}
+            onMessage={setMessage}
+            onChange={toutRecharger}
+          />
+        </>
       )}
 
       {onglet === 'paiements' && <PaiementsTab demande={demande} />}
@@ -471,7 +480,7 @@ function FacturesTab({
                 <tbody>
                   {toutesLignes.map((l) => (
                     <tr key={`${l.referenceFacture}-${l.ligneServiceId}`}>
-                      <td className="fw-600">{l.nomService ?? '—'}</td>
+                      <td className="fw-600">{l.libelleLigne ?? l.nomService ?? '—'}</td>
                       <td className="text-secondary">
                         {formatDate(l.debutService)} → {formatDate(l.finService)}
                       </td>
@@ -786,6 +795,8 @@ function LigneCard({
   const [voirEcheances, setVoirEcheances] = useState(true)
   const [voirHistorique, setVoirHistorique] = useState(false)
   const estDebours = ligne.categorie === 'DEBOURS'
+  const estPrestationOuAbonnement = !estDebours
+    && (ligne.typePrestation === 'PRESTATION' || ligne.typePrestation === 'ABONNEMENT_MENSUEL')
 
   return (
     <section className="card card-pad">
@@ -872,7 +883,7 @@ function LigneCard({
         )}
       </div>
 
-      {!estDebours && plan && voirEcheances && (
+      {!estDebours && !estPrestationOuAbonnement && plan && voirEcheances && (
         <div className="table-scroll-container no-global-scroll" style={{ marginTop: 8 }}>
           <div className="table-wrap">
             <table className="table">
@@ -904,11 +915,15 @@ function LigneCard({
           </div>
         </div>
       )}
-      {!estDebours && !plan && voirEcheances && (
+      {!estDebours && !estPrestationOuAbonnement && !plan && voirEcheances && (
         <p className="section-note">Aucun plan de paiement pour ce service.</p>
       )}
-      {estDebours && voirEcheances && (
-        <p className="section-note">Débours : paiement direct, sans échéance ni plan de paiement.</p>
+      {estPrestationOuAbonnement && voirEcheances && (
+        <p className="section-note">
+          {ligne.typePrestation === 'PRESTATION'
+            ? 'Prestation : paiement direct après validation de la facture, sans échéance ni plan de paiement.'
+            : 'Abonnement mensuel : paiement lié à la facture validée, sans échéance ni plan de paiement.'}
+        </p>
       )}
 
       {voirHistorique && <LigneHistorique demandeId={demandeId} ligneId={ligne.id} />}
@@ -925,7 +940,7 @@ function LigneCard({
           </div>
         </Can>
       )}
-      {!estDebours && !plan && planEtablissable && (
+      {!estDebours && !estPrestationOuAbonnement && !plan && planEtablissable && (
         <Can permission="DEMANDE_UPDATE">
           <div style={{ marginTop: 8 }}>
             <button type="button" className="btn-primary" onClick={onPlan}>
@@ -934,7 +949,7 @@ function LigneCard({
           </div>
         </Can>
       )}
-      {!estDebours && !plan && !planEtablissable && (
+      {!estDebours && !estPrestationOuAbonnement && !plan && !planEtablissable && (
         <p className="section-note">Le plan sera établissable après validation de la facture.</p>
       )}
     </section>
@@ -1096,15 +1111,16 @@ function LigneFormModal({
       setErreur('Le tarif doit être positif ou nul')
       return
     }
-    if (!debut || !fin) {
+    const estPrestationSansDates = ligne?.typePrestation === 'PRESTATION'
+    if (!estPrestationSansDates && (!debut || !fin)) {
       setErreur('La période est obligatoire')
       return
     }
-    if (debut < aujourdhui) {
+    if (!estPrestationSansDates && debut && debut < aujourdhui) {
       setErreur("Le début doit être postérieur ou égal à aujourd'hui")
       return
     }
-    if (fin <= debut) {
+    if (!estPrestationSansDates && debut && fin && fin <= debut) {
       setErreur('La fin doit être strictement postérieure au début')
       return
     }
@@ -1773,5 +1789,222 @@ function ModifierDemandeModal({
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * Section « Factures mensuelles — Abonnement » de l'onglet Factures :
+ * pour un abonnement mensuel, on crée la facture du mois avant chaque paiement.
+ * La facture reprend la référence de la facture générale validée, la référence
+ * de la facture proforma et la référence de la demande.
+ */
+function FacturesAbonnementSection({
+  demande,
+  onErreur,
+  onMessage,
+}: {
+  demande: Demande
+  onErreur: (message: string | null) => void
+  onMessage: (message: string | null) => void
+}) {
+  const abonnementLignes = (demande.lignes ?? []).filter(
+    (l) => l.categorie === 'EXTERNALISATION'
+      && l.typePrestation === 'ABONNEMENT_MENSUEL'
+      && l.statut === 'EN_COURS',
+  )
+  const { data: facturesValidees, reload } = useApi<FactureValidee[]>(
+    () => (demande?.id ? facturesValideesApi.list(demande.id).catch(() => []) : Promise.resolve([])),
+    [demande?.id],
+  )
+  const [creationEnCours, setCreationEnCours] = useState<number | null>(null)
+  const [telechargement, setTelechargement] = useState<number | null>(null)
+  const [cible, setCible] = useState<LigneService | null>(null)
+  const [dateEmission, setDateEmission] = useState(() => new Date().toISOString().slice(0, 10))
+  const [erreurDialog, setErreurDialog] = useState<string | null>(null)
+
+  if (abonnementLignes.length === 0) {
+    return null
+  }
+
+  const ligneLabel = (l: LigneService) =>
+    `${l.nomService ?? 'Abonnement'} · tarif mensuel ${formatMontantMGA(l.tarif ?? 0)}`
+
+  const creer = async () => {
+    if (!cible) {
+      return
+    }
+    if (!dateEmission) {
+      setErreurDialog('La date d’émission est obligatoire.')
+      return
+    }
+    setCreationEnCours(cible.id)
+    onErreur(null)
+    onMessage(null)
+    setErreurDialog(null)
+    try {
+      const fv = await facturesValideesApi.creerFactureAbonnement(
+        demande.id,
+        cible.id,
+        dateEmission,
+      )
+      onMessage(
+        `Facture du mois créée (${dateEmission}) : ${fv.referenceFactureValidee}`
+        + ` (facture générale ${fv.referenceFactureGenerale ?? '—'}`
+        + `${fv.referenceFactureProforma ? ` · proforma ${fv.referenceFactureProforma}` : ''})`,
+      )
+      setCible(null)
+      reload()
+    } catch (err) {
+      setErreurDialog(messageErreur(err))
+    } finally {
+      setCreationEnCours(null)
+    }
+  }
+
+  const telecharger = async (fv: FactureValidee) => {
+    setTelechargement(fv.id)
+    onErreur(null)
+    try {
+      const { data } = await http.get<Blob>(facturesValideesApi.abonnementUrl(fv.id), {
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${fv.referenceFactureValidee}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      onErreur('Téléchargement du PDF impossible')
+    } finally {
+      setTelechargement(null)
+    }
+  }
+
+  return (
+    <section className="card card-pad">
+      <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700 }}>
+        Factures mensuelles — Abonnement
+      </h3>
+      <p className="section-note" style={{ marginBottom: 12 }}>
+        Créez la facture du mois avant chaque paiement. Elle reprend la référence
+        de la facture générale validée, la référence de la facture proforma et la
+        référence de la demande.
+      </p>
+      {abonnementLignes.map((ligne) => {
+        const enfants = (facturesValidees ?? []).filter(
+          (f) => f.ligneServiceId === ligne.id && f.type === 'ABONNEMENT_MENSUEL',
+        )
+        const restant = enfants.filter((f) => f.resteAPayer > 0)
+        return (
+          <div key={ligne.id}
+            style={{ borderTop: '1px solid var(--border, #e5e7eb)', padding: '12px 0' }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}>
+              <div>
+                <b>{ligneLabel(ligne)}</b>
+                <div className="text-secondary" style={{ fontSize: 13 }}>
+                  {enfants.length === 0
+                    ? 'Aucune facture du mois créée pour cet abonnement.'
+                    : `${enfants.length} facture(s) du mois · ${restant.length} à régler`}
+                </div>
+              </div>
+              <Can permission="FACTURE_ABONNEMENT_CREATE">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={creationEnCours === ligne.id}
+                  onClick={() => {
+                    setErreurDialog(null)
+                    setDateEmission(new Date().toISOString().slice(0, 10))
+                    setCible(ligne)
+                  }}
+                >
+                  Créer la facture du mois
+                </button>
+              </Can>
+            </div>
+            {enfants.length > 0 && (
+              <div className="table-scroll-container no-global-scroll" style={{ marginTop: 8 }}>
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Facture</th>
+                        <th>Émise le</th>
+                        <th>Générale</th>
+                        <th>Proforma</th>
+                        <th>Montant</th>
+                        <th>Payé</th>
+                        <th>Reste</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {enfants.map((f) => (
+                        <tr key={f.id}>
+                          <td className="fw-600">{f.referenceFactureValidee}</td>
+                          <td className="text-secondary">
+                            {f.valideLe ? formatDate(f.valideLe.slice(0, 10)) : '—'}
+                          </td>
+                          <td className="text-secondary">{f.referenceFactureGenerale ?? '—'}</td>
+                          <td className="text-secondary">{f.referenceFactureProforma ?? '—'}</td>
+                          <td>{formatMontantMGA(f.montant)}</td>
+                          <td>{formatMontantMGA(f.montantPaye)}</td>
+                          <td>{formatMontantMGA(f.resteAPayer)}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="btn-ghost"
+                              disabled={telechargement === f.id}
+                              onClick={() => void telecharger(f)}
+                            >
+                              {telechargement === f.id ? '…' : 'PDF'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+      <ConfirmDialog
+        open={cible !== null}
+        titre="Créer la facture du mois"
+        message={cible
+          ? `Facture du mois pour « ${cible.nomService ?? cible.libelleLigne ?? 'Abonnement mensuel'} » (tarif mensuel).`
+          : ''}
+        confirmer="Créer la facture"
+        ton="primary"
+        enCours={creationEnCours !== null}
+        erreur={erreurDialog}
+        details={(
+          <label className="field" style={{ marginTop: 12 }}>
+            Date d&apos;émission <span className="required">*</span>
+            <input
+              type="date"
+              value={dateEmission}
+              onChange={(e) => setDateEmission(e.target.value)}
+              required
+              autoFocus
+            />
+          </label>
+        )}
+        onAnnuler={() => {
+          setCible(null)
+          setErreurDialog(null)
+        }}
+        onConfirmer={() => void creer()}
+      />
+    </section>
   )
 }

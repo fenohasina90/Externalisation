@@ -16,6 +16,8 @@ import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ResourceNotFoundException;
+import com.cabex.backend.facture.entity.FactureValidee;
+import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.facture.service.FactureService;
 import com.cabex.backend.service.entity.Service;
 import com.cabex.backend.service.repository.ServiceRepository;
@@ -53,6 +55,7 @@ class LigneServiceTest {
     @Mock private AuditService auditService;
     @Mock private FactureService factureService;
     @Mock private com.cabex.backend.paiement.repository.PaiementRepository paiementRepository;
+    @Mock private FactureValideeRepository factureValideeRepository;
 
     private LigneServiceService service;
 
@@ -61,8 +64,8 @@ class LigneServiceTest {
         service = new LigneServiceService(ligneRepository, historiqueLigneRepository,
                 demandeRepository, historiqueDemandeRepository, statutDemandeRepository,
                 serviceRepository, proposRepository, utilisateurRepository,
-                auditService, factureService, paiementRepository);
-        lenient().when(paiementRepository.sommePayeeParLigne(anyInt())).thenReturn(BigDecimal.ZERO);
+                auditService, factureService, paiementRepository, factureValideeRepository);
+        lenient().when(paiementRepository.sommePayeeParFactureValidee(anyInt())).thenReturn(BigDecimal.ZERO);
         lenient().when(historiqueDemandeRepository.findFirstByDemandeIdOrderByIdDesc(any()))
                 .thenReturn(Optional.of(HistoriqueDemande.builder()
                         .statut(StatutDemande.builder().statut("EN_ATTENTE").build()).build()));
@@ -75,6 +78,10 @@ class LigneServiceTest {
                 l.setId(1);
             }
             return l;
+        });
+        lenient().when(ligneRepository.findById(1)).thenAnswer(inv -> {
+            LigneService l = LigneService.builder().id(1).build();
+            return Optional.of(l);
         });
     }
 

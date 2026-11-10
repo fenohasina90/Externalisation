@@ -12,16 +12,15 @@ public record CreatePaiementRequest(
         Integer demandeId,
 
         /**
-         * Échéance liée au paiement. Requise pour une ligne EXTERNALISATION,
-         * interdite (null) pour une ligne DEBOURS. Validation côté service.
+         * Facture validée liée au paiement. Toujours requise :
+         * - EXTERNALISATION : facture validée issue de la proforma
+         * - DEBOURS : facture validée créée pour le débours
          */
-        Integer echeanceId,
+        @NotNull(message = "La facture validée est obligatoire")
+        Integer factureValideeId,
 
-        /**
-         * Ligne DEBOURS payée. Requise pour un paiement DEBOURS,
-         * null pour EXTERNALISATION (dérivée de l'échéance).
-         */
-        Integer ligneServiceId,
+        /** Échéance réglée (EXTERNALISATION avec plan de paiement). NULL sinon. */
+        Integer echeanceId,
 
         @NotNull(message = "Le mode de paiement est obligatoire")
         Integer modePaiementId,

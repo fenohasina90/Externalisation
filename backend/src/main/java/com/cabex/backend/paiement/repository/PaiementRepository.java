@@ -32,9 +32,13 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
     @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.demande.id = :demandeId AND p.actif = true")
     BigDecimal sommePayeeParDemande(@Param("demandeId") Integer demandeId);
 
-    /** Somme payée sur une ligne DEBOURS (paiements directs ligne_service_id). */
-    @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.ligneService.id = :ligneId AND p.actif = true")
-    BigDecimal sommePayeeParLigne(@Param("ligneId") Integer ligneId);
+    /** Somme payée sur une facture validée. */
+    @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.factureValidee.id = :factureValideeId AND p.actif = true")
+    BigDecimal sommePayeeParFactureValidee(@Param("factureValideeId") Integer factureValideeId);
+
+    /** Somme payée sur un ensemble de factures validées (ex. factures du mois d'un abonnement). */
+    @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.factureValidee.id IN :ids AND p.actif = true")
+    BigDecimal sommePayeeParFacturesValidees(@Param("ids") Collection<Integer> ids);
 
     /** Montants payés par demande, en une seule requête pour toute une page. */
     @Query("""
@@ -48,12 +52,6 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
     @Query("SELECT p FROM Paiement p WHERE p.demande.societe.id = :societeId AND p.actif = true ORDER BY p.datePaiement DESC")
     List<Paiement> findBySocieteId(@Param("societeId") Integer societeId);
 
-    @Query("SELECT p FROM Paiement p WHERE p.echeance IS NOT NULL AND p.actif = true ORDER BY p.datePaiement DESC")
-    List<Paiement> payesSurEcheance();
-
-    @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p WHERE p.echeance.id = :echeanceId AND p.actif = true")
-    BigDecimal sommePayeeParEcheance(@Param("echeanceId") Integer echeanceId);
-
     @Query("""
         SELECT p.demande.societe.id, COALESCE(SUM(p.montantPaye), 0)
         FROM Paiement p
@@ -61,19 +59,6 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
         GROUP BY p.demande.societe.id
         """)
     List<Object[]> sommeParSociete();
-
-    @Query("""
-        SELECT COALESCE(COUNT(p), 0) FROM Paiement p
-        WHERE p.actif = true AND p.echeance IS NOT NULL
-        """)
-    long compterPaiementsSurEcheance();
-
-    @Query("""
-        SELECT COALESCE(COUNT(p), 0) FROM Paiement p
-        WHERE p.actif = true AND p.echeance IS NOT NULL
-          AND p.datePaiement <= p.echeance.dateEcheance
-        """)
-    long compterPaiementsSurEcheanceATemps();
 
     /**
      * Filtre de l'historique des paiements : la recherche porte sur la
@@ -194,23 +179,7 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
     // Tableau de bord filtré : période, société cliente et service.
     // ------------------------------------------------------------------
 
-    @Query("""
-        SELECT COUNT(p), COALESCE(SUM(CASE WHEN p.datePaiement <= p.echeance.dateEcheance THEN 1 ELSE 0 END), 0)
-        FROM Paiement p
-        LEFT JOIN p.demande.societe s
-        WHERE p.actif = true
-          AND p.echeance IS NOT NULL
-          AND (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
-          AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
-          AND (:societeId IS NULL OR s.id = :societeId)
-          AND (:serviceId IS NULL OR EXISTS (
-                SELECT 1 FROM LigneService l
-                WHERE l.demande = p.demande AND l.service.id = :serviceId))
-        """)
-    List<Object[]> statistiquesPaiementsEcheance(@Param("dateDebut") LocalDate dateDebut,
-                                                 @Param("dateFin") LocalDate dateFin,
-                                                 @Param("societeId") Integer societeId,
-                                                 @Param("serviceId") Integer serviceId);
+
 
     @Query("""
         SELECT EXTRACT(YEAR FROM p.datePaiement), EXTRACT(MONTH FROM p.datePaiement), COALESCE(SUM(p.montantPaye), 0)

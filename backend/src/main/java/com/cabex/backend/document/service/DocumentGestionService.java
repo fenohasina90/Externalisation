@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -46,6 +47,7 @@ public class DocumentGestionService {
     private final AuditService auditService;
     private final ConfigurationService configurationService;
     private final com.cabex.backend.facture.repository.FactureRepository factureRepository;
+    private final com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository;
     private final com.cabex.backend.dossier.repository.DossierCreationRepository dossierRepository;
     private final com.cabex.backend.dossier.repository.DossierTransactionImmobiliereRepository
             dossierTransactionRepository;
@@ -65,6 +67,7 @@ public class DocumentGestionService {
                                   AuditService auditService,
                                   ConfigurationService configurationService,
                                   com.cabex.backend.facture.repository.FactureRepository factureRepository,
+                                  com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository,
                                   com.cabex.backend.dossier.repository.DossierCreationRepository dossierRepository,
                                   com.cabex.backend.dossier.repository.DossierTransactionImmobiliereRepository
                                           dossierTransactionRepository) {
@@ -77,6 +80,7 @@ public class DocumentGestionService {
         this.auditService = auditService;
         this.configurationService = configurationService;
         this.factureRepository = factureRepository;
+        this.factureValideeRepository = factureValideeRepository;
         this.dossierRepository = dossierRepository;
         this.dossierTransactionRepository = dossierTransactionRepository;
     }
@@ -199,7 +203,10 @@ public class DocumentGestionService {
         Paiement paiement = paiementRepository.findById(paiementId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Paiement", paiementId)));
-        return pdfGenerator.recuPaiement(paiement);
+        BigDecimal somme = paiement.getFactureValidee() != null
+                ? paiementRepository.sommePayeeParFactureValidee(paiement.getFactureValidee().getId())
+                : BigDecimal.ZERO;
+        return pdfGenerator.recuPaiement(paiement, somme != null ? somme : BigDecimal.ZERO);
     }
 
     public byte[] planPaiement(Integer demandeId) {
@@ -215,6 +222,19 @@ public class DocumentGestionService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Facture", factureId)));
         return pdfGenerator.factureProforma(facture);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] factureAbonnement(Integer factureValideeId) {
+        com.cabex.backend.facture.entity.FactureValidee facture = factureValideeRepository
+                .findById(factureValideeId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Facture validée", factureValideeId)));
+        if (facture.getFactureGenerale() == null) {
+            throw new BusinessException(
+                    "Ce document ne concerne pas une facture d'abonnement mensuel");
+        }
+        return pdfGenerator.factureAbonnement(facture);
     }
 
     @Transactional

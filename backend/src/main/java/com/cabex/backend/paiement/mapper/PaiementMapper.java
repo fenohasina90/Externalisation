@@ -1,8 +1,10 @@
 package com.cabex.backend.paiement.mapper;
 
+import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.LigneService;
+import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.document.service.MontantEnLettres;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
+import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.paiement.dto.ModePaiementResponse;
 import com.cabex.backend.paiement.dto.PaiementDetailResponse;
 import com.cabex.backend.paiement.dto.PaiementResponse;
@@ -32,6 +34,7 @@ public class PaiementMapper {
         if (paiement == null) {
             return null;
         }
+        FactureValidee fv = paiement.getFactureValidee();
         return new PaiementResponse(
                 paiement.getId(),
                 paiement.getReferencePaiement(),
@@ -41,6 +44,8 @@ public class PaiementMapper {
                         ? paiement.getDemande().getSociete().getId() : null,
                 paiement.getDemande() != null && paiement.getDemande().getSociete() != null
                         ? paiement.getDemande().getSociete().getNomSociete() : null,
+                fv != null ? fv.getId() : null,
+                fv != null ? fv.getReferenceFactureValidee() : null,
                 paiement.getEcheance() != null ? paiement.getEcheance().getId() : null,
                 paiement.getModePaiement() != null ? paiement.getModePaiement().getId() : null,
                 paiement.getModePaiement() != null ? paiement.getModePaiement().getLibelle() : null,
@@ -56,20 +61,29 @@ public class PaiementMapper {
         );
     }
 
-    public static PaiementDetailResponse toDetailResponse(Paiement paiement) {
+    /**
+     * Détail d'un paiement. {@code sommePayeeSurFacture} est la somme des
+     * paiements actifs sur la facture validée concernée (le reste à payer
+     * de la facture en tient compte).
+     */
+    public static PaiementDetailResponse toDetailResponse(Paiement paiement, BigDecimal sommePayeeSurFacture) {
         if (paiement == null) {
             return null;
         }
-        EcheancePaiement echeance = paiement.getEcheance();
-        LigneService ligne = echeance != null && echeance.getProposPaiement() != null
-                ? echeance.getProposPaiement().getLigneService() : null;
+        FactureValidee fv = paiement.getFactureValidee();
+        LigneService ligne = fv != null && fv.getLigneService() != null
+                ? fv.getLigneService()
+                : fv != null && fv.getFactureProforma() != null
+                        ? fv.getFactureProforma().getLignes().stream()
+                                .filter(l -> l.getDemande() != null
+                                        && l.getDemande().getId().equals(paiement.getDemande().getId()))
+                                .findFirst().orElse(null)
+                        : null;
 
-        BigDecimal montantAttendu = echeance != null ? echeance.getMontantAttendu() : null;
-        BigDecimal montantPayeEcheance = echeance != null
-                ? echeance.getMontantPaye() : paiement.getMontantPaye();
-        BigDecimal resteAPayer = montantAttendu != null
-                ? montantAttendu.subtract(montantPayeEcheance != null
-                        ? montantPayeEcheance : BigDecimal.ZERO)
+        BigDecimal montantFacture = fv != null ? fv.getMontant() : null;
+        BigDecimal montantPayeSurFacture = sommePayeeSurFacture != null ? sommePayeeSurFacture : BigDecimal.ZERO;
+        BigDecimal resteAPayerFacture = montantFacture != null
+                ? montantFacture.subtract(montantPayeSurFacture).max(BigDecimal.ZERO)
                 : null;
 
         return new PaiementDetailResponse(
@@ -81,11 +95,16 @@ public class PaiementMapper {
                         ? paiement.getDemande().getSociete().getId() : null,
                 paiement.getDemande() != null && paiement.getDemande().getSociete() != null
                         ? paiement.getDemande().getSociete().getNomSociete() : null,
-                echeance != null ? echeance.getId() : null,
-                echeance != null ? echeance.getNumeroEcheance() : null,
-                echeance != null ? echeance.getDateEcheance() : null,
-                ligne != null && ligne.getService() != null
-                        ? ligne.getService().getNomService() : null,
+                fv != null ? fv.getId() : null,
+                fv != null ? fv.getReferenceFactureValidee() : null,
+                ligne != null
+                        ? (LigneServiceService.estDebours(ligne)
+                                ? (ligne.getDesignationDebours() != null ? ligne.getDesignationDebours() : "Débours")
+                                : com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(ligne))
+                        : null,
+                paiement.getEcheance() != null ? paiement.getEcheance().getId() : null,
+                paiement.getEcheance() != null ? paiement.getEcheance().getNumeroEcheance() : null,
+                paiement.getEcheance() != null ? paiement.getEcheance().getDateEcheance() : null,
                 paiement.getModePaiement() != null ? paiement.getModePaiement().getId() : null,
                 paiement.getModePaiement() != null ? paiement.getModePaiement().getLibelle() : null,
                 paiement.getDatePaiement(),
@@ -97,9 +116,9 @@ public class PaiementMapper {
                 paiement.getCreatedBy() != null
                         ? paiement.getCreatedBy().getPrenom() + " " + paiement.getCreatedBy().getNom()
                         : null,
-                montantAttendu,
-                montantPayeEcheance,
-                resteAPayer,
+                montantFacture,
+                montantPayeSurFacture,
+                resteAPayerFacture,
                 paiement.getMontantPaye() != null
                         ? MontantEnLettres.convertir(paiement.getMontantPaye().longValue()) : null
         );

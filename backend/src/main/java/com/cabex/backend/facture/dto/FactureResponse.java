@@ -8,6 +8,8 @@ public record FactureResponse(
         Integer id,
         String referenceFacture,
         String referenceFactureValidee,
+        /** ID de la facture validée liée (null tant que la proforma n'est pas validée). */
+        Integer factureValideeId,
         Integer demandeId,
         String referenceDemande,
         String modeFacturation,
