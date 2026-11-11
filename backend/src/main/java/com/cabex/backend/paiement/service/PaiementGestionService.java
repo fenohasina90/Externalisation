@@ -391,9 +391,15 @@ public class PaiementGestionService {
         if (fv == null) {
             return List.of();
         }
+        // Facture du mois : seul le règlement de l'abonnement est imputé sur la ligne
+        // d'abonnement. Les lignes RAPPEL ne décrivent que des règlements séparés.
+        if (fv.getFactureGenerale() != null) {
+            return fv.getLigneService() != null ? List.of(fv.getLigneService()) : List.of();
+        }
         List<LigneService> lignes = new ArrayList<>();
         if (fv.getLignes() != null && !fv.getLignes().isEmpty()) {
             fv.getLignes().stream()
+                    .filter(l -> !"RAPPEL".equalsIgnoreCase(l.getType()))
                     .map(com.cabex.backend.facture.entity.FactureValideeLigne::getLigneService)
                     .filter(java.util.Objects::nonNull)
                     .forEach(lignes::add);

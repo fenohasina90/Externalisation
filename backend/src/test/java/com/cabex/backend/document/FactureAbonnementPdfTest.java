@@ -65,7 +65,7 @@ class FactureAbonnementPdfTest {
                 .factureGenerale(generale)
                 .ligneService(ligne)
                 .demande(demande)
-                .montant(new BigDecimal("1750000"))
+                .montant(new BigDecimal("1500000"))
                 .valideLe(LocalDateTime.of(2026, 11, 10, 0, 0))
                 .mois(java.time.LocalDate.of(2026, 1, 1))
                 .build();
@@ -76,6 +76,7 @@ class FactureAbonnementPdfTest {
                         .ligneService(ligne)
                         .designation("Abonnement mensuel — Abonnement comptabilité")
                         .montant(new BigDecimal("1500000"))
+                        .type("PRINCIPALE")
                         .build();
         LigneService debours = LigneService.builder().id(9).demande(demandeDebours)
                 .categorie("DEBOURS").statut("NON_PAYEE")
@@ -89,6 +90,7 @@ class FactureAbonnementPdfTest {
                         .ligneService(debours)
                         .designation("Débours — Timbres postaux")
                         .montant(new BigDecimal("250000"))
+                        .type("RAPPEL")
                         .build();
         duMois.setLignes(new java.util.HashSet<>(java.util.Set.of(ligneAbo, ligneDebours)));
 
@@ -119,5 +121,6 @@ class FactureAbonnementPdfTest {
         assertTrue(texte.contains("DEM-2026-00017"), "demande de la ligne abonnement");
         assertTrue(texte.contains("DEM-2026-00018"), "demande de la ligne débours");
         assertTrue(texte.toLowerCase(Locale.FRANCE).contains("janvier 2026"), "mois facturé");
+        assertTrue(texte.toLowerCase(Locale.FRANCE).contains("rappel"), "section de rappel");
     }
 }

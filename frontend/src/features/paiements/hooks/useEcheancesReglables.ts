@@ -41,6 +41,12 @@ export interface LigneDirecteReglable {
   referenceDemande: string
 }
 
+export interface DeboursEnAttenteValidation {
+  ligneId: number
+  designation: string
+  statut: string | null
+}
+
 export interface DemandeReglable {
   /** null tant qu'aucune demande n'est sélectionnée. */
   demande: Demande | null
@@ -48,6 +54,8 @@ export interface DemandeReglable {
   echeances: EcheanceReglable[]
   /** Lignes DEBOURS réglables (NON_PAYEE / PARTIEL avec reste). */
   debours: DeboursReglable[]
+  /** Lignes DEBOURS en attente de validation du montant (EN_ATTENTE) : pas encore réglables. */
+  deboursEnAttente: DeboursEnAttenteValidation[]
   /** Lignes EXTERNALISATION (PRESTATION / ABONNEMENT_MENSUEL) réglables directement
    *  sur la facture validée (pas d'échéance ni de plan de paiement). */
   lignesDirectes: LigneDirecteReglable[]
@@ -60,7 +68,7 @@ export interface DemandeReglable {
 export function useEcheancesReglables(demandeId: number | null) {
   return useApi<DemandeReglable>(
     async () => {
-      if (!demandeId) return { demande: null, echeances: [], debours: [], lignesDirectes: [] }
+      if (!demandeId) return { demande: null, echeances: [], debours: [], deboursEnAttente: [], lignesDirectes: [] }
       const demande = await demandesApi.get(demandeId)
       const lignes = demande.lignes ?? []
       const plans = await planPaiementApi.getByLignes(lignes.map((l) => l.id))
@@ -86,6 +94,7 @@ export function useEcheancesReglables(demandeId: number | null) {
 
       const echeances: EcheanceReglable[] = []
       const debours: DeboursReglable[] = []
+      const deboursEnAttente: DeboursEnAttenteValidation[] = []
       const lignesDirectes: LigneDirecteReglable[] = []
 
       lignes.forEach((ligne, i) => {
@@ -95,7 +104,13 @@ export function useEcheancesReglables(demandeId: number | null) {
 
         if (ligne.categorie === 'DEBOURS') {
           const fv = fvDeLaLigne.find((f) => f.type === 'DEBOURS') ?? null
-          if (
+          if (ligne.statut === 'EN_ATTENTE') {
+            deboursEnAttente.push({
+              ligneId: ligne.id,
+              designation: ligne.designationDebours ?? `Débours ${i + 1}`,
+              statut: ligne.statut,
+            })
+          } else if (
             (ligne.statut === 'NON_PAYEE' || ligne.statut === 'PARTIEL') &&
             ligne.resteAPayer > 0
           ) {
@@ -203,7 +218,7 @@ export function useEcheancesReglables(demandeId: number | null) {
       // Les plans sont chargés service par service : on recolle les échéances
       // dans un ordre chronologique global pour le sélecteur de règlement.
       echeances.sort((a, b) => comparerEcheances(a.echeance, b.echeance))
-      return { demande, echeances, debours, lignesDirectes }
+      return { demande, echeances, debours, deboursEnAttente, lignesDirectes }
     },
     [demandeId],
   )

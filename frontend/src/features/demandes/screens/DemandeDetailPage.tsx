@@ -667,7 +667,7 @@ function FacturesTab({
                           </div>
                         </div>
                       </td>
-                      {/* <td>
+                      <td>
                         {reste > 0 ? (
                           <button
                             type="button"
@@ -681,7 +681,7 @@ function FacturesTab({
                         ) : (
                           <span className="pill ok">Soldée</span>
                         )}
-                      </td> */}
+                      </td>
                     </tr>
                   )
                 })}
@@ -2345,28 +2345,57 @@ function FacturesAbonnementSection({
                                 <div style={{
                                   display: 'flex',
                                   flexDirection: 'column',
-                                  gap: 2,
+                                  gap: 8,
                                   fontSize: 13,
-                                  padding: '6px 0 6px 40px',
+                                  padding: '8px 0 8px 40px',
                                   borderLeft: '3px solid var(--vert, #10b981)',
                                 }}>
-                                  <b>{f.referenceFactureValidee} — détail des lignes</b>
-                                  {(f.lignes ?? []).map((l) => (
-                                    <div
-                                      key={l.id}
-                                      style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        gap: 12,
-                                      }}
-                                    >
-                                      <span>
-                                        <b className="text-secondary" style={{ fontSize: 12 }}>{l.referenceDemande ?? '—'}</b>
-                                        {' · '}{l.designation}
-                                      </span>
-                                      <span className="fw-600">{formatMontantMGA(l.montant)}</span>
-                                    </div>
-                                  ))}
+                                  {(() => {
+                                    const principales = (f.lignes ?? []).filter((l) => l.type === 'PRINCIPALE')
+                                    const rappels = (f.lignes ?? []).filter((l) => l.type === 'RAPPEL')
+                                    return (
+                                      <>
+                                        {principales.length > 0 && (
+                                          <div>
+                                            <b style={{ color: 'var(--vert, #10b981)' }}>→ Cette facture</b>
+                                            {principales.map((l) => (
+                                              <div
+                                                key={l.id}
+                                                style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}
+                                              >
+                                                <span>
+                                                  <b className="text-secondary" style={{ fontSize: 12 }}>{l.referenceDemande ?? '—'}</b>
+                                                  {' · '}{l.designation}
+                                                </span>
+                                                <span className="fw-600">{formatMontantMGA(l.montant)}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                        {rappels.length > 0 && (
+                                          <div>
+                                            <b style={{ color: 'var(--attention, #b45309)' }}>À titre de rappel (non inclus)</b>
+                                            {rappels.map((l) => (
+                                              <div
+                                                key={l.id}
+                                                style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}
+                                              >
+                                                <span>
+                                                  <b className="text-secondary" style={{ fontSize: 12 }}>{l.referenceDemande ?? '—'}</b>
+                                                  {' · '}{l.designation}
+                                                </span>
+                                                <span className="fw-600">{formatMontantMGA(l.montant)}</span>
+                                              </div>
+                                            ))}
+                                            <p className="section-note" style={{ fontSize: 11, margin: '4px 0 0' }}>
+                                              Ces factures ne sont pas comptabilisées dans le montant de la facture ci-dessus ;
+                                              elles doivent être réglées chacune sur sa propre facture validée.
+                                            </p>
+                                          </div>
+                                        )}
+                                      </>
+                                    )
+                                  })()}
                                 </div>
                               </td>
                             </tr>

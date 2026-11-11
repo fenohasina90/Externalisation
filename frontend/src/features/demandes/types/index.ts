@@ -156,6 +156,8 @@ export interface FactureValideeLigne {
   referenceDemande: string | null
   designation: string
   montant: number
+  /** PRINCIPALE : l'abonnement (seul élément payable). RAPPEL : mention informative. */
+  type: 'PRINCIPALE' | 'RAPPEL' | string
 }
 
 /** Élément impayé pouvant être repris dans la facture du mois. */

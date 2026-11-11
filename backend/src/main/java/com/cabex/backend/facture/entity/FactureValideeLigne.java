@@ -42,6 +42,18 @@ public class FactureValideeLigne {
     @Column(name = "designation", nullable = false, length = 255)
     private String designation;
 
+    /**
+     * Nature de la ligne :
+     * <ul>
+     *   <li>{@code PRINCIPALE} : l'abonnement — seul élément payable sur cette facture ;</li>
+     *   <li>{@code RAPPEL} : prestation / débours impayé mentionné à titre d'information
+     *       (se règle sur sa propre facture validée, pas sur celle-ci).</li>
+     * </ul>
+     */
+    @Column(name = "type", nullable = false, length = 20)
+    @Builder.Default
+    private String type = "PRINCIPALE";
+
     /** Montant à facturer pour cette ligne. */
     @Column(name = "montant", nullable = false, precision = 15, scale = 2)
     private BigDecimal montant;

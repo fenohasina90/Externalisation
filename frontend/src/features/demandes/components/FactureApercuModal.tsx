@@ -70,29 +70,49 @@ export function FactureApercuModal({
     referenceDemande: string | null
     montant: number
     secondary?: string | null
+    /** PRINCIPALE = payable sur cette facture ; RAPPEL = rappel uniquement. */
+    type: 'PRINCIPALE' | 'RAPPEL'
   }
-  const lignes: LigneAffichee[] = estProforma
+  const principales: LigneAffichee[] = estProforma
     ? apercu.facture.lignes.map((l) => ({
         id: `${apercu.facture.id}-${l.ligneServiceId}`,
         designation: l.nomService ?? l.libelleLigne ?? '—',
         referenceDemande: apercu.facture.referenceDemande,
         montant: l.tarif,
         secondary: l.libelleLigne && l.libelleLigne !== l.nomService ? l.libelleLigne : null,
+        type: 'PRINCIPALE' as const,
       }))
     : apercu.facture.lignes.length > 0
-      ? apercu.facture.lignes.map((l) => ({
-          id: `${apercu.facture.id}-${l.id}`,
-          designation: l.designation,
-          referenceDemande: l.referenceDemande,
-          montant: l.montant,
-        }))
+      ? apercu.facture.lignes
+          .filter((l) => l.type === 'PRINCIPALE')
+          .map((l) => ({
+            id: `${apercu.facture.id}-${l.id}`,
+            designation: l.designation,
+            referenceDemande: l.referenceDemande,
+            montant: l.montant,
+            type: 'PRINCIPALE' as const,
+          }))
       : [{
           id: `${apercu.facture.id}-unique`,
           designation: apercu.facture.nomService ?? libelleLigneFallback ?? 'Facture',
           referenceDemande: apercu.facture.referenceDemande,
           montant: montantTotal,
           secondary: libelleLigneFallback && apercu.facture.nomService ? libelleLigneFallback : null,
+          type: 'PRINCIPALE' as const,
         }]
+  const rappels: LigneAffichee[] = !estProforma && apercu.facture.lignes.length > 0
+    ? apercu.facture.lignes
+        .filter((l) => l.type === 'RAPPEL')
+        .map((l) => ({
+          id: `${apercu.facture.id}-rappel-${l.id}`,
+          designation: l.designation,
+          referenceDemande: l.referenceDemande,
+          montant: l.montant,
+          type: 'RAPPEL' as const,
+        }))
+    : []
+  const totalPrincipales = principales.reduce((s, l) => s + l.montant, 0)
+  const totalRappels = rappels.reduce((s, l) => s + l.montant, 0)
 
   const body = (
     <div
@@ -200,10 +220,10 @@ export function FactureApercuModal({
             </div>
           </section>
 
-          {/* Lignes */}
+          {/* Section A — objet de la présente facture */}
           <section>
             <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
-              Détail de la facture
+              Cette facture — objet du règlement
             </h4>
             <div className="table-wrap">
               <table className="table">
@@ -215,7 +235,7 @@ export function FactureApercuModal({
                   </tr>
                 </thead>
                 <tbody>
-                  {lignes.map((l) => (
+                  {principales.map((l) => (
                     <tr key={l.id}>
                       <td>
                         <div className="fw-600">{l.designation}</div>
@@ -228,13 +248,52 @@ export function FactureApercuModal({
                     </tr>
                   ))}
                   <tr>
-                    <th colSpan={2} style={{ textAlign: 'right' }}>Total à payer</th>
-                    <th>{formatMontantMGA(montantTotal)}</th>
+                    <th colSpan={2} style={{ textAlign: 'right' }}>Total à payer (cette facture)</th>
+                    <th>{formatMontantMGA(totalPrincipales)}</th>
                   </tr>
                 </tbody>
               </table>
             </div>
           </section>
+
+          {/* Section B — rappel des impayés, NON inclus */}
+          {rappels.length > 0 && (
+            <section>
+              <h4 style={{ margin: '0 0 4px', fontSize: 13, color: 'var(--attention, #b45309)', textTransform: 'uppercase' }}>
+                À titre de rappel de règlement
+              </h4>
+              <p className="section-note" style={{ margin: '0 0 6px', fontSize: 13 }}>
+                Ces factures validées restent <b>impayées</b>. Elles ne sont <b>pas comptabilisées</b> dans
+                le montant de la présente facture et doivent être réglées chacune sur sa propre facture validée.
+              </p>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Facture concernée</th>
+                      <th>Demande</th>
+                      <th>Reste</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rappels.map((l) => (
+                      <tr key={l.id}>
+                        <td>
+                          <div className="fw-600">{l.designation}</div>
+                        </td>
+                        <td className="text-secondary">{l.referenceDemande ?? '—'}</td>
+                        <td>{formatMontantMGA(l.montant)}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <th colSpan={2} style={{ textAlign: 'right' }}>Total des rappels impayés</th>
+                      <th>{formatMontantMGA(totalRappels)}</th>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           {/* Suivi des paiements (validée uniquement) */}
           {!estProforma && (

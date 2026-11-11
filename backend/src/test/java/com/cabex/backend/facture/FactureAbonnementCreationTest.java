@@ -147,7 +147,7 @@ class FactureAbonnementCreationTest {
         com.cabex.backend.facture.dto.FactureValideeResponse reponse = service.creerFactureMensuelleAbonnement(
                 7, 1, LocalDate.of(2026, 11, 10), "2026-11", "Novembre", List.of(2));
 
-        assertEquals(new BigDecimal("1750000"), reponse.montant());
+        assertEquals(new BigDecimal("1500000"), reponse.montant());
         assertEquals(2, reponse.lignes().size());
         assertTrue(reponse.lignes().stream()
                 .anyMatch(l -> l.designation().startsWith("Abonnement mensuel")
@@ -200,7 +200,7 @@ class FactureAbonnementCreationTest {
         com.cabex.backend.facture.dto.FactureValideeResponse reponse = service.creerFactureMensuelleAbonnement(
                 7, 1, LocalDate.of(2026, 11, 10), "2026-11", null, List.of(2));
 
-        assertEquals(new BigDecimal("1450000"), reponse.montant());
+        assertEquals(new BigDecimal("1200000"), reponse.montant());
         assertTrue(reponse.lignes().stream()
                 .anyMatch(l -> l.designation().startsWith("Abonnement mensuel")
                         && l.montant().compareTo(new BigDecimal("1200000")) == 0),

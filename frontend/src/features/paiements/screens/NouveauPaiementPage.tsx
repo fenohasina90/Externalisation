@@ -490,10 +490,40 @@ export function NouveauPaiementPage() {
               {demandeId && !chargement && typeReglement === 'ECHEANCE' && echeances.length === 0 && deboursList.length === 0 && lignesDirectesList.length === 0 && (
                 <Alert tone="warning">
                   Cette demande n&apos;a aucune échéance non soldée ni ligne réglable.
-                  Un plan de paiement doit être établi — et sa facture validée — avant tout règlement.
+                  {(reglatable?.deboursEnAttente?.length ?? 0) > 0 ? (
+                    <>
+                      {' '}Des débours sont en attente de validation du montant ({reglatable?.deboursEnAttente?.map((d) => d.designation).join(', ')}) :
+                      {' '}
+                      <Link
+                        className="btn-link"
+                        to={`/demandes/${encodeURIComponent(reglatable?.demande?.referenceDemande ?? '')}?onglet=services`}
+                      >
+                        ouvrez la fiche demande → Services
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      {' '}Un plan de paiement doit être établi — et sa facture validée — avant tout règlement.
+                    </>
+                  )}
                 </Alert>
               )}
-              {demandeId && !chargement && typeReglement === 'DEBOURS' && deboursList.length === 0 && (
+              {demandeId && !chargement && (reglatable?.deboursEnAttente?.length ?? 0) > 0 && deboursList.length === 0 && (
+                <Alert tone="warning">
+                  Demande&nbsp;: certaines lignes débours sont <b>en attente de validation du montant</b>
+                  {' '}({reglatable?.deboursEnAttente?.map((d) => d.designation).join(', ')}) et ne sont
+                  donc pas réglables ici. Validez d'abord leur montant depuis la fiche de la demande,
+                  onglet Services (bouton « Valider le montant ») :
+                  {' '}
+                  <Link
+                    className="btn-link"
+                    to={`/demandes/${encodeURIComponent(reglatable?.demande?.referenceDemande ?? '')}?onglet=services`}
+                  >
+                    Ouvrir la fiche demande →
+                  </Link>
+                </Alert>
+              )}
+              {demandeId && !chargement && typeReglement === 'DEBOURS' && deboursList.length === 0 && (reglatable?.deboursEnAttente?.length ?? 0) === 0 && (
                 <Alert tone="warning">
                   Cette demande n&apos;a aucun débours à régler (montant validé avec reste dû).
                 </Alert>

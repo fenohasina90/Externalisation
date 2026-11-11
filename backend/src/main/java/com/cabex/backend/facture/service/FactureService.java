@@ -338,7 +338,10 @@ public class FactureService {
             throw new BusinessException("Le montant de la facture validée est manquant");
         }
 
-        // --- Lignes de la facture combinée du mois -----------------------
+        // --- Lignes de la facture du mois --------------------------------
+        // La facture du mois est UNIQUEMENT l'objet payable (l'abonnement) ;
+        // les prestations / débours impayés mentionnés dans la facture ne sont là
+        // qu'à titre de rappel et ne constituent pas une ligne payable ici.
         List<com.cabex.backend.facture.entity.FactureValideeLigne> lignesFacture =
                 new ArrayList<>();
         String nomServiceAbo = ligne.getService() != null ? ligne.getService().getNomService() : null;
@@ -347,6 +350,7 @@ public class FactureService {
                 .designation("Abonnement mensuel"
                         + (nomServiceAbo != null ? " — " + nomServiceAbo : ""))
                 .montant(tarif)
+                .type("PRINCIPALE")
                 .build());
         BigDecimal montantTotal = tarif;
         List<String> inclusionsNote = new ArrayList<>();
@@ -388,9 +392,9 @@ public class FactureService {
                         .ligneService(inclusion)
                         .designation(candidat.designation())
                         .montant(candidat.reste())
+                        .type("RAPPEL")
                         .build());
                 inclusionsNote.add(candidat.designation() + " (" + candidat.reste() + ")");
-                montantTotal = montantTotal.add(candidat.reste());
             }
         }
 
@@ -619,7 +623,8 @@ public class FactureService {
                                 l.getLigneService() != null && l.getLigneService().getDemande() != null
                                         ? l.getLigneService().getDemande().getReferenceDemande() : null,
                                 l.getDesignation(),
-                                l.getMontant()))
+                                l.getMontant(),
+                                l.getType() != null ? l.getType() : "PRINCIPALE"))
                         .toList();
         String nomService = ligne != null && ligne.getService() != null
                 ? ligne.getService().getNomService() : null;

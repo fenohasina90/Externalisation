@@ -1593,6 +1593,10 @@ CREATE TABLE facture_validee_ligne (
     -- Désignation figée au moment de la création de la facture
     designation VARCHAR(255) NOT NULL,
 
+    -- Nature de la ligne : PRINCIPALE (l'abonnement, seul élément payable sur cette facture)
+    -- ou RAPPEL (prestation / débours impayé mentionné à titre d'information ; se règle sur sa propre facture validée)
+    type VARCHAR(20) NOT NULL DEFAULT 'PRINCIPALE' COMMENT 'PRINCIPALE ou RAPPEL',
+
     -- Montant à facturer pour cette ligne (tarif mensuel pour l'abonnement,
     -- reste dû pour les éléments inclus)
     montant DECIMAL(15,2) NOT NULL,
