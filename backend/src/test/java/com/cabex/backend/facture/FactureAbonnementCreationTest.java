@@ -159,6 +159,24 @@ class FactureAbonnementCreationTest {
     }
 
     @Test
+    void creationFactureMemeMoisRefusee() {
+        LigneService abonnement = abonnement(7, 1, new BigDecimal("1500000"));
+        stubAbonnement(abonnement);
+        lenient().when(factureValideeRepository.findByLigneServiceIdAndMois(anyInt(), any()))
+                .thenReturn(com.cabex.backend.facture.entity.FactureValidee.builder()
+                        .id(77)
+                        .referenceFactureValidee("00077/EXT/TNR/2026")
+                        .demande(abonnement.getDemande())
+                        .montant(new BigDecimal("1500000"))
+                        .build());
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.creerFactureMensuelleAbonnement(
+                        7, 1, LocalDate.of(2026, 11, 10), "2026-11", null, List.of()));
+        assertTrue(ex.getMessage().toLowerCase(java.util.Locale.FRANCE).contains("novembre 2026"));
+    }
+
+    @Test
     void creationUtiliseMontantFactureValideePasTarif() {
         LigneService abonnement = abonnement(7, 1, new BigDecimal("1500000"));
         stubAbonnement(abonnement);

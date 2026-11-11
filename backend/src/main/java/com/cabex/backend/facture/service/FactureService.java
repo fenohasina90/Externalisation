@@ -294,6 +294,20 @@ public class FactureService {
         } catch (java.time.format.DateTimeParseException e) {
             throw new BusinessException("Le mois facturé est obligatoire et doit être au format AAAA-MM (ex. 2026-01)");
         }
+        java.time.LocalDate moisDebut = moisAnnee.atDay(1);
+        java.time.format.DateTimeFormatter libelleMois =
+                java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale.FRANCE);
+        String moisLabel = libelleMois.format(moisAnnee);
+        moisLabel = Character.toUpperCase(moisLabel.charAt(0)) + moisLabel.substring(1);
+
+        // Un mois ne peut être facturé qu'une fois par abonnement (pas de facture de novembre 2026 en double).
+        com.cabex.backend.facture.entity.FactureValidee dejaExistante =
+                factureValideeRepository.findByLigneServiceIdAndMois(ligneServiceId, moisDebut);
+        if (dejaExistante != null) {
+            throw new BusinessException(
+                    "Une facture pour le mois " + moisLabel + " existe déjà pour cet abonnement "
+                            + "(" + dejaExistante.getReferenceFactureValidee() + ")");
+        }
         LigneService ligne = ligneRepository.findById(ligneServiceId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Ligne de service", ligneServiceId)));
@@ -391,7 +405,7 @@ public class FactureService {
                 .ligneService(ligne)
                 .demande(demande)
                 .montant(montantTotal)
-                .mois(moisAnnee.atDay(1))
+                .mois(moisDebut)
                 .validePar(validateur)
                 .valideLe(valideLe)
                 .build();

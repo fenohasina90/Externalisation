@@ -22,4 +22,7 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
     List<com.cabex.backend.facture.entity.FactureValidee> findByDemandeIdOrderByIdAsc(Integer demandeId);
 
     List<com.cabex.backend.facture.entity.FactureValidee> findByLigneServiceId(Integer ligneServiceId);
+
+    /** Facture du mois d'un abonnement pour un mois donné (YYYY-MM-01). */
+    com.cabex.backend.facture.entity.FactureValidee findByLigneServiceIdAndMois(Integer ligneServiceId, java.time.LocalDate mois);
 }

@@ -122,15 +122,8 @@ public class LigneServiceService {
     public List<LigneServiceResponse> listerParDemande(Integer demandeId) {
         verifierDemande(demandeId);
         List<LigneService> lignes = ligneRepository.findByDemandeIdInWithService(List.of(demandeId));
-        Map<Integer, BigDecimal> paiements = lignes.isEmpty()
-                ? Map.of()
-                : ligneRepository.sommesPayeesParLignes(
-                        lignes.stream().map(LigneService::getId).toList()).stream()
-                        .collect(Collectors.toMap(
-                                o -> ((Number) o[0]).intValue(),
-                                o -> o[1] == null ? BigDecimal.ZERO : new BigDecimal(o[1].toString())));
         return lignes.stream()
-                .map(l -> toResponse(l, paiements.getOrDefault(l.getId(), BigDecimal.ZERO)))
+                .map(l -> toResponse(l, montantPayeParLigne(l.getId())))
                 .toList();
     }
 

@@ -146,10 +146,10 @@ public class DemandeGestionService {
                 .toList();
         Map<Integer, BigDecimal> paiementsParLigne = ligneIds.isEmpty()
                 ? Map.of()
-                : ligneRepository.sommesPayeesParLignes(ligneIds).stream()
+                : ligneIds.stream()
                         .collect(Collectors.toMap(
-                                o -> ((Number) o[0]).intValue(),
-                                o -> toBigDecimal(o[1])));
+                                id -> id,
+                                id -> ligneServiceService.montantPayeParLigne(id)));
         Map<Integer, BigDecimal> paiementsParDemande = paiementRepository
                 .sommesPayeesParDemandes(demandeIds).stream()
                 .collect(Collectors.toMap(

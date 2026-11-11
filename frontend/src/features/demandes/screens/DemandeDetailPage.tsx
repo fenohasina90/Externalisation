@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Can } from '@/components/shared/Can'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -667,7 +667,7 @@ function FacturesTab({
                           </div>
                         </div>
                       </td>
-                      <td>
+                      {/* <td>
                         {reste > 0 ? (
                           <button
                             type="button"
@@ -681,7 +681,7 @@ function FacturesTab({
                         ) : (
                           <span className="pill ok">Soldée</span>
                         )}
-                      </td>
+                      </td> */}
                     </tr>
                   )
                 })}
@@ -2068,6 +2068,19 @@ function FacturesAbonnementSection({
   const [creationEnCours, setCreationEnCours] = useState<number | null>(null)
   const [telechargement, setTelechargement] = useState<number | null>(null)
   const [apercu, setApercu] = useState<FactureApercu | null>(null)
+  const [lignesOuvertes, setLignesOuvertes] = useState<Set<number>>(new Set())
+
+  function toggleLignesOuvertes(id: number): void {
+    setLignesOuvertes((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
   const [cible, setCible] = useState<LigneService | null>(null)
   const [dateEmission, setDateEmission] = useState(() => new Date().toISOString().slice(0, 10))
   const [moisActuel, setMoisActuel] = useState(() => new Date().toISOString().slice(0, 7))
@@ -2259,85 +2272,108 @@ function FacturesAbonnementSection({
                       </tr>
                     </thead>
                     <tbody>
-                      {enfants.map((f) => (
-                        <tr key={f.id}>
-                          <td className="fw-600">
-                        <button
-                          type="button"
-                          className="btn-link"
-                          onClick={() => setApercu({ kind: 'validee', facture: f })}
-                        >
-                          {f.referenceFactureValidee}
-                        </button>
-                      </td>
-                          <td>{moisLabel(f.mois)}</td>
-                          <td className="text-secondary">
-                            {f.valideLe ? formatDate(f.valideLe.slice(0, 10)) : '—'}
-                          </td>
-                          <td className="text-secondary">{f.referenceFactureGenerale ?? '—'}</td>
-                          <td className="text-secondary">{f.referenceFactureProforma ?? '—'}</td>
-                          <td>{formatMontantMGA(f.montant)}</td>
-                          <td>{formatMontantMGA(f.montantPaye)}</td>
-                          <td>{formatMontantMGA(f.resteAPayer)}</td>
-                          <td>
-                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                              {f.resteAPayer > 0 && (
+                      {enfants.map((f) => {
+                        const detailOuvert = lignesOuvertes.has(f.id)
+                        return (
+                        <Fragment key={f.id}>
+                          <tr>
+                            <td className="fw-600">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {(f.lignes ?? []).length > 0 && (
+                                  <button
+                                    type="button"
+                                    className="btn-ghost"
+                                    style={{
+                                      minWidth: 30,
+                                      width: 30,
+                                      padding: 0,
+                                      lineHeight: 1.4,
+                                    }}
+                                    onClick={() => toggleLignesOuvertes(f.id)}
+                                    aria-expanded={detailOuvert}
+                                    aria-label={detailOuvert ? 'Cacher les lignes de la facture' : 'Afficher les lignes de la facture'}
+                                    title={detailOuvert ? 'Cacher les lignes' : 'Afficher les lignes'}
+                                  >
+                                    {detailOuvert ? '▾' : '▸'}
+                                  </button>
+                                )}
                                 <button
                                   type="button"
-                                  className="btn-primary"
-                                  onClick={() => navigate(
-                                    `/paiements/nouveau?demande=${encodeURIComponent(ligne.referenceDemande)}&ligne=${ligne.id}`,
-                                  )}
+                                  className="btn-link"
+                                  onClick={() => setApercu({ kind: 'validee', facture: f })}
                                 >
-                                  Encaisser
+                                  {f.referenceFactureValidee}
                                 </button>
-                              )}
-                              <button
-                                type="button"
-                                className="btn-ghost"
-                                disabled={telechargement === f.id}
-                                onClick={() => void telecharger(f)}
-                              >
-                                {telechargement === f.id ? '…' : 'PDF'}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {enfants.map((f) =>
-                        (f.lignes ?? []).length > 1 && (
-                          <tr key={`l-${f.id}`}>
-                            <td colSpan={9}>
-                              <div style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 2,
-                                fontSize: 13,
-                                padding: '4px 0 4px 12px',
-                                borderLeft: '3px solid var(--vert, #10b981)',
-                              }}>
-                                <b>{f.referenceFactureValidee} — détail des lignes</b>
-                                {(f.lignes ?? []).map((l) => (
-                                  <div
-                                    key={l.id}
-                                    style={{
-                                      display: 'flex',
-                                      justifyContent: 'space-between',
-                                      gap: 12,
-                                    }}
+                              </div>
+                            </td>
+                            <td>{moisLabel(f.mois)}</td>
+                            <td className="text-secondary">
+                              {f.valideLe ? formatDate(f.valideLe.slice(0, 10)) : '—'}
+                            </td>
+                            <td className="text-secondary">{f.referenceFactureGenerale ?? '—'}</td>
+                            <td className="text-secondary">{f.referenceFactureProforma ?? '—'}</td>
+                            <td>{formatMontantMGA(f.montant)}</td>
+                            <td>{formatMontantMGA(f.montantPaye)}</td>
+                            <td>{formatMontantMGA(f.resteAPayer)}</td>
+                            <td>
+                              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                {f.resteAPayer > 0 && (
+                                  <button
+                                    type="button"
+                                    className="btn-primary"
+                                    onClick={() => navigate(
+                                      `/paiements/nouveau?demande=${encodeURIComponent(ligne.referenceDemande)}&ligne=${ligne.id}`,
+                                    )}
                                   >
-                                    <span>
-                                      <b className="text-secondary" style={{ fontSize: 12 }}>{l.referenceDemande ?? '—'}</b>
-                                      {' · '}{l.designation}
-                                    </span>
-                                    <span className="fw-600">{formatMontantMGA(l.montant)}</span>
-                                  </div>
-                                ))}
+                                    Encaisser
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="btn-ghost"
+                                  disabled={telechargement === f.id}
+                                  onClick={() => void telecharger(f)}
+                                >
+                                  {telechargement === f.id ? '…' : 'PDF'}
+                                </button>
                               </div>
                             </td>
                           </tr>
-                        ),
-                      )}
+                          {detailOuvert && (f.lignes ?? []).length > 0 && (
+                            <tr>
+                              <td colSpan={9}>
+                                <div style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 2,
+                                  fontSize: 13,
+                                  padding: '6px 0 6px 40px',
+                                  borderLeft: '3px solid var(--vert, #10b981)',
+                                }}>
+                                  <b>{f.referenceFactureValidee} — détail des lignes</b>
+                                  {(f.lignes ?? []).map((l) => (
+                                    <div
+                                      key={l.id}
+                                      style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        gap: 12,
+                                      }}
+                                    >
+                                      <span>
+                                        <b className="text-secondary" style={{ fontSize: 12 }}>{l.referenceDemande ?? '—'}</b>
+                                        {' · '}{l.designation}
+                                      </span>
+                                      <span className="fw-600">{formatMontantMGA(l.montant)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>

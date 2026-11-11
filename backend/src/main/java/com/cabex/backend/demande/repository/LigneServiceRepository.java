@@ -35,20 +35,4 @@ public interface LigneServiceRepository extends JpaRepository<LigneService, Inte
     List<LigneService> findByDemandeIdInWithService(
             @Param("demandeIds") Collection<Integer> demandeIds);
 
-    /**
-     * Montant payé par ligne (EXTERNALISATION via échéances + DEBOURS via
-     * facture validee), en une seule requête.
-     */
-    @Query("""
-        SELECT l.id, COALESCE(SUM(e.montantPaye), 0) + COALESCE(SUM(p.montantPaye), 0)
-        FROM LigneService l
-        LEFT JOIN ProposPaiement pp ON pp.ligneService = l
-        LEFT JOIN pp.echeances e
-        LEFT JOIN l.facture f
-        LEFT JOIN f.factureValidee fv
-        LEFT JOIN Paiement p ON p.factureValidee = fv AND p.actif = true
-        WHERE l.id IN :ligneIds
-        GROUP BY l.id
-        """)
-    List<Object[]> sommesPayeesParLignes(@Param("ligneIds") Collection<Integer> ligneIds);
 }
