@@ -35,10 +35,10 @@ import {
   lignesApi,
 } from '../services/demandes.service'
 
-type Onglet = 'informations' | 'services' | 'factures' | 'documents' | 'paiements'
+type Onglet = 'informations' | 'services' | 'factures' | 'factures-mensuelles' | 'documents' | 'paiements'
   | 'historique' | 'dossier' | 'dossier-transaction'
 
-const ONGLETS_VALIDES: Onglet[] = ['informations', 'services', 'factures', 'documents',
+const ONGLETS_VALIDES: Onglet[] = ['informations', 'services', 'factures', 'factures-mensuelles', 'documents',
   'paiements', 'historique', 'dossier', 'dossier-transaction']
 
 /** « 2026-01 » → « Janvier 2026 ». */
@@ -202,6 +202,9 @@ export function DemandeDetailPage() {
     ['informations', 'Informations'],
     ['services', `Services (${demande.lignes?.length ?? 0})`],
     ['factures', `Factures (${factures?.length ?? 0})`],
+    ...((demande.lignes ?? []).some((l) => l.typePrestation === 'ABONNEMENT_MENSUEL')
+      ? [['factures-mensuelles', 'Factures mensuelles'] as [Onglet, string]]
+      : []),
     ...(hasPermission('DOCUMENT_DEMANDE_VIEW')
       ? [['documents', 'Documents'] as [Onglet, string]]
       : []),
@@ -335,21 +338,21 @@ export function DemandeDetailPage() {
       )}
 
       {onglet === 'factures' && (
-        <>
-          <FacturesAbonnementSection
-            demande={demande}
-            onErreur={setErreur}
-            onMessage={setMessage}
-          />
-          <FacturesTab
-            factures={factures ?? []}
-            traitement={traitement}
-            onTelecharger={(f) => void telechargerProforma(f)}
-            onErreur={setErreur}
-            onMessage={setMessage}
-            onChange={toutRecharger}
-          />
-        </>
+        <FacturesTab
+          factures={factures ?? []}
+          traitement={traitement}
+          onTelecharger={(f) => void telechargerProforma(f)}
+          onErreur={setErreur}
+          onMessage={setMessage}
+          onChange={toutRecharger}
+        />
+      )}
+      {onglet === 'factures-mensuelles' && (
+        <FacturesAbonnementSection
+          demande={demande}
+          onErreur={setErreur}
+          onMessage={setMessage}
+        />
       )}
 
       {onglet === 'paiements' && <PaiementsTab demande={demande} />}
@@ -1837,10 +1840,6 @@ function FacturesAbonnementSection({
   const [erreurDialog, setErreurDialog] = useState<string | null>(null)
   const [selectionInclusions, setSelectionInclusions] = useState<Set<number>>(new Set())
 
-  if (abonnementLignes.length === 0) {
-    return null
-  }
-
   const ligneLabel = (l: LigneService) =>
     `${l.nomService ?? 'Abonnement'} · tarif mensuel ${formatMontantMGA(l.tarif ?? 0)}`
 
@@ -1849,6 +1848,15 @@ function FacturesAbonnementSection({
   const montantFactureMensuelle = cible
     ? (facturesValidees ?? []).find((f) => f.type === 'GENERALE' && f.ligneServiceId === cible.id)?.montant ?? (cible.tarif ?? 0)
     : 0
+
+  // Toutes les factures du mois de la demande (tous les abonnements confondus).
+  const enfantsTous = (facturesValidees ?? []).filter((f) => f.type === 'ABONNEMENT_MENSUEL')
+  const totalFacture = enfantsTous.reduce((s, f) => s + f.montant, 0)
+  const totalPaye = enfantsTous.reduce((s, f) => s + f.montantPaye, 0)
+  const totalReste = enfantsTous.reduce((s, f) => s + f.resteAPayer, 0)
+  const nbRestant = enfantsTous.filter((f) => f.resteAPayer > 0).length
+
+  const navigate = useNavigate()
 
   const creer = async () => {
     if (!cible) {
@@ -1912,16 +1920,52 @@ function FacturesAbonnementSection({
     }
   }
 
+  if (abonnementLignes.length === 0) {
+    return (
+      <section className="card card-pad">
+        <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700 }}>Factures mensuelles</h3>
+        <p className="section-note" style={{ margin: 0 }}>
+          Aucun abonnement mensuel en cours dans cette demande. Les lignes d&apos;abonnement sont
+          créées depuis l&apos;onglet Services (type de prestation « Abonnement mensuel »).
+        </p>
+      </section>
+    )
+  }
+
   return (
     <section className="card card-pad">
       <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700 }}>
         Factures mensuelles — Abonnement
       </h3>
       <p className="section-note" style={{ marginBottom: 12 }}>
-        Créez la facture du mois avant chaque paiement. Elle reprend la référence
-        de la facture générale validée, la référence de la facture proforma et la
-        référence de la demande.
+        Créez la facture du mois avant chaque paiement : elle reprend le mois facturé, la date
+        d&apos;émission, la référence de la facture générale validée et la référence de la facture
+        proforma. Vous pouvez y reprendre des prestations / débours impayés du même client.
       </p>
+
+      {/* KPI — suivi des encaissements */}
+      <div className="info-grid" style={{ marginBottom: 12 }}>
+        <div className="info-item">
+          <span>Factures du mois</span>
+          <b>{enfantsTous.length}</b>
+        </div>
+        <div className="info-item">
+          <span>Total facturé</span>
+          <b>{formatMontantMGA(totalFacture)}</b>
+        </div>
+        <div className="info-item">
+          <span>Déjà payé</span>
+          <b style={{ color: 'var(--success)' }}>{formatMontantMGA(totalPaye)}</b>
+        </div>
+        <div className="info-item">
+          <span>Reste à encaisser</span>
+          <b style={{ color: nbRestant > 0 ? 'var(--danger)' : 'var(--success)' }}>
+            {formatMontantMGA(totalReste)}
+          </b>
+        </div>
+      </div>
+
+      {/* Création — une carte par abonnement EN_COURS */}
       {abonnementLignes.map((ligne) => {
         const enfants = (facturesValidees ?? []).filter(
           (f) => f.ligneServiceId === ligne.id && f.type === 'ABONNEMENT_MENSUEL',
@@ -1994,14 +2038,27 @@ function FacturesAbonnementSection({
                           <td>{formatMontantMGA(f.montantPaye)}</td>
                           <td>{formatMontantMGA(f.resteAPayer)}</td>
                           <td>
-                            <button
-                              type="button"
-                              className="btn-ghost"
-                              disabled={telechargement === f.id}
-                              onClick={() => void telecharger(f)}
-                            >
-                              {telechargement === f.id ? '…' : 'PDF'}
-                            </button>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                              {f.resteAPayer > 0 && (
+                                <button
+                                  type="button"
+                                  className="btn-primary"
+                                  onClick={() => navigate(
+                                    `/paiements/nouveau?demande=${encodeURIComponent(ligne.referenceDemande)}&ligne=${ligne.id}`,
+                                  )}
+                                >
+                                  Encaisser
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="btn-ghost"
+                                disabled={telechargement === f.id}
+                                onClick={() => void telecharger(f)}
+                              >
+                                {telechargement === f.id ? '…' : 'PDF'}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -2153,6 +2210,12 @@ function FacturesAbonnementSection({
         }}
         onConfirmer={() => void creer()}
       />
+
+      <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+        <Link to={`/paiements/historique`} className="btn-link">
+          Voir l&apos;historique des paiements ›
+        </Link>
+      </div>
     </section>
   )
 }

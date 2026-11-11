@@ -114,13 +114,16 @@ public class DemandeGestionService {
     public Page<DemandeResponse> getAll(String recherche, Integer societeId, Integer serviceId,
                                         Integer commercialId, String statut,
                                         LocalDate dateDebut, LocalDate dateFin,
-                                        Boolean actif, String situation, Pageable pageable) {
+                                        Boolean actif, String situation,
+                                        String categorie, String typePrestation,
+                                        Pageable pageable) {
         Pageable tri = pageable.getSort().isSorted()
                 ? pageable
                 : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                         Sort.by(Sort.Order.desc("dateDemande"), Sort.Order.desc("id")));
         Page<DemandeService> page = demandeRepository.rechercher(recherche, societeId, serviceId,
                 commercialId, statut, dateDebut, dateFin, actif, situation,
+                categorie, typePrestation,
                 LocalDate.now(), tri);
 
         List<DemandeService> demandes = page.getContent();

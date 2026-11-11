@@ -81,8 +81,13 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                   AND h.statut.statut = :statut
                   AND h.id = (SELECT MAX(h2.id) FROM HistoriqueDemande h2 WHERE h2.demande = d)
               ))
-          AND (
-            :situation IS NULL
+          AND (:categorie IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = d AND l.categorie = :categorie))
+          AND (:typePrestation IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = d AND l.typePrestation = :typePrestation))
+          AND (:situation IS NULL
             OR (:situation = 'PAYE'
                 AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
                                 WHERE e.proposPaiement.demande = d
@@ -134,6 +139,8 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                                     @Param("dateFin") LocalDate dateFin,
                                     @Param("actif") Boolean actif,
                                     @Param("situation") String situation,
+                                    @Param("categorie") String categorie,
+                                    @Param("typePrestation") String typePrestation,
                                     @Param("aujourdhui") LocalDate aujourdhui,
                                     Pageable pageable);
 

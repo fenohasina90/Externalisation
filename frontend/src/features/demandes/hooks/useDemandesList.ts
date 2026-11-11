@@ -15,6 +15,10 @@ export interface DemandesFiltresUI {
   commercialId: number | null
   dateDebut: string
   dateFin: string
+  /** EXTERNALISATION ou DEBOURS (lignes de la demande). */
+  categorie: 'tous' | 'EXTERNALISATION' | 'DEBOURS'
+  /** Type de prestation : PRESTATION ou ABONNEMENT_MENSUEL. */
+  typePrestation: 'tous' | 'PRESTATION' | 'ABONNEMENT_MENSUEL'
 }
 
 export const FILTRES_DEMANDES_DEFAUT: DemandesFiltresUI = {
@@ -26,6 +30,8 @@ export const FILTRES_DEMANDES_DEFAUT: DemandesFiltresUI = {
   commercialId: null,
   dateDebut: '',
   dateFin: '',
+  categorie: 'tous',
+  typePrestation: 'tous',
 }
 
 /** Liste paginée des demandes via l'API, avec filtres serveur. */
@@ -42,6 +48,8 @@ export function useDemandesList(size = 8) {
     commercialId: filtres.commercialId ?? undefined,
     dateDebut: filtres.dateDebut || undefined,
     dateFin: filtres.dateFin || undefined,
+    categorie: filtres.categorie === 'tous' ? undefined : filtres.categorie,
+    typePrestation: filtres.typePrestation === 'tous' ? undefined : filtres.typePrestation,
   }
 
   const { data, loading, error, reload } = useApi<ApiPage<Demande>>(
@@ -51,7 +59,8 @@ export function useDemandesList(size = 8) {
         apiFiltres,
       ),
     [page, size, terme, filtres.statut, filtres.situation, filtres.societeId,
-      filtres.serviceId, filtres.commercialId, filtres.dateDebut, filtres.dateFin],
+      filtres.serviceId, filtres.commercialId, filtres.dateDebut, filtres.dateFin,
+      filtres.categorie, filtres.typePrestation],
   )
 
   function setFiltre<K extends keyof DemandesFiltresUI>(cle: K, valeur: DemandesFiltresUI[K]): void {
@@ -72,7 +81,9 @@ export function useDemandesList(size = 8) {
     filtres.serviceId !== null ||
     filtres.commercialId !== null ||
     filtres.dateDebut !== '' ||
-    filtres.dateFin !== ''
+    filtres.dateFin !== '' ||
+    filtres.categorie !== 'tous' ||
+    filtres.typePrestation !== 'tous'
 
   return {
     items: data?.content ?? [],

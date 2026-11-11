@@ -147,104 +147,127 @@ export function DemandesPage() {
 
       {showFilters && (
         <section className="card card-pad">
-          <form onSubmit={(e) => e.preventDefault()} className="filters-inline">
-            <label className="field filter-field">
-              Recherche
-              <input
-                type="text"
-                value={filtres.recherche}
-                onChange={(e) => setFiltre('recherche', e.target.value)}
-                placeholder="Référence…"
-              />
-            </label>
-            <label className="field filter-field">
-              Client
-              <select
-                value={filtres.societeId ?? ''}
-                onChange={(e) => setFiltre('societeId', e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">Tous les clients</option>
-                {(societes?.content ?? []).map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nomSociete}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field filter-field">
-              Service
-              <select
-                value={filtres.serviceId ?? ''}
-                onChange={(e) => setFiltre('serviceId', e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">Tous les services</option>
-                {(services?.content ?? []).map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nomService}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field filter-field">
-              Commercial
-              <select
-                value={filtres.commercialId ?? ''}
-                onChange={(e) => setFiltre('commercialId', e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">Tous</option>
-                {(commerciaux?.content ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nomCommercial}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field filter-field">
-              Statut
-              <select value={filtres.statut} onChange={(e) => setFiltre('statut', e.target.value)}>
-                <option value="tous">Tous</option>
-                <option value="EN_ATTENTE">En attente</option>
-                <option value="VALIDATION">Validation</option>
-                <option value="EN_COURS">En cours</option>
-                <option value="TERMINEE">Terminée</option>
-                <option value="ANNULEE">Annulée</option>
-              </select>
-            </label>
-            <label className="field filter-field">
-              Situation de paiement
-              <select
-                value={filtres.situation}
-                onChange={(e) =>
-                  setFiltre('situation', e.target.value as typeof filtres.situation)
-                }
-              >
-                <option value="tous">Toutes</option>
-                <option value="PAYE">Payé</option>
-                <option value="PARTIEL">Partiel</option>
-                <option value="EN_RETARD">En retard</option>
-                <option value="EN_ATTENTE">En attente</option>
-                <option value="NON_PLANIFIE">Non planifié</option>
-              </select>
-            </label>
-            <label className="field filter-field">
-              Période (début)
-              <input
-                type="date"
-                value={filtres.dateDebut}
-                onChange={(e) => setFiltre('dateDebut', e.target.value)}
-              />
-            </label>
-            <label className="field filter-field">
-              Période (fin)
-              <input
-                type="date"
-                value={filtres.dateFin}
-                onChange={(e) => setFiltre('dateFin', e.target.value)}
-              />
-            </label>
+          <div className="filters-head">
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--texte-secondaire, #6b7280)' }}>
+              Filtres
+            </h3>
             <button type="button" className="btn-ghost" onClick={resetFiltres} disabled={!hasActiveFiltres}>
               Réinitialiser
             </button>
+          </div>
+          <form onSubmit={(e) => e.preventDefault()}>
+            <div className="filters-grid-5">
+              <label className="field filter-field">
+                Recherche
+                <input
+                  type="text"
+                  value={filtres.recherche}
+                  onChange={(e) => setFiltre('recherche', e.target.value)}
+                  placeholder="Référence…"
+                />
+              </label>
+              <label className="field filter-field">
+                Client
+                <select
+                  value={filtres.societeId ?? ''}
+                  onChange={(e) => setFiltre('societeId', e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">Tous les clients</option>
+                  {(societes?.content ?? []).map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nomSociete}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field filter-field">
+                Service
+                <select
+                  value={filtres.serviceId ?? ''}
+                  onChange={(e) => setFiltre('serviceId', e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">Tous les services</option>
+                  {(services?.content ?? []).map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nomService}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field filter-field">
+                Commercial
+                <select
+                  value={filtres.commercialId ?? ''}
+                  onChange={(e) => setFiltre('commercialId', e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">Tous</option>
+                  {(commerciaux?.content ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nomCommercial}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field filter-field">
+                Statut
+                <select value={filtres.statut} onChange={(e) => setFiltre('statut', e.target.value)}>
+                  <option value="tous">Tous</option>
+                  <option value="EN_ATTENTE">En attente</option>
+                  <option value="VALIDATION">Validation</option>
+                  <option value="EN_COURS">En cours</option>
+                  <option value="TERMINEE">Terminée</option>
+                  <option value="ANNULEE">Annulée</option>
+                </select>
+              </label>
+              <label className="field filter-field">
+                Situation de paiement
+                <select
+                  value={filtres.situation}
+                  onChange={(e) =>
+                    setFiltre('situation', e.target.value as typeof filtres.situation)
+                  }
+                >
+                  <option value="tous">Toutes</option>
+                  <option value="PAYE">Payé</option>
+                  <option value="PARTIEL">Partiel</option>
+                  <option value="EN_RETARD">En retard</option>
+                  <option value="EN_ATTENTE">En attente</option>
+                  <option value="NON_PLANIFIE">Non planifié</option>
+                </select>
+              </label>
+              <label className="field filter-field">
+                Catégorie
+                <select value={filtres.categorie} onChange={(e) => setFiltre('categorie', e.target.value as typeof filtres.categorie)}>
+                  <option value="tous">Toutes</option>
+                  <option value="EXTERNALISATION">Externalisation</option>
+                  <option value="DEBOURS">Débours</option>
+                </select>
+              </label>
+              <label className="field filter-field">
+                Type de prestation
+                <select value={filtres.typePrestation} onChange={(e) => setFiltre('typePrestation', e.target.value as typeof filtres.typePrestation)}>
+                  <option value="tous">Tous</option>
+                  <option value="PRESTATION">Prestation</option>
+                  <option value="ABONNEMENT_MENSUEL">Abonnement mensuel</option>
+                </select>
+              </label>
+              <label className="field filter-field">
+                Période (début)
+                <input
+                  type="date"
+                  value={filtres.dateDebut}
+                  onChange={(e) => setFiltre('dateDebut', e.target.value)}
+                />
+              </label>
+              <label className="field filter-field">
+                Période (fin)
+                <input
+                  type="date"
+                  value={filtres.dateFin}
+                  onChange={(e) => setFiltre('dateFin', e.target.value)}
+                />
+              </label>
+            </div>
           </form>
         </section>
       )}

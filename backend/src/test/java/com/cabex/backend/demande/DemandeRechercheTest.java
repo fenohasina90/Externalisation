@@ -64,7 +64,8 @@ class DemandeRechercheTest {
 
         var page = demandeRepository.rechercher(
                 null, null, null, null, null, null, null, null, null, null,
-                Pageable.unpaged());
+                null, null,
+                        Pageable.unpaged());
 
         assertEquals(1, page.getTotalElements());
         assertEquals("DEM-2026-00017", page.getContent().get(0).getReferenceDemande());
@@ -76,7 +77,8 @@ class DemandeRechercheTest {
 
         var page = demandeRepository.rechercher(
                 "DEM-2026-00021", null, null, null, null, null, null, null, null, null,
-                Pageable.unpaged());
+                null, null,
+                        Pageable.unpaged());
 
         assertEquals(1, page.getTotalElements());
     }
@@ -87,7 +89,8 @@ class DemandeRechercheTest {
 
         var page = demandeRepository.rechercher(
                 "atlas", null, null, null, null, null, null, null, null, null,
-                Pageable.unpaged());
+                null, null,
+                        Pageable.unpaged());
 
         assertEquals(1, page.getTotalElements());
         assertEquals("DEM-2026-00021", page.getContent().get(0).getReferenceDemande());
@@ -120,7 +123,8 @@ class DemandeRechercheTest {
 
         var page = demandeRepository.rechercher(
                 "DEM-2026-00023", null, null, null, null, null, null, null, null, null,
-                Pageable.unpaged());
+                null, null,
+                        Pageable.unpaged());
 
         assertEquals(1, page.getTotalElements());
         assertEquals("DEM-2026-00023", page.getContent().get(0).getReferenceDemande());

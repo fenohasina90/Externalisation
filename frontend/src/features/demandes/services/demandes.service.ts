@@ -29,6 +29,10 @@ export interface DemandeFiltres {
   commercialId?: number
   dateDebut?: string
   dateFin?: string
+  /** EXTERNALISATION ou DEBOURS (au moins une ligne de la demande). */
+  categorie?: string
+  /** PRESTATION ou ABONNEMENT_MENSUEL. */
+  typePrestation?: string
 }
 
 export const demandesApi = {
