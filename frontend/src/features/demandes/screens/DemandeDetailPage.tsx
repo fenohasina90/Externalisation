@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Can } from '@/components/shared/Can'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -340,6 +340,8 @@ export function DemandeDetailPage() {
       {onglet === 'factures' && (
         <FacturesTab
           factures={factures ?? []}
+          demandeId={demande.id}
+          demandeReference={demande.referenceDemande}
           traitement={traitement}
           onTelecharger={(f) => void telechargerProforma(f)}
           onErreur={setErreur}
@@ -424,6 +426,8 @@ export function DemandeDetailPage() {
 /** Onglet Factures : aperçu d'ensemble, un seul bouton de validation (avec confirmation). */
 function FacturesTab({
   factures,
+  demandeId,
+  demandeReference,
   traitement,
   onTelecharger,
   onErreur,
@@ -431,6 +435,8 @@ function FacturesTab({
   onChange,
 }: {
   factures: Facture[]
+  demandeId: number
+  demandeReference: string
   traitement: boolean
   onTelecharger: (facture: Facture) => void
   onErreur: (message: string | null) => void
@@ -440,6 +446,19 @@ function FacturesTab({
   const [confirmValidation, setConfirmValidation] = useState(false)
   const [validationEnCours, setValidationEnCours] = useState(false)
   const [montantValideSaisi, setMontantValideSaisi] = useState('')
+  const navigate = useNavigate()
+  const { data: facturesValidees, reload: reloadValidees } = useApi<FactureValidee[]>(
+    () => facturesValideesApi.list(demandeId).catch(() => []),
+    [demandeId],
+  )
+  useEffect(() => {
+    // Recharger les factures validées après chaque génération / validation / paiement.
+    reloadValidees()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [factures])
+  // Les factures du mois d'abonnement restent dans l'onglet « Factures mensuelles ».
+  const validees = (facturesValidees ?? []).filter((f) => f.type !== 'ABONNEMENT_MENSUEL')
+  const nbSoldees = validees.filter((f) => f.resteAPayer <= 0).length
   const proformas = factures.filter((f) => f.statut === 'PROFORMA')
   const toutesLignes = factures.flatMap((f) =>
     f.lignes.map((l) => ({ ...l, referenceFacture: f.referenceFacture })),
@@ -518,6 +537,14 @@ function FacturesTab({
             <span>En attente de validation</span>
             <b>{proformas.length}</b>
           </div>
+          <div className="info-item">
+            <span>Factures validées</span>
+            <b>{validees.length}</b>
+          </div>
+          <div className="info-item">
+            <span>Factures soldées</span>
+            <b style={{ color: 'var(--success)' }}>{nbSoldees}</b>
+          </div>
         </div>
         {proformas.length > 0 && (
           <Can permission="FACTURE_VALIDATE">
@@ -536,6 +563,98 @@ function FacturesTab({
               </button>
             </div>
           </Can>
+        )}
+      </section>
+
+      {/* Factures validées — externalisation (GENERALE) et débours */}
+      <section className="card card-pad">
+        <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700 }}>
+          Factures validées
+        </h3>
+        {validees.length === 0 && (
+          <p className="section-note" style={{ margin: 0 }}>
+            Aucune facture validée sur cette demande pour l&apos;instant. La proforma
+            se valide ci-dessus ; une facture débours est créée automatiquement à la
+            validation de son montant (onglet Services).
+          </p>
+        )}
+        {validees.length > 0 && (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Réf. validée</th>
+                  <th>Type</th>
+                  <th>Ligne</th>
+                  <th>Proforma</th>
+                  <th>Montant</th>
+                  <th>Payé / reste</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {validees.map((f) => {
+                  const montantPaye = f.montantPaye ?? 0
+                  const reste = f.resteAPayer ?? Math.max(f.montant - montantPaye, 0)
+                  const taux = f.montant > 0 ? Math.min(100, Math.round((montantPaye / f.montant) * 100)) : 0
+                  return (
+                    <tr key={f.id}>
+                      <td className="fw-600">{f.referenceFactureValidee}</td>
+                      <td>
+                        <span className={f.type === 'DEBOURS' ? 'pill wt' : 'pill ok'}>
+                          {f.type === 'DEBOURS' ? 'Débours' : 'Externalisation'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="fw-600">{f.nomService ?? f.libelleLigne ?? '—'}</div>
+                        {f.nomService && f.libelleLigne && (
+                          <span className="text-secondary" style={{ fontSize: 12 }}>{f.libelleLigne}</span>
+                        )}
+                      </td>
+                      <td className="text-secondary">
+                        {f.referenceFactureProforma ?? '— (facture sans proforma)'}
+                      </td>
+                      <td>{formatMontantMGA(f.montant)}</td>
+                      <td>
+                        <div className="progression">
+                          <div className="progression__label">
+                            <span>{formatMontantMGA(montantPaye)} payé</span>
+                            <strong style={{ color: reste > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                              {reste > 0 ? `${formatMontantMGA(reste)} restants` : 'Soldée'}
+                            </strong>
+                          </div>
+                          <div
+                            className="trk"
+                            role="progressbar"
+                            aria-valuenow={taux}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                          >
+                            <i style={{ width: `${taux}%` }} />
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        {reste > 0 ? (
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            onClick={() => navigate(
+                              `/paiements/nouveau?demande=${encodeURIComponent(demandeReference)}&ligne=${f.ligneServiceId ?? ''}`,
+                            )}
+                          >
+                            Encaisser
+                          </button>
+                        ) : (
+                          <span className="pill ok">Soldée</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 

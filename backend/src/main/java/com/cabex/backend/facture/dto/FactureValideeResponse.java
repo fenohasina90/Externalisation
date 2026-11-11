@@ -29,6 +29,8 @@ public record FactureValideeResponse(
         String referenceDemande,
         Integer ligneServiceId,
         String libelleLigne,
+        /** Nom du service catalogue (ligne EXTERNALISATION), null pour un débours. */
+        String nomService,
         BigDecimal montant,
         BigDecimal montantPaye,
         BigDecimal resteAPayer,

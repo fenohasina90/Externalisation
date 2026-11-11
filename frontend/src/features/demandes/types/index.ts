@@ -175,6 +175,8 @@ export interface FactureValidee {
   referenceDemande: string
   ligneServiceId: number | null
   libelleLigne: string | null
+  /** Nom du service catalogue (ligne EXTERNALISATION), null pour un débours. */
+  nomService: string | null
   montant: number
   montantPaye: number
   resteAPayer: number

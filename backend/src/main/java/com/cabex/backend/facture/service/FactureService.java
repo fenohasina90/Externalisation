@@ -603,6 +603,8 @@ public class FactureService {
                                 l.getDesignation(),
                                 l.getMontant()))
                         .toList();
+        String nomService = ligne != null && ligne.getService() != null
+                ? ligne.getService().getNomService() : null;
         return new FactureValideeResponse(
                 fv.getId(),
                 fv.getReferenceFactureValidee(),
@@ -613,6 +615,7 @@ public class FactureService {
                 fv.getDemande() != null ? fv.getDemande().getReferenceDemande() : null,
                 ligne != null ? ligne.getId() : null,
                 libelleLigne,
+                nomService,
                 montant,
                 paye,
                 reste,
