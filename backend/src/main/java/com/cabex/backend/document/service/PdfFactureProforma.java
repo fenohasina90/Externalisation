@@ -160,13 +160,15 @@ final class PdfFactureProforma {
         designation.add(new Chunk(PdfFormats.valeur(com.cabex.backend.demande.mapper
                 .DemandeMapper.libelleLigne(ligne)), st.tdGras));
         PdfComposants.faCorps(table, st, designation, Element.ALIGN_LEFT, zebra);
-        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(ligne.getTarif()), st.td),
+        BigDecimal tarifAffiche = ligne.getTarifProforma() != null ? ligne.getTarifProforma()
+                : ligne.getTarif();
+        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(tarifAffiche), st.td),
                 Element.ALIGN_RIGHT, zebra);
         PdfComposants.faCorps(table, st, new Phrase("1", st.td), Element.ALIGN_CENTER, zebra);
-        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(ligne.getTarif()), st.td),
+        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(tarifAffiche), st.td),
                 Element.ALIGN_RIGHT, zebra);
         PdfComposants.faCorps(table, st, new Phrase("-", st.td), Element.ALIGN_RIGHT, zebra);
-        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(ligne.getTarif()), st.td),
+        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(tarifAffiche), st.td),
                 Element.ALIGN_RIGHT, zebra);
     }
 
@@ -176,7 +178,9 @@ final class PdfFactureProforma {
             return total;
         }
         for (LigneService ligne : facture.getLignes()) {
-            total = total.add(PdfFormats.montantOuZero(ligne.getTarif()));
+            BigDecimal tarifAffiche = ligne.getTarifProforma() != null ? ligne.getTarifProforma()
+                    : ligne.getTarif();
+            total = total.add(PdfFormats.montantOuZero(tarifAffiche));
         }
         return total;
     }

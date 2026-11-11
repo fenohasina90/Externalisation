@@ -100,6 +100,7 @@ public class FactureController {
         return ResponseEntity.ok(factureService.valider(
                 id,
                 request != null ? request.commentaire() : null,
-                request != null ? request.montant() : null));
+                request != null ? request.montant() : null,
+                request != null ? request.lignes() : null));
     }
 }

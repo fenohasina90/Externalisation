@@ -8,6 +8,8 @@ public record FactureLigneResponse(
         Integer serviceId,
         String nomService,
         BigDecimal tarif,
+        /** Tarif figé à la génération de la proforma (la ligne peut ensuite évoluer). */
+        BigDecimal tarifProforma,
         LocalDate debutService,
         LocalDate finService,
         String statutLigne,

@@ -145,6 +145,7 @@ public class FactureService {
             BigDecimal total = BigDecimal.ZERO;
             for (LigneService ligne : lignes) {
                 ligne.setFacture(facture);
+                ligne.setTarifProforma(ligne.getTarif());
                 ligneRepository.save(ligne);
                 total = total.add(montantLigne(ligne));
                 ajouterHistoriqueLigne(ligne, LigneServiceService.LIGNE_CREE,
@@ -157,6 +158,7 @@ public class FactureService {
                 Facture facture = creerFacture(demande, modeNormalise, montantLigne(ligne));
                 facture = factureRepository.save(facture);
                 ligne.setFacture(facture);
+                ligne.setTarifProforma(ligne.getTarif());
                 ligneRepository.save(ligne);
                 ajouterHistoriqueLigne(ligne, LigneServiceService.LIGNE_CREE,
                         "Facture proforma générée : " + facture.getReferenceFacture());
@@ -198,6 +200,7 @@ public class FactureService {
             for (LigneService ligne : lignes) {
                 if (ligne.getFacture() == null) {
                     ligne.setFacture(unique);
+                    ligne.setTarifProforma(ligne.getTarif());
                     ligneRepository.save(ligne);
                 }
                 total = total.add(montantLigne(ligne));
@@ -211,6 +214,7 @@ public class FactureService {
                 Facture facture = creerFacture(demande, MODE_PAR_SERVICE, montantLigne(ligne));
                 facture = factureRepository.save(facture);
                 ligne.setFacture(facture);
+                ligne.setTarifProforma(ligne.getTarif());
                 ligneRepository.save(ligne);
             } else {
                 Facture facture = ligne.getFacture();
@@ -631,11 +635,17 @@ public class FactureService {
 
     @Transactional
     public FactureResponse valider(Integer factureId, String commentaire) {
-        return valider(factureId, commentaire, null);
+        return valider(factureId, commentaire, null, null);
     }
 
     @Transactional
     public FactureResponse valider(Integer factureId, String commentaire, BigDecimal montantValide) {
+        return valider(factureId, commentaire, montantValide, null);
+    }
+
+    @Transactional
+    public FactureResponse valider(Integer factureId, String commentaire, BigDecimal montantValide,
+                                    List<com.cabex.backend.facture.dto.ValiderFactureLigneRequest> lignesValidees) {
         Facture facture = getFacture(factureId);
         if (!FACTURE_PROFORMA.equals(facture.getStatut())) {
             throw new BusinessException(
@@ -645,13 +655,77 @@ public class FactureService {
         if (factureValideeRepository.existsByFactureProformaId(facture.getId())) {
             throw new BusinessException("Cette facture proforma a déjà été validée");
         }
-        BigDecimal montantFinal = montantValide != null ? montantValide : facture.getMontant();
+        List<LigneService> lignesLignees = ligneRepository.findByDemandeId(facture.getDemande().getId()).stream()
+                .filter(l -> l.getFacture() != null && l.getFacture().getId().equals(facture.getId()))
+                .toList();
+
+        // --- Validation par ligne : chaque tarif de ligne devient le tarif validé ---
+        BigDecimal montantFinal;
+        if (lignesValidees != null && !lignesValidees.isEmpty()) {
+            if (lignesValidees.size() != lignesLignees.size()) {
+                throw new BusinessException(
+                        "La liste des lignes validées (" + lignesValidees.size()
+                                + ") ne correspond pas à la facture (" + lignesLignees.size() + " ligne(s))");
+            }
+            for (com.cabex.backend.facture.dto.ValiderFactureLigneRequest req : lignesValidees) {
+                if (req == null || req.ligneServiceId() == null) {
+                    throw new BusinessException("Une ligne à valider ne peut pas être vide");
+                }
+                if (req.montant() == null || req.montant().signum() < 0) {
+                    throw new BusinessException(
+                            "Le montant validé d'une ligne doit être supérieur ou nul");
+                }
+                LigneService ligne = null;
+                for (LigneService l : lignesLignees) {
+                    if (l.getId() != null && l.getId().equals(req.ligneServiceId())) {
+                        ligne = l;
+                        break;
+                    }
+                }
+                if (ligne == null) {
+                    throw new BusinessException(
+                            "La ligne " + req.ligneServiceId()
+                                    + " n'appartient pas à la facture " + facture.getReferenceFacture());
+                }
+                if (LigneServiceService.estDebours(ligne)) {
+                    throw new BusinessException(
+                            "Une ligne DEBOURS ne peut pas être validée via une facture proforma");
+                }
+                BigDecimal ancien = ligne.getTarif();
+                ligne.setTarif(req.montant());
+                ligneRepository.save(ligne);
+                ajouterHistoriqueLigne(ligne,
+                        ligne.getStatut() != null ? ligne.getStatut() : "TARIF_AJUSTE",
+                        "Tarif ajusté à la validation : " + ancien + " → " + req.montant());
+            }
+            // Le montant total de la facture validée = somme des lignes après mise à jour.
+            montantFinal = lignesLignees.stream()
+                    .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        } else if (montantValide != null) {
+            // Montant validé global (ancienne API) : sur une facture à une seule ligne,
+            // le tarif de la ligne suit aussi la valeur validée.
+            if (lignesLignees.size() == 1) {
+                LigneService ligne = lignesLignees.get(0);
+                if (!LigneServiceService.estDebours(ligne)) {
+                    BigDecimal ancien = ligne.getTarif();
+                    ligne.setTarif(montantValide);
+                    ligneRepository.save(ligne);
+                    ajouterHistoriqueLigne(ligne,
+                            ligne.getStatut() != null ? ligne.getStatut() : "TARIF_AJUSTE",
+                            "Tarif ajusté à la validation : " + ancien + " → " + montantValide);
+                }
+            }
+            montantFinal = montantValide;
+        } else {
+            montantFinal = facture.getMontant();
+        }
         if (montantFinal == null || montantFinal.signum() < 0) {
             throw new BusinessException("Le montant validé doit être supérieur ou nul");
         }
         Utilisateur validateur = currentUtilisateur();
         facture.setStatut(FACTURE_VALIDEE);
-        facture = factureRepository.save(facture);
+        factureRepository.save(facture);
 
         LocalDateTime valideLe = LocalDateTime.now();
         com.cabex.backend.facture.entity.FactureValidee validee =
@@ -735,6 +809,7 @@ public class FactureService {
                         l.getService() != null ? l.getService().getId() : null,
                         l.getService() != null ? l.getService().getNomService() : null,
                         l.getTarif(),
+                        l.getTarifProforma(),
                         l.getDebutService(),
                         l.getFinService(),
                         l.getStatut(),

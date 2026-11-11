@@ -49,6 +49,10 @@ public class LigneService {
     @Column(name = "tarif", precision = 15, scale = 2)
     private BigDecimal tarif;
 
+    /** Tarif figé au moment de la génération de la proforma (la ligne peut ensuite évoluer). */
+    @Column(name = "tarif_proforma", precision = 15, scale = 2)
+    private BigDecimal tarifProforma;
+
     @Column(name = "debut_service")
     private java.time.LocalDate debutService;
 

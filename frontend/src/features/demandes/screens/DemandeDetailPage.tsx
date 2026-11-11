@@ -446,7 +446,8 @@ function FacturesTab({
 }) {
   const [confirmValidation, setConfirmValidation] = useState(false)
   const [validationEnCours, setValidationEnCours] = useState(false)
-  const [montantValideSaisi, setMontantValideSaisi] = useState('')
+  /** Tarif saisi par ligne service (défaut = tarif proforma). */
+  const [tarifsModifies, setTarifsModifies] = useState<Record<number, number | ''>>({})
   const [apercu, setApercu] = useState<FactureApercu | null>(null)
   const navigate = useNavigate()
   const { data: facturesValidees, reload: reloadValidees } = useApi<FactureValidee[]>(
@@ -467,20 +468,31 @@ function FacturesTab({
   )
   const totalApercu = toutesLignes.reduce((s, l) => s + l.tarif, 0)
 
+  const tarifEffectif = (l: { ligneServiceId: number; tarif: number }): number => {
+    const v = tarifsModifies[l.ligneServiceId]
+    return v === '' || v === undefined ? l.tarif : Number(v)
+  }
+  const totalProformas = proformas
+    .flatMap((f) => f.lignes)
+    .reduce((s, l) => s + tarifEffectif(l), 0)
+
   const handleValiderTout = async () => {
     setConfirmValidation(false)
     setValidationEnCours(true)
     try {
       for (const f of proformas) {
-        const montant = proformas.length === 1 && montantValideSaisi.trim() !== '' ? Number(montantValideSaisi) : null
-        await facturesApi.valider(f.id, null, montant)
+        const lignes = f.lignes.map((l) => ({
+          ligneServiceId: l.ligneServiceId,
+          montant: tarifEffectif(l),
+        }))
+        await facturesApi.valider(f.id, null, null, lignes)
       }
       onMessage(
         proformas.length === 1
           ? `Facture ${proformas[0].referenceFacture} validée.`
           : `${proformas.length} factures validées.`,
       )
-      setMontantValideSaisi('')
+      setTarifsModifies({})
       onChange()
     } catch (err) {
       onErreur(err instanceof Error ? err.message : 'Échec de la validation')
@@ -718,22 +730,68 @@ function FacturesTab({
             : `Les ${proformas.length} factures proforma seront validées et les services concernés seront figés.`
         }
         details={
-          proformas.length === 1 && proformas[0] ? (
-            <label className="field" style={{ marginTop: 12 }}>
-              Montant validé (MGA) — vide = proforma ({formatMontantMGA(proformas[0].montantProforma ?? proformas[0].montant)})
-              <input
-                type="number"
-                min={0}
-                value={montantValideSaisi}
-                onChange={(e) => setMontantValideSaisi(e.target.value)}
-                placeholder="Ex. 1950000"
-              />
-            </label>
+          proformas.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12, maxHeight: 360, overflowY: 'auto' }}>
+              <p className="section-note" style={{ margin: 0, fontSize: 12 }}>
+                Ajustez chaque montant validé (défaut = tarif proforma). Le tarif du service passe
+                à cette valeur ; la valeur dans le proforma ne change pas.
+              </p>
+              {proformas.map((f) => {
+                const totalF = f.lignes.reduce((s, l) => s + tarifEffectif(l), 0)
+                return (
+                  <div
+                    key={f.id}
+                    style={{ border: '1px solid var(--bordure, #e5e7eb)', borderRadius: 8, padding: 10 }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+                      <div>
+                        <strong style={{ fontSize: 14 }}>{f.referenceFacture}</strong>
+                        <span className="text-secondary"> · {f.modeFacturation === 'UNIQUE' ? 'unique' : 'par service'}</span>
+                      </div>
+                      <span className="text-secondary">
+                        {f.lignes.length === 1 ? '1 ligne' : `${f.lignes.length} lignes`} — sous-total <b>{formatMontantMGA(totalF)}</b>
+                      </span>
+                    </div>
+                    {f.lignes.map((l) => {
+                      const vInput = tarifsModifies[l.ligneServiceId]
+                      return (
+                        <label key={l.ligneServiceId} className="field" style={{ marginTop: 8 }}>
+                          <b>{l.nomService ?? l.libelleLigne ?? `Service ${l.ligneServiceId}`}</b>
+                          {l.libelleLigne && (
+                            <span className="text-secondary" style={{ fontSize: 11, display: 'block' }}>
+                              {l.libelleLigne}
+                            </span>
+                          )}
+                          <input
+                            type="number"
+                            min={0}
+                            step="1"
+                            value={vInput ?? l.tarif}
+                            onChange={(e) =>
+                              setTarifsModifies((prev) => ({
+                                ...prev,
+                                [l.ligneServiceId]: e.target.value === '' ? '' : Number(e.target.value),
+                              }))
+                            }
+                          />
+                        </label>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', fontWeight: 600 }}>
+                Total à valider&nbsp;: <b style={{ marginLeft: 6 }}>{formatMontantMGA(totalProformas)}</b>
+              </div>
+            </div>
           ) : undefined
         }
         confirmer="Valider"
         ton="success"
-        onAnnuler={() => setConfirmValidation(false)}
+        onAnnuler={() => {
+          setConfirmValidation(false)
+          setTarifsModifies({})
+        }}
         onConfirmer={() => void handleValiderTout()}
       />
       <FactureApercuModal
@@ -1181,6 +1239,7 @@ function LigneFormModal({
   onErreur: (message: string | null) => void
 }) {
   const [serviceId, setServiceId] = useState<number | ''>('')
+  const [typePrestation, setTypePrestation] = useState<'PRESTATION' | 'ABONNEMENT_MENSUEL'>('PRESTATION')
   const [tarif, setTarif] = useState('')
   const [debut, setDebut] = useState('')
   const [fin, setFin] = useState('')
@@ -1189,11 +1248,15 @@ function LigneFormModal({
   const [erreur, setErreur] = useState<string | null>(null)
   const [enregistrement, setEnregistrement] = useState(false)
   const [serviceModalOpen, setServiceModalOpen] = useState(false)
-  const aujourdhui = new Date().toISOString().slice(0, 10)
+  const typeCourant = typePrestation
   const { data: pageServices, reload: reloadServices } = useApi(
     () => servicesApi.list({ page: 0, size: 100, recherche: null }, { actif: true }),
     [open],
   )
+
+  const estServiceStandard = ligne
+    ? ligne.typeService === 'STANDARD'
+    : (pageServices?.content ?? []).find((s) => s.id === serviceId)?.typeService === 'STANDARD'
 
   // Pré-remplissage à l'ouverture (montée de version sans effet de bord).
   const cle = open ? `ligne-${ligne?.id ?? 'nouvelle'}` : 'fermee'
@@ -1202,6 +1265,7 @@ function LigneFormModal({
     setCleVue(cle)
     if (open) {
       setServiceId(ligne?.serviceId ?? '')
+      setTypePrestation((ligne?.typePrestation as 'PRESTATION' | 'ABONNEMENT_MENSUEL') ?? 'PRESTATION')
       setTarif(ligne?.tarif != null ? String(ligne.tarif) : '')
       setDebut(ligne?.debutService ?? '')
       setFin(ligne?.finService ?? '')
@@ -1274,16 +1338,18 @@ function LigneFormModal({
       setErreur('Le tarif doit être positif ou nul')
       return
     }
-    const estPrestationSansDates = ligne?.typePrestation === 'PRESTATION'
-    if (!estPrestationSansDates && (!debut || !fin)) {
+    // Sous-type de la ligne (défaut PRESTATION — même règle que le backend).
+    const estPrestation = typeCourant === 'PRESTATION'
+    const estAbonnement = typeCourant === 'ABONNEMENT_MENSUEL'
+    if (estAbonnement && !debut) {
+      setErreur('La date de début est obligatoire pour un abonnement mensuel')
+      return
+    }
+    if (!estPrestation && !estAbonnement && (!debut || !fin)) {
       setErreur('La période est obligatoire')
       return
     }
-    if (!estPrestationSansDates && debut && debut < aujourdhui) {
-      setErreur("Le début doit être postérieur ou égal à aujourd'hui")
-      return
-    }
-    if (!estPrestationSansDates && debut && fin && fin <= debut) {
+    if (debut && fin && fin <= debut) {
       setErreur('La fin doit être strictement postérieure au début')
       return
     }
@@ -1293,17 +1359,19 @@ function LigneFormModal({
       if (ligne) {
         await lignesApi.update(demandeId, ligne.id, {
           tarif: Number(tarif),
-          debutService: debut,
-          finService: fin,
+          debutService: debut || null,
+          finService: fin || null,
+          typePrestation: estServiceStandard ? typePrestation : null,
         })
       } else {
         await lignesApi.create(demandeId, {
           serviceId: serviceId as number,
           tarif: Number(tarif),
-          debutService: debut,
-          finService: fin,
+          debutService: debut || null,
+          finService: fin || null,
           categorie: 'EXTERNALISATION',
           designationDebours: null,
+          typePrestation: estServiceStandard ? typePrestation : null,
         })
       }
       onSaved()
@@ -1379,8 +1447,22 @@ function LigneFormModal({
                 </select>
               </label>
             )}
+            {estServiceStandard && categorie === 'EXTERNALISATION' && (
+              <label className="field form-grid__full">
+                Type de prestation <span className="required">*</span>
+                <select
+                  value={typePrestation}
+                  onChange={(e) =>
+                    setTypePrestation(e.target.value as 'PRESTATION' | 'ABONNEMENT_MENSUEL')
+                  }
+                >
+                  <option value="PRESTATION">Prestation</option>
+                  <option value="ABONNEMENT_MENSUEL">Abonnement mensuel</option>
+                </select>
+              </label>
+            )}
             <label className="field">
-              Tarif (MGA) <span className="required">*</span>
+              {typePrestation === 'ABONNEMENT_MENSUEL' ? 'Tarif mensuel' : 'Tarif'} (MGA) <span className="required">*</span>
               <input
                 type="number"
                 min={0}
@@ -1390,12 +1472,12 @@ function LigneFormModal({
             </label>
             <span className="field" />
             <label className="field">
-              Début <span className="required">*</span>
-              <input type="date" min={aujourdhui} value={debut} onChange={(e) => setDebut(e.target.value)} />
+              Début {typeCourant === 'ABONNEMENT_MENSUEL' && <span className="required">*</span>}
+              <input type="date" value={debut} onChange={(e) => setDebut(e.target.value)} />
             </label>
             <label className="field">
-              Fin <span className="required">*</span>
-              <input type="date" min={debut || aujourdhui} value={fin} onChange={(e) => setFin(e.target.value)} />
+              Fin {typeCourant !== 'PRESTATION' && typeCourant !== 'ABONNEMENT_MENSUEL' && <span className="required">*</span>}
+              <input type="date" value={fin} min={debut || undefined} onChange={(e) => setFin(e.target.value)} />
             </label>
             </>
             )}

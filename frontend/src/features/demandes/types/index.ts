@@ -130,12 +130,19 @@ export type ModeFacturation = 'UNIQUE' | 'PAR_SERVICE'
 
 export type StatutFacture = 'PROFORMA' | 'VALIDEE' | 'ANNULEE'
 
+export interface ValiderFactureLignePayload {
+  ligneServiceId: number
+  montant: number
+}
+
 export interface FactureLigne {
   ligneServiceId: number
   serviceId: number | null
   nomService: string | null
   libelleLigne: string | null
   tarif: number
+  /** Tarif figé au moment de la génération de la proforma. */
+  tarifProforma?: number | null
   debutService: string
   finService: string
   statutLigne: string | null

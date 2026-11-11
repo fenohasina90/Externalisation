@@ -1633,6 +1633,9 @@ CREATE TABLE ligne_service (
 
     tarif DECIMAL(15,2) NULL,
 
+    -- Tarif figé à la génération de la proforma (la ligne peut ensuite évoluer)
+    tarif_proforma DECIMAL(15,2) NULL COMMENT 'Tarif figé à la génération de la proforma',
+
     debut_service DATE NULL,
 
     fin_service DATE NULL,

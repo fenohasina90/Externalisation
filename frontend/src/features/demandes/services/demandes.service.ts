@@ -8,6 +8,7 @@ import type {
   Facture,
   FactureValidee,
   InclusionDisponible,
+  ValiderFactureLignePayload,
   HistoriqueDemande,
   HistoriqueLigne,
   LigneService,
@@ -156,8 +157,17 @@ export const facturesApi = {
     return data
   },
 
-  async valider(id: number, commentaire?: string | null, montant?: number | null): Promise<Facture> {
-    const { data } = await http.put<Facture>(`/factures/${id}/valider`, { commentaire: commentaire ?? null, montant: montant ?? null })
+  async valider(
+    id: number,
+    commentaire?: string | null,
+    montant?: number | null,
+    lignes?: ValiderFactureLignePayload[],
+  ): Promise<Facture> {
+    const { data } = await http.put<Facture>(`/factures/${id}/valider`, {
+      commentaire: commentaire ?? null,
+      montant: montant ?? null,
+      lignes: lignes ?? null,
+    })
     return data
   },
 
