@@ -21,7 +21,8 @@ import { ServiceFormModal } from '@/features/services/components/ServiceFormModa
 import { PiecesJointes } from '@/features/documents'
 import { getLibelleTypePrestation } from '../constants/labels'
 import { ChangerStatutModal, DemandeStepper, DossierEntrepriseDetail,
-  DossierTransactionImmobiliereDetail, StatutDemandePill } from '../components'
+  DossierTransactionImmobiliereDetail, FactureApercuModal, StatutDemandePill } from '../components'
+import type { FactureApercu } from '../components'
 import type { Demande, Facture, FactureValidee, InclusionDisponible, HistoriqueDemande, HistoriqueLigne,
   LigneService, StatutDemande } from '../types'
 import { dossierVersFormulaire, type Dossier } from '../types/dossier'
@@ -446,6 +447,7 @@ function FacturesTab({
   const [confirmValidation, setConfirmValidation] = useState(false)
   const [validationEnCours, setValidationEnCours] = useState(false)
   const [montantValideSaisi, setMontantValideSaisi] = useState('')
+  const [apercu, setApercu] = useState<FactureApercu | null>(null)
   const navigate = useNavigate()
   const { data: facturesValidees, reload: reloadValidees } = useApi<FactureValidee[]>(
     () => facturesValideesApi.list(demandeId).catch(() => []),
@@ -516,7 +518,18 @@ function FacturesTab({
                         {formatDate(l.debutService)} → {formatDate(l.finService)}
                       </td>
                       <td>{formatMontantMGA(l.tarif)}</td>
-                      <td className="text-secondary">{l.referenceFacture}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-link"
+                          onClick={() => {
+                            const f = factures.find((x) => x.referenceFacture === l.referenceFacture)
+                            if (f) setApercu({ kind: 'proforma', facture: f })
+                          }}
+                        >
+                          {l.referenceFacture}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -599,7 +612,15 @@ function FacturesTab({
                   const taux = f.montant > 0 ? Math.min(100, Math.round((montantPaye / f.montant) * 100)) : 0
                   return (
                     <tr key={f.id}>
-                      <td className="fw-600">{f.referenceFactureValidee}</td>
+                      <td className="fw-600">
+                        <button
+                          type="button"
+                          className="btn-link"
+                          onClick={() => setApercu({ kind: 'validee', facture: f })}
+                        >
+                          {f.referenceFactureValidee}
+                        </button>
+                      </td>
                       <td>
                         <span className={f.type === 'DEBOURS' ? 'pill wt' : 'pill ok'}>
                           {f.type === 'DEBOURS' ? 'Débours' : 'Externalisation'}
@@ -661,10 +682,15 @@ function FacturesTab({
       {factures.map((f) => (
         <section key={f.id} className="card card-pad">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <strong>
+            <button
+              type="button"
+              className="btn-link fw-600"
+              style={{ textAlign: 'left', fontSize: 'inherit', color: 'inherit' }}
+              onClick={() => setApercu({ kind: 'proforma', facture: f })}
+            >
               Proforma {f.referenceFacture} — {formatMontantMGA(f.montantProforma ?? f.montant)}
               {f.montantValidee != null && ` → validée ${formatMontantMGA(f.montantValidee)}`}
-            </strong>
+            </button>
             <span className={f.statut === 'VALIDEE' ? 'pill ok' : 'pill wt'}>
               ● {f.statut === 'VALIDEE' ? 'Validée' : 'Proforma'}
             </span>
@@ -709,6 +735,10 @@ function FacturesTab({
         ton="success"
         onAnnuler={() => setConfirmValidation(false)}
         onConfirmer={() => void handleValiderTout()}
+      />
+      <FactureApercuModal
+        apercu={apercu}
+        onClose={() => setApercu(null)}
       />
     </div>
   )
@@ -933,7 +963,9 @@ function LigneCard({
     <section className="card card-pad">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <strong>
-          {libelleLigne(ligne)} — {formatMontantMGA(ligne.tarif ?? ligne.montantDebours ?? 0)}
+          {estDebours
+            ? `${ligne.designationDebours ?? 'Débours'} — ${formatMontantMGA(ligne.tarif ?? ligne.montantDebours ?? 0)}`
+            : `${ligne.nomService ?? libelleLigne(ligne)} — ${formatMontantMGA(ligne.tarif ?? ligne.montantDebours ?? 0)}`}
         </strong>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span className={`pill ${estDebours ? 'pill warning' : 'pill wt'}`}>● {estDebours ? 'Débours' : 'Externalisation'}</span>
@@ -1953,6 +1985,7 @@ function FacturesAbonnementSection({
   )
   const [creationEnCours, setCreationEnCours] = useState<number | null>(null)
   const [telechargement, setTelechargement] = useState<number | null>(null)
+  const [apercu, setApercu] = useState<FactureApercu | null>(null)
   const [cible, setCible] = useState<LigneService | null>(null)
   const [dateEmission, setDateEmission] = useState(() => new Date().toISOString().slice(0, 10))
   const [moisActuel, setMoisActuel] = useState(() => new Date().toISOString().slice(0, 7))
@@ -2146,7 +2179,15 @@ function FacturesAbonnementSection({
                     <tbody>
                       {enfants.map((f) => (
                         <tr key={f.id}>
-                          <td className="fw-600">{f.referenceFactureValidee}</td>
+                          <td className="fw-600">
+                        <button
+                          type="button"
+                          className="btn-link"
+                          onClick={() => setApercu({ kind: 'validee', facture: f })}
+                        >
+                          {f.referenceFactureValidee}
+                        </button>
+                      </td>
                           <td>{moisLabel(f.mois)}</td>
                           <td className="text-secondary">
                             {f.valideLe ? formatDate(f.valideLe.slice(0, 10)) : '—'}
@@ -2335,6 +2376,11 @@ function FacturesAbonnementSection({
           Voir l&apos;historique des paiements ›
         </Link>
       </div>
+
+      <FactureApercuModal
+        apercu={apercu}
+        onClose={() => setApercu(null)}
+      />
     </section>
   )
 }

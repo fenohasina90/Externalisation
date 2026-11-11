@@ -237,6 +237,19 @@ public class DocumentGestionService {
         return pdfGenerator.factureAbonnement(facture);
     }
 
+    /**
+     * Document complet d'une facture validée : abonnement mensuel (PDF abonnement),
+     * débours (PDF simple) ou facture générale (PDF proforma).
+     */
+    @Transactional(readOnly = true)
+    public byte[] factureValideeDocument(Integer factureValideeId) {
+        com.cabex.backend.facture.entity.FactureValidee facture = factureValideeRepository
+                .findById(factureValideeId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Facture validée", factureValideeId)));
+        return pdfGenerator.factureValideeDocument(facture);
+    }
+
     @Transactional
     public DocumentResponse sauvegarderRecapitulatif(Integer demandeId) {
         verifierDemande(demandeId);

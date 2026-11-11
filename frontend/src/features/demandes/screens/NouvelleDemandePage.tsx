@@ -695,7 +695,7 @@ export function NouvelleDemandePage() {
                             placeholder="Ex. 2000000"
                           />
                         </label>
-                        <span className="field" />
+                        {/* <span className="field" /> */}
                         <label className="field">
                           Début{
                             l.typePrestation !== 'PRESTATION' ? (

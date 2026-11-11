@@ -33,9 +33,12 @@ import java.util.Map;
 public class DocumentController {
 
     private final DocumentGestionService documentService;
+    private final com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository;
 
-    public DocumentController(DocumentGestionService documentService) {
+    public DocumentController(DocumentGestionService documentService,
+                              com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository) {
         this.documentService = documentService;
+        this.factureValideeRepository = factureValideeRepository;
     }
 
     @GetMapping("/demandes/{id}/documents")
@@ -146,6 +149,23 @@ public class DocumentController {
             description = "Références affichées : facture générale validée, facture proforma et demande")
     public ResponseEntity<byte[]> factureAbonnement(@PathVariable Integer id) {
         return pdfResponse(documentService.factureAbonnement(id), "facture-abonnement-" + id + ".pdf");
+    }
+
+    @GetMapping("/factures-validees/{id}/document")
+    @PreAuthorize("hasAuthority('FACTURE_VIEW')")
+    @Operation(summary = "Télécharger la facture validée (PDF)",
+            description = "Document complet selon le type : facture du mois (abonnement), facture de débours, ou facture validée issue d'une proforma")
+    public ResponseEntity<byte[]> factureDocument(@PathVariable Integer id) {
+        String nomFichier = "facture-" + id + ".pdf";
+        try {
+            com.cabex.backend.facture.entity.FactureValidee fv = factureValideeRepository.findById(id).orElse(null);
+            if (fv != null && fv.getReferenceFactureValidee() != null) {
+                nomFichier = fv.getReferenceFactureValidee().replace('/', '-') + ".pdf";
+            }
+        } catch (Exception ignored) {
+            // nom générique
+        }
+        return pdfResponse(documentService.factureValideeDocument(id), nomFichier);
     }
 
     private ResponseEntity<byte[]> pdfResponse(byte[] contenu, String nomFichier) {
