@@ -1523,6 +1523,9 @@ CREATE TABLE facture_validee (
 
     demande_id INT NOT NULL,
 
+    -- Mois facturé par une facture du mois d'abonnement (premier du mois), NULL sinon
+    mois DATE NULL COMMENT 'Mois facturé par la facture du mois d''abonnement',
+
     montant DECIMAL(15,2) NOT NULL COMMENT 'Montant validé (peut différer du proforma)',
 
     valide_par INT NULL,

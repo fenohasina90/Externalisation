@@ -85,6 +85,10 @@ public class FactureValidee {
     @Column(name = "montant", nullable = false, precision = 15, scale = 2)
     private BigDecimal montant;
 
+    /** Mois facturé par une facture du mois d'abonnement (premier du mois). NULL sinon. */
+    @Column(name = "mois")
+    private java.time.LocalDate mois;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "valide_par")
     private Utilisateur validePar;

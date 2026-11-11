@@ -272,6 +272,7 @@ public class FactureService {
     public FactureValideeResponse creerFactureMensuelleAbonnement(Integer demandeId,
                                                                   Integer ligneServiceId,
                                                                   LocalDate dateEmission,
+                                                                  String mois,
                                                                   String commentaire,
                                                                   List<Integer> inclusionLigneIds) {
         DemandeService demande = verifierDemande(demandeId);
@@ -282,6 +283,12 @@ public class FactureService {
         }
         if (dateEmission == null) {
             throw new BusinessException("La date d'émission de la facture est obligatoire");
+        }
+        java.time.YearMonth moisAnnee;
+        try {
+            moisAnnee = java.time.YearMonth.parse(mois);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new BusinessException("Le mois facturé est obligatoire et doit être au format AAAA-MM (ex. 2026-01)");
         }
         LigneService ligne = ligneRepository.findById(ligneServiceId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -380,6 +387,7 @@ public class FactureService {
                 .ligneService(ligne)
                 .demande(demande)
                 .montant(montantTotal)
+                .mois(moisAnnee.atDay(1))
                 .validePar(validateur)
                 .valideLe(valideLe)
                 .build();
@@ -390,6 +398,7 @@ public class FactureService {
         }
         child = factureValideeRepository.save(child);
         String note = "Facture mensuelle d'abonnement " + child.getReferenceFactureValidee()
+                + " — mois " + moisAnnee
                 + " — émise le " + dateEmission
                 + " — facture générale " + generale.getReferenceFactureValidee()
                 + ", proforma " + proforma.getReferenceFacture()
@@ -589,6 +598,8 @@ public class FactureService {
                         .map(l -> new FactureValideeLigneResponse(
                                 l.getId(),
                                 l.getLigneService() != null ? l.getLigneService().getId() : null,
+                                l.getLigneService() != null && l.getLigneService().getDemande() != null
+                                        ? l.getLigneService().getDemande().getReferenceDemande() : null,
                                 l.getDesignation(),
                                 l.getMontant()))
                         .toList();
@@ -609,7 +620,10 @@ public class FactureService {
                 fv.getValidePar() != null
                         ? fv.getValidePar().getPrenom() + " " + fv.getValidePar().getNom() : null,
                 fv.getValideLe(),
-                lignesResp);
+                lignesResp,
+                fv.getMois() != null
+                        ? java.time.format.DateTimeFormatter.ofPattern("yyyy-MM").format(fv.getMois())
+                        : null);
     }
 
     @Transactional

@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -37,6 +38,8 @@ class FactureAbonnementPdfTest {
         Societe societe = Societe.builder().id(1).nomSociete("Atlas Conseil").build();
         DemandeService demande = DemandeService.builder().id(17)
                 .referenceDemande("DEM-2026-00017").societe(societe).build();
+        DemandeService demandeDebours = DemandeService.builder().id(18)
+                .referenceDemande("DEM-2026-00018").societe(societe).build();
         LigneService ligne = LigneService.builder().id(1).demande(demande)
                 .service(Service.builder().id(1).nomService("Abonnement comptabilité").build())
                 .tarif(new BigDecimal("1500000"))
@@ -64,6 +67,7 @@ class FactureAbonnementPdfTest {
                 .demande(demande)
                 .montant(new BigDecimal("1750000"))
                 .valideLe(LocalDateTime.of(2026, 11, 10, 0, 0))
+                .mois(java.time.LocalDate.of(2026, 1, 1))
                 .build();
         com.cabex.backend.facture.entity.FactureValideeLigne ligneAbo =
                 com.cabex.backend.facture.entity.FactureValideeLigne.builder()
@@ -73,7 +77,7 @@ class FactureAbonnementPdfTest {
                         .designation("Abonnement mensuel — Abonnement comptabilité")
                         .montant(new BigDecimal("1500000"))
                         .build();
-        LigneService debours = LigneService.builder().id(9).demande(demande)
+        LigneService debours = LigneService.builder().id(9).demande(demandeDebours)
                 .categorie("DEBOURS").statut("NON_PAYEE")
                 .designationDebours("Timbres postaux")
                 .montantDebours(new BigDecimal("250000"))
@@ -112,5 +116,8 @@ class FactureAbonnementPdfTest {
         assertTrue(texte.contains("DEM-2026-00017"), "référence demande");
         assertTrue(texte.contains("Abonnement mensuel"), "désignation abonnement");
         assertTrue(texte.contains("Timbres postaux"), "désignation débours");
+        assertTrue(texte.contains("DEM-2026-00017"), "demande de la ligne abonnement");
+        assertTrue(texte.contains("DEM-2026-00018"), "demande de la ligne débours");
+        assertTrue(texte.toLowerCase(Locale.FRANCE).contains("janvier 2026"), "mois facturé");
     }
 }

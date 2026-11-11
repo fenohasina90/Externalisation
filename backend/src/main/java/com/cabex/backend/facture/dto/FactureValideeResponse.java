@@ -37,6 +37,8 @@ public record FactureValideeResponse(
         String valideParNom,
         LocalDateTime valideLe,
         /** Lignes de la facture (facture combinée du mois) ; vide sinon. */
-        List<FactureValideeLigneResponse> lignes
+        List<FactureValideeLigneResponse> lignes,
+        /** Mois facturé (format AAAA-MM), uniquement pour les factures du mois d'abonnement. */
+        String mois
 ) {
 }

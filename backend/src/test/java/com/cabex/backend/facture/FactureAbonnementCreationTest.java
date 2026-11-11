@@ -145,7 +145,7 @@ class FactureAbonnementCreationTest {
         lenient().when(ligneRepository.findById(2)).thenReturn(Optional.of(debours));
 
         com.cabex.backend.facture.dto.FactureValideeResponse reponse = service.creerFactureMensuelleAbonnement(
-                7, 1, LocalDate.of(2026, 11, 10), "Novembre", List.of(2));
+                7, 1, LocalDate.of(2026, 11, 10), "2026-11", "Novembre", List.of(2));
 
         assertEquals(new BigDecimal("1750000"), reponse.montant());
         assertEquals(2, reponse.lignes().size());
@@ -180,7 +180,7 @@ class FactureAbonnementCreationTest {
         lenient().when(ligneRepository.findById(2)).thenReturn(Optional.of(debours));
 
         com.cabex.backend.facture.dto.FactureValideeResponse reponse = service.creerFactureMensuelleAbonnement(
-                7, 1, LocalDate.of(2026, 11, 10), null, List.of(2));
+                7, 1, LocalDate.of(2026, 11, 10), "2026-11", null, List.of(2));
 
         assertEquals(new BigDecimal("1450000"), reponse.montant());
         assertTrue(reponse.lignes().stream()
@@ -205,6 +205,6 @@ class FactureAbonnementCreationTest {
         lenient().when(ligneRepository.findById(3)).thenReturn(Optional.of(debours));
 
         assertThrows(BusinessException.class, () -> service.creerFactureMensuelleAbonnement(
-                7, 1, LocalDate.of(2026, 11, 10), null, List.of(3)));
+                7, 1, LocalDate.of(2026, 11, 10), "2026-11", null, List.of(3)));
     }
 }

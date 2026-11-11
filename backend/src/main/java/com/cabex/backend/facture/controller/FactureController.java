@@ -79,7 +79,7 @@ public class FactureController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(factureService.creerFactureMensuelleAbonnement(
                         demandeId, request.ligneServiceId(), request.dateEmission(),
-                        request.commentaire(), request.inclusionLigneIds()));
+                        request.mois(), request.commentaire(), request.inclusionLigneIds()));
     }
 
     @GetMapping("/demandes/{demandeId}/factures-abonnement/inclusions-disponibles")

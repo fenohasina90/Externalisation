@@ -6,6 +6,8 @@ import java.math.BigDecimal;
 public record FactureValideeLigneResponse(
         Integer id,
         Integer ligneServiceId,
+        /** Référence de la demande d'où provient la ligne. */
+        String referenceDemande,
         String designation,
         BigDecimal montant
 ) {

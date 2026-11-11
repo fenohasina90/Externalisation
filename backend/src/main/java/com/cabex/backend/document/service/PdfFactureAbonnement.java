@@ -106,6 +106,7 @@ final class PdfFactureAbonnement {
                 {"Service", PdfFormats.valeur(service)}
         });
         PdfPCell cValidation = PdfComposants.carte("Validation", new String[][]{
+                {"Mois facturé", moisLabel(facture.getMois())},
                 {"Émise le", facture.getValideLe() != null
                         ? PdfFormats.valeurDate(facture.getValideLe().toLocalDate()) : null},
                 {"Émise par", PdfFormats.valeur(facture.getValidePar() != null
@@ -121,15 +122,15 @@ final class PdfFactureAbonnement {
                 }));
     }
 
-    /** Tableau des lignes de la facture, désignations bien séparées. */
+    /** Tableau des lignes de la facture combinée, désignations et demandes bien séparées. */
     private static PdfPTable detail(List<FactureValideeLigne> lignes, FactureValidee facture) {
-        PdfPTable table = new PdfPTable(2);
+        PdfPTable table = new PdfPTable(3);
         table.setWidthPercentage(100);
-        table.setWidths(new float[]{3f, 1f});
+        table.setWidths(new float[]{3f, 1.6f, 1.4f});
         table.setSpacingBefore(10);
 
         PdfPCell entete = new PdfPCell(new com.lowagie.text.Phrase("DÉTAIL DE LA FACTURE", PdfTheme.F_SECTION));
-        entete.setColspan(2);
+        entete.setColspan(3);
         entete.setBorder(Rectangle.BOTTOM);
         entete.setBorderColor(PdfTheme.PRIMAIRE);
         entete.setBorderWidth(1f);
@@ -140,16 +141,23 @@ final class PdfFactureAbonnement {
         h1.setBorder(Rectangle.NO_BORDER);
         h1.setPadding(6);
         table.addCell(h1);
-        PdfPCell h2 = new PdfPCell(new com.lowagie.text.Phrase("Montant (Ariary)", PdfTheme.F_LABEL));
+        PdfPCell h2 = new PdfPCell(new com.lowagie.text.Phrase("Demande", PdfTheme.F_LABEL));
         h2.setBorder(Rectangle.NO_BORDER);
-        h2.setHorizontalAlignment(Element.ALIGN_RIGHT);
         h2.setPadding(6);
         table.addCell(h2);
+        PdfPCell h3 = new PdfPCell(new com.lowagie.text.Phrase("Montant (Ariary)", PdfTheme.F_LABEL));
+        h3.setBorder(Rectangle.NO_BORDER);
+        h3.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        h3.setPadding(6);
+        table.addCell(h3);
 
         boolean zebra = false;
         for (FactureValideeLigne ligne : lignes) {
             zebra = !zebra;
             java.awt.Color fond = zebra ? PdfTheme.VERT_PALE : java.awt.Color.WHITE;
+            String refDemande = ligne.getLigneService() != null && ligne.getLigneService().getDemande() != null
+                    ? ligne.getLigneService().getDemande().getReferenceDemande()
+                    : null;
             PdfPCell c1 = new PdfPCell(new com.lowagie.text.Phrase(
                     PdfFormats.valeur(ligne.getDesignation()), PdfTheme.F_VALEUR));
             c1.setBackgroundColor(fond);
@@ -157,15 +165,22 @@ final class PdfFactureAbonnement {
             c1.setPadding(7);
             table.addCell(c1);
             PdfPCell c2 = new PdfPCell(new com.lowagie.text.Phrase(
-                    PdfFormats.formatMontant(ligne.getMontant()), PdfTheme.F_VALEUR));
+                    PdfFormats.valeur(refDemande), PdfTheme.F_VALEUR));
             c2.setBackgroundColor(fond);
-            c2.setHorizontalAlignment(Element.ALIGN_RIGHT);
             c2.setBorder(Rectangle.NO_BORDER);
             c2.setPadding(7);
             table.addCell(c2);
+            PdfPCell c3 = new PdfPCell(new com.lowagie.text.Phrase(
+                    PdfFormats.formatMontant(ligne.getMontant()), PdfTheme.F_VALEUR));
+            c3.setBackgroundColor(fond);
+            c3.setHorizontalAlignment(Element.ALIGN_RIGHT);
+            c3.setBorder(Rectangle.NO_BORDER);
+            c3.setPadding(7);
+            table.addCell(c3);
         }
 
         PdfPCell totalLibelle = new PdfPCell(new com.lowagie.text.Phrase("TOTAL À PAYER", PdfTheme.F_SECTION));
+        totalLibelle.setColspan(2);
         totalLibelle.setBorder(Rectangle.TOP);
         totalLibelle.setBorderColor(PdfTheme.PRIMAIRE);
         totalLibelle.setBorderWidth(1f);
@@ -180,6 +195,15 @@ final class PdfFactureAbonnement {
         totalMontant.setHorizontalAlignment(Element.ALIGN_RIGHT);
         table.addCell(totalMontant);
         return table;
+    }
+
+    private static String moisLabel(java.time.LocalDate mois) {
+        if (mois == null) {
+            return null;
+        }
+        String s = java.time.format.DateTimeFormatter
+                .ofPattern("MMMM yyyy", Locale.FRANCE).format(mois);
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
     private static void montantEnLettres(Document doc, FactureValidee facture) {

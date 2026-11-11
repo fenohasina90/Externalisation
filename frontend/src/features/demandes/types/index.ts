@@ -145,6 +145,8 @@ export interface FactureLigne {
 export interface FactureValideeLigne {
   id: number
   ligneServiceId: number | null
+  /** Référence de la demande d'où provient la ligne. */
+  referenceDemande: string | null
   designation: string
   montant: number
 }
@@ -182,6 +184,8 @@ export interface FactureValidee {
   valideLe: string | null
   /** Lignes de la facture (facture combinée du mois) ; tableau vide sinon. */
   lignes: FactureValideeLigne[]
+  /** Mois facturé (format AAAA-MM), uniquement pour les factures du mois d'abonnement. */
+  mois: string | null
 }
 
 export interface Facture {

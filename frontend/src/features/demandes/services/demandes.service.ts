@@ -182,12 +182,13 @@ export const facturesValideesApi = {
     demandeId: number,
     ligneServiceId: number,
     dateEmission: string,
+    mois: string,
     commentaire?: string | null,
     inclusionLigneIds?: number[],
   ): Promise<FactureValidee> {
     const { data } = await http.post<FactureValidee>(
       `/demandes/${demandeId}/factures-abonnement`,
-      { ligneServiceId, dateEmission, commentaire: commentaire ?? null, inclusionLigneIds: inclusionLigneIds ?? [] },
+      { ligneServiceId, dateEmission, mois, commentaire: commentaire ?? null, inclusionLigneIds: inclusionLigneIds ?? [] },
     )
     return data
   },

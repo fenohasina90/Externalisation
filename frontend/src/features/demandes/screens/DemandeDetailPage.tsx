@@ -41,6 +41,15 @@ type Onglet = 'informations' | 'services' | 'factures' | 'documents' | 'paiement
 const ONGLETS_VALIDES: Onglet[] = ['informations', 'services', 'factures', 'documents',
   'paiements', 'historique', 'dossier', 'dossier-transaction']
 
+/** « 2026-01 » → « Janvier 2026 ». */
+const moisLabel = (isoMois: string | null | undefined): string => {
+  if (!isoMois) return '—'
+  const d = new Date(`${isoMois}-01T00:00:00`)
+  if (Number.isNaN(d.getTime())) return isoMois
+  const s = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(d)
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
 const LIBELLES_LIGNE: Record<string, string> = {
   VALIDE: 'Validé',
   EN_ATTENTE: 'En attente',
@@ -1824,6 +1833,7 @@ function FacturesAbonnementSection({
   const [telechargement, setTelechargement] = useState<number | null>(null)
   const [cible, setCible] = useState<LigneService | null>(null)
   const [dateEmission, setDateEmission] = useState(() => new Date().toISOString().slice(0, 10))
+  const [moisActuel, setMoisActuel] = useState(() => new Date().toISOString().slice(0, 7))
   const [erreurDialog, setErreurDialog] = useState<string | null>(null)
   const [selectionInclusions, setSelectionInclusions] = useState<Set<number>>(new Set())
 
@@ -1848,6 +1858,10 @@ function FacturesAbonnementSection({
       setErreurDialog('La date d’émission est obligatoire.')
       return
     }
+    if (!moisActuel) {
+      setErreurDialog('Le mois facturé est obligatoire.')
+      return
+    }
     setCreationEnCours(cible.id)
     onErreur(null)
     onMessage(null)
@@ -1858,11 +1872,12 @@ function FacturesAbonnementSection({
         demande.id,
         cible.id,
         dateEmission,
+        moisActuel,
         null,
         inclusionIds,
       )
       onMessage(
-        `Facture du mois créée (${dateEmission}) : ${fv.referenceFactureValidee}`
+        `Facture du mois de ${moisLabel(moisActuel)} créée (${dateEmission}) : ${fv.referenceFactureValidee}`
         + ` (facture générale ${fv.referenceFactureGenerale ?? '—'}`
         + `${fv.referenceFactureProforma ? ` · proforma ${fv.referenceFactureProforma}` : ''})`,
       )
@@ -1938,6 +1953,7 @@ function FacturesAbonnementSection({
                   onClick={() => {
                     setErreurDialog(null)
                     setDateEmission(new Date().toISOString().slice(0, 10))
+                    setMoisActuel(new Date().toISOString().slice(0, 7))
                     setSelectionInclusions(new Set())
                     reloadInclusions()
                     setCible(ligne)
@@ -1954,6 +1970,7 @@ function FacturesAbonnementSection({
                     <thead>
                       <tr>
                         <th>Facture</th>
+                        <th>Mois facturé</th>
                         <th>Émise le</th>
                         <th>Générale</th>
                         <th>Proforma</th>
@@ -1967,6 +1984,7 @@ function FacturesAbonnementSection({
                       {enfants.map((f) => (
                         <tr key={f.id}>
                           <td className="fw-600">{f.referenceFactureValidee}</td>
+                          <td>{moisLabel(f.mois)}</td>
                           <td className="text-secondary">
                             {f.valideLe ? formatDate(f.valideLe.slice(0, 10)) : '—'}
                           </td>
@@ -1990,7 +2008,7 @@ function FacturesAbonnementSection({
                       {enfants.map((f) =>
                         (f.lignes ?? []).length > 1 && (
                           <tr key={`l-${f.id}`}>
-                            <td colSpan={8}>
+                            <td colSpan={9}>
                               <div style={{
                                 display: 'flex',
                                 flexDirection: 'column',
@@ -2009,7 +2027,10 @@ function FacturesAbonnementSection({
                                       gap: 12,
                                     }}
                                   >
-                                    <span>{l.designation}</span>
+                                    <span>
+                                      <b className="text-secondary" style={{ fontSize: 12 }}>{l.referenceDemande ?? '—'}</b>
+                                      {' · '}{l.designation}
+                                    </span>
                                     <span className="fw-600">{formatMontantMGA(l.montant)}</span>
                                   </div>
                                 ))}
@@ -2046,6 +2067,16 @@ function FacturesAbonnementSection({
                 onChange={(e) => setDateEmission(e.target.value)}
                 required
                 autoFocus
+              />
+            </label>
+            <label className="field">
+              Mois facturé <span className="required">*</span>
+              <input
+                type="month"
+                lang="fr-FR"
+                value={moisActuel}
+                onChange={(e) => setMoisActuel(e.target.value)}
+                required
               />
             </label>
             {(inclusionsDisponibles ?? []).length > 0 && (
