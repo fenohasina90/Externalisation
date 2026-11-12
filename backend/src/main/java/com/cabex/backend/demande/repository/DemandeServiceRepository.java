@@ -62,6 +62,16 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
         WHERE (:recherche IS NULL OR (
                 LOWER(d.referenceDemande) LIKE LOWER(CONCAT('%', :recherche, '%'))
              OR (s IS NOT NULL AND LOWER(s.nomSociete) LIKE LOWER(CONCAT('%', :recherche, '%')))
+             OR (c IS NOT NULL AND LOWER(c.nomCommercial) LIKE LOWER(CONCAT('%', :recherche, '%')))
+             OR EXISTS (SELECT 1 FROM LigneService l
+                          WHERE l.demande = d
+                            AND LOWER(l.service.nomService) LIKE LOWER(CONCAT('%', :recherche, '%')))
+             OR EXISTS (SELECT 1 FROM Facture f
+                          WHERE f.demande = d
+                            AND LOWER(f.referenceFacture) LIKE LOWER(CONCAT('%', :recherche, '%')))
+             OR EXISTS (SELECT 1 FROM FactureValidee v
+                          WHERE v.demande = d
+                            AND LOWER(v.referenceFactureValidee) LIKE LOWER(CONCAT('%', :recherche, '%')))
           ))
           AND (:societeId IS NULL OR s.id = :societeId)
           AND (:serviceId IS NULL OR EXISTS (
@@ -281,6 +291,12 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                 SELECT 1 FROM LigneService l
                 WHERE l.demande = d AND LOWER(l.service.nomService) LIKE LOWER(CONCAT('%', :q, '%')))
            OR (c IS NOT NULL AND LOWER(c.nomCommercial) LIKE LOWER(CONCAT('%', :q, '%')))
+           OR EXISTS (SELECT 1 FROM Facture f
+                          WHERE f.demande = d
+                            AND LOWER(f.referenceFacture) LIKE LOWER(CONCAT('%', :q, '%')))
+           OR EXISTS (SELECT 1 FROM FactureValidee v
+                          WHERE v.demande = d
+                            AND LOWER(v.referenceFactureValidee) LIKE LOWER(CONCAT('%', :q, '%')))
            OR LOWER(COALESCE(d.commentaire, '')) LIKE LOWER(CONCAT('%', :q, '%'))
         ORDER BY d.dateDemande DESC
         """)

@@ -163,7 +163,7 @@ export function DemandesPage() {
                   type="text"
                   value={filtres.recherche}
                   onChange={(e) => setFiltre('recherche', e.target.value)}
-                  placeholder="Référence…"
+                  placeholder="Référence : facture, proforma…"
                 />
               </label>
               <label className="field filter-field">
