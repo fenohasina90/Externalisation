@@ -1465,6 +1465,34 @@ VALUES
     'http://localhost:5173',
     'STRING',
     'URL de base du frontend utilisée pour construire les liens envoyés par email'
+),
+
+(
+    'JOURS_RETARD_PRESTATION_DEBOURS',
+    '5',
+    'INTEGER',
+    'Alerte de retard de paiement (prestation et débours) : nombre de jours après la validation de la facture avant déclenchement de la notification'
+),
+
+(
+    'JOURS_RETARD_ABONNEMENT',
+    '7',
+    'INTEGER',
+    'Alerte de retard de paiement (abonnement mensuel) : nombre de jours après la date d''émission de la facture mensuelle avant déclenchement de la notification'
+),
+
+(
+    'JOUR_CREATION_FACTURE_MENSUELLE',
+    '15',
+    'INTEGER',
+    'Jour du mois de création de la facture mensuelle d''abonnement (rappel uniquement — la facture peut être créée à n''importe quelle date)'
+),
+
+(
+    'JOURS_RAPPEL_AVANT_CREATION_MENSUELLE',
+    '5',
+    'INTEGER',
+    'Nombre de jours avant la création de la facture mensuelle pour envoyer un rappel (le jour J, un rappel est également émis)'
 );
 
 -- =========================================================

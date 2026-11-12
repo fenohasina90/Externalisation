@@ -18,6 +18,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -36,7 +37,8 @@ public class NotificationService {
             "NOUVELLE_DEMANDE", "CHANGEMENT_STATUT");
 
     private static final List<String> TYPES_PAIEMENT = List.of(
-            "PAIEMENT_ENREGISTRE", "ECHEANCE_PROCHE", "PAIEMENT_RETARD");
+            "PAIEMENT_ENREGISTRE", "ECHEANCE_PROCHE", "PAIEMENT_RETARD",
+            "FACTURE_MENSUELLE_RAPPEL");
 
     public static final String TYPE_ALERTE_SYSTEME = "ALERTE_SYSTEME";
 
@@ -221,6 +223,71 @@ public class NotificationService {
                 message,
                 referenceType, referenceId,
                 ROLE_SUPER_ADMIN, ROLE_ADMIN);
+    }
+
+    /**
+     * Notification de retard de paiement : facture validée/émise depuis plus
+     * que le délai configuré et non soldée. Dédupliquée par utilisateur et
+     * par facture (une seule notification par retard non soldé).
+     */
+    @Transactional
+    public void notifierRetardPaiement(com.cabex.backend.facture.entity.FactureValidee facture,
+                                       String designation,
+                                       java.math.BigDecimal reste) {
+        DemandeService demande = facture.getDemande();
+        String societe = demande != null && demande.getSociete() != null
+                ? demande.getSociete().getNomSociete() : "client";
+        String dateEmission = facture.getValideLe() != null
+                ? facture.getValideLe().toLocalDate().format(FORMAT_DATE) : "—";
+        String referenceDemande = demande != null ? nullSafe(demande.getReferenceDemande()) : "—";
+        String designationFinal = designation != null && !designation.isBlank() ? designation : "Facture";
+        String message = "⛔ Retard de paiement — " + societe + " · " + designationFinal
+                + " — facture " + nullSafe(facture.getReferenceFactureValidee())
+                + " émise le " + dateEmission
+                + " — reste dû : " + montant(reste)
+                + ". Référence demande : " + referenceDemande + ".";
+        // Dedup par facture (une notification par facture non soldée en retard).
+        creerPourRoles(true,
+                "PAIEMENT_RETARD",
+                "Retard de paiement",
+                message,
+                "FACTURE_VALIDEE", facture.getId() != null ? facture.getId().longValue() : null,
+                ROLE_SUPER_ADMIN, ROLE_ECONOMAT);
+    }
+
+    /**
+     * Rappel de création de la facture mensuelle d'abonnement : J-R avant la
+     * date prévue et le jour J (toujours un rappel). Dédupliqué par mois et
+     * par type de rappel ; la création effective de la facture mensuelle
+     * reste manuelle et possible à n'importe quelle date.
+     */
+    @Transactional
+    public void notifierRappelCreationMensuelle(LocalDate dateRappel, boolean auJour) {
+        String dateLibelle = dateRappel.format(FORMAT_DATE);
+        String finMois = dateRappel.format(DateTimeFormatter.ofPattern("MMMM yyyy",
+                java.util.Locale.FRANCE));
+        String message;
+        if (auJour) {
+            message = "📅 Aujourd'hui (" + dateLibelle + ", " + finMois + ") : "
+                    + "date prévue de création de la facture mensuelle « Rappel de création ». "
+                    + "N'oubliez pas de générer les mensualités des abonnements en cours — "
+                    + "la création reste possible à n'importe quelle date.";
+        } else {
+            long jours = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), dateRappel);
+            message = "📅 Il reste " + jours + " jour(s) (date prévue : " + dateLibelle + " — création attendue). "
+                    + "Préparez les factures du mois pour les abonnements en cours — "
+                    + "la création reste possible à n'importe quelle date.";
+        }
+        // Référence unique par mois et par type de rappel (évite le spam horaire).
+        int ry = dateRappel.getYear();
+        int rm = dateRappel.getMonthValue();
+        long refId = (long) ry * 10000L + (long) rm * 10L + (auJour ? 2L : 1L);
+        creerPourRoles(true,
+                "FACTURE_MENSUELLE_RAPPEL",
+                "Création de la facture mensuelle",
+                message,
+                "RAPPEL_MENSUEL", refId,
+                ROLE_SUPER_ADMIN, ROLE_ECONOMAT);
     }
 
     public void notifierDemandeReinitialisation(Utilisateur utilisateur, Long demandeId) {

@@ -13,6 +13,7 @@ export const TYPE_META: Record<TypeNotification, TypeNotificationMeta> = {
   CHANGEMENT_STATUT: { label: 'Changement de statut', tone: 'blue' },
   ALERTE_SYSTEME: { label: 'Alertes système', tone: 'gray' },
   DEMANDE_RESET_MDP: { label: 'Réinitialisation de mot de passe', tone: 'gray' },
+  FACTURE_MENSUELLE_RAPPEL: { label: 'Création facture mensuelle', tone: 'orange' },
 }
 
 export const TYPES_NOTIFICATION = Object.keys(TYPE_META) as TypeNotification[]
@@ -22,6 +23,7 @@ const TYPES_PAIEMENT: TypeNotification[] = [
   'PAIEMENT_RETARD',
   'ECHEANCE_PROCHE',
   'PAIEMENT_ENREGISTRE',
+  'FACTURE_MENSUELLE_RAPPEL',
 ]
 
 /** Types que le backend autorise à la lecture selon le rôle connecté. */

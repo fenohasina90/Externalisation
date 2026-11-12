@@ -3924,3 +3924,224 @@ body.page-responsables {
     justify-content: flex-start;
   }
 }
+
+/* ============================================================
+   Page « Configuration » — layout 2 colonnes (sommaire + cards)
+   ============================================================ */
+
+.administration-page {
+  width: 100%;
+}
+
+.config-layout {
+  display: block;
+  margin-top: 4px;
+}
+
+/* Zone de contenu (cards) */
+.config-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.config-card {
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(17, 40, 29, 0.04);
+}
+
+.config-card__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.config-card__icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  font-size: 24px;
+  border-radius: 12px;
+  background: var(--highlight-bg);
+  border: 1px solid var(--highlight-border);
+  flex: 0 0 auto;
+}
+
+.config-card__titre {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.config-card__titre h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.config-card__compte {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--g);
+  background: var(--highlight-bg);
+  border: 1px solid var(--highlight-border);
+  border-radius: 12px;
+  flex: 0 0 auto;
+}
+
+.config-card__compte-suffixe {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.config-grille {
+  gap: 14px 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+/* Ligne de champ */
+.config-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 0;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.config-row:hover {
+  background: var(--bg-soft);
+  border-color: var(--border);
+}
+
+.config-row__tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.config-row__saisie {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.config-row__saisie input {
+  flex: 1;
+  width: 100%;
+  padding: 8px 10px;
+  padding-right: 64px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-height: 38px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.config-row__saisie input:focus {
+  outline: 2px solid rgba(45, 154, 92, 0.35);
+  outline-offset: 0;
+  border-color: var(--g);
+  box-shadow: 0 0 0 3px rgba(45, 154, 92, 0.12);
+}
+
+.config-row__saisie input:disabled {
+  background: var(--neutral-bg, #edf1ed);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.config-row__unite {
+  position: absolute;
+  right: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  background: var(--bg-soft);
+  border-left: 1px solid var(--border);
+  border-radius: 0 8px 8px 0;
+  pointer-events: none;
+  min-width: 44px;
+  text-align: center;
+}
+
+.form-help--code {
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.form-help--code .code-inline {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* Aperçu pédagogique des notifications (section alertes) */
+.config-apercu {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--info-bg, #e4eefb);
+  border: 1px solid #cbdaf2;
+  font-size: 13px;
+  color: var(--info-text, #1e4f8f);
+  line-height: 1.45;
+}
+
+.config-apercu__icone {
+  font-size: 18px;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.config-apercu p {
+  margin: 0;
+}
+
+/* Très grands écrans (≥ 1600px) : densifier davantage la grille de champs */
+@media (min-width: 1800px) {
+  .config-grille {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .config-card__head {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  .config-card__compte {
+    order: -1;
+  }
+}

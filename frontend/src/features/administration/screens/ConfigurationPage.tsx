@@ -4,35 +4,129 @@ import { useApi } from '@/hooks/useApi'
 import { configurationApi } from '../services/administration.service'
 import type { ApplicationConfiguration } from '../types'
 
-const SECTIONS: { titre: string; sousTitre: string; cles: string[] }[] = [
+interface SectionDef {
+  /** Identifiant d'ancre pour la navigation latérale. */
+  id: string
+  icone: string
+  titre: string
+  sousTitre: string
+  cles: string[]
+}
+
+const SECTIONS: SectionDef[] = [
   {
+    id: 'application',
+    icone: '🌐',
     titre: 'Application',
-    sousTitre: 'Identité et devise.',
+    sousTitre: 'Identité de l’application affichée sur les documents et dans l’onglet du navigateur.',
     cles: ['NOM_APPLICATION', 'DEVISE', 'URL_APPLICATION'],
   },
   {
-    titre: 'Paiements et alertes',
-    sousTitre: 'Échéances et fiscalité.',
-    cles: ['JOURS_AVANCE_ALERTE_ECHEANCE', 'TAUX_TVA'],
+    id: 'alertes',
+    icone: '🔔',
+    titre: 'Alertes paiements',
+    sousTitre:
+      'Échéances proches, retards de paiement et rappel de création de la facture mensuelle. Toutes les valeurs sont exprimées en jours.',
+    cles: [
+      'JOURS_AVANCE_ALERTE_ECHEANCE',
+      'JOURS_RETARD_PRESTATION_DEBOURS',
+      'JOURS_RETARD_ABONNEMENT',
+      'JOUR_CREATION_FACTURE_MENSUELLE',
+      'JOURS_RAPPEL_AVANT_CREATION_MENSUELLE',
+      'TAUX_TVA',
+    ],
   },
   {
-    titre: 'Sauvegardes',
-    sousTitre: 'Heure quotidienne de la sauvegarde automatique (heure du serveur).',
+    id: 'sauvegarde',
+    icone: '💾',
+    titre: 'Sauvegarde automatique',
+    sousTitre: 'Heure quotidienne d’exécution de la sauvegarde automatique de la base (heure du serveur).',
     cles: ['HEURE_SAUVEGARDE_AUTOMATIQUE'],
   },
   {
+    id: 'technique',
+    icone: '⚙️',
     titre: 'Fichiers, session et affichage',
-    sousTitre: 'Limites techniques.',
+    sousTitre: 'Limites techniques de l’application et pagination des listes.',
     cles: ['TAILLE_MAX_FICHIER', 'DUREE_SESSION_MINUTES', 'PAGINATION_TAILLE_DEFAUT'],
   },
   {
+    id: 'securite',
+    icone: '🔒',
     titre: 'Sécurité',
-    sousTitre: 'Validité des demandes et mots de passe temporaires (en minutes).',
+    sousTitre: 'Durée de validité des demandes et des mots de passe temporaires (en minutes).',
     cles: ['DUREE_VALIDITE_DEMANDE_RESET', 'DUREE_VALIDITE_MDP_TEMPORAIRE'],
   },
 ]
 
-/** Configuration branchée sur l'API : lecture GET /configuration, écriture PUT /configuration/{cle}. */
+/** Libellés lisibles par clé (sans les texte bruts) et unités de mesure. */
+const LIBELLES: Record<string, { label: string; unite?: string; aide?: string }> = {
+  NOM_APPLICATION: { label: 'Nom de l’application', aide: 'Titre affiché sur les documents PDF (factures, reçu…).' },
+  DEVISE: { label: 'Devise', aide: 'Code ISO affiché sur les factures et dans l’interface (ex. MGA, EUR, USD).' },
+  URL_APPLICATION: { label: 'URL du frontend', aide: 'Base utilisée pour construire les liens envoyés par courriel.' },
+
+  JOURS_AVANCE_ALERTE_ECHEANCE: {
+    label: 'Échéance proche',
+    unite: 'jours',
+    aide: 'Alerte préalable avant une échéance de plan de paiement non soldée.',
+  },
+  JOURS_RETARD_PRESTATION_DEBOURS: {
+    label: 'Retard prestation / débours',
+    unite: 'jours',
+    aide: 'Facture validée (prestation, débours) non soldée après X jours → notification « Retard de paiement ».',
+  },
+  JOURS_RETARD_ABONNEMENT: {
+    label: 'Retard abonnement mensuel',
+    unite: 'jours',
+    aide: 'Facture mensuelle non soldée après X jours depuis la date d’émission → notification « Retard de paiement ».',
+  },
+  JOUR_CREATION_FACTURE_MENSUELLE: {
+    label: 'Jour de création mensuelle',
+    unite: 'jours',
+    aide: 'Rappel uniquement (ex. 15) — la facture du mois peut être créée à n’importe quelle date.',
+  },
+  JOURS_RAPPEL_AVANT_CREATION_MENSUELLE: {
+    label: 'Rappel avant création mensuelle',
+    unite: 'jours',
+    aide: 'Le jour J − X, un rappel est envoyé (ex. si X = 5 et le jour cible est le 15, rappel le 10). Le jour J lui-même, un rappel est toujours émis.',
+  },
+  TAUX_TVA: { label: 'Taux TVA', unite: '%', aide: 'Taux appliqué par défaut sur les documents si aucun taux n’est indiqué.' },
+
+  HEURE_SAUVEGARDE_AUTOMATIQUE: { label: 'Heure de la sauvegarde', aide: 'Déclenchement de la sauvegarde automatique quotidienne.' },
+
+  TAILLE_MAX_FICHIER: { label: 'Taille maximale des fichiers', unite: 'octets', aide: 'Taille maximale d’un fichier pièce jointe (≈ 10 Mo par défaut).' },
+  DUREE_SESSION_MINUTES: { label: 'Durée de session', unite: 'minutes', aide: 'Durée avant expiration automatique d’une session inactive.' },
+  PAGINATION_TAILLE_DEFAUT: { label: 'Taille de page par défaut', unite: 'éléments', aide: 'Nombre de résultats affichés par page dans les listes.' },
+
+  DUREE_VALIDITE_DEMANDE_RESET: {
+    label: 'Validité de la demande de réinitialisation',
+    unite: 'minutes',
+    aide: 'Durée de validité d’un lien de réinitialisation du mot de passe.',
+  },
+  DUREE_VALIDITE_MDP_TEMPORAIRE: {
+    label: 'Durée de validité du mot de passe temporaire',
+    unite: 'minutes',
+    aide: 'Durée avant que le mot de passe temporaire attribué ne soit plus valide.',
+  },
+}
+
+/** Section de type decimal → saisie décimale ; TIME → saisie heure; sinon entier. */
+function inputType(champ: ApplicationConfiguration): 'text' | 'number' | 'time' {
+  if (champ.typeValeur === 'TIME') return 'time'
+  if (champ.typeValeur === 'STRING') return 'text'
+  return 'number'
+}
+
+function champNumberStep(champ: ApplicationConfiguration): string | undefined {
+  if (champ.typeValeur === 'DECIMAL' || champ.typeValeur === 'NUMERIC') return 'any'
+  return '1'
+}
+
+function champMin(champ: ApplicationConfiguration): number | undefined {
+  return champ.typeValeur === 'DECIMAL' || champ.typeValeur === 'NUMERIC' ? undefined : 0
+}
+
+/** Configuration branchée sur l'API : GET /configuration, PUT /configuration/{cle}. */
 export function ConfigurationPage() {
   const { data, loading, error, reload } = useApi<ApplicationConfiguration[]>(
     () => configurationApi.list(),
@@ -67,13 +161,23 @@ export function ConfigurationPage() {
     })).filter((s) => s.champs.length > 0)
     const autres = (data ?? []).filter((c) => !rangees.has(c.cle))
     if (autres.length > 0) {
-      bloc.push({ titre: 'Autres paramètres', sousTitre: 'Paramètres supplémentaires.', cles: [], champs: autres })
+      bloc.push({
+        id: 'autres',
+        icone: '🗂️',
+        titre: 'Autres paramètres',
+        sousTitre: 'Paramètres supplémentaires présents en base (non classés).',
+        cles: [],
+        champs: autres,
+      })
     }
     return bloc
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empreinte])
 
-  const modifie = base !== null && JSON.stringify(valeurs) !== JSON.stringify(base)
+  const diffs = base != null
+    ? Object.keys(valeurs).filter((cle) => valeurs[cle] !== base[cle])
+    : []
+  const modifie = diffs.length > 0
 
   const handleAnnuler = () => {
     if (base) setValeurs(base)
@@ -87,14 +191,13 @@ export function ConfigurationPage() {
     setMessage(null)
     setErreur(null)
     try {
-      const changees = Object.keys(valeurs).filter((cle) => valeurs[cle] !== base[cle])
-      for (const cle of changees) {
+      for (const cle of diffs) {
         await configurationApi.update(cle, valeurs[cle])
       }
       setMessage(
-        changees.length === 0
+        diffs.length === 0
           ? 'Aucune modification à enregistrer.'
-          : `Configuration enregistrée (${changees.length} paramètre${changees.length > 1 ? 's' : ''}).`,
+          : `Configuration enregistrée (${diffs.length} paramètre${diffs.length > 1 ? 's' : ''}).`,
       )
       reload()
       setBase(null)
@@ -115,11 +218,14 @@ export function ConfigurationPage() {
   }
 
   return (
-    <div className="app-page responsables-page">
+    <div className="app-page administration-page">
       <header className="page-header page-header-sticky">
         <div>
           <h1>Configuration</h1>
-          <p>Paramètres généraux de l&apos;application.</p>
+          <p>
+            Les paramètres directement utilisés par l&apos;application. Chaque paramètre est
+            enregistré individuellement&nbsp;; seules les valeurs modifiées sont envoyées au serveur.
+          </p>
         </div>
         <div className="actions">
           <button type="button" className="btn-ghost" onClick={handleAnnuler} disabled={!modifie}>
@@ -129,59 +235,96 @@ export function ConfigurationPage() {
             type="button"
             className="btn-primary"
             onClick={() => void handleEnregistrer()}
-            disabled={enregistrement}
+            disabled={enregistrement || !modifie}
           >
-            {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
+            {enregistrement
+              ? 'Enregistrement…'
+              : modifie
+                ? `Enregistrer (${diffs.length})`
+                : 'Enregistrer'}
           </button>
         </div>
       </header>
 
-      {message && (
-        <div className="alert alert-success" role="status">
-          {message}
-        </div>
-      )}
-      {erreur && (
-        <div className="alert alert-danger" role="alert">
-          {erreur}
-        </div>
-      )}
+      {message && <div className="alert alert-success" role="status">{message}</div>}
+      {erreur && <div className="alert alert-danger" role="alert">{erreur}</div>}
 
-      {sections.map((section) => (
-        <section key={section.titre} className="card card-pad">
-          <h3 style={{ margin: '0 0 2px' }}>{section.titre}</h3>
-          <p className="section-note" style={{ marginBottom: 14 }}>
-            {section.sousTitre}
-          </p>
-          <div className="form-grid">
-            {section.champs.map((champ) => (
-              <label key={champ.cle} className="field">
-                {champ.description ?? champ.cle}
-                <input
-                  type={
-                    champ.typeValeur === 'TIME'
-                      ? 'time'
-                      : champ.typeValeur === 'STRING'
-                        ? 'text'
-                        : 'number'
-                  }
-                  value={valeurs[champ.cle] ?? ''}
-                  disabled={!champ.modifiable}
-                  onChange={(e) => {
-                    setValeurs((v) => ({ ...v, [champ.cle]: e.target.value }))
-                    setMessage(null)
-                    setErreur(null)
-                  }}
-                />
-                <span className="form-help">
-                  Clé : <code className="code-inline">{champ.cle}</code>
-                  {!champ.modifiable && ' — non modifiable'}
+      <div className="config-layout">
+        <div className="config-content">
+          {sections.map((section) => (
+            <section id={section.id} key={section.id} className="card config-card">
+              <header className="config-card__head">
+                <span className="config-card__icone" aria-hidden="true">{section.icone}</span>
+                <div className="config-card__titre">
+                  <h2>{section.titre}</h2>
+                  <p className="section-note">{section.sousTitre}</p>
+                </div>
+                <span className="config-card__compte">
+                  {section.champs.length}<span className="config-card__compte-suffixe">&nbsp;param.</span>
                 </span>
-              </label>
-            ))}
-          </div>
-        </section>
-      ))}
+              </header>
+
+              <div className="form-grid form-grid--2 config-grille">
+                {section.champs.map((champ) => {
+                  const meta = LIBELLES[champ.cle]
+                  const label = meta?.label ?? champ.description ?? champ.cle
+                  const unite = meta?.unite
+                  const typeValeur = champ.typeValeur
+                  const modifiable = champ.modifiable !== false
+                  return (
+                    <label key={champ.cle} className="field config-row">
+                      <div className="config-row__tete">
+                        <span className="field-label">{label}</span>
+                        {!modifiable && <span className="pill wt">Verrouillé</span>}
+                      </div>
+                      <div className="config-row__saisie">
+                        <input
+                          type={inputType(champ)}
+                          step={champNumberStep(champ)}
+                          min={champMin(champ)}
+                          inputMode={typeValeur !== 'STRING' ? 'numeric' : undefined}
+                          value={valeurs[champ.cle] ?? ''}
+                          disabled={!modifiable}
+                          onChange={(e) => {
+                            setValeurs((v) => ({ ...v, [champ.cle]: e.target.value }))
+                            setMessage(null)
+                            setErreur(null)
+                          }}
+                          aria-label={label}
+                        />
+                        {unite && <span className="config-row__unite">{unite}</span>}
+                      </div>
+                      {meta?.aide && <span className="form-help">{meta.aide}</span>}
+                      <span className="form-help form-help--code">
+                        <code className="code-inline">{champ.cle}</code>
+                        {!modifiable && ' — paramètre système non modifiable depuis l’interface'}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+
+              {section.id === 'alertes' && (
+                <div className="config-apercu">
+                  <span className="config-apercu__icone" aria-hidden="true">💡</span>
+                  <p>
+                    <strong>Aperçu des notifications associées.</strong>
+                    {' '}Une facture non soldée déclenche un <em>rappel de retard</em> au-delà de
+                    <strong> {valeurs.JOURS_RETARD_PRESTATION_DEBOURS ?? 5} jours</strong> pour
+                    les prestations/débours (validation de la facture) et de
+                    <strong> {valeurs.JOURS_RETARD_ABONNEMENT ?? 7} jours</strong> pour l’abonnement
+                    mensuel (date d’émission de la facture).
+                    {' '}La facture mensuelle propose également un rappel
+                    <strong> {valeurs.JOURS_RAPPEL_AVANT_CREATION_MENSUELLE ?? 5} jours avant</strong>
+                    {' '}et le jour J (<strong>le {valeurs.JOUR_CREATION_FACTURE_MENSUELLE ?? 15} du mois</strong>).
+                    {' '}Ces valeurs ne sont que des rappels ; la création de la facture reste possible à n’importe quelle date.
+                  </p>
+                </div>
+              )}
+            </section>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

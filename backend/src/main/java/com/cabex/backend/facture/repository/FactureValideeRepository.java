@@ -33,4 +33,31 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
 
     /** Facture du mois d'un abonnement pour un mois donné (YYYY-MM-01). */
     com.cabex.backend.facture.entity.FactureValidee findByLigneServiceIdAndMois(Integer ligneServiceId, java.time.LocalDate mois);
+
+    /**
+     * Toutes les factures concernées par l'alerte « retard de paiement »
+     * (prestation et débours) : factures enfants en mode unique + factures
+     * générales par service + factures de débours sans proforma. Charge la
+     * demande et la société pour la composition des messages.
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT f FROM FactureValidee f"
+                    + " JOIN FETCH f.demande d LEFT JOIN FETCH d.societe s"
+                    + " LEFT JOIN FETCH f.ligneService l LEFT JOIN FETCH l.service svc"
+                    + " LEFT JOIN f.factureProforma fp"
+                    + " WHERE (f.factureGenerale IS NOT NULL AND f.mois IS NULL)"
+                    + "    OR fp.modeFacturation = 'PAR_SERVICE'"
+                    + "    OR f.factureProforma IS NULL")
+    List<com.cabex.backend.facture.entity.FactureValidee> findFacturesPourAlertesPaiement();
+
+    /**
+     * Toutes les factures du mois d'abonnement (alertes de retard abonnement).
+     * Charge la demande et la société pour la composition des messages.
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT f FROM FactureValidee f"
+                    + " JOIN FETCH f.demande d LEFT JOIN FETCH d.societe s"
+                    + " LEFT JOIN FETCH f.ligneService l LEFT JOIN FETCH l.service svc"
+                    + " WHERE f.mois IS NOT NULL")
+    List<com.cabex.backend.facture.entity.FactureValidee> findFacturesMensuellesPourAlerte();
 }
