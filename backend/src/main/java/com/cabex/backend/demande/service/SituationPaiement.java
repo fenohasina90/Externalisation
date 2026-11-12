@@ -3,12 +3,17 @@ package com.cabex.backend.demande.service;
 /**
  * Situation de règlement d'une demande, déduite de l'ensemble de ses plans
  * de paiement et de leurs échéances (une demande multi-services est jugée sur
- * l'ensemble de ses lignes, pas sur le premier plan).
+ * l'ensemble de ses lignes, pas sur le premier plan) ou, en l'absence de
+ * plan, de l'avancement de ses lignes.
  *
- * <p>Le classement reprend l'ordre de précédence appliqué aux échéances
- * ({@code EcheanceMapper.calculerStatutEcheance}) : soldé, puis en retard,
- * puis partiel, puis en attente. Les situations sont mutuellement exclusives
- * et couvrent toutes les demandes — y compris celles sans plan de paiement.
+ * <p>Ordre de précédence — du plus grave au plus favorable :
+ * <ol>
+ *   <li>PAYE</li>
+ *   <li>EN_RETARD</li>
+ *   <li>PARTIEL</li>
+ *   <li>EN_ATTENTE</li>
+ *   <li>NON_PLANIFIE</li>
+ * </ol>
  */
 public final class SituationPaiement {
 
@@ -34,8 +39,35 @@ public final class SituationPaiement {
                                  long nombreEnRetard,
                                  long nombrePayees) {
         if (nombrePlans == 0) {
-            return NON_PLANIFIE;
+            // Pas de plan : la demande est encore en attente ; le calcul
+            // qui considère aussi les avances sur lignes est fourni par
+            // {@link #classer(Object[])}, auquel cas lignes terminées
+            // seront transmises comme {@code nombreAvecReste = 0}.
+            return EN_ATTENTE;
         }
+        return classerEcheance(nombreEcheances, nombreAvecReste, nombreEnRetard, nombrePayees);
+    }
+
+    /** Situation d'une ligne agrégée par la requête
+     * {@code situations(...)} (colonnes 0..8). */
+    public static String classer(Object[] ligne) {
+        int nombrePlans = ((Number) ligne[1]).intValue();
+        if (nombrePlans > 0) {
+            return classerEcheance(((Number) ligne[2]).longValue(),
+                    ((Number) ligne[3]).longValue(),
+                    ((Number) ligne[4]).longValue(),
+                    ((Number) ligne[5]).longValue());
+        }
+        return classerLignes(((Number) ligne[6]).longValue(),
+                ((Number) ligne[7]).longValue(),
+                ((Number) ligne[8]).longValue());
+    }
+
+    /** Situation dérivée des échéances (préférée dès qu'un plan existe). */
+    public static String classerEcheance(long nombreEcheances,
+                                         long nombreAvecReste,
+                                         long nombreEnRetard,
+                                         long nombrePayees) {
         if (nombreEcheances == 0) {
             // Planifié mais aucun découpage : rien à régler pour l'instant.
             return EN_ATTENTE;
@@ -49,13 +81,23 @@ public final class SituationPaiement {
         return nombrePayees > 0 ? PARTIEL : EN_ATTENTE;
     }
 
-    /** Situation d'une ligne agrégée par la requête {@code situations}. */
-    public static String classer(Object[] ligne) {
-        return classer(
-                ((Number) ligne[1]).intValue(),
-                ((Number) ligne[2]).longValue(),
-                ((Number) ligne[3]).longValue(),
-                ((Number) ligne[4]).longValue(),
-                ((Number) ligne[5]).longValue());
+    /**
+     * Situation dérivée des lignes (autre source de vérité, sans plan).
+     * PAYE si toutes terminées ; PARTIEL si au moins une ligne soldée mais pas toutes
+     * (les autres encore en cours) ou partiellement réglée ; sinon EN_ATTENTE.
+     */
+    public static String classerLignes(long nombreLignes,
+                                        long nombreLignesPayees,
+                                        long nombreLignesPartielles) {
+        if (nombreLignes == 0) {
+            return NON_PLANIFIE;
+        }
+        if (nombreLignesPayees == nombreLignes) {
+            return PAYE;
+        }
+        if (nombreLignesPartielles > 0 || nombreLignesPayees > 0) {
+            return PARTIEL;
+        }
+        return EN_ATTENTE;
     }
 }

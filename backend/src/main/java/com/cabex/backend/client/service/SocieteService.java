@@ -121,7 +121,10 @@ public class SocieteService {
                 .toList();
 
         List<DemandeService> demandes = demandeRepository
-                .rechercher(null, id, null, null, null, null, null, null, null, null, null, null,
+                .rechercher(null, id, null, null, null, null, null, null, null, null, null,
+                        LocalDate.now(),
+                        java.time.LocalDateTime.MIN,
+                        java.time.LocalDateTime.MIN,
                         Pageable.unpaged()).getContent();
 
         List<DemandeFicheResponse> demandesFiche = demandes.stream()

@@ -260,8 +260,14 @@ public class RapportService {
     }
 
     private List<DemandeService> demandesFiltrees(RapportFilter f) {
+        LocalDate aujourdhui = LocalDate.now();
+        java.time.LocalDateTime deadlinePrestationDebours =
+                aujourdhui.minusDays(5).atTime(java.time.LocalTime.MAX);
+        java.time.LocalDateTime deadlineAbonnement =
+                aujourdhui.minusDays(7).atTime(java.time.LocalTime.MAX);
         return demandeRepository.rechercher(null, f.clientId(), f.serviceId(), f.commercialId(),
-                        f.statut(), f.dateDebut(), f.dateFin(), null, null, null, null, null,
+                        f.statut(), f.dateDebut(), f.dateFin(), null, null, null, null,
+                aujourdhui, deadlinePrestationDebours, deadlineAbonnement,
                 Pageable.unpaged())
                 .getContent();
     }

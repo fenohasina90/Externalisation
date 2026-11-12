@@ -17,6 +17,10 @@ import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -39,6 +43,10 @@ class DemandeRechercheTest {
     private SocieteRepository societeRepository;
     @Autowired
     private DomaineServiceRepository domaineRepository;
+
+    private static final LocalDate AUJOURDHUI = LocalDate.of(2026, 10, 20);
+    private static final LocalDateTime DEADLINE_PD = AUJOURDHUI.minusDays(5).atTime(LocalTime.MAX);
+    private static final LocalDateTime DEADLINE_ABO = AUJOURDHUI.minusDays(7).atTime(LocalTime.MAX);
 
     @Test
     void demandeSansSocietePresenteDansLaListe() {
@@ -63,8 +71,8 @@ class DemandeRechercheTest {
                 .build());
 
         var page = demandeRepository.rechercher(
-                null, null, null, null, null, null, null, null, null, null,
-                null, null,
+                null, null, null, null, null, null, null, null, null, null, null,
+                AUJOURDHUI, DEADLINE_PD, DEADLINE_ABO,
                         Pageable.unpaged());
 
         assertEquals(1, page.getTotalElements());
@@ -76,8 +84,8 @@ class DemandeRechercheTest {
         demandeAvecSociete();
 
         var page = demandeRepository.rechercher(
-                "DEM-2026-00021", null, null, null, null, null, null, null, null, null,
-                null, null,
+                "DEM-2026-00021", null, null, null, null, null, null, null, null, null, null,
+                AUJOURDHUI, DEADLINE_PD, DEADLINE_ABO,
                         Pageable.unpaged());
 
         assertEquals(1, page.getTotalElements());
@@ -88,8 +96,8 @@ class DemandeRechercheTest {
         demandeAvecSociete();
 
         var page = demandeRepository.rechercher(
-                "atlas", null, null, null, null, null, null, null, null, null,
-                null, null,
+                "atlas", null, null, null, null, null, null, null, null, null, null,
+                AUJOURDHUI, DEADLINE_PD, DEADLINE_ABO,
                         Pageable.unpaged());
 
         assertEquals(1, page.getTotalElements());
@@ -122,8 +130,8 @@ class DemandeRechercheTest {
                 .build());
 
         var page = demandeRepository.rechercher(
-                "DEM-2026-00023", null, null, null, null, null, null, null, null, null,
-                null, null,
+                "DEM-2026-00023", null, null, null, null, null, null, null, null, null, null,
+                AUJOURDHUI, DEADLINE_PD, DEADLINE_ABO,
                         Pageable.unpaged());
 
         assertEquals(1, page.getTotalElements());

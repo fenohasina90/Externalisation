@@ -2,6 +2,8 @@ package com.cabex.backend.demande.service;
 
 import com.cabex.backend.audit.action.AuditActions;
 import com.cabex.backend.audit.service.AuditService;
+import com.cabex.backend.configuration.service.ConfigurationKeys;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.client.entity.ClientResponsable;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.client.repository.ClientResponsableRepository;
@@ -77,6 +79,7 @@ public class DemandeGestionService {
     private final FactureService factureService;
     private final LigneServiceRepository ligneRepository;
     private final ProposPaiementRepository proposRepository;
+    private final ConfigurationService configurationService;
 
     public DemandeGestionService(DemandeServiceRepository demandeRepository,
                                  SocieteRepository societeRepository,
@@ -92,7 +95,8 @@ public class DemandeGestionService {
                                  LigneServiceService ligneServiceService,
                                  FactureService factureService,
                                  LigneServiceRepository ligneRepository,
-                                 ProposPaiementRepository proposRepository) {
+                                 ProposPaiementRepository proposRepository,
+                                 ConfigurationService configurationService) {
         this.demandeRepository = demandeRepository;
         this.societeRepository = societeRepository;
         this.responsableRepository = responsableRepository;
@@ -108,6 +112,7 @@ public class DemandeGestionService {
         this.factureService = factureService;
         this.ligneRepository = ligneRepository;
         this.proposRepository = proposRepository;
+        this.configurationService = configurationService;
     }
 
     @Transactional(readOnly = true)
@@ -121,10 +126,22 @@ public class DemandeGestionService {
                 ? pageable
                 : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                         Sort.by(Sort.Order.desc("dateDemande"), Sort.Order.desc("id")));
+        LocalDate aujourdhui = LocalDate.now();
+        int pdJours = Math.max(0, configurationService.lireEntier(
+                ConfigurationKeys.JOURS_RETARD_PRESTATION_DEBOURS,
+                ConfigurationKeys.JOURS_RETARD_PRESTATION_DEBOURS_DEFAUT));
+        int aboJours = Math.max(0, configurationService.lireEntier(
+                ConfigurationKeys.JOURS_RETARD_ABONNEMENT,
+                ConfigurationKeys.JOURS_RETARD_ABONNEMENT_DEFAUT));
+        java.time.LocalDateTime deadlinePrestationDebours =
+                aujourdhui.minusDays(pdJours).atTime(java.time.LocalTime.MAX);
+        java.time.LocalDateTime deadlineAbonnement =
+                aujourdhui.minusDays(aboJours).atTime(java.time.LocalTime.MAX);
+
         Page<DemandeService> page = demandeRepository.rechercher(recherche, societeId, serviceId,
                 commercialId, statut, dateDebut, dateFin, actif, situation,
                 categorie, typePrestation,
-                LocalDate.now(), tri);
+                aujourdhui, deadlinePrestationDebours, deadlineAbonnement, tri);
 
         List<DemandeService> demandes = page.getContent();
         if (demandes.isEmpty()) {

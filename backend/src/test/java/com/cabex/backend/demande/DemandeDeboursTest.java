@@ -11,6 +11,7 @@ import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.HistoriqueDemande;
 import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.entity.StatutDemande;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.demande.repository.LigneServiceRepository;
@@ -66,6 +67,7 @@ class DemandeDeboursTest {
     @Mock private FactureService factureService;
     @Mock private LigneServiceRepository ligneRepository;
     @Mock private ProposPaiementRepository proposRepository;
+    @Mock private ConfigurationService configurationService;
 
     private DemandeGestionService demandeService;
 
@@ -89,7 +91,7 @@ class DemandeDeboursTest {
                 responsableRepository, commercialRepository, serviceRepository,
                 historiqueRepository, statutRepository, paiementRepository,
                 utilisateurRepository, notificationService, auditService,
-                ligneServiceService, factureService, ligneRepository, proposRepository);
+                ligneServiceService, factureService, ligneRepository, proposRepository, configurationService);
 
         ligneService = new LigneServiceService(ligneRepoLigne, historiqueLigneRepo,
                 demandeRepository, historiqueDemandeRepo2, statutRepo2, serviceRepo2,

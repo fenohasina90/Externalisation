@@ -8,6 +8,7 @@ import com.cabex.backend.commercial.repository.CommercialRepository;
 import com.cabex.backend.demande.dto.CreateDemandeRequest;
 import com.cabex.backend.demande.dto.CreateLigneRequest;
 import com.cabex.backend.demande.entity.StatutDemande;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.demande.repository.StatutDemandeRepository;
@@ -54,6 +55,7 @@ class DemandeSansSocieteTest {
     @Mock private com.cabex.backend.facture.service.FactureService factureService;
     @Mock private com.cabex.backend.demande.repository.LigneServiceRepository ligneRepository;
     @Mock private com.cabex.backend.echeance.repository.ProposPaiementRepository proposRepository;
+    @Mock private ConfigurationService configurationService;
 
     private DemandeGestionService service;
 
@@ -64,7 +66,7 @@ class DemandeSansSocieteTest {
                 commercialRepository, serviceRepository, historiqueRepository,
                 statutRepository, paiementRepository, utilisateurRepository,
                 notificationService, auditService, ligneServiceService,
-                factureService, ligneRepository, proposRepository);
+                factureService, ligneRepository, proposRepository, configurationService);
         lenient().when(statutRepository.findByStatut("EN_ATTENTE"))
                 .thenReturn(Optional.of(StatutDemande.builder().id(1).statut("EN_ATTENTE").build()));
         lenient().when(demandeRepository.countByReferenceDemandeStartingWith(anyString())).thenReturn(0L);

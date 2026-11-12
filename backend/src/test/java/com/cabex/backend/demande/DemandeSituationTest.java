@@ -5,7 +5,10 @@ import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.service.SituationPaiement;
+import com.cabex.backend.facture.entity.FactureValidee;
+import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
+import java.time.LocalDateTime;
 import com.cabex.backend.echeance.entity.ProposPaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import com.cabex.backend.echeance.repository.ProposPaiementRepository;
@@ -18,6 +21,8 @@ import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,8 +48,12 @@ class DemandeSituationTest {
     private EcheancePaiementRepository echeanceRepository;
     @Autowired
     private ServiceRepository serviceRepository;
+    @Autowired
+    private FactureValideeRepository factureValideeRepository;
 
     private static final LocalDate AUJOURDHUI = LocalDate.of(2026, 10, 20);
+    private static final LocalDateTime DEADLINE_PD = AUJOURDHUI.minusDays(5).atTime(LocalTime.MAX);
+    private static final LocalDateTime DEADLINE_ABO = AUJOURDHUI.minusDays(7).atTime(LocalTime.MAX);
     private int compteur;
 
     private DemandeService demande(String reference) {
@@ -113,10 +122,30 @@ class DemandeSituationTest {
         demande("DEM-2026-00005");
     }
 
+    private void ligneMixte(String reference, String statut) {
+        DemandeService d = demande(reference);
+        String code = "SRV-" + (++compteur);
+        Service service = serviceRepository.save(Service.builder()
+                .nomService("Service " + code)
+                .codeService(code)
+                .typeService("STANDARD")
+                .actif(true)
+                .build());
+        ligneRepository.save(LigneService.builder()
+                .demande(d)
+                .service(service)
+                .tarif(new BigDecimal("1000000"))
+                .debutService(AUJOURDHUI.minusDays(30))
+                .finService(AUJOURDHUI.plusDays(60))
+                .statut(statut)
+                .categorie("EXTERNALISATION")
+                .build());
+    }
+
     private long count(String situation) {
         return demandeRepository
                 .rechercher(null, null, null, null, null, null, null, null,
-                        situation, null, null, AUJOURDHUI,
+                        situation, null, null, AUJOURDHUI, DEADLINE_PD, DEADLINE_ABO,
                         Pageable.unpaged())
                 .getTotalElements();
     }
@@ -152,6 +181,108 @@ class DemandeSituationTest {
     }
 
     @Test
+    void situationEnRetardFactureNonSoldeeApresDelaisPrestation() {
+        DemandeService d = demande("DEM-2026-06001");
+        String code = "SRV-" + (++compteur);
+        Service service = serviceRepository.save(Service.builder()
+                .nomService("Service " + code)
+                .codeService(code)
+                .typeService("STANDARD")
+                .actif(true)
+                .build());
+        LigneService ligne = ligneRepository.save(LigneService.builder()
+                .demande(d)
+                .service(service)
+                .tarif(new BigDecimal("500000"))
+                .debutService(AUJOURDHUI.minusDays(10))
+                .finService(AUJOURDHUI.plusDays(30))
+                .statut("EN_COURS")
+                .categorie("EXTERNALISATION")
+                .build());
+        factureValideeRepository.save(FactureValidee.builder()
+                .referenceFactureValidee("00007EXT/TNR/2026")
+                .demande(d)
+                .montant(new BigDecimal("500000"))
+                .valideLe(AUJOURDHUI.minusDays(8).atTime(LocalTime.of(0, 0)))
+                .build());
+
+        var filtrees = demandeRepository.rechercher(null, null, null, null, null, null,
+                null, null, "EN_RETARD", null, null, AUJOURDHUI, DEADLINE_PD, DEADLINE_ABO,
+                        Pageable.unpaged());
+        assertEquals(1, filtrees.getTotalElements());
+        assertEquals("DEM-2026-06001", filtrees.getContent().get(0).getReferenceDemande());
+    }
+
+    @Test
+    void situationEnRetardMensualiteNonSoldeeApresDelaisAbonnement() {
+        DemandeService d = demande("DEM-2026-06002");
+        String code = "SRV-" + (++compteur);
+        Service service = serviceRepository.save(Service.builder()
+                .nomService("Service " + code)
+                .codeService(code)
+                .typeService("STANDARD")
+                .actif(true)
+                .build());
+        LigneService ligne = ligneRepository.save(LigneService.builder()
+                .demande(d)
+                .service(service)
+                .tarif(new BigDecimal("450000"))
+                .debutService(AUJOURDHUI.minusDays(10))
+                .finService(AUJOURDHUI.plusDays(180))
+                .statut("EN_COURS")
+                .categorie("EXTERNALISATION")
+                .typePrestation("ABONNEMENT_MENSUEL")
+                .build());
+        factureValideeRepository.save(FactureValidee.builder()
+                .referenceFactureValidee("00008EXT/TNR/2026")
+                .demande(d)
+                .montant(new BigDecimal("450000"))
+                .valideLe(AUJOURDHUI.minusDays(8).atTime(LocalTime.of(0, 0)))
+                .mois(AUJOURDHUI.minusDays(30).withDayOfMonth(1))
+                .build());
+
+        var filtrees = demandeRepository.rechercher(null, null, null, null, null, null,
+                null, null, "EN_RETARD", null, null, AUJOURDHUI, DEADLINE_PD, DEADLINE_ABO,
+                        Pageable.unpaged());
+        assertEquals(1, filtrees.getTotalElements());
+        assertEquals("DEM-2026-06002", filtrees.getContent().get(0).getReferenceDemande());
+    }
+
+    @Test
+    void situationPasEnRetardMensualiteAvantDelaisAbonnement() {
+        DemandeService d = demande("DEM-2026-06003");
+        String code = "SRV-" + (++compteur);
+        Service service = serviceRepository.save(Service.builder()
+                .nomService("Service " + code)
+                .codeService(code)
+                .typeService("STANDARD")
+                .actif(true)
+                .build());
+        LigneService ligne = ligneRepository.save(LigneService.builder()
+                .demande(d)
+                .service(service)
+                .tarif(new BigDecimal("450000"))
+                .debutService(AUJOURDHUI.minusDays(10))
+                .finService(AUJOURDHUI.plusDays(180))
+                .statut("EN_COURS")
+                .categorie("EXTERNALISATION")
+                .typePrestation("ABONNEMENT_MENSUEL")
+                .build());
+        factureValideeRepository.save(FactureValidee.builder()
+                .referenceFactureValidee("00009EXT/TNR/2026")
+                .demande(d)
+                .montant(new BigDecimal("450000"))
+                .valideLe(AUJOURDHUI.minusDays(3).atTime(LocalTime.of(0, 0)))
+                .mois(AUJOURDHUI.minusDays(30).withDayOfMonth(1))
+                .build());
+
+        var filtrees = demandeRepository.rechercher(null, null, null, null, null, null,
+                null, null, "EN_RETARD", null, null, AUJOURDHUI, DEADLINE_PD, DEADLINE_ABO,
+                        Pageable.unpaged());
+        assertEquals(0, filtrees.getTotalElements());
+    }
+
+    @Test
     void situationNonPlanifie() {
         jeuDeDonnees();
         assertEquals(1, count("NON_PLANIFIE"));
@@ -175,9 +306,9 @@ class DemandeSituationTest {
         jeuDeDonnees();
 
         var premierePage = demandeRepository.rechercher(null, null, null, null, null, null,
-                null, null, null, null, null, AUJOURDHUI, Pageable.ofSize(2));
+                null, null, null, null, null, AUJOURDHUI, DEADLINE_PD, DEADLINE_ABO, Pageable.ofSize(2));
         var toutes = demandeRepository.rechercher(null, null, null, null, null, null,
-                null, null, "PAYE", null, null, AUJOURDHUI,
+                null, null, "PAYE", null, null, AUJOURDHUI, DEADLINE_PD, DEADLINE_ABO,
                         Pageable.unpaged());
 
         assertTrue(premierePage.getTotalPages() > 1, "jeu de test trop petit pour être paginé");
@@ -214,7 +345,7 @@ class DemandeSituationTest {
         assertEquals(SituationPaiement.EN_RETARD, affichee);
 
         var filtrees = demandeRepository.rechercher(null, null, null, null, null, null,
-                null, null, affichee, null, null, AUJOURDHUI,
+                null, null, affichee, null, null, AUJOURDHUI, DEADLINE_PD, DEADLINE_ABO,
                         Pageable.unpaged());
         assertTrue(filtrees.getContent().stream()
                         .anyMatch(d -> "DEM-2026-00030".equals(d.getReferenceDemande())),
@@ -255,5 +386,89 @@ class DemandeSituationTest {
                 .montantAttendu(new BigDecimal(attendu))
                 .montantPaye(new BigDecimal(paye))
                 .build());
+    }
+    @Test
+    void situationPayeLigneTermineeSansPlan() {
+        ligneMixte("DEM-2026-01001", "TERMINE");
+        assertEquals(1, count("PAYE"));
+        assertEquals(0, count("EN_ATTENTE"));
+    }
+
+    @Test
+    void situationPartielleLinesMixtes() {
+        DemandeService d1 = demande("DEM-2026-02001");
+        // une ligne terminée, une ligne PARTIEL → la demande est partiellement réglée
+        Service sd = serviceRepository.save(Service.builder()
+                .nomService("ServiceP" + (++compteur))
+                .codeService("SRV-" + compteur)
+                .typeService("STANDARD")
+                .actif(true)
+                .build());
+        ligneRepository.save(LigneService.builder()
+                .demande(d1)
+                .service(sd)
+                .tarif(new BigDecimal("1000000"))
+                .debutService(AUJOURDHUI.minusDays(30))
+                .finService(AUJOURDHUI.plusDays(60))
+                .statut("TERMINE")
+                .categorie("EXTERNALISATION")
+                .build());
+        Service sp = serviceRepository.save(Service.builder()
+                .nomService("ServiceP" + (++compteur))
+                .codeService("SRV-" + compteur)
+                .typeService("STANDARD")
+                .actif(true)
+                .build());
+        ligneRepository.save(LigneService.builder()
+                .demande(d1)
+                .service(sp)
+                .tarif(new BigDecimal("5000000"))
+                .debutService(AUJOURDHUI.minusDays(30))
+                .finService(AUJOURDHUI.plusDays(60))
+                .statut("PARTIEL")
+                .categorie("EXTERNALISATION")
+                .build());
+        assertEquals(1, count("PARTIEL"));
+    }
+
+    @Test
+    void situationEnAttenteLinesAucunePayee() {
+        ligneMixte("DEM-2026-03001", "EN_COURS");
+        assertEquals(1, count("EN_ATTENTE"));
+        assertEquals(0, count("PAYE"));
+        assertEquals(0, count("PARTIEL"));
+    }
+
+    @Test
+    void situationAfficheeEgaleSituationFiltreMixte() {
+        DemandeService d = demande("DEM-2026-05001");
+        Service service = serviceRepository.save(Service.builder()
+                .nomService("ServiceAffiche" + (++compteur))
+                .codeService("SRV-" + compteur)
+                .typeService("STANDARD")
+                .actif(true)
+                .build());
+        ligneRepository.save(LigneService.builder()
+                .demande(d)
+                .service(service)
+                .tarif(new BigDecimal("1000000"))
+                .debutService(AUJOURDHUI.minusDays(30))
+                .finService(AUJOURDHUI.plusDays(60))
+                .statut("PARTIEL")
+                .categorie("EXTERNALISATION")
+                .build());
+
+        List<Object[]> lignes = demandeRepository.situations(
+                List.of(d.getId()), AUJOURDHUI);
+
+        assertEquals(1, lignes.size());
+        String affichee = SituationPaiement.classer(lignes.get(0));
+
+        var filtrees = demandeRepository.rechercher(null, null, null, null, null, null,
+                null, null, affichee, null, null, AUJOURDHUI, DEADLINE_PD, DEADLINE_ABO,
+                        Pageable.unpaged());
+        assertTrue(filtrees.getContent().stream()
+                        .anyMatch(dd -> "DEM-2026-05001".equals(dd.getReferenceDemande())),
+                "la demande mixte partielle doit ressortir dans le filtre PARTIEL");
     }
 }

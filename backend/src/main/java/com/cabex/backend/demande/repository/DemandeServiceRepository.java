@@ -89,46 +89,93 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                 WHERE l.demande = d AND l.typePrestation = :typePrestation))
           AND (:situation IS NULL
             OR (:situation = 'PAYE'
-                AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                AND (
+                  (NOT EXISTS (SELECT 1 FROM EcheancePaiement e
                                 WHERE e.proposPaiement.demande = d
                                   AND e.montantPaye < e.montantAttendu)
-                AND EXISTS (SELECT 1 FROM EcheancePaiement e
-                            WHERE e.proposPaiement.demande = d))
+                   AND EXISTS (SELECT 1 FROM EcheancePaiement e
+                               WHERE e.proposPaiement.demande = d))
+                  OR (NOT EXISTS (SELECT 1 FROM LigneService l
+                                   WHERE l.demande = d
+                                     AND (l.statut IS NULL
+                                          OR l.statut NOT IN ('TERMINE','PAYEE','ANNULEE')))
+                      AND EXISTS (SELECT 1 FROM LigneService l WHERE l.demande = d))))
             OR (:situation = 'EN_RETARD'
-                AND EXISTS (SELECT 1 FROM EcheancePaiement e
+                AND (
+                  EXISTS (SELECT 1 FROM EcheancePaiement e
                             WHERE e.proposPaiement.demande = d
                               AND e.dateEcheance < :aujourdhui
-                              AND e.montantPaye < e.montantAttendu))
-            OR (:situation = 'PARTIEL'
-                AND EXISTS (SELECT 1 FROM EcheancePaiement e
-                            WHERE e.proposPaiement.demande = d
                               AND e.montantPaye < e.montantAttendu)
-                AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
-                                WHERE e.proposPaiement.demande = d
-                                  AND e.dateEcheance < :aujourdhui
-                                  AND e.montantPaye < e.montantAttendu)
-                AND EXISTS (SELECT 1 FROM EcheancePaiement e
-                            WHERE e.proposPaiement.demande = d AND e.montantPaye > 0))
-            OR (:situation = 'EN_ATTENTE'
-                AND EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d)
-                AND (
-                  NOT EXISTS (SELECT 1 FROM EcheancePaiement e
-                              WHERE e.proposPaiement.demande = d)
-                  OR (
-                    EXISTS (SELECT 1 FROM EcheancePaiement e
-                            WHERE e.proposPaiement.demande = d
-                              AND e.montantPaye < e.montantAttendu)
-                    AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
-                                    WHERE e.proposPaiement.demande = d
-                                      AND e.dateEcheance < :aujourdhui
-                                      AND e.montantPaye < e.montantAttendu)
-                    AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
-                                    WHERE e.proposPaiement.demande = d AND e.montantPaye > 0)
-                  )
+                  OR EXISTS (SELECT 1 FROM FactureValidee fv LEFT JOIN fv.factureProforma fp
+                            WHERE fv.demande = d
+                              AND fv.mois IS NULL
+                              AND fv.valideLe <= :deadlinePrestationDebours
+                              AND (SELECT COALESCE(SUM(p.montantPaye), 0)
+                                   FROM Paiement p
+                                   WHERE p.factureValidee.id = fv.id AND p.actif = true) < fv.montant
+                              AND (fp IS NULL OR fp.modeFacturation <> 'UNIQUE'))
+                  OR EXISTS (SELECT 1 FROM FactureValidee fv LEFT JOIN fv.factureProforma fp
+                            WHERE fv.demande = d
+                              AND fv.mois IS NOT NULL
+                              AND fv.valideLe <= :deadlineAbonnement
+                              AND (SELECT COALESCE(SUM(p.montantPaye), 0)
+                                   FROM Paiement p
+                                   WHERE p.factureValidee.id = fv.id AND p.actif = true) < fv.montant
+                              AND (fp IS NULL OR fp.modeFacturation <> 'UNIQUE'))
                 ))
+            OR (:situation = 'PARTIEL'
+                AND (
+                  (EXISTS (SELECT 1 FROM EcheancePaiement e
+                            WHERE e.proposPaiement.demande = d
+                              AND e.montantPaye < e.montantAttendu)
+                   AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                                   WHERE e.proposPaiement.demande = d
+                                     AND e.dateEcheance < :aujourdhui
+                                     AND e.montantPaye < e.montantAttendu)
+                   AND EXISTS (SELECT 1 FROM EcheancePaiement e
+                               WHERE e.proposPaiement.demande = d AND e.montantPaye > 0))
+                  OR (EXISTS (SELECT 1 FROM LigneService l
+                               WHERE l.demande = d AND l.statut = 'PARTIEL')
+                      AND NOT EXISTS (SELECT 1 FROM LigneService l
+                                       WHERE l.demande = d
+                                         AND (l.statut IS NULL
+                                              OR l.statut NOT IN ('TERMINE','PAYEE','ANNULEE','PARTIEL'))))))
+            OR (:situation = 'EN_ATTENTE'
+                AND (
+                  (EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d)
+                   AND (
+                     NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                                 WHERE e.proposPaiement.demande = d)
+                     OR (
+                       EXISTS (SELECT 1 FROM EcheancePaiement e
+                               WHERE e.proposPaiement.demande = d
+                                 AND e.montantPaye < e.montantAttendu)
+                       AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                                       WHERE e.proposPaiement.demande = d
+                                         AND e.dateEcheance < :aujourdhui
+                                         AND e.montantPaye < e.montantAttendu)
+                       AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                                       WHERE e.proposPaiement.demande = d AND e.montantPaye > 0)
+                     )
+                   ))
+                  OR (NOT EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d)
+                      AND EXISTS (SELECT 1 FROM LigneService l
+                                   WHERE l.demande = d
+                                     AND (l.statut IS NULL
+                                          OR l.statut = 'EN_ATTENTE'
+                                          OR l.statut = 'EN_COURS'
+                                          OR l.statut = 'VALIDE'
+                                          OR l.statut = 'NON_PAYEE')
+                                     AND NOT EXISTS (SELECT 1 FROM LigneService l2
+                                                      WHERE l2.demande = d
+                                                        AND l2.statut IN
+                                                            ('TERMINE','PAYEE','ANNULEE','PARTIEL'))))))
             OR (:situation = 'NON_PLANIFIE'
-                AND NOT EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d))
-          )
+                AND NOT EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d)
+                AND NOT EXISTS (SELECT 1 FROM LigneService l
+                                WHERE l.demande = d
+                                  AND l.statut IN ('TERMINE','PAYEE','PARTIEL')))
+            )
         """)
     Page<DemandeService> rechercher(@Param("recherche") String recherche,
                                     @Param("societeId") Integer societeId,
@@ -142,6 +189,8 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                                     @Param("categorie") String categorie,
                                     @Param("typePrestation") String typePrestation,
                                     @Param("aujourdhui") LocalDate aujourdhui,
+                                    @Param("deadlinePrestationDebours") java.time.LocalDateTime deadlinePrestationDebours,
+                                    @Param("deadlineAbonnement") java.time.LocalDateTime deadlineAbonnement,
                                     Pageable pageable);
 
     /**
@@ -149,6 +198,8 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
      * en une seule requête (évite un aller-retour par ligne de liste).
      * Colonnes : id, nb plans, nb échéances, nb avec reste, nb en retard,
      * nb payées — agrégats interpreétés par {@code SituationPaiement.classer}.
+     * Les trois dernières colonnes (nb lignes, nb lignes payées, nb partielles)
+     * permettent de classer les demandes sans plan de paiement.
      */
     @Query("""
         SELECT d.id,
@@ -157,7 +208,10 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                SUM(CASE WHEN e.montantPaye < e.montantAttendu THEN 1 ELSE 0 END),
                SUM(CASE WHEN e.dateEcheance < :aujourdhui AND e.montantPaye < e.montantAttendu
                         THEN 1 ELSE 0 END),
-               SUM(CASE WHEN e.montantPaye > 0 THEN 1 ELSE 0 END)
+               SUM(CASE WHEN e.montantPaye > 0 THEN 1 ELSE 0 END),
+               COUNT(DISTINCT l.id),
+               COUNT(DISTINCT CASE WHEN l.statut IN ('TERMINE','PAYEE') THEN l.id END),
+               COUNT(DISTINCT CASE WHEN l.statut = 'PARTIEL' THEN l.id END)
         FROM DemandeService d
         LEFT JOIN LigneService l ON l.demande = d
         LEFT JOIN ProposPaiement p ON p.ligneService = l
