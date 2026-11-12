@@ -1045,15 +1045,14 @@ public class FactureService {
     }
 
     /**
-     * Lignes reprises dans la proforma : EXTERNALISATION + DEBOURS dont le
-     * montant est annoncé à la création (montant figé). Les débours sans
-     * montant connu attendent « Valider le montant » avant de figurer dans une
-     * facture.
+     * Lignes reprises dans la proforma : uniquement EXTERNALISATION. Les
+     * débours n'ont pas de facture proforma — leur facture validée est créée
+     * directement à la validation de leur montant (« Valider le montant ») ou
+     * à la création de la demande quand le montant est annoncé d'emblée.
      */
     private List<LigneService> lignesDansProforma(Integer demandeId) {
         return ligneRepository.findByDemandeIdOrderByIdAsc(demandeId).stream()
-                .filter(l -> !LigneServiceService.estDebours(l)
-                        || l.getMontantDebours() != null)
+                .filter(l -> !LigneServiceService.estDebours(l))
                 .toList();
     }
 

@@ -459,6 +459,13 @@ export function NouveauPaiementPage() {
                     ))}
                   </select>
                   <span className="form-help">Lignes DEBOURS non soldées (Non payé / Partiel).</span>
+                  {deboursChoisi && deboursChoisi.factureValideeId == null && (
+                    <Alert tone="warning">
+                      Ce débours n’a pas de facture validée : validez son montant depuis la fiche
+                      demande (bouton « Valider le montant », onglet Services) — la facture
+                      validée du débours est créée à ce moment-là.
+                    </Alert>
+                  )}
                 </label>
                 ) : (
                 <label className="field form-grid__full">

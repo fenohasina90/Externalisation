@@ -235,21 +235,6 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
             LocalDate dateDebut, LocalDate dateFin);
 
     @Query("""
-        SELECT COALESCE(SUM(l.tarif), 0) FROM DemandeService d JOIN d.lignes l
-        LEFT JOIN d.societe s LEFT JOIN d.commercial c
-        WHERE (:dateDebut IS NULL OR l.debutService >= :dateDebut)
-          AND (:dateFin IS NULL OR l.finService <= :dateFin)
-          AND (:societeId IS NULL OR s.id = :societeId)
-          AND (:serviceId IS NULL OR l.service.id = :serviceId)
-          AND (:commercialId IS NULL OR c.id = :commercialId)
-        """)
-    BigDecimal sommeTarifTotal(@Param("dateDebut") LocalDate dateDebut,
-                               @Param("dateFin") LocalDate dateFin,
-                               @Param("societeId") Integer societeId,
-                               @Param("serviceId") Integer serviceId,
-                               @Param("commercialId") Integer commercialId);
-
-    @Query("""
         SELECT h.statut.statut, COUNT(DISTINCT d.id)
         FROM DemandeService d JOIN d.historiques h
         WHERE h.id = (SELECT MAX(h2.id) FROM HistoriqueDemande h2 WHERE h2.demande = d)
@@ -411,41 +396,6 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                                            @Param("serviceId") Integer serviceId);
 
     @Query("""
-        SELECT l.service.id, l.service.nomService, COUNT(DISTINCT l.demande.id), COALESCE(SUM(l.tarif), 0)
-        FROM LigneService l JOIN l.demande d
-        LEFT JOIN d.societe s
-        WHERE d.actif = true
-          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
-          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
-          AND (:societeId IS NULL OR s.id = :societeId)
-          AND (:serviceId IS NULL OR l.service.id = :serviceId)
-        GROUP BY l.service.id, l.service.nomService
-        ORDER BY COALESCE(SUM(l.tarif), 0) DESC
-        """)
-    List<Object[]> revenuParServiceFiltre(@Param("dateDebut") LocalDate dateDebut,
-                                          @Param("dateFin") LocalDate dateFin,
-                                          @Param("societeId") Integer societeId,
-                                          @Param("serviceId") Integer serviceId);
-
-    @Query("""
-        SELECT s.id, s.nomSociete, COUNT(DISTINCT d.id), COALESCE(SUM(l.tarif), 0)
-        FROM DemandeService d
-        LEFT JOIN d.lignes l ON (:serviceId IS NULL OR l.service.id = :serviceId)
-        LEFT JOIN d.societe s
-        WHERE d.actif = true
-          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
-          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
-          AND (:societeId IS NULL OR s.id = :societeId)
-          AND (:serviceId IS NULL OR l.service.id = :serviceId)
-        GROUP BY s.id, s.nomSociete
-        ORDER BY COUNT(DISTINCT d.id) DESC
-        """)
-    List<Object[]> demandesParSocieteFiltre(@Param("dateDebut") LocalDate dateDebut,
-                                            @Param("dateFin") LocalDate dateFin,
-                                            @Param("societeId") Integer societeId,
-                                            @Param("serviceId") Integer serviceId);
-
-    @Query("""
         SELECT d.commercial.id, d.commercial.nomCommercial, COUNT(DISTINCT d.id)
         FROM DemandeService d
         LEFT JOIN d.societe s
@@ -464,21 +414,6 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                                               @Param("dateFin") LocalDate dateFin,
                                               @Param("societeId") Integer societeId,
                                               @Param("serviceId") Integer serviceId);
-
-    @Query("""
-        SELECT COALESCE(SUM(l.tarif), 0)
-        FROM DemandeService d JOIN d.lignes l
-        LEFT JOIN d.societe s
-        WHERE d.actif = true
-          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
-          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
-          AND (:societeId IS NULL OR s.id = :societeId)
-          AND (:serviceId IS NULL OR l.service.id = :serviceId)
-        """)
-    BigDecimal sommeTarifDashboard(@Param("dateDebut") LocalDate dateDebut,
-                                   @Param("dateFin") LocalDate dateFin,
-                                   @Param("societeId") Integer societeId,
-                                   @Param("serviceId") Integer serviceId);
 
     @Query("""
         SELECT COUNT(DISTINCT l.service.id)

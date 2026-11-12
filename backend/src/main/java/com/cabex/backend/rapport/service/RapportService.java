@@ -9,6 +9,7 @@ import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
+import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.cabex.backend.paiement.repository.PaiementRepository;
 import com.cabex.backend.rapport.dto.RapportClientLigne;
@@ -41,6 +42,7 @@ public class RapportService {
     private final SocieteRepository societeRepository;
     private final ServiceRepository serviceRepository;
     private final LigneServiceService ligneService;
+    private final FactureValideeRepository factureValideeRepository;
 
     public RapportService(DemandeServiceRepository demandeRepository,
                           HistoriqueDemandeRepository historiqueRepository,
@@ -48,7 +50,8 @@ public class RapportService {
                           EcheancePaiementRepository echeanceRepository,
                           SocieteRepository societeRepository,
                           ServiceRepository serviceRepository,
-                          LigneServiceService ligneService) {
+                          LigneServiceService ligneService,
+                          FactureValideeRepository factureValideeRepository) {
         this.demandeRepository = demandeRepository;
         this.historiqueRepository = historiqueRepository;
         this.paiementRepository = paiementRepository;
@@ -56,13 +59,14 @@ public class RapportService {
         this.societeRepository = societeRepository;
         this.serviceRepository = serviceRepository;
         this.ligneService = ligneService;
+        this.factureValideeRepository = factureValideeRepository;
     }
 
     @Transactional(readOnly = true)
     public RapportGeneralResponse general(RapportFilter f) {
         List<DemandeService> demandes = demandesFiltrees(f);
         BigDecimal encaisse = fin(f);
-        BigDecimal total = sommeTarif(demandes);
+        BigDecimal total = sommeFacturesPayables(f);
         return new RapportGeneralResponse(
                 societeRepository.countByActifTrue(),
                 demandes.size(),
@@ -78,7 +82,7 @@ public class RapportService {
     @Transactional(readOnly = true)
     public RapportFinancierResponse financier(RapportFilter f) {
         List<DemandeService> demandes = demandesFiltrees(f);
-        BigDecimal total = sommeTarif(demandes);
+        BigDecimal total = sommeFacturesPayables(f);
         BigDecimal encaisse = fin(f);
         BigDecimal reste = total.subtract(encaisse).max(BigDecimal.ZERO);
         BigDecimal enRetard = echeanceRepository.sommeEnRetardFiltree(LocalDate.now(), f.clientId(), f.serviceId());
@@ -99,10 +103,15 @@ public class RapportService {
             Integer cle = d.getSociete() != null ? d.getSociete().getId() : null;
             parClient.computeIfAbsent(cle, k -> new ArrayList<>()).add(d);
         }
+        Map<Integer, BigDecimal> montantParClient = new LinkedHashMap<>();
+        for (Object[] o : factureValideeRepository
+                .sommeMontantFacturesParClient(f.dateDebut(), f.dateFin(), f.clientId(), f.serviceId())) {
+            montantParClient.put(o[0] != null ? (Integer) o[0] : null, toBigDecimal(o[3]));
+        }
         return parClient.entrySet().stream().map(e -> {
             Integer clientId = e.getKey();
             List<DemandeService> list = e.getValue();
-            BigDecimal total = sommeTarif(list);
+            BigDecimal total = montantParClient.getOrDefault(clientId, BigDecimal.ZERO);
             BigDecimal paye = clientId == null
                     ? list.stream()
                             .map(d -> toBigDecimal(paiementRepository.sommePayeeParDemande(d.getId())))
@@ -131,14 +140,20 @@ public class RapportService {
                 parService.computeIfAbsent(l.getService().getId(), k -> new ArrayList<>()).add(l);
             }
         }
+        Map<Integer, BigDecimal> montantParService = new LinkedHashMap<>();
+        for (Object[] o : factureValideeRepository
+                .sommeMontantFacturesParService(f.dateDebut(), f.dateFin(), f.clientId(), f.serviceId())) {
+            montantParService.put((Integer) o[0], toBigDecimal(o[3]));
+        }
         return parService.entrySet().stream().map(e -> {
             Integer serviceId = e.getKey();
             List<LigneService> list = e.getValue();
+            BigDecimal revenu = montantParService.getOrDefault(serviceId, BigDecimal.ZERO);
             return new RapportServiceLigne(serviceId,
                     list.get(0).getService().getNomService(),
                     null,
                     (int) list.stream().map(l -> l.getDemande().getId()).distinct().count(),
-                    sommeTarifLignes(list));
+                    revenu);
         }).sorted(Comparator.comparing(RapportServiceLigne::revenu).reversed()).toList();
     }
 
@@ -259,6 +274,19 @@ public class RapportService {
                 List.of("Référence", "Demande", "Client", "Mode", "Date", "Montant"), lignes);
     }
 
+    /**
+     * Total des factures validées <b>payables</b> : ce sont les factures utilisables
+     * comme cible d'un paiement (enfants du mode UNIQUE, facture PAR_SERVICE,
+     * mensualité d'abonnement). Les demandes encore en attente, la facture générale
+     * UNIQUE (non payable) et les débours (gN'hors CA — seules prestation et abonnement comptent)
+     * sont exclues.
+     */
+    private BigDecimal sommeFacturesPayables(RapportFilter f) {
+        BigDecimal montant = factureValideeRepository.sommeMontantFacturesPayables(
+                f.dateDebut(), f.dateFin(), f.clientId(), f.serviceId());
+        return montant == null ? BigDecimal.ZERO : montant;
+    }
+
     private List<DemandeService> demandesFiltrees(RapportFilter f) {
         LocalDate aujourdhui = LocalDate.now();
         java.time.LocalDateTime deadlinePrestationDebours =
@@ -273,26 +301,11 @@ public class RapportService {
     }
 
     private BigDecimal fin(RapportFilter f) {
-        return paiementRepository.sommePayee(f.dateDebut(), f.dateFin(), f.clientId(), f.serviceId());
+        return paiementRepository.sommePayeeFacturesPayables(f.dateDebut(), f.dateFin(), f.clientId(), f.serviceId());
     }
 
     private BigDecimal fin(RapportFilter f, Integer clientId) {
-        return paiementRepository.sommePayee(f.dateDebut(), f.dateFin(), clientId, f.serviceId());
-    }
-
-    private BigDecimal sommeTarif(List<DemandeService> list) {
-        return list.stream()
-                .flatMap(d -> d.getLignes() != null
-                        ? d.getLignes().stream()
-                        : java.util.stream.Stream.empty())
-                .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private BigDecimal sommeTarifLignes(List<LigneService> list) {
-        return list.stream()
-                .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return paiementRepository.sommePayeeFacturesPayables(f.dateDebut(), f.dateFin(), clientId, f.serviceId());
     }
 
     private DemandeResponse toDemandeResponse(DemandeService d) {
@@ -300,7 +313,8 @@ public class RapportService {
                 .map(h -> h.getStatut().getStatut()).orElse(null);
         BigDecimal paye = paiementRepository.sommePayeeParDemande(d.getId());
         if (paye == null) paye = BigDecimal.ZERO;
-        BigDecimal total = sommeTarif(java.util.List.of(d));
+        BigDecimal total = factureValideeRepository.sommeFacturesPaieablesPourDemande(d.getId());
+        if (total == null) total = BigDecimal.ZERO;
         BigDecimal reste = total.subtract(paye).max(BigDecimal.ZERO);
         return DemandeMapper.toResponse(d, statut, paye, reste,
                 ligneService.listerParDemande(d.getId()), total);

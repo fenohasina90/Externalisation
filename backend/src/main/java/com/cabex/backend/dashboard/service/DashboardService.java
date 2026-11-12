@@ -24,6 +24,7 @@ import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
+import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.paiement.repository.PaiementRepository;
 import com.cabex.backend.security.SecurityUtils;
 import com.cabex.backend.service.repository.ServiceRepository;
@@ -52,6 +53,7 @@ public class DashboardService {
     private final ServiceRepository serviceRepository;
     private final PaiementRepository paiementRepository;
     private final EcheancePaiementRepository echeanceRepository;
+    private final FactureValideeRepository factureValideeRepository;
     private final ConfigurationService configurationService;
 
     public DashboardService(SocieteRepository societeRepository,
@@ -60,6 +62,7 @@ public class DashboardService {
                             ServiceRepository serviceRepository,
                             PaiementRepository paiementRepository,
                             EcheancePaiementRepository echeanceRepository,
+                            FactureValideeRepository factureValideeRepository,
                             ConfigurationService configurationService) {
         this.societeRepository = societeRepository;
         this.demandeRepository = demandeRepository;
@@ -67,6 +70,7 @@ public class DashboardService {
         this.serviceRepository = serviceRepository;
         this.paiementRepository = paiementRepository;
         this.echeanceRepository = echeanceRepository;
+        this.factureValideeRepository = factureValideeRepository;
         this.configurationService = configurationService;
     }
 
@@ -87,7 +91,7 @@ public class DashboardService {
         long demandesEnAttente = parStatut.getOrDefault("EN_ATTENTE", 0L);
 
         if ("ECONOMAT".equalsIgnoreCase(role)) {
-            BigDecimal montantTotal = sommeTarif(filtre);
+            BigDecimal montantTotal = sommeFacturesPayables(filtre);
             BigDecimal montantPaye = sommePayee(filtre);
             BigDecimal reste = montantTotal.subtract(montantPaye).max(BigDecimal.ZERO);
             return new DashboardSummaryResponse(
@@ -118,7 +122,7 @@ public class DashboardService {
                     demandesEnAttente, demandesEnCours, joursAlerte);
         }
 
-        BigDecimal montantTotal = sommeTarif(filtre);
+        BigDecimal montantTotal = sommeFacturesPayables(filtre);
         BigDecimal montantPaye = sommePayee(filtre);
         BigDecimal reste = montantTotal.subtract(montantPaye).max(BigDecimal.ZERO);
 
@@ -164,7 +168,7 @@ public class DashboardService {
                 : BigDecimal.valueOf(nbTerminees * 100.0 / totalDemandes)
                         .setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal montantTotal = sommeTarif(filtre);
+        BigDecimal montantTotal = sommeFacturesPayables(filtre);
         BigDecimal montantMoyen = totalDemandes == 0 ? BigDecimal.ZERO
                 : montantTotal.divide(BigDecimal.valueOf(totalDemandes), 2, RoundingMode.HALF_UP);
 
@@ -255,7 +259,7 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public List<ServiceRevenuResponse> services(DashboardFilter filtre) {
-        return demandeRepository.revenuParServiceFiltre(
+        return factureValideeRepository.sommeMontantFacturesParService(
                         filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
                 .stream()
                 .map(o -> new ServiceRevenuResponse(
@@ -269,7 +273,7 @@ public class DashboardService {
     @Transactional(readOnly = true)
     public List<ClientRevenuResponse> clients(DashboardFilter filtre) {
         String role = SecurityUtils.currentRoleName();
-        List<Object[]> demandes = demandeRepository.demandesParSocieteFiltre(
+        List<Object[]> demandes = factureValideeRepository.sommeMontantFacturesParClient(
                 filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
 
         if ("ACCUEIL".equalsIgnoreCase(role)) {
@@ -345,14 +349,25 @@ public class DashboardService {
                 filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
     }
 
-    private BigDecimal sommeTarif(DashboardFilter filtre) {
-        BigDecimal montant = demandeRepository.sommeTarifDashboard(
+    /**
+     * Chiffre d'affaires prévu — somme des factures validées <b>payables</b>
+     * (enfant du mode UNIQUE, facture PAR_SERVICE, mensualité d'abonnement),
+     * <b>hors débours</b> (seules prestation et abonnement), et hors demandes
+     * encore en attente de validation. Aucune facture générale UNIQUE comptabilisée.
+     * Identique à la règle « cible de paiement ».
+     */
+    private BigDecimal sommeFacturesPayables(DashboardFilter filtre) {
+        BigDecimal montant = factureValideeRepository.sommeMontantFacturesPayables(
                 filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
         return montant == null ? BigDecimal.ZERO : montant;
     }
 
+    /**
+     * Montant payé lié aux factures validées <b>payables</b> (prestation + abonnement) —
+     * hors débours et hors facture générale UNIQUE, comme le total prévu.
+     */
     private BigDecimal sommePayee(DashboardFilter filtre) {
-        BigDecimal montant = paiementRepository.sommePayee(
+        BigDecimal montant = paiementRepository.sommePayeeFacturesPayables(
                 filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
         return montant == null ? BigDecimal.ZERO : montant;
     }

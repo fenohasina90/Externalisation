@@ -387,10 +387,8 @@ public class DemandeGestionService {
                         .statut(LigneServiceService.LIGNE_EN_ATTENTE)
                         .build();
                 // Si un montant est annoncé à la création, le débours est directement
-                // considéré validé (aucun « Valider le montant » à faire ensuite) et
-                // figure dans la proforma / la facture générale validée. Sa facture
-                // enfant (mode unique) ou sa facture générale (par service) est créée
-                // automatiquement à la validation de la proforma.
+                // considéré validé (aucun « Valider le montant » à faire ensuite) : sa
+                // facture validée est créée immédiatement, sans facture proforma.
                 BigDecimal montantInitial = ligne.montantDebours();
                 if (montantInitial != null) {
                     creee.setMontantDebours(montantInitial);
@@ -398,9 +396,16 @@ public class DemandeGestionService {
                 }
                 creee = ligneRepository.save(creee);
                 if (montantInitial != null) {
+                    // Un débours n'a pas de facture proforma : la facture validée
+                    // du débours est créée directement, comme à la « validation
+                    // du montant » sur une fiche demande.
+                    com.cabex.backend.facture.entity.FactureValidee fvDebours =
+                            factureService.creerFactureValideePourDebours(creee, montantInitial);
                     ligneServiceService.ajouterHistoriqueCreation(creee,
                             "Débours créé (montant annoncé : " + montantInitial + ") — "
-                                    + creee.getDesignationDebours());
+                                    + creee.getDesignationDebours()
+                                    + " — facture validée créée : "
+                                    + fvDebours.getReferenceFactureValidee());
                 } else {
                     ligneServiceService.ajouterHistoriqueCreation(creee,
                             "Débours ajouté à la création : " + creee.getDesignationDebours());

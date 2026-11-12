@@ -108,6 +108,48 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
                           @Param("societeId") Integer societeId,
                           @Param("serviceId") Integer serviceId);
 
+    /**
+     * Somme des montants payés liés aux factures validées <b>payables</b>
+     * (prestation + abonnement) — hors débours et hors facture générale UNIQUE.
+     * Utilisée par le tableau de bord et les rapports pour les KPI de paiement.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(p.montantPaye), 0)
+        FROM Paiement p
+        LEFT JOIN p.demande.societe s
+        JOIN p.factureValidee f
+        LEFT JOIN f.ligneService l
+        LEFT JOIN f.factureProforma fp
+        WHERE p.actif = true
+          AND NOT (f.factureGenerale IS NULL AND fp IS NOT NULL AND fp.modeFacturation = 'UNIQUE')
+          AND NOT (l IS NULL AND fp IS NOT NULL
+                   AND EXISTS (SELECT 1 FROM com.cabex.backend.demande.entity.LigneService l3
+                               WHERE l3.facture = fp
+                                 AND l3.typePrestation = 'ABONNEMENT_MENSUEL')
+                   AND NOT EXISTS (SELECT 1 FROM com.cabex.backend.demande.entity.LigneService l4
+                               WHERE l4.facture = fp
+                                 AND (l4.typePrestation IS NULL OR l4.typePrestation <> 'ABONNEMENT_MENSUEL')))
+          AND ((l IS NOT NULL AND l.categorie <> 'DEBOURS')
+               OR (l IS NULL AND NOT EXISTS (
+                       SELECT 1 FROM com.cabex.backend.facture.entity.FactureValideeLigne fl
+                       WHERE fl.factureValidee = f
+                         AND fl.ligneService.categorie = 'DEBOURS'))
+               OR (l IS NULL AND EXISTS (
+                       SELECT 1 FROM com.cabex.backend.facture.entity.FactureValideeLigne fl
+                       WHERE fl.factureValidee = f
+                         AND fl.ligneService.categorie <> 'DEBOURS')))
+          AND (:dateDebut IS NULL OR p.datePaiement >= :dateDebut)
+          AND (:dateFin IS NULL OR p.datePaiement <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+          AND (:serviceId IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l2
+                WHERE l2.demande = p.demande AND l2.service.id = :serviceId))
+        """)
+    BigDecimal sommePayeeFacturesPayables(@Param("dateDebut") LocalDate dateDebut,
+                                          @Param("dateFin") LocalDate dateFin,
+                                          @Param("societeId") Integer societeId,
+                                          @Param("serviceId") Integer serviceId);
+
     @Query("""
         SELECT p.modePaiement.libelle, COALESCE(SUM(p.montantPaye), 0)
         FROM Paiement p

@@ -76,15 +76,26 @@ export function useEcheancesReglables(demandeId: number | null) {
       // d'abonnement et factures débours — avec payé / reste recalculés par le backend.
       const facturesValidees = await facturesValideesApi.list(demandeId).catch(() => [])
       const fvParLigne = new Map<number, FactureValidee[]>()
+      const ajouterALaLigne = (ligneId: number, fv: FactureValidee) => {
+        const arr = fvParLigne.get(ligneId) ?? []
+        arr.push(fv)
+        fvParLigne.set(ligneId, arr)
+      }
       for (const fv of facturesValidees) {
         if (fv.ligneServiceId != null) {
-          const arr = fvParLigne.get(fv.ligneServiceId) ?? []
-          arr.push(fv)
-          fvParLigne.set(fv.ligneServiceId, arr)
+          ajouterALaLigne(fv.ligneServiceId, fv)
+          continue
+        }
+        // Facture générale validée mono-ligne (mode « par service ») : pas de
+        // ligne ServiceId sur la facture, mais son unique ligne — la proforma
+        // couvre exactement cette ligne — est la cible de règlement dans ce
+        // mode. (Mode UNIQUE : une générale mono-ligne n'est jamais une cible
+        // de paiement — seule la facture enfant l'est — d'où le filtre.)
+        if (fv.type === 'GENERALE' && fv.modeFacturation === 'PAR_SERVICE'
+            && fv.lignes?.length === 1 && fv.lignes[0]?.ligneServiceId != null) {
+          ajouterALaLigne(fv.lignes[0].ligneServiceId, fv)
         }
       }
-      // Facture générale validée (type GENERALE) par ligne.
-      const fvGeneraleParLigne = new Map<number, FactureValidee>()
       // Facture enfant créée à la validation de la facture générale (mode « unique ») :
       // facture liée pour le paiement de ce service uniquement.
       const fvEnfantParLigne = new Map<number, FactureValidee>()
@@ -92,10 +103,6 @@ export function useEcheancesReglables(demandeId: number | null) {
         if (fv.ligneServiceId != null && fv.factureGeneraleId != null && fv.mois == null
             && !fvEnfantParLigne.has(fv.ligneServiceId)) {
           fvEnfantParLigne.set(fv.ligneServiceId, fv)
-        }
-        if (fv.type === 'GENERALE' && fv.ligneServiceId != null
-            && !fvGeneraleParLigne.has(fv.ligneServiceId)) {
-          fvGeneraleParLigne.set(fv.ligneServiceId, fv)
         }
       }
 
@@ -106,8 +113,10 @@ export function useEcheancesReglables(demandeId: number | null) {
 
       lignes.forEach((ligne, i) => {
         const nom = ligne.libelleLigne ?? ligne.nomService ?? `Service ${ligne.serviceId ?? i + 1}`
-        const fvLigne = fvGeneraleParLigne.get(ligne.id) ?? null
         const fvDeLaLigne = fvParLigne.get(ligne.id) ?? []
+        // Facture générale validée (proforma validée) couvrant cette ligne :
+        // cible de règlement directe en mode « par service ».
+        const fvLigne = fvDeLaLigne.find((f) => f.type === 'GENERALE') ?? null
 
         if (ligne.categorie === 'DEBOURS') {
           // Débours créé automatiquement à la validation générale (montant annoncé à la
