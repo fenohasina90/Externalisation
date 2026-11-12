@@ -568,6 +568,68 @@ public class FactureService {
         return factureValideeRepository.save(creee);
     }
 
+    /**
+     * Lignes de la facture validée à afficher : lignes du type ABONNEMENT_MENSUEL
+     * créées à la facture, lignes de la proforma pour une facture générale validée,
+     * ou une ligne unique pour un débours direct.
+     */
+    private List<FactureValideeLigneResponse> construireLignesFacture(FactureValidee fv,
+                                                                      LigneService ligne) {
+        // Lignes enfants (facture combinée du mois).
+        if (fv.getLignes() != null && !fv.getLignes().isEmpty()) {
+            return fv.getLignes().stream()
+                    .sorted(Comparator.comparing(
+                            com.cabex.backend.facture.entity.FactureValideeLigne::getId,
+                            Comparator.nullsLast(Comparator.naturalOrder())))
+                    .map(l -> new FactureValideeLigneResponse(
+                            l.getId(),
+                            l.getLigneService() != null ? l.getLigneService().getId() : null,
+                            l.getLigneService() != null && l.getLigneService().getDemande() != null
+                                    ? l.getLigneService().getDemande().getReferenceDemande() : null,
+                            l.getDesignation(),
+                            l.getMontant(),
+                            l.getType() != null ? l.getType() : "PRINCIPALE",
+                            l.getLigneService() != null && l.getLigneService().getService() != null
+                                    ? l.getLigneService().getService().getNomService() : null))
+                    .toList();
+        }
+        // Facture générale (proforma validée) : une ligne par ligne de la proforma.
+        if (fv.getFactureProforma() != null && fv.getFactureProforma().getDemande() != null) {
+            List<LigneService> lignesProforma = ligneRepository
+                    .findByDemandeIdOrderByIdAsc(fv.getFactureProforma().getDemande().getId()).stream()
+                    .filter(l -> l.getFacture() != null
+                            && l.getFacture().getId().equals(fv.getFactureProforma().getId()))
+                    .toList();
+            return lignesProforma.stream()
+                    .map(l -> {
+                        String nomService = l.getService() != null ? l.getService().getNomService()
+                                : DemandeMapper.libelleLigne(l);
+                        return new FactureValideeLigneResponse(
+                                null,
+                                l.getId(),
+                                fv.getFactureProforma().getDemande().getReferenceDemande(),
+                                nomService,
+                                l.getTarifProforma() != null ? l.getTarifProforma() : l.getTarif(),
+                                "PRINCIPALE",
+                                l.getService() != null ? l.getService().getNomService() : null);
+                    })
+                    .toList();
+        }
+        // Débours : une seule ligne reprenant la désignation du débours.
+        if (ligne != null && LigneServiceService.estDebours(ligne)) {
+            return List.of(new FactureValideeLigneResponse(
+                    null,
+                    ligne.getId(),
+                    ligne.getDemande() != null ? ligne.getDemande().getReferenceDemande() : null,
+                    "Débours — " + (ligne.getDesignationDebours() != null
+                            ? ligne.getDesignationDebours() : "Débours"),
+                    fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO,
+                    "PRINCIPALE",
+                    null));
+        }
+        return List.of();
+    }
+
     private FactureValideeResponse toFactureValideeResponse(FactureValidee fv) {
         BigDecimal paye = fv.getId() != null ? paiementRepository.sommePayeeParFactureValidee(fv.getId()) : BigDecimal.ZERO;
         if (paye == null) {
@@ -611,21 +673,7 @@ public class FactureService {
         } else {
             referenceProforma = null;
         }
-        List<FactureValideeLigneResponse> lignesResp = fv.getLignes() == null
-                ? List.of()
-                : fv.getLignes().stream()
-                        .sorted(Comparator.comparing(
-                                com.cabex.backend.facture.entity.FactureValideeLigne::getId,
-                                Comparator.nullsLast(Comparator.naturalOrder())))
-                        .map(l -> new FactureValideeLigneResponse(
-                                l.getId(),
-                                l.getLigneService() != null ? l.getLigneService().getId() : null,
-                                l.getLigneService() != null && l.getLigneService().getDemande() != null
-                                        ? l.getLigneService().getDemande().getReferenceDemande() : null,
-                                l.getDesignation(),
-                                l.getMontant(),
-                                l.getType() != null ? l.getType() : "PRINCIPALE"))
-                        .toList();
+        List<FactureValideeLigneResponse> lignesResp = construireLignesFacture(fv, ligne);
         String nomService = ligne != null && ligne.getService() != null
                 ? ligne.getService().getNomService() : null;
         return new FactureValideeResponse(

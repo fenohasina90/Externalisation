@@ -49,14 +49,52 @@ class FactureProformaTarifFreezeTest {
                 .referenceFacture("PRO-2026-00001")
                 .demande(demande)
                 .montant(new BigDecimal("1500000"))
-                .statut("VALIDEE")
+                .statut("PROFORMA")
                 .build();
         proforma.getLignes().add(ligne);
 
         byte[] pdf = new PdfGenerator(configurationService).factureProforma(proforma);
         assertNotNull(pdf);
 
-        String texte;
+        String texte = extraireTexte(pdf);
+
+        assertTrue(texte.contains("1500000"), "tarif figé de la proforma doit apparaître dans le PDF");
+        assertFalse(texte.contains("1800000"), "tarif validé ne doit pas apparaître dans la proforma");
+    }
+
+    @Test
+    void pdfValideeAfficheMontantValidee() throws Exception {
+        Societe societe = Societe.builder().id(1).nomSociete("Atlas Conseil").build();
+        DemandeService demande = DemandeService.builder().id(1)
+                .referenceDemande("DEM-2026-00002").societe(societe).build();
+        LigneService ligne = LigneService.builder().id(1).demande(demande)
+                .categorie("EXTERNALISATION")
+                .typePrestation("PRESTATION")
+                .service(Service.builder().id(1).nomService("Comptabilité").build())
+                .tarif(new BigDecimal("1800000"))
+                .tarifProforma(new BigDecimal("1500000"))
+                .debutService(LocalDate.of(2026, 10, 1))
+                .finService(LocalDate.of(2026, 12, 31))
+                .statut("VALIDEE")
+                .build();
+        Facture validee = Facture.builder().id(1)
+                .referenceFacture("PRO-2026-00002")
+                .demande(demande)
+                .montant(new BigDecimal("1800000"))
+                .statut("VALIDEE")
+                .build();
+        validee.getLignes().add(ligne);
+
+        byte[] pdf = new PdfGenerator(configurationService).factureProforma(validee);
+        assertNotNull(pdf);
+
+        String texte = extraireTexte(pdf);
+
+        assertTrue(texte.contains("1800000"), "montant validé doit apparaître dans la facture validée");
+        assertFalse(texte.contains("1500000"), "tarif figé ne doit pas apparaître dans la facture validée");
+    }
+
+    private String extraireTexte(byte[] pdf) throws Exception {
         try (com.lowagie.text.pdf.PdfReader lecteur = new com.lowagie.text.pdf.PdfReader(pdf)) {
             com.lowagie.text.pdf.parser.PdfTextExtractor extracteur =
                     new com.lowagie.text.pdf.parser.PdfTextExtractor(lecteur);
@@ -64,10 +102,7 @@ class FactureProformaTarifFreezeTest {
             for (int page = 1; page <= lecteur.getNumberOfPages(); page++) {
                 sb.append(extracteur.getTextFromPage(page));
             }
-            texte = sb.toString().replaceAll("[^0-9]", "");
+            return sb.toString().replaceAll("[^0-9]", "");
         }
-
-        assertTrue(texte.contains("1500000"), "tarif figé de la proforma doit apparaître dans le PDF");
-        assertFalse(texte.contains("1800000"), "tarif validé ne doit pas apparaître dans la proforma");
     }
 }

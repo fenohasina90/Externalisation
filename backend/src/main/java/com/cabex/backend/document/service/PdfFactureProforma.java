@@ -76,7 +76,9 @@ final class PdfFactureProforma {
     // ------------------------------------------------------------------
 
     private static void entete(Document doc, Facture facture, PdfStyleFacture st) {
-        PdfComposants.enteteDocument(doc, st, "FACTURE", "PROFORMA");
+        String sousTitre = facture.getStatut() != null && "VALIDEE".equalsIgnoreCase(facture.getStatut())
+                ? "VALIDÉE" : "PROFORMA";
+        PdfComposants.enteteDocument(doc, st, "FACTURE", sousTitre);
 
         DemandeService demande = facture.getDemande();
         PdfPTable meta = new PdfPTable(3);
@@ -142,7 +144,7 @@ final class PdfFactureProforma {
         if (facture.getLignes() != null) {
             int index = 0;
             for (LigneService ligne : facture.getLignes()) {
-                lignesPrestation(table, st, ligne, index++ % 2 == 1);
+                lignesPrestation(table, st, facture, ligne, index++ % 2 == 1);
             }
         }
 
@@ -154,14 +156,15 @@ final class PdfFactureProforma {
     }
 
     private static void lignesPrestation(PdfPTable table, PdfStyleFacture st,
-                                         LigneService ligne, boolean zebra) {
+                                         Facture facture, LigneService ligne, boolean zebra) {
         Phrase designation = new Phrase();
         designation.setLeading(st.td.getSize() * 1.3f);
-        designation.add(new Chunk(PdfFormats.valeur(com.cabex.backend.demande.mapper
-                .DemandeMapper.libelleLigne(ligne)), st.tdGras));
+        String nomService = ligne.getService() != null ? ligne.getService().getNomService() : null;
+        designation.add(new Chunk(PdfFormats.valeur(nomService != null && !nomService.isBlank()
+                ? nomService
+                : com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(ligne)), st.tdGras));
         PdfComposants.faCorps(table, st, designation, Element.ALIGN_LEFT, zebra);
-        BigDecimal tarifAffiche = ligne.getTarifProforma() != null ? ligne.getTarifProforma()
-                : ligne.getTarif();
+        BigDecimal tarifAffiche = tarifAffichePdf(ligne, facture);
         PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(tarifAffiche), st.td),
                 Element.ALIGN_RIGHT, zebra);
         PdfComposants.faCorps(table, st, new Phrase("1", st.td), Element.ALIGN_CENTER, zebra);
@@ -172,15 +175,26 @@ final class PdfFactureProforma {
                 Element.ALIGN_RIGHT, zebra);
     }
 
+    /**
+     * Tarif affiché dans le PDF : après validation, le document validée
+     * affiche les montants validés (tarif ligne) ; la proforma garde
+     * le tarif figé (tarif_proforma).
+     */
+    private static BigDecimal tarifAffichePdf(LigneService ligne, Facture facture) {
+        if (facture.getStatut() != null && "VALIDEE".equalsIgnoreCase(facture.getStatut())) {
+            return ligne.getTarif() != null ? ligne.getTarif() : BigDecimal.ZERO;
+        }
+        return ligne.getTarifProforma() != null ? ligne.getTarifProforma()
+                : (ligne.getTarif() != null ? ligne.getTarif() : BigDecimal.ZERO);
+    }
+
     private static BigDecimal totalHt(Facture facture) {
         BigDecimal total = BigDecimal.ZERO;
         if (facture.getLignes() == null) {
             return total;
         }
         for (LigneService ligne : facture.getLignes()) {
-            BigDecimal tarifAffiche = ligne.getTarifProforma() != null ? ligne.getTarifProforma()
-                    : ligne.getTarif();
-            total = total.add(PdfFormats.montantOuZero(tarifAffiche));
+            total = total.add(PdfFormats.montantOuZero(tarifAffichePdf(ligne, facture)));
         }
         return total;
     }

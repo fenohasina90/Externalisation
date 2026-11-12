@@ -10,7 +10,9 @@ public record FactureValideeLigneResponse(
         String referenceDemande,
         String designation,
         BigDecimal montant,
-        /** PRINCIPALE (l'abonnement) ou RAPPEL (information). */
-        String type
+        /** PRINCIPALE (l'abonnement) ou RAPPEL (rappel). */
+        String type,
+        /** Nom du service catalogue (null pour un débours). */
+        String nomService
 ) {
 }

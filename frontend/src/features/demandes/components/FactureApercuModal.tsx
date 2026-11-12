@@ -70,6 +70,7 @@ export function FactureApercuModal({
     referenceDemande: string | null
     montant: number
     secondary?: string | null
+    nomService?: string | null
     /** PRINCIPALE = payable sur cette facture ; RAPPEL = rappel uniquement. */
     type: 'PRINCIPALE' | 'RAPPEL'
   }
@@ -80,16 +81,18 @@ export function FactureApercuModal({
         referenceDemande: apercu.facture.referenceDemande,
         montant: l.tarif,
         secondary: l.libelleLigne && l.libelleLigne !== l.nomService ? l.libelleLigne : null,
+        nomService: l.nomService,
         type: 'PRINCIPALE' as const,
       }))
     : apercu.facture.lignes.length > 0
       ? apercu.facture.lignes
           .filter((l) => l.type === 'PRINCIPALE')
           .map((l) => ({
-            id: `${apercu.facture.id}-${l.id}`,
+            id: `${apercu.facture.id}-${l.id ?? l.ligneServiceId ?? l.designation}`,
             designation: l.designation,
             referenceDemande: l.referenceDemande,
             montant: l.montant,
+            nomService: l.nomService,
             type: 'PRINCIPALE' as const,
           }))
       : [{
@@ -98,16 +101,18 @@ export function FactureApercuModal({
           referenceDemande: apercu.facture.referenceDemande,
           montant: montantTotal,
           secondary: libelleLigneFallback && apercu.facture.nomService ? libelleLigneFallback : null,
+          nomService: apercu.facture.nomService,
           type: 'PRINCIPALE' as const,
         }]
   const rappels: LigneAffichee[] = !estProforma && apercu.facture.lignes.length > 0
     ? apercu.facture.lignes
         .filter((l) => l.type === 'RAPPEL')
         .map((l) => ({
-          id: `${apercu.facture.id}-rappel-${l.id}`,
+          id: `${apercu.facture.id}-rappel-${l.id ?? l.ligneServiceId ?? l.designation}`,
           designation: l.designation,
           referenceDemande: l.referenceDemande,
           montant: l.montant,
+          nomService: l.nomService,
           type: 'RAPPEL' as const,
         }))
     : []
@@ -238,8 +243,13 @@ export function FactureApercuModal({
                   {principales.map((l) => (
                     <tr key={l.id}>
                       <td>
-                        <div className="fw-600">{l.designation}</div>
-                        {l.secondary && (
+                        <div className="fw-600">
+                          {l.nomService && l.nomService !== l.designation ? l.nomService : l.designation}
+                        </div>
+                        {l.nomService && l.nomService !== l.designation && (
+                          <span className="text-secondary" style={{ fontSize: 12 }}>{l.designation}</span>
+                        )}
+                        {!l.nomService && l.secondary && (
                           <span className="text-secondary" style={{ fontSize: 12 }}>{l.secondary}</span>
                         )}
                       </td>
@@ -247,6 +257,9 @@ export function FactureApercuModal({
                       <td>{formatMontantMGA(l.montant)}</td>
                     </tr>
                   ))}
+                  {principales.length === 0 && (
+                    <tr><td colSpan={3} className="text-secondary">Aucune ligne principale.</td></tr>
+                  )}
                   <tr>
                     <th colSpan={2} style={{ textAlign: 'right' }}>Total à payer (cette facture)</th>
                     <th>{formatMontantMGA(totalPrincipales)}</th>
@@ -279,7 +292,12 @@ export function FactureApercuModal({
                     {rappels.map((l) => (
                       <tr key={l.id}>
                         <td>
-                          <div className="fw-600">{l.designation}</div>
+                          <div className="fw-600">
+                            {l.nomService && l.nomService !== l.designation ? l.nomService : l.designation}
+                          </div>
+                          {l.nomService && l.nomService !== l.designation && (
+                            <span className="text-secondary" style={{ fontSize: 12 }}>{l.designation}</span>
+                          )}
                         </td>
                         <td className="text-secondary">{l.referenceDemande ?? '—'}</td>
                         <td>{formatMontantMGA(l.montant)}</td>

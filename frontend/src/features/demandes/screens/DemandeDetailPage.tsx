@@ -525,7 +525,12 @@ function FacturesTab({
                 <tbody>
                   {toutesLignes.map((l) => (
                     <tr key={`${l.referenceFacture}-${l.ligneServiceId}`}>
-                      <td className="fw-600">{l.libelleLigne ?? l.nomService ?? '—'}</td>
+                      <td>
+                        <div className="fw-600">{l.nomService ?? l.libelleLigne ?? '—'}</div>
+                        {l.nomService && l.libelleLigne && l.libelleLigne !== l.nomService && (
+                          <span className="text-secondary" style={{ fontSize: 12 }}>{l.libelleLigne}</span>
+                        )}
+                      </td>
                       <td className="text-secondary">
                         {formatDate(l.debutService)} → {formatDate(l.finService)}
                       </td>
@@ -639,9 +644,21 @@ function FacturesTab({
                         </span>
                       </td>
                       <td>
-                        <div className="fw-600">{f.nomService ?? f.libelleLigne ?? '—'}</div>
-                        {f.nomService && f.libelleLigne && (
-                          <span className="text-secondary" style={{ fontSize: 12 }}>{f.libelleLigne}</span>
+                        {f.lignes && f.lignes.length > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {f.lignes.map((l) => (
+                              <div key={l.id ?? l.ligneServiceId ?? l.designation}>
+                                <div className="fw-600">
+                                  {l.nomService && l.nomService !== l.designation ? l.nomService : l.designation}
+                                </div>
+                                {l.nomService && l.nomService !== l.designation && (
+                                  <span className="text-secondary" style={{ fontSize: 11 }}>{l.designation}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="fw-600">{f.nomService ?? f.libelleLigne ?? '—'}</div>
                         )}
                       </td>
                       <td className="text-secondary">
@@ -2365,7 +2382,10 @@ function FacturesAbonnementSection({
                                               >
                                                 <span>
                                                   <b className="text-secondary" style={{ fontSize: 12 }}>{l.referenceDemande ?? '—'}</b>
-                                                  {' · '}{l.designation}
+                                                  {' · '}<b>{l.nomService ?? l.designation}</b>
+                                                  {l.nomService && l.nomService !== l.designation && (
+                                                    <span className="text-secondary"> · {l.designation}</span>
+                                                  )}
                                                 </span>
                                                 <span className="fw-600">{formatMontantMGA(l.montant)}</span>
                                               </div>
@@ -2382,7 +2402,10 @@ function FacturesAbonnementSection({
                                               >
                                                 <span>
                                                   <b className="text-secondary" style={{ fontSize: 12 }}>{l.referenceDemande ?? '—'}</b>
-                                                  {' · '}{l.designation}
+                                                  {' · '}<b>{l.nomService ?? l.designation}</b>
+                                                  {l.nomService && l.nomService !== l.designation && (
+                                                    <span className="text-secondary"> · {l.designation}</span>
+                                                  )}
                                                 </span>
                                                 <span className="fw-600">{formatMontantMGA(l.montant)}</span>
                                               </div>

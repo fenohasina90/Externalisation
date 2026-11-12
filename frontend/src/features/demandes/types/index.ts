@@ -150,7 +150,7 @@ export interface FactureLigne {
 
 /** Ligne d'une facture validée (désignation figée à la création). */
 export interface FactureValideeLigne {
-  id: number
+  id: number | null
   ligneServiceId: number | null
   /** Référence de la demande d'où provient la ligne. */
   referenceDemande: string | null
@@ -158,6 +158,8 @@ export interface FactureValideeLigne {
   montant: number
   /** PRINCIPALE : l'abonnement (seul élément payable). RAPPEL : mention informative. */
   type: 'PRINCIPALE' | 'RAPPEL' | string
+  /** Nom du service catalogue (null pour un débours). */
+  nomService: string | null
 }
 
 /** Élément impayé pouvant être repris dans la facture du mois. */
