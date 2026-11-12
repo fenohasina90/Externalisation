@@ -13,9 +13,11 @@ public interface FactureValideeLigneRepository extends JpaRepository<FactureVali
 
     List<FactureValideeLigne> findByFactureValideeIdOrderByIdAsc(Integer factureValideeId);
 
-    /** Somme payée (paiements actifs) couvrant une ligne de service via les factures combinées. */
+    /** Somme payée (paiements actifs) couvrant une ligne de service via les factures combinées
+     *  (type PRINCIPALE uniquement : les lignes reprises « à titre de rappel » ne sont pas payables). */
     @Query("SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p " +
            "JOIN p.factureValidee.lignes fvl " +
-           "WHERE p.actif = true AND fvl.ligneService.id = :ligneServiceId")
+           "WHERE p.actif = true AND fvl.ligneService.id = :ligneServiceId " +
+           "AND fvl.type = 'PRINCIPALE'")
     BigDecimal sommePayeeViaFacturesCombinees(@Param("ligneServiceId") Integer ligneServiceId);
 }

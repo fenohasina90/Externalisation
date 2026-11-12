@@ -148,6 +148,16 @@ public class PaiementGestionService {
                         .orElseThrow(() -> new ResourceNotFoundException(
                                 ErrorMessages.introuvable("Facture validée", request.factureValideeId())));
 
+        // En mode « facture générale unique », la facture générale couvre
+        // plusieurs services : elle n'est pas un objet de règlement —
+        // chaque service possède sa propre facture pour le paiement.
+        if (factureValidee.getFactureProforma() != null
+                && "UNIQUE".equals(factureValidee.getFactureProforma().getModeFacturation())) {
+            throw new BusinessException(
+                    "La facture générale couvre plusieurs services : chaque service se règle "
+                            + "sur sa propre facture validée");
+        }
+
         if (factureValidee.getDemande() == null
                 || factureValidee.getDemande().getId() == null
                 || !factureValidee.getDemande().getId().equals(demande.getId())) {

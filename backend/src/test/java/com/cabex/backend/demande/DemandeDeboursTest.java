@@ -270,8 +270,8 @@ class DemandeDeboursTest {
     void actualiserStatutDeboursPartiel() {
         LigneService l = ligneDebours(5, "NON_PAYEE", new BigDecimal("500000"));
         FactureValidee fv = factureValidee(1, l, new BigDecimal("500000"));
-        lenient().when(factureValideeRepo2.findByFactureProformaIdIsNullAndDemandeId(17))
-                .thenReturn(fv);
+        lenient().when(factureValideeRepo2.findFirstByDemandeIdAndFactureProformaIdIsNullAndLigneServiceIdIsNull(17))
+                .thenReturn(Optional.of(fv));
         lenient().when(paiementRepo2.sommePayeeParFactureValidee(1))
                 .thenReturn(new BigDecimal("200000"));
         lenient().when(ligneRepoLigne.save(any())).thenAnswer(inv -> inv.getArgument(0));

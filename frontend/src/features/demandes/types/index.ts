@@ -142,12 +142,14 @@ export interface FactureLigne {
   serviceId: number | null
   nomService: string | null
   libelleLigne: string | null
-  tarif: number
+  tarif: number | null
   /** Tarif figé au moment de la génération de la proforma. */
   tarifProforma?: number | null
-  debutService: string
-  finService: string
+  debutService: string | null
+  finService?: string | null
   statutLigne: string | null
+  /** EXTERNALISATION (défaut) ou DEBOURS. */
+  categorie?: 'EXTERNALISATION' | 'DEBOURS' | string | null
 }
 
 /** Ligne d'une facture validée (désignation figée à la création). */
@@ -201,6 +203,8 @@ export interface FactureValidee {
   lignes: FactureValideeLigne[]
   /** Mois facturé (format AAAA-MM), uniquement pour les factures du mois d'abonnement. */
   mois: string | null
+  /** UNIQUE ou PAR_SERVICE (uniquement sur la facture générale validée), null sinon. */
+  modeFacturation?: string | null
 }
 
 export interface Facture {

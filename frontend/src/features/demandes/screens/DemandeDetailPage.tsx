@@ -425,6 +425,24 @@ export function DemandeDetailPage() {
 }
 
 /** Onglet Factures : aperçu d'ensemble, un seul bouton de validation (avec confirmation). */
+/** Libellé affiché pour le type de facture validée. */
+function pillTypeValidee(type: string): string {
+  switch (type) {
+    case 'DEBOURS':
+      return 'Débours'
+    case 'PRESTATION':
+      return 'Prestation'
+    case 'ABONNEMENT_MENSUEL':
+      return 'Abonnement'
+    case 'CREATION':
+      return 'Création'
+    case 'TRANSACTION_IMMOBILIERE':
+      return 'Transaction'
+    default:
+      return 'Externalisation'
+  }
+}
+
 function FacturesTab({
   factures,
   demandeId,
@@ -466,11 +484,16 @@ function FacturesTab({
   const toutesLignes = factures.flatMap((f) =>
     f.lignes.map((l) => ({ ...l, referenceFacture: f.referenceFacture })),
   )
-  const totalApercu = toutesLignes.reduce((s, l) => s + l.tarif, 0)
-
-  const tarifEffectif = (l: { ligneServiceId: number; tarif: number }): number => {
+  const montantLigneFacture = (l: { tarif: number | null; tarifProforma?: number | null }): number =>
+    l.tarif ?? l.tarifProforma ?? 0
+  const totalApercu = toutesLignes.reduce((s, l) => s + montantLigneFacture(l), 0)
+  const tarifEffectif = (l: {
+    ligneServiceId: number
+    tarif: number | null
+    tarifProforma?: number | null
+  }): number => {
     const v = tarifsModifies[l.ligneServiceId]
-    return v === '' || v === undefined ? l.tarif : Number(v)
+    return v === '' || v === undefined ? montantLigneFacture(l) : Number(v)
   }
   const totalProformas = proformas
     .flatMap((f) => f.lignes)
@@ -534,7 +557,7 @@ function FacturesTab({
                       <td className="text-secondary">
                         {formatDate(l.debutService)} → {formatDate(l.finService)}
                       </td>
-                      <td>{formatMontantMGA(l.tarif)}</td>
+                      <td>{formatMontantMGA(montantLigneFacture(l))}</td>
                       <td>
                         <button
                           type="button"
@@ -627,6 +650,7 @@ function FacturesTab({
                   const montantPaye = f.montantPaye ?? 0
                   const reste = f.resteAPayer ?? Math.max(f.montant - montantPaye, 0)
                   const taux = f.montant > 0 ? Math.min(100, Math.round((montantPaye / f.montant) * 100)) : 0
+                  const estGeneraleUnique = f.type === 'GENERALE' && f.modeFacturation === 'UNIQUE'
                   return (
                     <tr key={f.id}>
                       <td className="fw-600">
@@ -640,7 +664,7 @@ function FacturesTab({
                       </td>
                       <td>
                         <span className={f.type === 'DEBOURS' ? 'pill wt' : 'pill ok'}>
-                          {f.type === 'DEBOURS' ? 'Débours' : 'Externalisation'}
+                          {pillTypeValidee(f.type)}
                         </span>
                       </td>
                       <td>
@@ -666,26 +690,34 @@ function FacturesTab({
                       </td>
                       <td>{formatMontantMGA(f.montant)}</td>
                       <td>
-                        <div className="progression">
-                          <div className="progression__label">
-                            <span>{formatMontantMGA(montantPaye)} payé</span>
-                            <strong style={{ color: reste > 0 ? 'var(--danger)' : 'var(--success)' }}>
-                              {reste > 0 ? `${formatMontantMGA(reste)} restants` : 'Soldée'}
-                            </strong>
+                        {estGeneraleUnique ? (
+                          <span className="text-secondary" style={{ fontSize: 12 }}>
+                            Règlement par service (chaque facture de service porte sa référence)
+                          </span>
+                        ) : (
+                          <div className="progression">
+                            <div className="progression__label">
+                              <span>{formatMontantMGA(montantPaye)} payé</span>
+                              <strong style={{ color: reste > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                                {reste > 0 ? `${formatMontantMGA(reste)} restants` : 'Soldée'}
+                              </strong>
+                            </div>
+                            <div
+                              className="trk"
+                              role="progressbar"
+                              aria-valuenow={taux}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                            >
+                              <i style={{ width: `${taux}%` }} />
+                            </div>
                           </div>
-                          <div
-                            className="trk"
-                            role="progressbar"
-                            aria-valuenow={taux}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                          >
-                            <i style={{ width: `${taux}%` }} />
-                          </div>
-                        </div>
+                        )}
                       </td>
                       <td>
-                        {reste > 0 ? (
+                        {estGeneraleUnique ? (
+                          <span className="text-secondary">—</span>
+                        ) : reste > 0 ? (
                           <button
                             type="button"
                             className="btn-primary"
@@ -771,9 +803,15 @@ function FacturesTab({
                     </div>
                     {f.lignes.map((l) => {
                       const vInput = tarifsModifies[l.ligneServiceId]
+                      const debours = l.categorie === 'DEBOURS'
                       return (
                         <label key={l.ligneServiceId} className="field" style={{ marginTop: 8 }}>
-                          <b>{l.nomService ?? l.libelleLigne ?? `Service ${l.ligneServiceId}`}</b>
+                          <b>
+                            {l.nomService ?? l.libelleLigne ?? `Service ${l.ligneServiceId}`}
+                            {debours && (
+                              <span className="pill wt" style={{ marginLeft: 8, fontSize: 11 }}>Débours — figé</span>
+                            )}
+                          </b>
                           {l.libelleLigne && (
                             <span className="text-secondary" style={{ fontSize: 11, display: 'block' }}>
                               {l.libelleLigne}
@@ -783,7 +821,8 @@ function FacturesTab({
                             type="number"
                             min={0}
                             step="1"
-                            value={vInput ?? l.tarif}
+                            value={debours ? montantLigneFacture(l) : vInput ?? montantLigneFacture(l)}
+                            disabled={debours}
                             onChange={(e) =>
                               setTarifsModifies((prev) => ({
                                 ...prev,
@@ -791,6 +830,11 @@ function FacturesTab({
                               }))
                             }
                           />
+                          {debours && (
+                            <span className="form-help">
+                              Montant annoncé à la création — constaté tel quel à la validation.
+                            </span>
+                          )}
                         </label>
                       )
                     })}
@@ -2136,11 +2180,9 @@ function FacturesAbonnementSection({
   const ligneLabel = (l: LigneService) =>
     `${l.nomService ?? 'Abonnement'} · tarif mensuel ${formatMontantMGA(l.tarif ?? 0)}`
 
-  // Montant appliqué dans la facture du mois : le montant de la facture
-  // générale validée (référence pour le client), pas le tarif saisi.
-  const montantFactureMensuelle = cible
-    ? (facturesValidees ?? []).find((f) => f.type === 'GENERALE' && f.ligneServiceId === cible.id)?.montant ?? (cible.tarif ?? 0)
-    : 0
+  // Montant appliqué dans la facture du mois : le montant validé de la ligne
+  // d'abonnement (le tarif passe à cette valeur à la validation de la proforma).
+  const montantFactureMensuelle = cible ? (cible.tarif ?? 0) : 0
 
   // Toutes les factures du mois de la demande (tous les abonnements confondus).
   const enfantsTous = (facturesValidees ?? []).filter((f) => f.type === 'ABONNEMENT_MENSUEL')

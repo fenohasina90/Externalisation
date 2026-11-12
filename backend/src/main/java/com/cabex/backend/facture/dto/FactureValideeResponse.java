@@ -41,6 +41,8 @@ public record FactureValideeResponse(
         /** Lignes de la facture (facture combinée du mois) ; vide sinon. */
         List<FactureValideeLigneResponse> lignes,
         /** Mois facturé (format AAAA-MM), uniquement pour les factures du mois d'abonnement. */
-        String mois
+        String mois,
+        /** UNIQUE ou PAR_SERVICE (uniquement pour les factures générales) ; null sinon. */
+        String modeFacturation
 ) {
 }

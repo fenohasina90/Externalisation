@@ -85,7 +85,14 @@ export function useEcheancesReglables(demandeId: number | null) {
       }
       // Facture générale validée (type GENERALE) par ligne.
       const fvGeneraleParLigne = new Map<number, FactureValidee>()
+      // Facture enfant créée à la validation de la facture générale (mode « unique ») :
+      // facture liée pour le paiement de ce service uniquement.
+      const fvEnfantParLigne = new Map<number, FactureValidee>()
       for (const fv of facturesValidees) {
+        if (fv.ligneServiceId != null && fv.factureGeneraleId != null && fv.mois == null
+            && !fvEnfantParLigne.has(fv.ligneServiceId)) {
+          fvEnfantParLigne.set(fv.ligneServiceId, fv)
+        }
         if (fv.type === 'GENERALE' && fv.ligneServiceId != null
             && !fvGeneraleParLigne.has(fv.ligneServiceId)) {
           fvGeneraleParLigne.set(fv.ligneServiceId, fv)
@@ -103,7 +110,17 @@ export function useEcheancesReglables(demandeId: number | null) {
         const fvDeLaLigne = fvParLigne.get(ligne.id) ?? []
 
         if (ligne.categorie === 'DEBOURS') {
-          const fv = fvDeLaLigne.find((f) => f.type === 'DEBOURS') ?? null
+          // Débours créé automatiquement à la validation générale (montant annoncé à la
+          // création) : sa facture apparaît en type DEBOURS avec facture générale liée.
+          // À défaut, en mode « par service », sa facture générale mono-ligne est
+          // acceptée uniquement si elle ne couvre que cette ligne.
+          const fv = fvDeLaLigne.find((f) => f.type === 'DEBOURS')
+            ?? fvDeLaLigne.find(
+              (f) => f.type === 'GENERALE'
+                && f.lignes?.length === 1
+                && f.lignes[0]?.ligneServiceId === ligne.id,
+            )
+            ?? null
           if (ligne.statut === 'EN_ATTENTE') {
             deboursEnAttente.push({
               ligneId: ligne.id,
@@ -175,10 +192,13 @@ export function useEcheancesReglables(demandeId: number | null) {
             }
             return
           }
-          // PRESTATION : règlement direct sur la facture générale validée.
-          const reste = fvLigne ? fvLigne.resteAPayer : Math.max((ligne.tarif ?? 0) - (ligne.montantPaye ?? 0), 0)
-          const paye = fvLigne?.montantPaye ?? ligne.montantPaye ?? 0
-          if (fvLigne && reste > 0) {
+          // PRESTATION : règlement sur la facture enfant (mode unique, créée à la
+          // validation générale) ou directement sur la facture générale (par service).
+          const enfant = fvEnfantParLigne.get(ligne.id) ?? null
+          const cible = enfant ?? fvLigne
+          const reste = cible ? cible.resteAPayer : Math.max((ligne.tarif ?? 0) - (ligne.montantPaye ?? 0), 0)
+          const paye = cible?.montantPaye ?? ligne.montantPaye ?? 0
+          if (cible && reste > 0) {
             lignesDirectes.push({
               ligneId: ligne.id,
               ligneLabel: nom,
@@ -187,10 +207,12 @@ export function useEcheancesReglables(demandeId: number | null) {
               montantPaye: paye,
               resteAPayer: reste,
               statut: ligne.statut,
-              factureValideeId: fvLigne.id,
-              referenceFactureValidee: fvLigne.referenceFactureValidee,
-              referenceFactureGenerale: fvLigne.referenceFactureGenerale,
-              referenceFactureProforma: fvLigne.referenceFactureProforma,
+              factureValideeId: cible.id,
+              referenceFactureValidee: cible.referenceFactureValidee,
+              referenceFactureGenerale: enfant
+                ? enfant.referenceFactureGenerale
+                : fvLigne?.referenceFactureGenerale ?? null,
+              referenceFactureProforma: cible.referenceFactureProforma,
               demandeId: demande.id,
               referenceDemande: demande.referenceDemande,
             })
@@ -199,7 +221,11 @@ export function useEcheancesReglables(demandeId: number | null) {
         }
         const plan = plans.get(ligne.id)
         if (!plan) return
-        const factureValideeId = fvLigne?.id ?? null
+        // Création / transaction : paiement lié à la facture enfant (mode unique)
+        // ou directement à la facture générale validée (par service).
+        const enfantPlan = fvEnfantParLigne.get(ligne.id) ?? null
+        const ciblePlan = enfantPlan ?? fvLigne
+        const factureValideeId = ciblePlan?.id ?? null
         echeancesOuvertes(plan.echeances ?? []).forEach((echeance) => {
           echeances.push({
             echeance,
@@ -211,7 +237,7 @@ export function useEcheancesReglables(demandeId: number | null) {
             debutService: ligne.debutService,
             finService: ligne.finService,
             factureValideeId,
-            referenceFactureValidee: fvLigne?.referenceFactureValidee ?? null,
+            referenceFactureValidee: ciblePlan?.referenceFactureValidee ?? null,
           })
         })
       })

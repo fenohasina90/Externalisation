@@ -36,6 +36,10 @@ export function FactureApercuModal({
   }
 
   const estProforma = apercu.kind === 'proforma'
+  /** Facture générale validée en mode « unique » : aucun paiement ne lui est lié. */
+  const estGeneraleUnique = !estProforma
+    && apercu.facture.type === 'GENERALE'
+    && apercu.facture.modeFacturation === 'UNIQUE'
 
   const referenceTitre = estProforma ? apercu.facture.referenceFacture : apercu.facture.referenceFactureValidee
   const telechargerPdf = async () => {
@@ -79,7 +83,7 @@ export function FactureApercuModal({
         id: `${apercu.facture.id}-${l.ligneServiceId}`,
         designation: l.nomService ?? l.libelleLigne ?? '—',
         referenceDemande: apercu.facture.referenceDemande,
-        montant: l.tarif,
+        montant: l.tarif ?? l.tarifProforma ?? 0,
         secondary: l.libelleLigne && l.libelleLigne !== l.nomService ? l.libelleLigne : null,
         nomService: l.nomService,
         type: 'PRINCIPALE' as const,
@@ -313,8 +317,21 @@ export function FactureApercuModal({
             </section>
           )}
 
-          {/* Suivi des paiements (validée uniquement) */}
-          {!estProforma && (
+          {/* Suivi des paiements (validée uniquement) — pas en mode unique */}
+          {!estProforma && estGeneraleUnique && (
+            <section>
+              <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
+                Suivi des paiements
+              </h4>
+              <p className="section-note" style={{ margin: '0 0 4px' }}>
+                Cette facture générale couvre plusieurs services : <strong>aucun paiement ne lui est lié.</strong>
+              </p>
+              <p className="section-note" style={{ margin: 0 }}>
+                Chaque service se règle sur sa propre facture validée (factures de service ci-dessous).
+              </p>
+            </section>
+          )}
+          {!estProforma && !estGeneraleUnique && (
             <section>
               <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
                 Suivi des paiements

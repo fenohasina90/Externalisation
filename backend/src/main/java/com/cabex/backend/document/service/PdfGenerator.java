@@ -88,12 +88,17 @@ public class PdfGenerator {
     }
 
     /**
-     * Document PDF complet d'une facture validée : abonnement (mois), débours
-     * ou proforma validée (réutilise le rendu de la proforma).
+     * Document PDF complet d'une facture validée : facture du mois
+     * d'abonnement, facture enfant d'une facture générale validée (mode
+     * « facture unique »), débours sans proforma, ou proforma validée
+     * (réutilise le rendu de la proforma).
      */
     public byte[] factureValideeDocument(com.cabex.backend.facture.entity.FactureValidee facture) {
         if (facture.getFactureGenerale() != null) {
-            return PdfFactureAbonnement.generer(facture);
+            if (facture.getMois() != null) {
+                return PdfFactureAbonnement.generer(facture);
+            }
+            return PdfFactureDetail.generer(facture);
         }
         if (facture.getFactureProforma() == null) {
             return PdfFactureDebours.generer(facture);

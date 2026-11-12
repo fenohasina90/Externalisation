@@ -14,6 +14,8 @@ public record FactureLigneResponse(
         LocalDate finService,
         String statutLigne,
         /** Désignation affichée : « Prestation », « Abonnement mensuel » ou nom du service. */
-        String libelleLigne
+        String libelleLigne,
+        /** EXTERNALISATION ou DEBOURS. */
+        String categorie
 ) {
 }

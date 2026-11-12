@@ -132,9 +132,10 @@ public class FactureService {
             throw new BusinessException(
                     "Des factures existent déjà : modifiez les lignes de service pour les actualiser");
         }
-        // Seules les lignes EXTERNALISATION génèrent une proforma.
-        List<LigneService> lignes = ligneRepository.findByDemandeIdOrderByIdAsc(demandeId)
-                .stream().filter(l -> !LigneServiceService.estDebours(l)).toList();
+        // EXTERNALISATION : toujours dans la proforma.
+        // DEBOURS : seulement si le montant est annoncé à la création (montant figé),
+        // il figure alors dans la proforma et dans la facture générale validée.
+        List<LigneService> lignes = lignesDansProforma(demandeId);
         if (lignes.isEmpty()) {
             return List.of();
         }
@@ -145,7 +146,7 @@ public class FactureService {
             BigDecimal total = BigDecimal.ZERO;
             for (LigneService ligne : lignes) {
                 ligne.setFacture(facture);
-                ligne.setTarifProforma(ligne.getTarif());
+                ligne.setTarifProforma(montantLigne(ligne));
                 ligneRepository.save(ligne);
                 total = total.add(montantLigne(ligne));
                 ajouterHistoriqueLigne(ligne, LigneServiceService.LIGNE_CREE,
@@ -158,7 +159,7 @@ public class FactureService {
                 Facture facture = creerFacture(demande, modeNormalise, montantLigne(ligne));
                 facture = factureRepository.save(facture);
                 ligne.setFacture(facture);
-                ligne.setTarifProforma(ligne.getTarif());
+                ligne.setTarifProforma(montantLigne(ligne));
                 ligneRepository.save(ligne);
                 ajouterHistoriqueLigne(ligne, LigneServiceService.LIGNE_CREE,
                         "Facture proforma générée : " + facture.getReferenceFacture());
@@ -192,15 +193,14 @@ public class FactureService {
                         "La facture " + facture.getReferenceFacture() + " est déjà validée : modification impossible");
             }
         }
-        List<LigneService> lignes = ligneRepository.findByDemandeIdOrderByIdAsc(demandeId)
-                .stream().filter(l -> !LigneServiceService.estDebours(l)).toList();
+        List<LigneService> lignes = lignesDansProforma(demandeId);
         if (factures.size() == 1 && MODE_UNIQUE.equals(factures.get(0).getModeFacturation())) {
             Facture unique = factures.get(0);
             BigDecimal total = BigDecimal.ZERO;
             for (LigneService ligne : lignes) {
                 if (ligne.getFacture() == null) {
                     ligne.setFacture(unique);
-                    ligne.setTarifProforma(ligne.getTarif());
+                    ligne.setTarifProforma(montantLigne(ligne));
                     ligneRepository.save(ligne);
                 }
                 total = total.add(montantLigne(ligne));
@@ -214,7 +214,7 @@ public class FactureService {
                 Facture facture = creerFacture(demande, MODE_PAR_SERVICE, montantLigne(ligne));
                 facture = factureRepository.save(facture);
                 ligne.setFacture(facture);
-                ligne.setTarifProforma(ligne.getTarif());
+                ligne.setTarifProforma(montantLigne(ligne));
                 ligneRepository.save(ligne);
             } else {
                 Facture facture = ligne.getFacture();
@@ -331,11 +331,13 @@ public class FactureService {
         FactureValidee generale = factureValideeRepository.findByFactureProformaId(proforma.getId())
                 .orElseThrow(() -> new BusinessException(
                         "La facture validée associée à la proforma est introuvable"));
-        // Le montant appliqué est le montant de la facture validée (générale),
-        // pas le tarif saisi à la création de la demande.
-        BigDecimal tarif = generale.getMontant();
+        // Le montant appliqué est le montant validé de la LIGNE d'abonnement
+        // (le tarif figé par la validation de la proforma), et non celui de la
+        // facture générale validée : en mode « unique », celle-ci couvre
+        // plusieurs services.
+        BigDecimal tarif = montantLigne(ligne);
         if (tarif == null) {
-            throw new BusinessException("Le montant de la facture validée est manquant");
+            throw new BusinessException("Le montant de l'abonnement est manquant");
         }
 
         // --- Lignes de la facture du mois --------------------------------
@@ -509,25 +511,27 @@ public class FactureService {
                 reste);
     }
 
-    /** Montant attendu d'une ligne : montant de la facture validée liée (si créée), sinon tarif ou montant débours validé. */
+    /**
+     * Montant attendu d'une ligne : le montant validé de LA LIGNE —
+     * montant du débours (fixé) ou tarif validé (mis à jour à la validation
+     * de la proforma). N'utilise jamais la facture générale (partagée avec
+     * les autres services en mode UNIQUE).
+     */
     private BigDecimal attenduPourLigne(LigneService l) {
         if (LigneServiceService.estDebours(l)) {
             return l.getMontantDebours() != null ? l.getMontantDebours() : BigDecimal.ZERO;
         }
-        if (l.getFacture() != null) {
-            com.cabex.backend.facture.entity.FactureValidee fv = factureValideeRepository
-                    .findByFactureProformaId(l.getFacture().getId()).orElse(null);
-            if (fv != null && fv.getMontant() != null) {
-                return fv.getMontant();
-            }
-        }
         return l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO;
     }
 
-    /** Somme payée pour une ligne : facture générale de la proforma, factures directes (débours) et factures combinées. */
+    /** Somme payée pour une ligne : facture générale (par service uniquement), enfants, débours et factures combinées. */
     private BigDecimal paiementsPourLigne(LigneService ligne) {
         BigDecimal paye = BigDecimal.ZERO;
-        if (ligne.getFacture() != null) {
+        // En mode « facture générale unique », la facture est partagée entre les
+        // services : son montant n'est attribuable à aucune ligne ; chaque
+        // service paie sur sa propre facture enfant.
+        if (ligne.getFacture() != null
+                && !MODE_UNIQUE.equals(ligne.getFacture().getModeFacturation())) {
             com.cabex.backend.facture.entity.FactureValidee fv = factureValideeRepository
                     .findByFactureProformaId(ligne.getFacture().getId()).orElse(null);
             if (fv != null) {
@@ -549,16 +553,33 @@ public class FactureService {
     }
 
     /**
-     * Facture validée créée à la validation d'une ligne DEBOURS
-     * (facture sans proforma, liée à la ligne de débours).
+     * Facture validée créée à la validation d'un montant DEBOURS
+     * (facture sans proforma, liée à la ligne de débours). En mode
+     * « facture générale unique », la facture générale validée y est
+     * rattachée : la référence de la facture générale figure toujours
+     * dans la facture du service.
      */
     @Transactional
     public FactureValidee creerFactureValideePourDebours(LigneService ligne, BigDecimal montant) {
         Utilisateur validateur = currentUtilisateur();
         LocalDateTime valideLe = LocalDateTime.now();
+        com.cabex.backend.facture.entity.FactureValidee generale = null;
+        if (ligne.getDemande() != null) {
+            boolean modeUnique = factureRepository
+                    .findByDemandeId(ligne.getDemande().getId()).stream()
+                    .anyMatch(f -> MODE_UNIQUE.equals(f.getModeFacturation()));
+            if (modeUnique) {
+                generale = factureValideeRepository
+                        .findByDemandeIdOrderByIdAsc(ligne.getDemande().getId())
+                        .stream()
+                        .filter(f -> f.getFactureProforma() != null)
+                        .findFirst().orElse(null);
+            }
+        }
         FactureValidee creee = FactureValidee.builder()
                 .referenceFactureValidee(genererReferenceValidee(valideLe.getYear()))
                 .factureProforma(null)
+                .factureGenerale(generale)
                 .ligneService(ligne)
                 .demande(ligne.getDemande())
                 .montant(montant)
@@ -575,6 +596,30 @@ public class FactureService {
      */
     private List<FactureValideeLigneResponse> construireLignesFacture(FactureValidee fv,
                                                                       LigneService ligne) {
+        // Facture enfant d'une « facture générale » validée (mode UNIQUE) :
+        // facture mono-ligne pour le paiement (PRESTATION / débours / création...).
+        if (fv.getFactureGenerale() != null && fv.getMois() == null && ligne != null) {
+            String designation;
+            if (LigneServiceService.estDebours(ligne)) {
+                designation = "Débours — " + (ligne.getDesignationDebours() != null
+                        ? ligne.getDesignationDebours() : "n° " + ligne.getId());
+            } else {
+                designation = DemandeMapper.libelleLigne(ligne);
+                if (designation == null || designation.isBlank()) {
+                    designation = ligne.getService() != null
+                            ? ligne.getService().getNomService() : "Service " + ligne.getId();
+                }
+            }
+            String nomService = ligne.getService() != null ? ligne.getService().getNomService() : null;
+            return List.of(new FactureValideeLigneResponse(
+                    null,
+                    ligne.getId(),
+                    ligne.getDemande() != null ? ligne.getDemande().getReferenceDemande() : null,
+                    designation,
+                    fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO,
+                    "PRINCIPALE",
+                    nomService));
+        }
         // Lignes enfants (facture combinée du mois).
         if (fv.getLignes() != null && !fv.getLignes().isEmpty()) {
             return fv.getLignes().stream()
@@ -659,7 +704,19 @@ public class FactureService {
         }
         String type;
         if (fv.getFactureGenerale() != null) {
-            type = "ABONNEMENT_MENSUEL";
+            if (fv.getMois() != null) {
+                type = "ABONNEMENT_MENSUEL";
+            } else if (ligne != null && LigneServiceService.estDebours(ligne)) {
+                type = "DEBOURS";
+            } else if (ligne != null && ligne.getTypePrestation() != null) {
+                type = ligne.getTypePrestation();
+            } else if (ligne != null && ligne.getService() != null
+                    && ligne.getService().getTypeService() != null
+                    && !"STANDARD".equalsIgnoreCase(ligne.getService().getTypeService())) {
+                type = ligne.getService().getTypeService();
+            } else {
+                type = "PRESTATION";
+            }
         } else if (fv.getFactureProforma() == null) {
             type = "DEBOURS";
         } else {
@@ -697,7 +754,9 @@ public class FactureService {
                 lignesResp,
                 fv.getMois() != null
                         ? java.time.format.DateTimeFormatter.ofPattern("yyyy-MM").format(fv.getMois())
-                        : null);
+                        : null,
+                fv.getFactureProforma() != null
+                        ? fv.getFactureProforma().getModeFacturation() : null);
     }
 
     @Transactional
@@ -755,8 +814,22 @@ public class FactureService {
                                     + " n'appartient pas à la facture " + facture.getReferenceFacture());
                 }
                 if (LigneServiceService.estDebours(ligne)) {
-                    throw new BusinessException(
-                            "Une ligne DEBOURS ne peut pas être validée via une facture proforma");
+                    // Montant du débours figé à la création : il ne peut pas
+                    // être ajusté à la validation, seulement constaté.
+                    BigDecimal attendu = ligne.getMontantDebours() != null
+                            ? ligne.getMontantDebours() : BigDecimal.ZERO;
+                    if (req.montant().compareTo(attendu) != 0) {
+                        throw new BusinessException(
+                                "Le montant du débours « "
+                                        + (ligne.getDesignationDebours() != null
+                                                ? ligne.getDesignationDebours() : "n° " + ligne.getId())
+                                        + " » est figé à " + attendu
+                                        + " : il ne peut pas être modifié à la validation");
+                    }
+                    ajouterHistoriqueLigne(ligne,
+                            ligne.getStatut() != null ? ligne.getStatut() : LigneServiceService.LIGNE_NON_PAYEE,
+                            "Débours figuré dans la facture proforma (montant figé) : " + attendu);
+                    continue;
                 }
                 BigDecimal ancien = ligne.getTarif();
                 ligne.setTarif(req.montant());
@@ -767,14 +840,23 @@ public class FactureService {
             }
             // Le montant total de la facture validée = somme des lignes après mise à jour.
             montantFinal = lignesLignees.stream()
-                    .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
+                    .map(this::montantLigne)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
         } else if (montantValide != null) {
             // Montant validé global (ancienne API) : sur une facture à une seule ligne,
-            // le tarif de la ligne suit aussi la valeur validée.
+            // le tarif de la ligne suit aussi la valeur validée. Pour un débours,
+            // le montant reste figé à celui annoncé à la création.
             if (lignesLignees.size() == 1) {
                 LigneService ligne = lignesLignees.get(0);
-                if (!LigneServiceService.estDebours(ligne)) {
+                if (LigneServiceService.estDebours(ligne)) {
+                    BigDecimal attendu = ligne.getMontantDebours() != null
+                            ? ligne.getMontantDebours() : BigDecimal.ZERO;
+                    if (montantValide.compareTo(attendu) != 0) {
+                        throw new BusinessException(
+                                "Le montant du débours est figé à " + attendu
+                                        + " : il ne peut pas être modifié à la validation");
+                    }
+                } else {
                     BigDecimal ancien = ligne.getTarif();
                     ligne.setTarif(montantValide);
                     ligneRepository.save(ligne);
@@ -808,6 +890,46 @@ public class FactureService {
 
         List<LigneService> lignes = ligneRepository.findByDemandeId(facture.getDemande().getId());
         DemandeService demande = facture.getDemande();
+
+        // En mode UNIQUE (« facture générale unique »), chaque service possède sa
+        // propre facture validée pour payer : création automatique des factures
+        // enfant (PRESTATION / débours annoncé / créations / transactions), liées
+        // à la facture générale validée.
+        // L'abonnement mensuel n'a pas de facture enfant : il se règle via la
+        // facture du mois (créée manuellement).
+        if (MODE_UNIQUE.equals(facture.getModeFacturation())) {
+            Utilisateur validateurEnfant = validateur;
+            for (LigneService ligne : lignesLignees) {
+                boolean estAbonnement = LigneServiceService.CATEGORIE_EXTERNALISATION
+                        .equalsIgnoreCase(ligne.getCategorie())
+                        && LigneServiceService.ABONNEMENT_MENSUEL
+                                .equalsIgnoreCase(ligne.getTypePrestation());
+                if (estAbonnement) {
+                    continue;
+                }
+                com.cabex.backend.facture.entity.FactureValidee enfant =
+                        com.cabex.backend.facture.entity.FactureValidee.builder()
+                                .referenceFactureValidee(genererReferenceValidee(valideLe.getYear()))
+                                .factureProforma(null)
+                                .factureGenerale(validee)
+                                .ligneService(ligne)
+                                .demande(demande)
+                                .montant(montantLigne(ligne))
+                                .validePar(validateurEnfant)
+                                .valideLe(valideLe)
+                                .build();
+                factureValideeRepository.save(enfant);
+                ajouterHistoriqueLigne(ligne,
+                        ligne.getStatut() != null ? ligne.getStatut() : LigneServiceService.LIGNE_VALIDE,
+                        "Facture créée pour le paiement : " + enfant.getReferenceFactureValidee()
+                                + " — facture générale " + validee.getReferenceFactureValidee());
+                auditService.log(AuditActions.CREATE, "FACTURE", "FactureValidee",
+                        enfant.getId() != null ? Long.valueOf(enfant.getId()) : null,
+                        null, "Facture de service " + enfant.getReferenceFactureValidee()
+                                + " liée à la facture générale " + validee.getReferenceFactureValidee()
+                                + " (ligne " + ligne.getId() + ")");
+            }
+        }
 
         // Pour chaque ligne EXTERNALISATION de la demande liée à cette facture,
         // passer le statut à EN_COURS (VALIDATION automatique après validation proforma).
@@ -880,7 +1002,8 @@ public class FactureService {
                         l.getDebutService(),
                         l.getFinService(),
                         l.getStatut(),
-                        com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(l)))
+                        com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(l),
+                        l.getCategorie() != null ? l.getCategorie() : "EXTERNALISATION"))
                 .toList();
         com.cabex.backend.facture.entity.FactureValidee validee =
                 facture.getId() != null
@@ -915,7 +1038,28 @@ public class FactureService {
                 .build();
     }
 
+    /**
+     * Lignes reprises dans la proforma : EXTERNALISATION + DEBOURS dont le
+     * montant est annoncé à la création (montant figé). Les débours sans
+     * montant connu attendent « Valider le montant » avant de figurer dans une
+     * facture.
+     */
+    private List<LigneService> lignesDansProforma(Integer demandeId) {
+        return ligneRepository.findByDemandeIdOrderByIdAsc(demandeId).stream()
+                .filter(l -> !LigneServiceService.estDebours(l)
+                        || l.getMontantDebours() != null)
+                .toList();
+    }
+
+    /**
+     * Montant ligne pour les calculs de factures : le montant du débours
+     * pour une ligne DEBOURS, sinon le tarif. Un débours sans montant connu
+     * (montant encore à valider) vaut 0 : il n'est figuré dans aucune proforma.
+     */
     private BigDecimal montantLigne(LigneService ligne) {
+        if (LigneServiceService.estDebours(ligne)) {
+            return ligne.getMontantDebours() != null ? ligne.getMontantDebours() : BigDecimal.ZERO;
+        }
         return ligne.getTarif() != null ? ligne.getTarif() : BigDecimal.ZERO;
     }
 

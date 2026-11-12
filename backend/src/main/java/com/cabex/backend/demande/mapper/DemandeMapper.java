@@ -162,9 +162,14 @@ public class DemandeMapper {
 
     /**
      * Libellé affiché pour une ligne : "Prestation" pour PRESTATION,
-     * "Abonnement mensuel" pour ABONNEMENT_MENSUEL, sinon le nom du service.
+     * "Abonnement mensuel" pour ABONNEMENT_MENSUEL, "Débours — désignation"
+     * pour DEBOURS, sinon le nom du service.
      */
     public static String libelleLigne(LigneService l) {
+        if (LigneServiceService.estDebours(l)) {
+            String d = l.getDesignationDebours();
+            return "Débours — " + (d != null && !d.isBlank() ? d.trim() : "Débours");
+        }
         if (LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(l.getTypePrestation())) {
             return "Abonnement mensuel";
         }

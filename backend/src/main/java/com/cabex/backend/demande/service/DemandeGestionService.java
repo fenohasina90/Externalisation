@@ -369,8 +369,11 @@ public class DemandeGestionService {
                         .designationDebours(ligne.designationDebours().trim())
                         .statut(LigneServiceService.LIGNE_EN_ATTENTE)
                         .build();
-                // Si un montant est saisi à la création, le débours est directement
-                // considéré validé (pas de « Valider le montant » à faire ensuite).
+                // Si un montant est annoncé à la création, le débours est directement
+                // considéré validé (aucun « Valider le montant » à faire ensuite) et
+                // figure dans la proforma / la facture générale validée. Sa facture
+                // enfant (mode unique) ou sa facture générale (par service) est créée
+                // automatiquement à la validation de la proforma.
                 BigDecimal montantInitial = ligne.montantDebours();
                 if (montantInitial != null) {
                     creee.setMontantDebours(montantInitial);
@@ -378,10 +381,9 @@ public class DemandeGestionService {
                 }
                 creee = ligneRepository.save(creee);
                 if (montantInitial != null) {
-                    factureService.creerFactureValideePourDebours(creee, montantInitial);
                     ligneServiceService.ajouterHistoriqueCreation(creee,
-                            "Débours créé et validé à la création : " + creee.getDesignationDebours()
-                                    + " — montant " + montantInitial);
+                            "Débours créé (montant annoncé : " + montantInitial + ") — "
+                                    + creee.getDesignationDebours());
                 } else {
                     ligneServiceService.ajouterHistoriqueCreation(creee,
                             "Débours ajouté à la création : " + creee.getDesignationDebours());

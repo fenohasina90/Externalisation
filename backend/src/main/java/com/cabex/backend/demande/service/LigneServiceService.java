@@ -222,19 +222,33 @@ public class LigneServiceService {
         }
         // DEBOURS : type de prestation interdit (null obligatoire).
         normaliserTypePrestation(CATEGORIE_DEBOURS, null, request.typePrestation());
+        if (request.montantDebours() != null && request.montantDebours().signum() < 0) {
+            throw new BusinessException("Le montant du débours doit être positif ou nul");
+        }
 
+        BigDecimal montantInitial = request.montantDebours();
         LigneService ligne = LigneService.builder()
                 .demande(demande)
                 .categorie(CATEGORIE_DEBOURS)
                 .designationDebours(request.designationDebours().trim())
-                .statut(LIGNE_EN_ATTENTE)
+                .statut(montantInitial != null ? LIGNE_NON_PAYEE : LIGNE_EN_ATTENTE)
+                .montantDebours(montantInitial)
                 .build();
         ligne = ligneRepository.save(ligne);
 
-        ajouterHistoriqueLigne(ligne, LIGNE_EN_ATTENTE,
-                "Débours ajouté (EN_ATTENTE) : " + ligne.getDesignationDebours(), "MANUEL");
+        if (montantInitial != null) {
+            ajouterHistoriqueLigne(ligne, LIGNE_NON_PAYEE,
+                    "Débours ajouté (montant annoncé : " + montantInitial + ") : "
+                            + ligne.getDesignationDebours(), "MANUEL");
+        } else {
+            ajouterHistoriqueLigne(ligne, LIGNE_EN_ATTENTE,
+                    "Débours ajouté (EN_ATTENTE) : " + ligne.getDesignationDebours(), "MANUEL");
+        }
         ajouterHistoriqueDemande(demande,
                 "Débours ajouté : " + ligne.getDesignationDebours());
+
+        // Un débours avec montant figure dans la proforma : la régénérer/actualiser.
+        factureService.actualiserPourDemande(demande.getId());
 
         auditService.log(AuditActions.CREATE, "DEMANDE", "LigneService",
                 Long.valueOf(ligne.getId()), null,
@@ -551,7 +565,8 @@ public class LigneServiceService {
         LigneService ligne = ligneRepository.findById(ligneId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Ligne de service", ligneId)));
-        if (ligne.getFacture() != null) {
+        if (ligne.getFacture() != null
+                && !"UNIQUE".equals(ligne.getFacture().getModeFacturation())) {
             com.cabex.backend.facture.entity.FactureValidee fv = factureValideeRepository
                     .findByFactureProformaId(ligne.getFacture().getId()).orElse(null);
             BigDecimal somme = BigDecimal.ZERO;
@@ -597,10 +612,11 @@ public class LigneServiceService {
             return sommeLiee != null ? sommeLiee : BigDecimal.ZERO;
         }
         // Ligne DEBOURS sans proforma : chercher la facture validée liée à la demande
-        // et sans facture proforma (repli pour l'ancien modèle).
+        // sans proforma ni ligne (repli pour l'ancien modèle).
         if (ligne.getDemande() != null) {
             com.cabex.backend.facture.entity.FactureValidee fv = factureValideeRepository
-                    .findByFactureProformaIdIsNullAndDemandeId(ligne.getDemande().getId());
+                    .findFirstByDemandeIdAndFactureProformaIdIsNullAndLigneServiceIdIsNull(
+                            ligne.getDemande().getId()).orElse(null);
             if (fv != null) {
                 return paiementRepository.sommePayeeParFactureValidee(fv.getId());
             }
@@ -609,10 +625,10 @@ public class LigneServiceService {
     }
 
     /**
-     * Montant attendu effectif d'une ligne : le montant de la facture validée
-     * (si la ligne est liée à une proforma validée), sinon le tarif
-     * EXTERNALISATION, sinon le montant DEBOURS validé. Toute la logique
-     * de reste à payer / clôture se base sur cette valeur.
+     * Montant attendu effectif d'une ligne : le montant validé de LA LIGNE —
+     * tarif validé pour EXTERNALISATION (mis à jour à la validation de la
+     * proforma), sinon le montant DEBOURS validé. La facture générale partagée
+     * n'est pas attribuable à la ligne (mode « unique »).
      */
     public BigDecimal montantAttendu(LigneService ligne) {
         if (ligne == null) {
@@ -620,14 +636,6 @@ public class LigneServiceService {
         }
         if (estDebours(ligne)) {
             return ligne.getMontantDebours() != null ? ligne.getMontantDebours() : BigDecimal.ZERO;
-        }
-        if (ligne.getFacture() != null) {
-            com.cabex.backend.facture.entity.FactureValidee fv = factureValideeRepository
-                    .findByFactureProformaId(ligne.getFacture().getId())
-                    .orElse(null);
-            if (fv != null && fv.getMontant() != null) {
-                return fv.getMontant();
-            }
         }
         return ligne.getTarif() != null ? ligne.getTarif() : BigDecimal.ZERO;
     }

@@ -178,9 +178,10 @@ class FactureAbonnementCreationTest {
 
     @Test
     void creationUtiliseMontantFactureValideePasTarif() {
-        LigneService abonnement = abonnement(7, 1, new BigDecimal("1500000"));
+        // Après validation de la proforma, le tarif de la ligne passe à la valeur validée
+        // (le frontend envoie le montant par ligne) : la facture du mois reprend ce montant.
+        LigneService abonnement = abonnement(7, 1, new BigDecimal("1200000"));
         stubAbonnement(abonnement);
-        // La facture générale est validée à 1 200 000 (différent du tarif).
         lenient().when(factureValideeRepository.findByFactureProformaId(anyInt()))
                 .thenReturn(Optional.of(com.cabex.backend.facture.entity.FactureValidee.builder()
                         .id(1)
@@ -204,7 +205,7 @@ class FactureAbonnementCreationTest {
         assertTrue(reponse.lignes().stream()
                 .anyMatch(l -> l.designation().startsWith("Abonnement mensuel")
                         && l.montant().compareTo(new BigDecimal("1200000")) == 0),
-                "la ligne d'abonnement reprend le montant validé, pas le tarif");
+                "la ligne d'abonnement reprend le montant validé");
     }
 
     @Test

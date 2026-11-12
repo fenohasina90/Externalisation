@@ -178,9 +178,13 @@ final class PdfFactureProforma {
     /**
      * Tarif affiché dans le PDF : après validation, le document validée
      * affiche les montants validés (tarif ligne) ; la proforma garde
-     * le tarif figé (tarif_proforma).
+     * le tarif figé (tarif_proforma). Pour un débours : le montant annoncé
+     * à la création (figé).
      */
     private static BigDecimal tarifAffichePdf(LigneService ligne, Facture facture) {
+        if (com.cabex.backend.demande.service.LigneServiceService.estDebours(ligne)) {
+            return ligne.getMontantDebours() != null ? ligne.getMontantDebours() : BigDecimal.ZERO;
+        }
         if (facture.getStatut() != null && "VALIDEE".equalsIgnoreCase(facture.getStatut())) {
             return ligne.getTarif() != null ? ligne.getTarif() : BigDecimal.ZERO;
         }
