@@ -5,6 +5,7 @@ import com.cabex.backend.demande.dto.HistoriqueLigneResponse;
 import com.cabex.backend.demande.dto.LigneServiceResponse;
 import com.cabex.backend.demande.dto.UpdateLigneRequest;
 import com.cabex.backend.demande.dto.ValiderMontantDeboursRequest;
+import com.cabex.backend.demande.service.DemandeGestionService;
 import com.cabex.backend.demande.service.LigneServiceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -32,9 +33,12 @@ import java.util.List;
 public class LigneServiceController {
 
     private final LigneServiceService ligneService;
+    private final DemandeGestionService demandeService;
 
-    public LigneServiceController(LigneServiceService ligneService) {
+    public LigneServiceController(LigneServiceService ligneService,
+                                  DemandeGestionService demandeService) {
         this.ligneService = ligneService;
+        this.demandeService = demandeService;
     }
 
     @GetMapping
@@ -82,11 +86,22 @@ public class LigneServiceController {
     @PatchMapping("/{ligneId}/valider-montant-debours")
     @PreAuthorize("hasAuthority('DEMANDE_STATUS_UPDATE')")
     @Operation(summary = "Valider le montant d'une ligne DEBOURS",
-            description = "Réservé aux lignes DEBOURS en EN_ATTENTE : saisit le montant et fait passer la ligne à NON_PAYEE (NON_PAYEE → PARTIEL → PAYEE ensuite automatiquement par les paiements)")
+            description = "Réservé aux lignes DEBOURS en EN_ATTENTE : saisit le montant et fait passer la ligne EN_COURS (→ PARTIEL → PAYEE ensuite automatiquement par les paiements)")
     public ResponseEntity<LigneServiceResponse> validerMontantDebours(@PathVariable Integer demandeId,
                                                                       @PathVariable Integer ligneId,
                                                                       @Valid @RequestBody ValiderMontantDeboursRequest request) {
         return ResponseEntity.ok(ligneService.validerMontantDebours(ligneId, request));
+    }
+
+    @PatchMapping("/{ligneId}/terminer")
+    @PreAuthorize("hasAuthority('DEMANDE_STATUS_UPDATE')")
+    @Operation(summary = "Terminer une ligne « Abonnement mensuel »",
+            description = "Réservé aux lignes ABONNEMENT_MENSUEL EN_COURS (ou partiellement réglées) : passe la ligne à TERMINE. La demande clôture ensuite si toutes ses lignes sont terminées ou payées.")
+    public ResponseEntity<LigneServiceResponse> terminer(@PathVariable Integer demandeId,
+                                                         @PathVariable Integer ligneId) {
+        LigneServiceResponse reponse = ligneService.terminerAbonnement(ligneId);
+        demandeService.cloturerSiTerminee(demandeId);
+        return ResponseEntity.ok(reponse);
     }
 
     @PatchMapping("/{ligneId}/annuler-debours")

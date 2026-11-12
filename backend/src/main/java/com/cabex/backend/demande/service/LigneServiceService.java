@@ -231,14 +231,14 @@ public class LigneServiceService {
                 .demande(demande)
                 .categorie(CATEGORIE_DEBOURS)
                 .designationDebours(request.designationDebours().trim())
-                .statut(montantInitial != null ? LIGNE_NON_PAYEE : LIGNE_EN_ATTENTE)
+                .statut(montantInitial != null ? LIGNE_EN_COURS : LIGNE_EN_ATTENTE)
                 .montantDebours(montantInitial)
                 .build();
         ligne = ligneRepository.save(ligne);
 
         if (montantInitial != null) {
-            ajouterHistoriqueLigne(ligne, LIGNE_NON_PAYEE,
-                    "Débours ajouté (montant annoncé : " + montantInitial + ") : "
+            ajouterHistoriqueLigne(ligne, LIGNE_EN_COURS,
+                    "Débours ajouté (montant annoncé, EN_COURS : " + montantInitial + ") : "
                             + ligne.getDesignationDebours(), "MANUEL");
         } else {
             ajouterHistoriqueLigne(ligne, LIGNE_EN_ATTENTE,
@@ -259,7 +259,7 @@ public class LigneServiceService {
 
     /**
      * Bouton « Valider le montant » d'une ligne DEBOURS.
-     * EN_ATTENTE → NON_PAYEE, montant figé sur la ligne.
+     * EN_ATTENTE → EN_COURS, montant figé sur la ligne.
      */
     @Transactional
     public LigneServiceResponse validerMontantDebours(
@@ -281,20 +281,21 @@ public class LigneServiceService {
         }
 
         ligne.setMontantDebours(montant);
-        ligne.setStatut(LIGNE_NON_PAYEE);
+        ligne.setStatut(LIGNE_EN_COURS);
         ligneRepository.save(ligne);
         // Un paiement est toujours lié à une facture validée : la validation
         // d'un débours crée sa facture validée (sans proforma).
         factureService.creerFactureValideePourDebours(ligne, montant);
 
-        ajouterHistoriqueLigne(ligne, LIGNE_NON_PAYEE,
-                "Montant du débours validé : " + montant.toPlainString(), "MANUEL");
+        ajouterHistoriqueLigne(ligne, LIGNE_EN_COURS,
+                "Montant du débours validé (ligne mise EN_COURS) : " + montant.toPlainString(),
+                "MANUEL");
         ajouterHistoriqueDemande(ligne.getDemande(),
                 "Montant du débours validé (ligne " + ligne.getId() + ") : "
                         + montant.toPlainString());
 
         auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "LigneService",
-                Long.valueOf(ligne.getId()), LIGNE_EN_ATTENTE, LIGNE_NON_PAYEE);
+                Long.valueOf(ligne.getId()), LIGNE_EN_ATTENTE, LIGNE_EN_COURS);
 
         return toResponse(ligne);
     }
@@ -327,73 +328,63 @@ public class LigneServiceService {
     }
 
     /**
-     * Recalcule le statut automatique d'une ligne DEBOURS après un paiement :
-     * NON_PAYEE → PARTIEL → PAYEE (selon le total payé vs montant validé).
+     * Clôture manuelle d'une ligne « Abonnement mensuel » (EN_COURS ou un
+     * règlement partiel → TERMINE). La demande clôture ensuite si toutes
+     * ses lignes sont terminées ou payées.
      */
     @Transactional
-    public void actualiserStatutDeboursApresPaiement(LigneService ligne) {
-        if (ligne == null || !estDebours(ligne)) {
-            return;
+    public LigneServiceResponse terminerAbonnement(Integer ligneId) {
+        LigneService ligne = getLigne(ligneId);
+        if (!CATEGORIE_EXTERNALISATION.equalsIgnoreCase(ligne.getCategorie())
+                || !ABONNEMENT_MENSUEL.equalsIgnoreCase(ligne.getTypePrestation())) {
+            throw new BusinessException(
+                    "Seules les lignes « Abonnement mensuel » peuvent être terminées manuellement");
         }
-        if (ligne.getMontantDebours() == null) {
-            return;
+        String statut = ligne.getStatut();
+        if (LIGNE_TERMINE.equals(statut)) {
+            return toResponse(ligne); // idempotent
         }
-        BigDecimal paye = montantPayeParLigne(ligne.getId());
-        if (paye == null) {
-            paye = BigDecimal.ZERO;
+        if (!LIGNE_EN_COURS.equals(statut) && !LIGNE_PARTIEL.equals(statut)) {
+            throw new BusinessException(
+                    "L'abonnement ne peut être terminé que quand il est EN_COURS");
         }
-        String cible;
-        if (paye.compareTo(BigDecimal.ZERO) == 0) {
-            cible = LIGNE_NON_PAYEE;
-        } else if (paye.compareTo(ligne.getMontantDebours()) >= 0) {
-            cible = LIGNE_PAYEE;
-        } else {
-            cible = LIGNE_PARTIEL;
-        }
-        String actuel = ligne.getStatut();
-        if (cible.equals(actuel)) {
-            return;
-        }
-        ligne.setStatut(cible);
+        ligne.setStatut(LIGNE_TERMINE);
         ligneRepository.save(ligne);
-
-        ajouterHistoriqueLigne(ligne, cible,
-                "Statut du débours mis à jour (payé : " + paye.toPlainString()
-                        + " / " + ligne.getMontantDebours().toPlainString() + ")", "AUTO");
+        ajouterHistoriqueLigne(ligne, LIGNE_TERMINE,
+                "Abonnement terminé (manuel)", "MANUEL");
         ajouterHistoriqueDemande(ligne.getDemande(),
-                "Débours ligne " + ligne.getId() + " : " + cible + " (payé : "
-                        + paye.toPlainString() + ")");
-
+                "Abonnement terminé manuellement (ligne " + ligne.getId() + ")");
         auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "LigneService",
-                Long.valueOf(ligne.getId()), actuel, cible);
+                Long.valueOf(ligne.getId()), statut, LIGNE_TERMINE);
+        return toResponse(ligne);
     }
 
     /**
      * Recalcule le statut d'une ligne après un paiement :
-     * NON_PAYEE → PARTIEL → PAYEE (selon le total payé vs montant attendu).
-     * Pour EXTERNALISATION, le montant attendu est le tarif de la ligne.
-     * Pour DEBOURS, c'est le montant débours validé.
+     * EN_COURS → PARTIEL → TERMINE (EXTERNALISATION, incl. CREATION / TRANSACTION)
+     * EN_COURS → PARTIEL → PAYEE (DEBOURS).
+     * Montant attendu = montant validé (tarif ligne, mis à jour à la validation)
+     * ou le montant débours validé. L'abonnement reste EN_COURS (règlement via
+     * facture du mois) — sa clôture est manuelle. Règlement zéro : pas de
+     * régression de statut.
      */
     @Transactional
     public void actualiserStatutApresPaiement(LigneService ligne) {
         if (ligne == null) {
             return;
         }
-        BigDecimal paye = montantPayeParLigne(ligne.getId());
-        BigDecimal attendu = montantAttendu(ligne);
-        String cible;
-        boolean estDebours = estDebours(ligne);
         if (ABONNEMENT_MENSUEL.equalsIgnoreCase(ligne.getTypePrestation())) {
-            // Abonnement mensuel : les règlements du mois sont suivis sur la facture
-            // et sur la facture du mois ; la ligne reste EN_COURS. La demande est
-            // clôturée par changement de statut (TERMINEE).
+            // Abonnement mensuel : réglé via la facture du mois ; la ligne reste EN_COURS.
             return;
         }
-        if (paye.compareTo(BigDecimal.ZERO) == 0) {
-            cible = estDebours ? LIGNE_NON_PAYEE : LIGNE_NON_PAYEE;
-        } else if (paye.compareTo(attendu) >= 0) {
-            // Pour EXTERNALISATION PRESTATION : passage à TERMINE quand totalement
-            // payé. Pour DEBOURS : passage à PAYEE.
+        BigDecimal paye = montantPayeParLigne(ligne.getId());
+        BigDecimal attendu = montantAttendu(ligne);
+        boolean estDebours = estDebours(ligne);
+        String cible = null;
+        if (paye == null || paye.compareTo(BigDecimal.ZERO) == 0) {
+            // Aucun paiement — le statut ne change pas.
+            return;
+        } else if (attendu != null && paye.compareTo(attendu) >= 0) {
             cible = estDebours ? LIGNE_PAYEE : LIGNE_TERMINE;
         } else {
             cible = LIGNE_PARTIEL;
@@ -407,7 +398,7 @@ public class LigneServiceService {
 
         ajouterHistoriqueLigne(ligne, cible,
                 "Statut de ligne mis à jour (payé : " + paye.toPlainString()
-                        + " / " + attendu.toPlainString() + ")", "AUTO");
+                        + " / " + (attendu != null ? attendu : "0") + ")", "AUTO");
         ajouterHistoriqueDemande(ligne.getDemande(),
                 "Ligne " + ligne.getId() + " : " + cible + " (payé : "
                         + paye.toPlainString() + ")");

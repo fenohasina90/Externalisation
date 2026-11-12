@@ -5,7 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 
@@ -18,8 +17,6 @@ public interface LigneServiceRepository extends JpaRepository<LigneService, Inte
     boolean existsByDemandeId(Integer demandeId);
 
     long countByDemandeId(Integer demandeId);
-
-    List<LigneService> findByStatutInAndFinServiceBefore(Collection<String> statuts, LocalDate date);
 
     /**
      * Charge en une requête les lignes d'une page de demandes, avec leur

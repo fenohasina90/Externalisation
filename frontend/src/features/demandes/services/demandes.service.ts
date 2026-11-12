@@ -117,7 +117,7 @@ export const lignesApi = {
     return data
   },
 
-  /** Bouton « Valider le montant » : EN_ATTENTE → NON_PAYEE (DEBOURS uniquement). */
+  /** Bouton « Valider le montant » : EN_ATTENTE → EN_COURS (DEBOURS uniquement). */
   async validerMontantDebours(
     demandeId: number,
     ligneId: number,
@@ -126,6 +126,14 @@ export const lignesApi = {
     const { data } = await http.patch<LigneService>(
       `/demandes/${demandeId}/services/${ligneId}/valider-montant-debours`,
       payload,
+    )
+    return data
+  },
+
+  /** Terminer une ligne « Abonnement mensuel » (EN_COURS / règlement partiel → TERMINE). */
+  async terminerAbonnement(demandeId: number, ligneId: number): Promise<LigneService> {
+    const { data } = await http.patch<LigneService>(
+      `/demandes/${demandeId}/services/${ligneId}/terminer`,
     )
     return data
   },

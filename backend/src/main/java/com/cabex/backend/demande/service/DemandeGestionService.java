@@ -377,7 +377,7 @@ public class DemandeGestionService {
                 BigDecimal montantInitial = ligne.montantDebours();
                 if (montantInitial != null) {
                     creee.setMontantDebours(montantInitial);
-                    creee.setStatut(LigneServiceService.LIGNE_NON_PAYEE);
+                    creee.setStatut(LigneServiceService.LIGNE_EN_COURS);
                 }
                 creee = ligneRepository.save(creee);
                 if (montantInitial != null) {
@@ -541,7 +541,7 @@ public class DemandeGestionService {
         }
         return switch (actuel) {
             // Annulation ordinaire uniquement depuis EN_ATTENTE (§3.2).
-            case "EN_ATTENTE" -> STATUT_VALIDATION.equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
+            case "EN_ATTENTE" -> STATUT_VALIDATION.equals(nouveau) || STATUT_EN_COURS.equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
             case "VALIDATION" -> STATUT_EN_COURS.equals(nouveau);
             case "EN_COURS" -> STATUT_TERMINEE.equals(nouveau);
             default -> false;
@@ -612,8 +612,8 @@ public class DemandeGestionService {
 
     /**
      * Clôture automatique : la demande passe TERMINEE quand toutes ses lignes
-     * EXTERNALISATION ont atteint leur date de fin (soldes éventuels conservés).
-     * Les lignes DEBOURS sont ignorées (statut indépendant, sans date de fin).
+     * sont TERMINEES (EXTERNALISATION full paiement / abonnement terminée
+     * manuellement) ou PAYEE (DEBOURS complet).
      */
     @Transactional
     public boolean cloturerSiTerminee(Integer demandeId) {
@@ -622,19 +622,18 @@ public class DemandeGestionService {
         if (!STATUT_EN_COURS.equals(actuel) && !STATUT_VALIDATION.equals(actuel)) {
             return false;
         }
-        List<LigneService> lignes = ligneRepository.findByDemandeId(demandeId).stream()
-                .filter(l -> !LigneServiceService.estDebours(l))
-                .toList();
+        List<LigneService> lignes = ligneRepository.findByDemandeId(demandeId);
         if (lignes.isEmpty()) {
             return false;
         }
         boolean toutesTerminees = lignes.stream()
-                .allMatch(l -> LigneServiceService.LIGNE_TERMINE.equals(l.getStatut()));
+                .allMatch(l -> LigneServiceService.LIGNE_TERMINE.equals(l.getStatut())
+                        || LigneServiceService.LIGNE_PAYEE.equals(l.getStatut()));
         if (!toutesTerminees) {
             return false;
         }
         enviereHistorique(demande, STATUT_TERMINEE,
-                "Tous les services ont atteint leur date de fin (clôture automatique)");
+                "Tous les services sont terminés ou payés (clôture automatique)");
         notificationService.notifierChangementStatut(demande, STATUT_TERMINEE);
         auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
                 Long.valueOf(demande.getId()), actuel, STATUT_TERMINEE);

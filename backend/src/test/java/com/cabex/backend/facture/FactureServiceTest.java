@@ -154,7 +154,7 @@ class FactureServiceTest {
         assertEquals("PRO-2026-00001", reponse.referenceFacture());
         assertNotNull(reponse.referenceFactureValidee());
         assertTrue(reponse.referenceFactureValidee().endsWith("EXT/TNR/" + java.time.LocalDate.now().getYear()));
-        assertEquals("VALIDE", ligne.getStatut());
+        assertEquals("EN_COURS", ligne.getStatut());
         verify(historiqueLigneRepository).save(any());
     }
 

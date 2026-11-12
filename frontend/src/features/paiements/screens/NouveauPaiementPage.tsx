@@ -4,7 +4,10 @@ import { Alert, Autocomplete, Spinner } from '@/components/ui'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { messageErreur } from '@/constants/messages'
 import { useAuth } from '@/features/auth/hooks/useAuth'
+import { useApi } from '@/hooks/useApi'
 import { SelectionFichiers, documentsApi } from '@/features/documents'
+import { demandesApi } from '@/features/demandes/services/demandes.service'
+import type { Demande } from '@/features/demandes/types'
 import { formatDate, formatMontantMGA } from '@/utils/format'
 import { telechargerBlob } from '@/utils/telechargement'
 import { CHEQUE, VIREMENT } from '../constants/labels'
@@ -47,6 +50,16 @@ export function NouveauPaiementPage() {
     loading: loadingEcheances,
     error: errorEcheances,
   } = useEcheancesReglables(demandeId)
+
+  // Résolution directe de la référence d'URL : l'appel ne passe pas par la
+  // liste des demandes (jusqu'à 200 éléments). Le formulaire s'initialise
+  // donc immédiatement, au lieu d'attendre la liste complète.
+  const { data: demandeDepuisReference, loading: loadingReference } = useApi<Demande | null>(
+    () => (referenceParam
+      ? demandesApi.getByReference(referenceParam).catch(() => null)
+      : Promise.resolve(null)),
+    [referenceParam],
+  )
 
   const { data: modes } = useModesPaiement()
 
@@ -91,14 +104,19 @@ export function NouveauPaiementPage() {
     [listeDemandes],
   )
 
-  // Résout la référence de l'URL en demande dès que la liste est chargée.
+  // Résolution de la référence d'URL → demande : tentative directe (une seule
+  // ligne) puis repli sur la liste si celle-ci arrive la première.
+  // Patron « au-render-time, une seule fois » (même style que le reste).
   const [referenceTraitee, setReferenceTraitee] = useState(false)
-  if (!referenceTraitee && referenceParam && listeDemandes.length > 0) {
-    setReferenceTraitee(true)
-    const trouve = listeDemandes.find((d) => d.referenceDemande === referenceParam)
-    if (trouve) {
-      setDemandeId(trouve.id)
-      setDemandeTexte(`${trouve.referenceDemande} — ${trouve.nomSociete ?? 'Sans société'}`)
+  if (!referenceTraitee && referenceParam) {
+    const directe = demandeDepuisReference
+    const incluse = directe
+      ?? listeDemandes.find((d) => d.referenceDemande === referenceParam)
+      ?? null
+    if (incluse) {
+      setReferenceTraitee(true)
+      setDemandeId(incluse.id)
+      setDemandeTexte(`${incluse.referenceDemande} — ${incluse.nomSociete ?? 'Sans société'}`)
     }
   }
 
@@ -317,7 +335,7 @@ export function NouveauPaiementPage() {
     }
   }
 
-  const chargement = loadingDemandes || loadingEcheances
+  const chargement = loadingDemandes || loadingEcheances || loadingReference
 
   return (
     <div className="app-page responsables-page">

@@ -44,7 +44,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Lignes DEBOURS : création par ligne (désignation, EN_ATTENTE),
- * validation du montant (NON_PAYEE), annulation uniquement depuis EN_ATTENTE.
+ * validation du montant (EN_COURS), annulation uniquement depuis EN_ATTENTE.
  * Catégorie par ligne : mélange EXTERNALISATION / DEBOURS possible.
  */
 @ExtendWith(MockitoExtension.class)
@@ -216,9 +216,9 @@ class DemandeDeboursTest {
         var reponse = ligneService.validerMontantDebours(5,
                 new ValiderMontantDeboursRequest(new BigDecimal("500000")));
 
-        assertEquals("NON_PAYEE", reponse.statut());
+        assertEquals("EN_COURS", reponse.statut());
         assertEquals(new BigDecimal("500000"), reponse.montantDebours());
-        verify(historiqueLigneRepo).save(argThat(h -> h.getStatut().equals("NON_PAYEE")));
+        verify(historiqueLigneRepo).save(argThat(h -> h.getStatut().equals("EN_COURS")));
     }
 
     @Test
@@ -268,15 +268,19 @@ class DemandeDeboursTest {
 
     @Test
     void actualiserStatutDeboursPartiel() {
-        LigneService l = ligneDebours(5, "NON_PAYEE", new BigDecimal("500000"));
+        LigneService l = ligneDebours(5, "EN_COURS", new BigDecimal("500000"));
         FactureValidee fv = factureValidee(1, l, new BigDecimal("500000"));
         lenient().when(factureValideeRepo2.findFirstByDemandeIdAndFactureProformaIdIsNullAndLigneServiceIdIsNull(17))
                 .thenReturn(Optional.of(fv));
-        lenient().when(paiementRepo2.sommePayeeParFactureValidee(1))
+        lenient().when(factureValideeRepo2.findByLigneServiceId(5))
+                .thenReturn(List.of(fv));
+        lenient().when(factureValideeLigneRepo2.sommePayeeViaFacturesCombinees(5))
+                .thenReturn(null);
+        lenient().when(paiementRepo2.sommePayeeParFacturesValidees(List.of(1)))
                 .thenReturn(new BigDecimal("200000"));
         lenient().when(ligneRepoLigne.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        ligneService.actualiserStatutDeboursApresPaiement(l);
+        ligneService.actualiserStatutApresPaiement(l);
 
         assertEquals("PARTIEL", l.getStatut());
         verify(historiqueLigneRepo).save(argThat(h -> h.getStatut().equals("PARTIEL")));

@@ -167,7 +167,7 @@ public class FactureService {
             }
         }
 
-        ajouterHistoriqueDemande(demande,
+        ajouterHistoriqueDemande(demande, DEMANDE_EN_ATTENTE,
                 "Factures proforma générées (mode " + modeNormalise + ") : " + crees.size());
         auditService.log(AuditActions.CREATE, "FACTURE", "Facture",
                 null, null, demande.getReferenceDemande() + " : " + modeNormalise);
@@ -433,7 +433,10 @@ public class FactureService {
                                 + String.join(" ; ", inclusionsNote))
                 + (commentaire != null && !commentaire.isBlank() ? " — " + commentaire.trim() : "");
         ajouterHistoriqueLigne(ligne, ligne.getStatut(), note);
-        ajouterHistoriqueDemande(demande, note);
+        String statutCourantNote = statutActuelDemande(demande.getId());
+        ajouterHistoriqueDemande(demande,
+                statutCourantNote != null ? statutCourantNote : DEMANDE_EN_ATTENTE,
+                note);
         auditService.log(AuditActions.CREATE, "FACTURE", "FactureValidee",
                 child.getId() != null ? Long.valueOf(child.getId()) : null,
                 null, note);
@@ -827,7 +830,7 @@ public class FactureService {
                                         + " : il ne peut pas être modifié à la validation");
                     }
                     ajouterHistoriqueLigne(ligne,
-                            ligne.getStatut() != null ? ligne.getStatut() : LigneServiceService.LIGNE_NON_PAYEE,
+                            ligne.getStatut() != null ? ligne.getStatut() : LigneServiceService.LIGNE_EN_COURS,
                             "Débours figuré dans la facture proforma (montant figé) : " + attendu);
                     continue;
                 }
@@ -920,7 +923,7 @@ public class FactureService {
                                 .build();
                 factureValideeRepository.save(enfant);
                 ajouterHistoriqueLigne(ligne,
-                        ligne.getStatut() != null ? ligne.getStatut() : LigneServiceService.LIGNE_VALIDE,
+                        ligne.getStatut() != null ? ligne.getStatut() : LigneServiceService.LIGNE_EN_COURS,
                         "Facture créée pour le paiement : " + enfant.getReferenceFactureValidee()
                                 + " — facture générale " + validee.getReferenceFactureValidee());
                 auditService.log(AuditActions.CREATE, "FACTURE", "FactureValidee",
@@ -933,16 +936,14 @@ public class FactureService {
 
         // Pour chaque ligne EXTERNALISATION de la demande liée à cette facture,
         // passer le statut à EN_COURS (VALIDATION automatique après validation proforma).
+        // Toutes les lignes EXTERNALISATION passent EN_COURS, y compris
+        // CREATION / TRANSACTION_IMMOBILIERE.
         boolean demandePasseEnCours = false;
         String statutActuel = statutActuelDemande(demande.getId());
         for (LigneService ligne : lignes) {
             if (ligne.getFacture() != null && ligne.getFacture().getId().equals(facture.getId())) {
                 if (LigneServiceService.CATEGORIE_EXTERNALISATION.equalsIgnoreCase(
-                        ligne.getCategorie())
-                        && (LigneServiceService.PRESTATION.equalsIgnoreCase(ligne.getTypePrestation())
-                        || LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(ligne.getTypePrestation()))) {
-                    // Pour PRESTATION et ABONNEMENT_MENSUEL : après validation de la facture
-                    // proforma, la ligne passe EN_COURS et la demande passe EN_COURS.
+                        ligne.getCategorie())) {
                     ligne.setStatut(LigneServiceService.LIGNE_EN_COURS);
                     ligneRepository.save(ligne);
                     ajouterHistoriqueLigne(ligne, LigneServiceService.LIGNE_EN_COURS,
@@ -954,12 +955,14 @@ public class FactureService {
                         demandePasseEnCours = true;
                     }
                 } else {
+                    // DEBOURS figé dans la proforma (si non déjà EN_COURS à la création).
                     if (ligne.getStatut() == null) {
-                        ligne.setStatut(LigneServiceService.LIGNE_VALIDE);
+                        ligne.setStatut(LigneServiceService.LIGNE_EN_COURS);
                         ligneRepository.save(ligne);
                     }
-                    ajouterHistoriqueLigne(ligne, LigneServiceService.LIGNE_VALIDE,
+                    ajouterHistoriqueLigne(ligne, LigneServiceService.LIGNE_EN_COURS,
                             "Facture validée : " + facture.getReferenceFacture()
+                                    + " — ligne débours"
                                     + (commentaire != null && !commentaire.isBlank()
                                             ? " — " + commentaire : ""));
                 }
@@ -967,18 +970,21 @@ public class FactureService {
         }
 
         if (demandePasseEnCours && !LigneServiceService.LIGNE_EN_COURS.equals(statutActuel)) {
-            StatutDemande statutEnCours = statutDemandeRepository.findByStatut(
-                    LigneServiceService.LIGNE_EN_COURS)
-                    .orElseThrow(() -> new BusinessException(ErrorMessages.STATUT_INVALIDE));
-            ajouterHistoriqueDemande(demande,
+            ajouterHistoriqueDemande(demande, LigneServiceService.LIGNE_EN_COURS,
                     "Demande passée EN_COURS après validation de la facture proforma "
                             + facture.getReferenceFacture());
-            notificationService.notifierChangementStatut(demande, LigneServiceService.LIGNE_EN_COURS);
+            notificationService.notifierChangementStatut(demande,
+                    LigneServiceService.LIGNE_EN_COURS);
             auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
-                    Long.valueOf(demande.getId()), statutActuel, LigneServiceService.LIGNE_EN_COURS);
+                    Long.valueOf(demande.getId()), statutActuel,
+                    LigneServiceService.LIGNE_EN_COURS);
         }
+        String statutDemandeCourant = demandePasseEnCours
+                && !LigneServiceService.LIGNE_EN_COURS.equals(statutActuel)
+                ? LigneServiceService.LIGNE_EN_COURS
+                : statutActuel;
 
-        ajouterHistoriqueDemande(demande,
+        ajouterHistoriqueDemande(demande, statutDemandeCourant,
                 "Facture validée : proforma " + facture.getReferenceFacture()
                         + " → validée " + validee.getReferenceFactureValidee()
                         + " (" + montantFinal + ")");
@@ -1130,12 +1136,11 @@ public class FactureService {
                 .build());
     }
 
-    private void ajouterHistoriqueDemande(DemandeService demande, String commentaire) {
-        String statut = historiqueDemandeRepository.findFirstByDemandeIdOrderByIdDesc(
-                        demande.getId())
-                .map(h -> h.getStatut() != null ? h.getStatut().getStatut() : null)
-                .orElse(DEMANDE_EN_ATTENTE);
-        StatutDemande statutEntite = statutDemandeRepository.findByStatut(statut)
+    /** Ajoute une ligne d'historique pour la demande avec le statut indiqué. */
+    private void ajouterHistoriqueDemande(DemandeService demande, String statut,
+                                          String commentaire) {
+        String statutResolu = statut != null ? statut : DEMANDE_EN_ATTENTE;
+        StatutDemande statutEntite = statutDemandeRepository.findByStatut(statutResolu)
                 .orElseThrow(() -> new BusinessException(ErrorMessages.STATUT_INVALIDE));
         historiqueDemandeRepository.save(HistoriqueDemande.builder()
                 .demande(demande)

@@ -52,7 +52,7 @@ export interface DemandeReglable {
   demande: Demande | null
   /** Échéances non soldées de toutes les lignes, à plat. */
   echeances: EcheanceReglable[]
-  /** Lignes DEBOURS réglables (NON_PAYEE / PARTIEL avec reste). */
+  /** Lignes DEBOURS réglables (EN_COURS / PARTIEL avec reste). */
   debours: DeboursReglable[]
   /** Lignes DEBOURS en attente de validation du montant (EN_ATTENTE) : pas encore réglables. */
   deboursEnAttente: DeboursEnAttenteValidation[]
@@ -128,7 +128,7 @@ export function useEcheancesReglables(demandeId: number | null) {
               statut: ligne.statut,
             })
           } else if (
-            (ligne.statut === 'NON_PAYEE' || ligne.statut === 'PARTIEL') &&
+            (ligne.statut === 'EN_COURS' || ligne.statut === 'PARTIEL') &&
             ligne.resteAPayer > 0
           ) {
             debours.push({

@@ -55,10 +55,10 @@ const LIBELLES_LIGNE: Record<string, string> = {
   VALIDE: 'Validé',
   EN_ATTENTE: 'En attente',
   EN_COURS: 'En cours',
-  TERMINE: 'Terminé',
+  TERMINE: 'Terminée',
   NON_PAYEE: 'Non payé',
   PARTIEL: 'Partiel',
-  PAYEE: 'Payé',
+  PAYEE: 'Payée',
   ANNULEE: 'Annulée',
 }
 
@@ -887,6 +887,7 @@ function ServicesTab({
   const [ajoutOuvert, setAjoutOuvert] = useState(false)
   const [validationDebours, setValidationDebours] = useState<LigneService | null>(null)
   const [annulationDebours, setAnnulationDebours] = useState<LigneService | null>(null)
+  const [terminaisonAbo, setTerminaisonAbo] = useState<LigneService | null>(null)
   const [edition, setEdition] = useState<LigneService | null>(null)
   const contientTypeSolo = (demande.lignes ?? []).some((l) =>
     estTypeServiceSolo(l.typeService),
@@ -905,6 +906,21 @@ function ServicesTab({
       onChange()
     } catch (err) {
       onErreur(err instanceof Error ? err.message : 'Échec de la validation du montant')
+    } finally {
+      setTraitement(false)
+    }
+  }
+
+  const handleTerminerAbonnement = async () => {
+    if (!terminaisonAbo) return
+    setTraitement(true)
+    try {
+      await lignesApi.terminerAbonnement(demande.id, terminaisonAbo.id)
+      setTerminaisonAbo(null)
+      onMessage("Abonnement terminé. La demande se clôturera si tous les services sont terminés ou payés.")
+      onChange()
+    } catch (err) {
+      onErreur(err instanceof Error ? err.message : "Échec de la terminaison de l’abonnement")
     } finally {
       setTraitement(false)
     }
@@ -954,6 +970,7 @@ function ServicesTab({
           onPlan={() => setPlanPour(ligne)}
           onValiderDebours={() => setValidationDebours(ligne)}
           onAnnulerDebours={() => setAnnulationDebours(ligne)}
+          onTerminerAbonnement={() => setTerminaisonAbo(ligne)}
         />
       ))}
       {modifiable && !toutFige && !contientTypeSolo && (
@@ -988,6 +1005,16 @@ function ServicesTab({
         }}
         onErreur={onErreur}
         demandeId={demande.id}
+      />
+
+      <ConfirmDialog
+        open={terminaisonAbo !== null}
+        titre="Terminer cet abonnement ?"
+        message={`La ligne « ${terminaisonAbo?.nomService ?? 'Abonnement mensuel'} » passera à « Terminée ». La demande se clôturera automatiquement si tous les services sont terminés ou payés.`}
+        confirmer="Terminer"
+        ton="success"
+        onAnnuler={() => setTerminaisonAbo(null)}
+        onConfirmer={() => void handleTerminerAbonnement()}
       />
 
       <ConfirmDialog
@@ -1042,6 +1069,7 @@ function LigneCard({
   onPlan,
   onValiderDebours,
   onAnnulerDebours,
+  onTerminerAbonnement,
 }: {
   demandeId: number
   ligne: LigneService
@@ -1053,6 +1081,7 @@ function LigneCard({
   onPlan: () => void
   onValiderDebours: () => void
   onAnnulerDebours: () => void
+  onTerminerAbonnement: () => void
 }) {
   const { data: plan } = useApi<PlanPaiement | null>(
     () => planPaiementApi.getByLigne(ligne.id).catch(() => null),
@@ -1153,7 +1182,7 @@ function LigneCard({
             </button>
           </Can>
         )}
-        {estDebours && (ligne.statut === 'NON_PAYEE' || ligne.statut === 'PARTIEL') && (
+        {estDebours && (ligne.statut === 'EN_COURS' || ligne.statut === 'PARTIEL') && (
           <Can permission="PAIEMENT_CREATE">
             <button type="button" className="btn-primary" onClick={() => navigate(`/paiements/nouveau?demande=${encodeURIComponent(ligne.referenceDemande)}&ligne=${ligne.id}`)}>
               Enregistrer un paiement
@@ -1162,6 +1191,16 @@ function LigneCard({
         )}
         {estDebours && ligne.statut === 'PAYEE' && (
           <span className="pill ok">● Débours soldé</span>
+        )}
+        {ligne.typePrestation === 'ABONNEMENT_MENSUEL' && (ligne.statut === 'EN_COURS' || ligne.statut === 'PARTIEL') && (
+          <Can permission="DEMANDE_STATUS_UPDATE">
+            <button type="button" className="btn-ghost" onClick={onTerminerAbonnement}>
+              Terminer l’abonnement
+            </button>
+          </Can>
+        )}
+        {ligne.typePrestation === 'ABONNEMENT_MENSUEL' && ligne.statut === 'TERMINE' && (
+          <span className="pill ok">● Abonnement terminé</span>
         )}
       </div>
 
@@ -2133,6 +2172,21 @@ function ModifierDemandeModal({
  * La facture reprend la référence de la facture générale validée, la référence
  * de la facture proforma et la référence de la demande.
  */
+/**
+ * Lignes d'abonnement dont on peut encore consulter les factures :
+ * EN_COURS ou PARTIEL (actif), TERMINE (terminé manuellement — historique consultable),
+ * en dehors des débours.
+ */
+function abonnementMessageLigne(ligne: LigneService): { classe: string; libelle: string } {
+  if (ligne.statut === 'TERMINE') {
+    return { classe: 'pill ok', libelle: 'Abonnement terminé' }
+  }
+  if (ligne.statut === 'PARTIEL') {
+    return { classe: 'pill warning', libelle: 'Abonnement partiel' }
+  }
+  return { classe: 'pill info', libelle: 'Abonnement en cours' }
+}
+
 function FacturesAbonnementSection({
   demande,
   onErreur,
@@ -2142,10 +2196,11 @@ function FacturesAbonnementSection({
   onErreur: (message: string | null) => void
   onMessage: (message: string | null) => void
 }) {
+  /** Toutes les lignes d'abonnement, même terminées : leurs factures restent consultables. */
   const abonnementLignes = (demande.lignes ?? []).filter(
     (l) => l.categorie === 'EXTERNALISATION'
       && l.typePrestation === 'ABONNEMENT_MENSUEL'
-      && l.statut === 'EN_COURS',
+      && ['EN_COURS', 'PARTIEL', 'TERMINE'].includes(l.statut ?? ''),
   )
   const { data: facturesValidees, reload } = useApi<FactureValidee[]>(
     () => (demande?.id ? facturesValideesApi.list(demande.id).catch(() => []) : Promise.resolve([])),
@@ -2260,7 +2315,7 @@ function FacturesAbonnementSection({
       <section className="card card-pad">
         <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700 }}>Factures mensuelles</h3>
         <p className="section-note" style={{ margin: 0 }}>
-          Aucun abonnement mensuel en cours dans cette demande. Les lignes d&apos;abonnement sont
+          Aucun abonnement mensuel dans cette demande. Les lignes d&apos;abonnement sont
           créées depuis l&apos;onglet Services (type de prestation « Abonnement mensuel »).
         </p>
       </section>
@@ -2276,6 +2331,8 @@ function FacturesAbonnementSection({
         Créez la facture du mois avant chaque paiement : elle reprend le mois facturé, la date
         d&apos;émission, la référence de la facture générale validée et la référence de la facture
         proforma. Vous pouvez y reprendre des prestations / débours impayés du même client.
+        Un abonnement terminé n&apos;accepte plus de nouvelle facture du mois ; ses factures
+        restent consultables ici.
       </p>
 
       {/* KPI — suivi des encaissements */}
@@ -2300,12 +2357,14 @@ function FacturesAbonnementSection({
         </div>
       </div>
 
-      {/* Création — une carte par abonnement EN_COURS */}
+      {/* Création — des abonnements actifs ; la terminée reste consultable */}
       {abonnementLignes.map((ligne) => {
         const enfants = (facturesValidees ?? []).filter(
           (f) => f.ligneServiceId === ligne.id && f.type === 'ABONNEMENT_MENSUEL',
         )
         const restant = enfants.filter((f) => f.resteAPayer > 0)
+        const actif = ligne.statut === 'EN_COURS' || ligne.statut === 'PARTIEL'
+        const etat = abonnementMessageLigne(ligne)
         return (
           <div key={ligne.id}
             style={{ borderTop: '1px solid var(--border, #e5e7eb)', padding: '12px 0' }}>
@@ -2317,30 +2376,37 @@ function FacturesAbonnementSection({
               flexWrap: 'wrap',
             }}>
               <div>
-                <b>{ligneLabel(ligne)}</b>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <b>{ligneLabel(ligne)}</b>
+                  <span className={etat.classe}>● {etat.libelle}</span>
+                </div>
                 <div className="text-secondary" style={{ fontSize: 13 }}>
                   {enfants.length === 0
-                    ? 'Aucune facture du mois créée pour cet abonnement.'
+                    ? ligne.statut === 'TERMINE'
+                      ? 'Aucune facture du mois créée.'
+                      : 'Aucune facture du mois créée pour cet abonnement.'
                     : `${enfants.length} facture(s) du mois · ${restant.length} à régler`}
                 </div>
               </div>
-              <Can permission="FACTURE_ABONNEMENT_CREATE">
-                <button
-                  type="button"
-                  className="btn-primary"
-                  disabled={creationEnCours === ligne.id}
-                  onClick={() => {
-                    setErreurDialog(null)
-                    setDateEmission(new Date().toISOString().slice(0, 10))
-                    setMoisActuel(new Date().toISOString().slice(0, 7))
-                    setSelectionInclusions(new Set())
-                    reloadInclusions()
-                    setCible(ligne)
-                  }}
-                >
-                  Créer la facture du mois
-                </button>
-              </Can>
+              {actif && (
+                <Can permission="FACTURE_ABONNEMENT_CREATE">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={creationEnCours === ligne.id}
+                    onClick={() => {
+                      setErreurDialog(null)
+                      setDateEmission(new Date().toISOString().slice(0, 10))
+                      setMoisActuel(new Date().toISOString().slice(0, 7))
+                      setSelectionInclusions(new Set())
+                      reloadInclusions()
+                      setCible(ligne)
+                    }}
+                  >
+                    Créer la facture du mois
+                  </button>
+                </Can>
+              )}
             </div>
             {enfants.length > 0 && (
               <div className="table-scroll-container no-global-scroll" style={{ marginTop: 8 }}>
@@ -2405,7 +2471,7 @@ function FacturesAbonnementSection({
                             <td>{formatMontantMGA(f.resteAPayer)}</td>
                             <td>
                               <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                                {f.resteAPayer > 0 && (
+                                {f.resteAPayer > 0 && demande.statutActuel !== 'TERMINEE' && demande.statutActuel !== 'ANNULEE' && (
                                   <button
                                     type="button"
                                     className="btn-primary"
