@@ -1262,6 +1262,7 @@ function LigneFormModal({
   const [fin, setFin] = useState('')
   const [categorie, setCategorie] = useState<'EXTERNALISATION' | 'DEBOURS'>('EXTERNALISATION')
   const [designation, setDesignation] = useState('')
+  const [montantDebours, setMontantDebours] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
   const [enregistrement, setEnregistrement] = useState(false)
   const [serviceModalOpen, setServiceModalOpen] = useState(false)
@@ -1288,6 +1289,7 @@ function LigneFormModal({
       setFin(ligne?.finService ?? '')
       setCategorie((ligne?.categorie as 'EXTERNALISATION' | 'DEBOURS') ?? 'EXTERNALISATION')
       setDesignation(ligne?.designationDebours ?? '')
+      setMontantDebours(ligne?.montantDebours != null ? String(ligne.montantDebours) : '')
       setErreur(null)
     }
   }
@@ -1307,6 +1309,14 @@ function LigneFormModal({
         setErreur('La désignation du débours est obligatoire')
         return
       }
+      if (montantDebours.trim() !== '' && Number.isNaN(Number(montantDebours))) {
+        setErreur('Le montant du débours doit être un nombre')
+        return
+      }
+      if (montantDebours.trim() !== '' && Number(montantDebours) < 0) {
+        setErreur('Le montant du débours doit être positif ou nul')
+        return
+      }
       setEnregistrement(true)
       setErreur(null)
       try {
@@ -1316,6 +1326,7 @@ function LigneFormModal({
           await lignesApi.create(demandeId, {
             categorie: 'DEBOURS',
             designationDebours: designation.trim(),
+            montantDebours: montantDebours.trim() !== '' ? Number(montantDebours) : null,
           })
         }
         onSaved()
@@ -1433,10 +1444,28 @@ function LigneFormModal({
               </label>
             )}
             {categorie === 'DEBOURS' ? (
-              <label className="field form-grid__full">
-                Désignation du débours <span className="required">*</span>
-                <input value={designation} onChange={(e) => setDesignation(e.target.value)} maxLength={255} placeholder="Ex. Déplacement, timbres, divers…" />
-              </label>
+              <>
+                <label className="field form-grid__full">
+                  Désignation du débours <span className="required">*</span>
+                  <input value={designation} onChange={(e) => setDesignation(e.target.value)} maxLength={255} placeholder="Ex. Déplacement, timbres, divers…" />
+                </label>
+                {!ligne && (
+                  <label className="field form-grid__full">
+                    Montant du débours (MGA) — facultatif
+                    <input
+                      type="number"
+                      min={0}
+                      step="1"
+                      value={montantDebours}
+                      onChange={(e) => setMontantDebours(e.target.value)}
+                      placeholder="Laisser vide pour valider ensuite"
+                    />
+                    <span className="form-help">
+                      Facultatif — s&apos;il est renseigné, le débours est directement validé (aucun « Valider le montant » à faire ensuite).
+                    </span>
+                  </label>
+                )}
+              </>
             ) : (
             <>
             {!ligne && (

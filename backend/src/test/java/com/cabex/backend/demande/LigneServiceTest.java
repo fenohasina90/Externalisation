@@ -103,7 +103,7 @@ class LigneServiceTest {
     private CreateLigneRequest requete(Integer serviceId, String tarif) {
         return new CreateLigneRequest(serviceId, new BigDecimal(tarif),
                 LocalDate.of(2026, 10, 18), LocalDate.of(2026, 12, 16),
-                "EXTERNALISATION", null, null);
+                "EXTERNALISATION", null, null, null);
     }
 
     @Test

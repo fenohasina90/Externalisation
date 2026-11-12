@@ -35,6 +35,13 @@ public record CreateLigneRequest(
          * PRESTATION (défaut si null) ou ABONNEMENT_MENSUEL.
          * Interdit (null) pour DEBOURS / CREATION / TRANSACTION.
          */
-        String typePrestation
+        String typePrestation,
+
+        /**
+         * Montant du débours (optionnel). Renseigné : le débours est
+         * considéré directement validé (ligne NON_PAYEE + facture validée créée).
+         * Non renseigné : montant à valider ensuite (ligne EN_ATTENTE).
+         */
+        BigDecimal montantDebours
 ) {
 }

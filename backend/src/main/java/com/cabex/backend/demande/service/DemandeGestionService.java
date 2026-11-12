@@ -251,7 +251,7 @@ public class DemandeGestionService {
             lignesDemandees = List.of(new CreateLigneRequest(
                     request.serviceId(), request.tarif(),
                     request.debutService(), request.finService(),
-                    LigneServiceService.CATEGORIE_EXTERNALISATION, null, null));
+                    LigneServiceService.CATEGORIE_EXTERNALISATION, null, null, null));
         }
 
         // Validation de la catégorie de chaque ligne (EXTERNALISATION / DEBOURS).
@@ -260,6 +260,9 @@ public class DemandeGestionService {
             if (LigneServiceService.CATEGORIE_DEBOURS.equals(categorie)) {
                 if (ligne.designationDebours() == null || ligne.designationDebours().isBlank()) {
                     throw new BusinessException(ErrorMessages.DESIGNATION_DEBOURS_OBLIGATOIRE);
+                }
+                if (ligne.montantDebours() != null && ligne.montantDebours().signum() < 0) {
+                    throw new BusinessException("Le montant du débours doit être positif ou nul");
                 }
                 if (ligne.serviceId() != null || ligne.tarif() != null
                         || ligne.debutService() != null || ligne.finService() != null) {
@@ -271,6 +274,10 @@ public class DemandeGestionService {
                 if (ligne.designationDebours() != null && !ligne.designationDebours().isBlank()) {
                     throw new BusinessException(
                             "La désignation du débours ne s'applique qu'aux lignes DEBOURS");
+                }
+                if (ligne.montantDebours() != null) {
+                    throw new BusinessException(
+                            "Le montant du débours ne s'applique qu'aux lignes DEBOURS");
                 }
                 if (ligne.serviceId() == null || ligne.tarif() == null) {
                     throw new BusinessException(ErrorMessages.DONNEES_OBLIGATOIRES);
@@ -362,9 +369,23 @@ public class DemandeGestionService {
                         .designationDebours(ligne.designationDebours().trim())
                         .statut(LigneServiceService.LIGNE_EN_ATTENTE)
                         .build();
-                ligneRepository.save(creee);
-                ligneServiceService.ajouterHistoriqueCreation(creee,
-                        "Débours ajouté à la création : " + creee.getDesignationDebours());
+                // Si un montant est saisi à la création, le débours est directement
+                // considéré validé (pas de « Valider le montant » à faire ensuite).
+                BigDecimal montantInitial = ligne.montantDebours();
+                if (montantInitial != null) {
+                    creee.setMontantDebours(montantInitial);
+                    creee.setStatut(LigneServiceService.LIGNE_NON_PAYEE);
+                }
+                creee = ligneRepository.save(creee);
+                if (montantInitial != null) {
+                    factureService.creerFactureValideePourDebours(creee, montantInitial);
+                    ligneServiceService.ajouterHistoriqueCreation(creee,
+                            "Débours créé et validé à la création : " + creee.getDesignationDebours()
+                                    + " — montant " + montantInitial);
+                } else {
+                    ligneServiceService.ajouterHistoriqueCreation(creee,
+                            "Débours ajouté à la création : " + creee.getDesignationDebours());
+                }
                 continue;
             }
             Service service = serviceRepository.findById(ligne.serviceId())

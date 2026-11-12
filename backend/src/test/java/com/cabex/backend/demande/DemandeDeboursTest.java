@@ -120,7 +120,7 @@ class DemandeDeboursTest {
         return new CreateDemandeRequest(
                 LocalDate.of(2026, 9, 1), null, null,
                 societeId, null, null, null, null, null,
-                List.of(new CreateLigneRequest(null, null, null, null, "DEBOURS", designation, null)),
+                List.of(new CreateLigneRequest(null, null, null, null, "DEBOURS", designation, null, null)),
                 "PAR_SERVICE");
     }
 
@@ -145,7 +145,7 @@ class DemandeDeboursTest {
         var requete = new CreateDemandeRequest(
                 LocalDate.of(2026, 9, 1), null, null,
                 1, null, null, null, null, null,
-                List.of(new CreateLigneRequest(null, null, null, null, "DEBOURS", " ", null)),
+                List.of(new CreateLigneRequest(null, null, null, null, "DEBOURS", " ", null, null)),
                 "PAR_SERVICE");
 
         var ex = assertThrows(BusinessException.class, () -> demandeService.create(requete));
@@ -161,7 +161,7 @@ class DemandeDeboursTest {
                 LocalDate.of(2026, 9, 1), null, null,
                 1, null, null, null, null, null,
                 List.of(new CreateLigneRequest(1, new BigDecimal("1000"),
-                        LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31), "DEBOURS", "Divers", null)),
+                        LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31), "DEBOURS", "Divers", null, null)),
                 "PAR_SERVICE");
 
         var ex = assertThrows(BusinessException.class, () -> demandeService.create(requete));
@@ -176,7 +176,7 @@ class DemandeDeboursTest {
         var requete = new CreateDemandeRequest(
                 LocalDate.of(2026, 9, 1), null, null,
                 1, null, null, null, null, null,
-                List.of(new CreateLigneRequest(null, null, null, null, "INCONNUE", null, null)),
+                List.of(new CreateLigneRequest(null, null, null, null, "INCONNUE", null, null, null)),
                 "PAR_SERVICE");
         var ex = assertThrows(BusinessException.class, () -> demandeService.create(requete));
         assertEquals(ErrorMessages.CATEGORIE_DEMANDE_INVALIDE, ex.getMessage());

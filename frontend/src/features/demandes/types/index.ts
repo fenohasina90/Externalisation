@@ -96,6 +96,8 @@ export interface CreateLignePayload {
   categorie?: CategorieLigne | string | null
   /** DEBOURS : requis. EXTERNALISATION : null. */
   designationDebours?: string | null
+  /** DEBOURS : montant saisi à la création (optionnel ; s'il est renseigné, le débours est directement validé). */
+  montantDebours?: number | null
   /** STANDARD : PRESTATION (défaut) ou ABONNEMENT_MENSUEL. */
   typePrestation?: TypePrestation | string | null
 }
