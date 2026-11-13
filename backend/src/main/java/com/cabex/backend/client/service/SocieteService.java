@@ -156,7 +156,9 @@ public class SocieteService {
                                 p.getModePaiement() != null ? p.getModePaiement().getLibelle() : null,
                                 p.getDatePaiement(),
                                 p.getMontantPaye(),
-                                p.getReferenceVirement()))
+                                p.getReferenceVirement(),
+                                p.getBanque(),
+                                p.getNumeroCheque()))
                         .toList();
 
         LocalDate today = LocalDate.now();

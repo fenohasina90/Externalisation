@@ -11,6 +11,8 @@ public record PaiementFicheResponse(
         String libelleMode,
         LocalDate datePaiement,
         BigDecimal montantPaye,
-        String referenceVirement
+        String referenceVirement,
+        String banque,
+        String numeroCheque
 ) {
 }

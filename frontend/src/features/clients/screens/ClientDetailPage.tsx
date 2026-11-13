@@ -445,6 +445,8 @@ export function ClientDetailPage() {
                     <th>Montant</th>
                     <th>Mode de paiement</th>
                     <th>Réf. virement</th>
+                    <th>Banque</th>
+                    <th>N° chèque</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -460,11 +462,13 @@ export function ClientDetailPage() {
                         </span>
                       </td>
                       <td className="text-secondary">{p.referenceVirement ?? '—'}</td>
+                      <td className="text-secondary">{p.banque ?? '—'}</td>
+                      <td className="text-secondary">{p.numeroCheque ?? '—'}</td>
                     </tr>
                   ))}
                   {paiements.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-muted">
+                      <td colSpan={8} className="text-muted">
                         Aucun paiement pour ce client.
                       </td>
                     </tr>
