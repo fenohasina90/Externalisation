@@ -1,7 +1,8 @@
 package com.cabex.backend.document.service;
 
+import com.cabex.backend.client.entity.Societe;
+import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.LigneService;
-import com.cabex.backend.demande.mapper.DemandeMapper;
 import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.lowagie.text.Document;
@@ -16,18 +17,20 @@ import java.util.Locale;
 
 /**
  * Reçu de paiement.
+ *
+ * <p>Même charte graphique que le cabEx : titre en tête, bandeau vert, cartes
+ * « Client et demande », « Service et facture », « Règlement » et
+ * « Montants de la facture », montant en lettres, signatures.</p>
+ * <p>Le reçu affiche uniquement la référence de la facture validée liée
+ * directement à ce paiement.</p>
  */
 final class PdfRecuPaiement {
 
     private PdfRecuPaiement() {
     }
 
-    static byte[] generer(Paiement paiement) {
-        return generer(paiement, null);
-    }
-
     static byte[] generer(Paiement paiement, BigDecimal sommePayeeSurFacture) {
-        return PdfDocument.generer(PdfDocument.MiseEnPage.DOCUMENT, "Reçu de paiement",
+        return PdfDocument.generer(PdfDocument.MiseEnPage.RECU_PAIEMENT, "Reçu de paiement",
                 "Reçu de paiement " + PdfFormats.valeur(paiement.getReferencePaiement()),
                 doc -> ecrire(doc, paiement, sommePayeeSurFacture),
                 "Erreur de génération du reçu de paiement");
@@ -65,91 +68,163 @@ final class PdfRecuPaiement {
         return bandeau;
     }
 
+    // ------------------------------------------------------------------
+    // Cartes
+    // ------------------------------------------------------------------
+
     private static void cartes(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture) {
-        String client = paiement.getDemande() != null && paiement.getDemande().getSociete() != null
-                ? paiement.getDemande().getSociete().getNomSociete() : null;
+        DemandeService demande = paiement.getDemande();
+        FactureValidee fv = paiement.getFactureValidee();
+        Societe societe = demande != null ? demande.getSociete() : null;
 
-        com.cabex.backend.facture.entity.FactureValidee fv = paiement.getFactureValidee();
-        LigneService ligne = fv != null && fv.getFactureProforma() != null
-                ? fv.getFactureProforma().getLignes().stream()
-                        .filter(l -> l.getDemande() != null
-                                && l.getDemande().getId().equals(paiement.getDemande().getId()))
-                        .findFirst().orElse(null)
-                : null;
-        String service = ligne != null
-                ? com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(ligne) : null;
-        String libelleFacture = fv != null
-                ? fv.getReferenceFactureValidee() != null
-                        ? fv.getReferenceFactureValidee()
-                        : fv.getFactureProforma() != null
-                                ? fv.getFactureProforma().getReferenceFacture()
-                                : null
-                : null;
+        String type = typeFactureValidee(fv);
+        String objetLabel = objetLabelFor(type);
+        String objetValeur = objetValeurFor(type, fv);
 
+        // Rangée 1 : client / service
         PdfPCell cClient = PdfComposants.carte("Client et demande", new String[][]{
-                {"Client", PdfFormats.valeur(client)},
-                {"Demande", PdfFormats.valeur(paiement.getDemande() != null
-                        ? paiement.getDemande().getReferenceDemande() : null)}
+                {"Référence paiement", PdfFormats.valeur(paiement.getReferencePaiement())},
+                {"Client", PdfFormats.valeur(societe != null ? societe.getNomSociete() : null)},
+                {"Demande", PdfFormats.valeur(demande != null ? demande.getReferenceDemande() : null)},
+                {"Date de paiement", PdfFormats.valeurDate(paiement.getDatePaiement())}
         });
-        PdfPCell cService = PdfComposants.carte("Service et facture", new String[][]{
-                {"Service", PdfFormats.valeur(service)},
-                {"Facture validée", PdfFormats.valeur(libelleFacture)}
-        });
-        java.util.List<String[]> lignesReglement = new java.util.ArrayList<>();
-        lignesReglement.add(new String[]{"Date de paiement", PdfFormats.valeurDate(paiement.getDatePaiement())});
-        lignesReglement.add(new String[]{"Mode de paiement",
-                PdfFormats.valeur(paiement.getModePaiement() != null
-                        ? paiement.getModePaiement().getLibelle() : null)});
-        if (notBlank(paiement.getReferenceVirement())) {
-            lignesReglement.add(new String[]{"Référence virement",
-                    PdfFormats.valeur(paiement.getReferenceVirement())});
+        boolean mensuelle = fv != null && fv.getMois() != null;
+        java.util.List<String[]> lignesService = new java.util.ArrayList<>();
+        lignesService.add(new String[]{objetLabel, PdfFormats.valeur(objetValeur)});
+        lignesService.add(new String[]{"Référence facture", PdfFormats.valeur(libelleFacture(fv))});
+        if (mensuelle) {
+            lignesService.add(new String[]{"Mois facturé", "Abonnement " + moisLabel(fv.getMois())});
+            lignesService.add(new String[]{"Date d'emission", PdfFormats.valeurDate(
+                    fv.getValideLe() != null ? fv.getValideLe().toLocalDate() : null)});
         }
-        if (notBlank(paiement.getBanque())) {
-            lignesReglement.add(new String[]{"Banque", PdfFormats.valeur(paiement.getBanque())});
-        }
-        if (notBlank(paiement.getNumeroCheque())) {
-            lignesReglement.add(new String[]{"N° de chèque",
-                    PdfFormats.valeur(paiement.getNumeroCheque())});
-        }
-        PdfPCell cReglement = PdfComposants.carte("Règlement",
-                lignesReglement.toArray(new String[0][]));
-        PdfPCell cMontants = PdfComposants.carte("Montants de la facture", new String[][]{
-                {"Montant facture", PdfFormats.formatArgent(montantFacture(fv))},
-                {"Paiement du reçu", PdfFormats.formatArgent(montantPaye(paiement))},
-                {"Total payé sur la facture", PdfFormats.formatArgent(sommePayeeSurFacture(paiement, sommePayeeSurFacture))},
-                {"Reste à payer", PdfFormats.formatArgent(reste(fv, paiement, sommePayeeSurFacture))}
-        });
-
+        PdfPCell cService = PdfComposants.carte("Service et facture",
+                lignesService.toArray(new String[0][]));
         PdfComposants.rangee(doc, 0.5f, cClient, cService);
+
+        // Rangée 2 : règlement / montants
+        PdfPCell cReglement = PdfComposants.carte("Règlement", new String[][]{
+                {"Mode de paiement", PdfFormats.valeur(paiement.getModePaiement() != null
+                        ? paiement.getModePaiement().getLibelle() : null)},
+                {"Référence virement", referenceVirementPour(paiement)},
+                {"N° de chèque", numeroChequePour(paiement)},
+                {"Banque", banquePour(paiement)}
+        });
+        PdfPCell cMontants = PdfComposants.carte("Montants de la facture", new String[][]{
+                {"Montant facture validée", PdfFormats.formatArgent(montantFacture(fv))},
+                {"Montant déjà payé", PdfFormats.formatArgent(montantDejaPaye(fv, sommePayeeSurFacture))},
+                {"Montant reçu", PdfFormats.formatArgent(paiement.getMontantPaye())},
+                {"Reste à payer", PdfFormats.formatArgent(reste(fv, sommePayeeSurFacture))}
+        });
         PdfComposants.rangee(doc, 0.5f, cReglement, cMontants);
     }
 
-    private static BigDecimal montantFacture(com.cabex.backend.facture.entity.FactureValidee fv) {
-        return fv != null ? fv.getMontant() : null;
+    private static String typeFactureValidee(FactureValidee fv) {
+        if (fv == null) {
+            return "PRESTATION";
+        }
+        if (fv.getMois() != null) {
+            return "ABONNEMENT_MENSUEL";
+        }
+        LigneService ligne = fv.getLigneService();
+        if (ligne != null && com.cabex.backend.demande.service.LigneServiceService.estDebours(ligne)) {
+            return "DEBOURS";
+        }
+        return "PRESTATION";
     }
 
-    private static BigDecimal montantPaye(Paiement paiement) {
-        return paiement.getMontantPaye();
+    private static String objetLabelFor(String type) {
+        switch (type) {
+            case "DEBOURS":
+                return "Désignation du débours";
+            case "ABONNEMENT_MENSUEL":
+                return "Nom du service";
+            case "PRESTATION":
+            default:
+                return "Nom du service";
+        }
     }
 
-    private static BigDecimal sommePayeeSurFacture(Paiement paiement, BigDecimal somme) {
-        return somme != null ? somme : paiement.getMontantPaye();
-    }
-
-    private static BigDecimal reste(com.cabex.backend.facture.entity.FactureValidee fv,
-                                    Paiement paiement, BigDecimal sommePayeeSurFacture) {
-        BigDecimal attendu = montantFacture(fv);
-        if (attendu == null) {
+    private static String objetValeurFor(String type, FactureValidee fv) {
+        if (fv == null) {
             return null;
         }
-        return attendu.subtract(
-                        PdfFormats.montantOuZero(sommePayeeSurFacture(paiement, sommePayeeSurFacture)))
-                .max(BigDecimal.ZERO);
+        LigneService ligne = fv.getLigneService();
+        if (ligne == null) {
+            return fv.getReferenceFactureValidee();
+        }
+        if ("DEBOURS".equals(type)) {
+            String d = ligne.getDesignationDebours();
+            return d != null && !d.isBlank() ? d.trim() : com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(ligne);
+        }
+        String nomService = ligne.getService() != null ? ligne.getService().getNomService() : null;
+        return nomService != null && !nomService.isBlank() ? nomService.trim()
+                : com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(ligne);
     }
 
-    private static boolean notBlank(String valeur) {
-        return valeur != null && !valeur.isBlank();
+    private static String libelleFacture(FactureValidee fv) {
+        if (fv == null) {
+            return null;
+        }
+        if (fv.getReferenceFactureValidee() != null) {
+            return fv.getReferenceFactureValidee();
+        }
+        return fv.getFactureProforma() != null
+                ? fv.getFactureProforma().getReferenceFacture() : null;
     }
+
+    private static BigDecimal montantFacture(FactureValidee fv) {
+        return fv != null && fv.getMontant() != null ? fv.getMontant() : null;
+    }
+
+    private static BigDecimal montantDejaPaye(FactureValidee fv, BigDecimal sommePayeeSurFacture) {
+        if (sommePayeeSurFacture != null) {
+            return sommePayeeSurFacture;
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private static BigDecimal reste(FactureValidee fv, BigDecimal sommePayeeSurFacture) {
+        BigDecimal montant = montantFacture(fv);
+        if (montant == null) {
+            return null;
+        }
+        BigDecimal payee = sommePayeeSurFacture != null ? sommePayeeSurFacture : BigDecimal.ZERO;
+        return montant.subtract(payee).max(BigDecimal.ZERO);
+    }
+
+    private static String moisLabel(java.time.LocalDate mois) {
+        if (mois == null) {
+            return null;
+        }
+        String s = java.time.format.DateTimeFormatter
+                .ofPattern("MMMM yyyy", Locale.FRANCE).format(mois);
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
+    private static String referenceVirementPour(Paiement paiement) {
+        String mode = paiement.getModePaiement() != null
+                ? paiement.getModePaiement().getCode() : null;
+        return mode != null && mode.equalsIgnoreCase("VIREMENT")
+                ? PdfFormats.valeur(paiement.getReferenceVirement()) : "—";
+    }
+
+    private static String numeroChequePour(Paiement paiement) {
+        String mode = paiement.getModePaiement() != null
+                ? paiement.getModePaiement().getCode() : null;
+        return mode != null && mode.equalsIgnoreCase("CHEQUE")
+                ? PdfFormats.valeur(paiement.getNumeroCheque()) : "—";
+    }
+
+    private static String banquePour(Paiement paiement) {
+        String mode = paiement.getModePaiement() != null
+                ? paiement.getModePaiement().getCode() : null;
+        return mode != null && mode.equalsIgnoreCase("CHEQUE")
+                ? PdfFormats.valeur(paiement.getBanque()) : "—";
+    }
+
+    // ------------------------------------------------------------------
+    // Montant en lettres et signatures
+    // ------------------------------------------------------------------
 
     private static void montantEnLettres(Document doc, Paiement paiement) {
         if (paiement.getMontantPaye() == null) {
@@ -168,7 +243,7 @@ final class PdfRecuPaiement {
 
         PdfPTable signatures = new PdfPTable(2);
         signatures.setWidthPercentage(100);
-        signatures.setSpacingBefore(26);
+        signatures.setSpacingBefore(0);
         signatures.setKeepTogether(true);
         signatures.setWidths(new float[]{1f, 1f});
         signatures.addCell(PdfComposants.celluleSignature("Le client", null));
