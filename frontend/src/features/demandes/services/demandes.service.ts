@@ -219,6 +219,11 @@ export const facturesValideesApi = {
   abonnementUrl(id: number): string {
     return `/factures-validees/${id}/document/abonnement`
   },
+
+  /** Supprimer une facture du mois — uniquement si aucun paiement n'y a été enregistré. */
+  async supprimerMensuelle(id: number): Promise<void> {
+    await http.delete(`/factures-validees/${id}/mensuelle`)
+  },
 }
 
 export const dossierApi = {

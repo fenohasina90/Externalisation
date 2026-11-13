@@ -444,6 +444,47 @@ public class FactureService {
     }
 
     /**
+     * Supprime une facture du mois d'abonnement — autorisée uniquement
+     * si aucun paiement n'a été enregistré dessus (payée = 0).
+     * Les lignes de la facture sont supprimées en cascade (orphanRemoval).
+     */
+    @Transactional
+    public void supprimerFactureMensuelleAbonnement(Integer factureValideeId) {
+        com.cabex.backend.facture.entity.FactureValidee fv = factureValideeRepository
+                .findById(factureValideeId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Facture validée", factureValideeId)));
+        if (fv.getMois() == null) {
+            throw new BusinessException(
+                    "Seule une facture du mois d'abonnement peut être supprimée (mois facturé requis)");
+        }
+        BigDecimal payee = paiementRepository.sommePayeeParFactureValidee(fv.getId());
+        if (payee != null && payee.signum() > 0) {
+            throw new BusinessException(
+                    "La facture " + fv.getReferenceFactureValidee()
+                            + " ne peut pas être supprimée : un paiement de " + payee
+                            + " MGA a déjà été enregistré dessus");
+        }
+        String ref = fv.getReferenceFactureValidee();
+        LigneService ligne = fv.getLigneService();
+        DemandeService demande = fv.getDemande();
+        factureValideeRepository.delete(fv);
+        if (ligne != null) {
+            ajouterHistoriqueLigne(ligne,
+                    ligne.getStatut() != null ? ligne.getStatut() : "EN_COURS",
+                    "Facture mensuelle supprimée : " + ref);
+        }
+        if (demande != null) {
+            String statutDemande = statutActuelDemande(demande.getId());
+            ajouterHistoriqueDemande(demande,
+                    statutDemande != null ? statutDemande : DEMANDE_EN_ATTENTE,
+                    "Facture mensuelle supprimée : " + ref);
+        }
+        auditService.log(AuditActions.DELETE, "FACTURE", "FactureValidee",
+                Long.valueOf(factureValideeId), ref, null);
+    }
+
+    /**
      * Éléments impayés (prestation / débours) d'une demande pouvant être
      * repris dans la facture mensuelle : demande EN_COURS, montant dû > 0.
      */

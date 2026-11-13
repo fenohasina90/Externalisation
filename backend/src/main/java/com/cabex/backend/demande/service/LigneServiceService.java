@@ -286,6 +286,9 @@ public class LigneServiceService {
         // Un paiement est toujours lié à une facture validée : la validation
         // d'un débours crée sa facture validée (sans proforma).
         factureService.creerFactureValideePourDebours(ligne, montant);
+        // Demande sans ligne EXTERNALISATION : aucune proforma à valider.
+        // La validation du montant passe la demande EN_COURS.
+        passerDemandeEnCoursSiDeboursUnique(ligne.getDemande());
 
         ajouterHistoriqueLigne(ligne, LIGNE_EN_COURS,
                 "Montant du débours validé (ligne mise EN_COURS) : " + montant.toPlainString(),
@@ -347,6 +350,27 @@ public class LigneServiceService {
         if (!LIGNE_EN_COURS.equals(statut) && !LIGNE_PARTIEL.equals(statut)) {
             throw new BusinessException(
                     "L'abonnement ne peut être terminé que quand il est EN_COURS");
+        }
+        // Règle métier : l'abonnement ne peut être terminé que lorsque toutes
+        // ses factures du mois sont soldées.
+        List<com.cabex.backend.facture.entity.FactureValidee> mensuelles =
+                factureValideeRepository.findMensuellesPourLigne(ligne.getId());
+        List<String> nonSoldees = new java.util.ArrayList<>();
+        for (com.cabex.backend.facture.entity.FactureValidee msv : mensuelles) {
+            BigDecimal payee = paiementRepository.sommePayeeParFactureValidee(msv.getId());
+            if (payee == null) {
+                payee = BigDecimal.ZERO;
+            }
+            BigDecimal reste = msv.getMontant().subtract(payee).max(BigDecimal.ZERO);
+            if (reste.signum() > 0) {
+                nonSoldees.add(msv.getReferenceFactureValidee()
+                        + " (reste " + reste.toPlainString() + ")");
+            }
+        }
+        if (!nonSoldees.isEmpty()) {
+            throw new BusinessException(
+                    "Impossible de terminer l'abonnement : des factures du mois ne sont pas totalement réglées — "
+                            + String.join(", ", nonSoldees));
         }
         ligne.setStatut(LIGNE_TERMINE);
         ligneRepository.save(ligne);
@@ -773,6 +797,34 @@ public class LigneServiceService {
             throw new BusinessException(
                     "La facture de ce service est validée : le service est figé");
         }
+    }
+
+    /**
+     * Demande sans ligne EXTERNALISATION (uniquement des débours) : la demande
+     * passe EN_COURS à la validation du montant du débours — il n'y aura jamais
+     * de facture proforma à valider pour déclencher la transition.
+     */
+    private void passerDemandeEnCoursSiDeboursUnique(DemandeService demande) {
+        String actuel = statutActuelDemande(demande.getId());
+        if (!DEMANDE_EN_ATTENTE.equals(actuel) && !"VALIDATION".equals(actuel)) {
+            return;
+        }
+        boolean aLigneExternalisation = ligneRepository.findByDemandeId(demande.getId())
+                .stream()
+                .anyMatch(l -> !estDebours(l));
+        if (aLigneExternalisation) {
+            return; // passage EN_COURS via la validation proforma
+        }
+        StatutDemande statutEntite = statutDemandeRepository.findByStatut(LIGNE_EN_COURS)
+                .orElseThrow(() -> new BusinessException(ErrorMessages.STATUT_INVALIDE));
+        historiqueDemandeRepository.save(HistoriqueDemande.builder()
+                .demande(demande)
+                .statut(statutEntite)
+                .commentaire("Débours validé : demande mise EN_COURS (aucune facture proforma à valider)")
+                .utilisateur(currentUtilisateur())
+                .build());
+        auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
+                Long.valueOf(demande.getId()), actuel, LIGNE_EN_COURS);
     }
 
     private String statutActuelDemande(Integer demandeId) {

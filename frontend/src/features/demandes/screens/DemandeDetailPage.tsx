@@ -335,6 +335,7 @@ export function DemandeDetailPage() {
           }}
           onErreur={setErreur}
           onMessage={setMessage}
+          onVoirFacturesMensuelles={() => setOnglet('factures-mensuelles')}
         />
       )}
 
@@ -868,12 +869,14 @@ function ServicesTab({
   onChange,
   onErreur,
   onMessage,
+  onVoirFacturesMensuelles,
 }: {
   demande: Demande
   factures: Facture[]
   onChange: () => void
   onErreur: (message: string | null) => void
   onMessage: (message: string | null) => void
+  onVoirFacturesMensuelles?: () => void
 }) {
   const modifiable = demande.statutActuel === 'EN_ATTENTE'
   const statutFacture = new Map(factures.map((f) => [f.id, f.statut]))
@@ -884,10 +887,42 @@ function ServicesTab({
   }
   const toutFige = (demande.lignes ?? []).length > 0
     && (demande.lignes ?? []).every((l) => fige(l))
+  const { data: facturesValidees } = useApi<FactureValidee[]>(
+    () => (demande?.id ? facturesValideesApi.list(demande.id).catch(() => []) : Promise.resolve([])),
+    [demande?.id],
+  )
   const [ajoutOuvert, setAjoutOuvert] = useState(false)
   const [validationDebours, setValidationDebours] = useState<LigneService | null>(null)
   const [annulationDebours, setAnnulationDebours] = useState<LigneService | null>(null)
   const [terminaisonAbo, setTerminaisonAbo] = useState<LigneService | null>(null)
+  interface FactureNonSoldee {
+    reference: string
+    mois: string | null
+    montant: number
+    paye: number
+    reste: number
+  }
+  const [blockageTerminaisonAbo, setBlockageTerminaisonAbo] = useState<{
+    ligne: LigneService
+    factures: FactureNonSoldee[]
+    message: string | null
+  } | null>(null)
+
+  const mensuellesNonSoldees = (ligneId: number): FactureNonSoldee[] =>
+    (facturesValidees ?? [])
+      .filter((f) =>
+        (f.mois !== null || f.type === 'ABONNEMENT_MENSUEL')
+        && (f.ligneServiceId === ligneId
+            || (f.lignes ?? []).some((l) => l.ligneServiceId === ligneId))
+        && f.resteAPayer > 0,
+      )
+      .map((f) => ({
+        reference: f.referenceFactureValidee,
+        mois: f.mois ?? null,
+        montant: f.montant,
+        paye: f.montantPaye,
+        reste: f.resteAPayer,
+      }))
   const [edition, setEdition] = useState<LigneService | null>(null)
   const contientTypeSolo = (demande.lignes ?? []).some((l) =>
     estTypeServiceSolo(l.typeService),
@@ -913,14 +948,28 @@ function ServicesTab({
 
   const handleTerminerAbonnement = async () => {
     if (!terminaisonAbo) return
+    const ligneCible = terminaisonAbo
+    const nonSoldees = mensuellesNonSoldees(ligneCible.id)
+    if (nonSoldees.length > 0) {
+      setBlockageTerminaisonAbo({ ligne: ligneCible, factures: nonSoldees, message: null })
+      setTerminaisonAbo(null)
+      return
+    }
     setTraitement(true)
     try {
-      await lignesApi.terminerAbonnement(demande.id, terminaisonAbo.id)
+      await lignesApi.terminerAbonnement(demande.id, ligneCible.id)
       setTerminaisonAbo(null)
       onMessage("Abonnement terminé. La demande se clôturera si tous les services sont terminés ou payés.")
       onChange()
     } catch (err) {
-      onErreur(err instanceof Error ? err.message : "Échec de la terminaison de l’abonnement")
+      // Le serveur refuse quand même (données désynchronisées) : même modale,
+      // avec le message serveur en détail.
+      setBlockageTerminaisonAbo({
+        ligne: ligneCible,
+        factures: mensuellesNonSoldees(ligneCible.id),
+        message: err instanceof Error ? err.message : "Échec de la terminaison de l’abonnement",
+      })
+      setTerminaisonAbo(null)
     } finally {
       setTraitement(false)
     }
@@ -1010,11 +1059,73 @@ function ServicesTab({
       <ConfirmDialog
         open={terminaisonAbo !== null}
         titre="Terminer cet abonnement ?"
-        message={`La ligne « ${terminaisonAbo?.nomService ?? 'Abonnement mensuel'} » passera à « Terminée ». La demande se clôturera automatiquement si tous les services sont terminés ou payés.`}
+        message={`La ligne « ${terminaisonAbo?.nomService ?? 'Abonnement mensuel'} » passera à « Terminée ». La demande se clôturera automatiquement si tous les services sont terminés ou payés. Toutes ses factures du mois doivent être soldées avant de pouvoir la terminer.`}
         confirmer="Terminer"
         ton="success"
         onAnnuler={() => setTerminaisonAbo(null)}
         onConfirmer={() => void handleTerminerAbonnement()}
+      />
+
+      <ConfirmDialog
+        open={blockageTerminaisonAbo !== null}
+        titre="Impossible de terminer cet abonnement"
+        message={`La ligne « ${blockageTerminaisonAbo?.ligne.nomService ?? 'Abonnement mensuel'} » ne peut pas être terminée : des factures du mois ne sont pas totalement réglées.`}
+        confirmer="Voir les factures du mois"
+        ton="primary"
+        details={
+          <>
+            <p className="section-note" style={{ margin: '0 0 10px' }}>
+              Réglez d&apos;abord les factures ci-dessous, puis réessayez.
+            </p>
+            {(blockageTerminaisonAbo?.factures.length ?? 0) > 0 ? (
+              <ul style={{
+                margin: 0,
+                padding: 0,
+                listStyle: 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                maxHeight: 220,
+                overflowY: 'auto',
+              }}>
+                {blockageTerminaisonAbo?.factures.map((f) => (
+                  <li key={f.reference}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'baseline',
+                      gap: 12,
+                      borderBottom: '1px solid var(--border, #e5e7eb)',
+                      paddingBottom: 8,
+                    }}>
+                    <span>
+                      <b>{f.reference}</b>
+                      <span className="text-secondary"> · {f.mois ? moisLabel(f.mois) : '—'}</span>
+                      <br />
+                      <span className="text-secondary" style={{ fontSize: 12 }}>
+                        Payé&nbsp;: {formatMontantMGA(f.paye)}
+                      </span>
+                    </span>
+                    <b style={{ color: 'var(--danger, #dc2626)', whiteSpace: 'nowrap' }}>
+                      {formatMontantMGA(f.reste)}
+                    </b>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              blockageTerminaisonAbo?.message && (
+                <p className="section-note" style={{ color: 'var(--danger, #dc2626)' }}>
+                  {blockageTerminaisonAbo.message}
+                </p>
+              )
+            )}
+          </>
+        }
+        onAnnuler={() => setBlockageTerminaisonAbo(null)}
+        onConfirmer={() => {
+          setBlockageTerminaisonAbo(null)
+          onVoirFacturesMensuelles?.()
+        }}
       />
 
       <ConfirmDialog
@@ -2231,6 +2342,8 @@ function FacturesAbonnementSection({
   const [moisActuel, setMoisActuel] = useState(() => new Date().toISOString().slice(0, 7))
   const [erreurDialog, setErreurDialog] = useState<string | null>(null)
   const [selectionInclusions, setSelectionInclusions] = useState<Set<number>>(new Set())
+  const [mensuelleASupprimer, setMensuelleASupprimer] = useState<FactureValidee | null>(null)
+  const [suppressionEnCours, setSuppressionEnCours] = useState(false)
 
   const ligneLabel = (l: LigneService) =>
     `${l.nomService ?? 'Abonnement'} · tarif mensuel ${formatMontantMGA(l.tarif ?? 0)}`
@@ -2287,6 +2400,30 @@ function FacturesAbonnementSection({
       setErreurDialog(messageErreur(err))
     } finally {
       setCreationEnCours(null)
+    }
+  }
+
+  const demanderSuppression = (fv: FactureValidee) => {
+    setErreurDialog(null)
+    setMensuelleASupprimer(fv)
+  }
+
+  const confirmerSuppression = async () => {
+    if (!mensuelleASupprimer) {
+      return
+    }
+    setSuppressionEnCours(true)
+    onErreur(null)
+    try {
+      await facturesValideesApi.supprimerMensuelle(mensuelleASupprimer.id)
+      onMessage(`Facture du mois ${mensuelleASupprimer.referenceFactureValidee} supprimée.`)
+      setMensuelleASupprimer(null)
+      reload()
+      reloadInclusions()
+    } catch (err) {
+      onErreur(messageErreur(err))
+    } finally {
+      setSuppressionEnCours(false)
     }
   }
 
@@ -2480,6 +2617,17 @@ function FacturesAbonnementSection({
                                     )}
                                   >
                                     Encaisser
+                                  </button>
+                                )}
+                                {f.montantPaye === 0 && demande.statutActuel !== 'TERMINEE' && demande.statutActuel !== 'ANNULEE' && (
+                                  <button
+                                    type="button"
+                                    className="btn-ghost"
+                                    style={{ color: 'var(--danger, #dc2626)' }}
+                                    disabled={suppressionEnCours}
+                                    onClick={() => demanderSuppression(f)}
+                                  >
+                                    Supprimer
                                   </button>
                                 )}
                                 <button
@@ -2687,6 +2835,18 @@ function FacturesAbonnementSection({
       <FactureApercuModal
         apercu={apercu}
         onClose={() => setApercu(null)}
+      />
+
+      <ConfirmDialog
+        open={mensuelleASupprimer !== null}
+        titre="Supprimer la facture du mois ?"
+        message={mensuelleASupprimer
+          ? `La facture ${mensuelleASupprimer.referenceFactureValidee} (${formatMontantMGA(mensuelleASupprimer.montant)}) sera supprimée définitivement. Aucun paiement n'y a été enregistré. Cette action est irréversible.`
+          : ''}
+        confirmer={suppressionEnCours ? 'Suppression…' : 'Supprimer'}
+        ton="danger"
+        onAnnuler={() => setMensuelleASupprimer(null)}
+        onConfirmer={() => void confirmerSuppression()}
       />
     </section>
   )

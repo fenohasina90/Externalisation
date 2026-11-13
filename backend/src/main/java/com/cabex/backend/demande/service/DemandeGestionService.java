@@ -434,6 +434,21 @@ public class DemandeGestionService {
         factureService.genererPourDemande(demande.getId(),
                 request.modeFacturation() != null ? request.modeFacturation() : "PAR_SERVICE");
 
+        // Demande sans ligne EXTERNALISATION (uniquement des débours) : aucune
+        // proforma ne sera générée — le passage EN_COURS se fait à la création
+        // (débours déjà validés) au lieu de la validation proforma.
+        boolean aucuneExternalisation = lignesDemandees.stream()
+                .allMatch(l -> LigneServiceService.CATEGORIE_DEBOURS.equals(
+                        LigneServiceService.normaliserCategorie(l.categorie())));
+        boolean auMoinsUnDeboursValide = lignesDemandees.stream()
+                .anyMatch(l -> LigneServiceService.CATEGORIE_DEBOURS.equals(
+                                LigneServiceService.normaliserCategorie(l.categorie()))
+                        && l.montantDebours() != null);
+        if (aucuneExternalisation && auMoinsUnDeboursValide) {
+            passerDemandeEnCours(demande,
+                    "Demande mise EN_COURS : montant du débours validé à la création (aucune facture proforma à valider)");
+        }
+
         notificationService.notifierNouvelleDemande(demande);
 
         auditService.log(AuditActions.CREATE, "DEMANDE", "DemandeService",
@@ -660,6 +675,22 @@ public class DemandeGestionService {
         auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
                 Long.valueOf(demande.getId()), actuel, STATUT_TERMINEE);
         return true;
+    }
+
+    /**
+     * Met la demande EN_COURS depuis EN_ATTENTE (ou VALIDATION) — passage direct
+     * au premier fait générateur métier (validation proforma, ou débours validé
+     * sur une demande sans facture proforma).
+     */
+    private void passerDemandeEnCours(DemandeService demande, String commentaire) {
+        String actuel = statutActuel(demande.getId());
+        if (!STATUT_EN_ATTENTE.equals(actuel) && !STATUT_VALIDATION.equals(actuel)) {
+            return;
+        }
+        enviereHistorique(demande, STATUT_EN_COURS, commentaire);
+        notificationService.notifierChangementStatut(demande, STATUT_EN_COURS);
+        auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
+                Long.valueOf(demande.getId()), actuel, STATUT_EN_COURS);
     }
 
     /**

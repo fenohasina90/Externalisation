@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -89,6 +90,15 @@ public class FactureController {
     public ResponseEntity<List<InclusionDisponibleResponse>> inclusionsDisponibles(
             @PathVariable Integer demandeId) {
         return ResponseEntity.ok(factureService.inclusionsDisponibles(demandeId));
+    }
+
+    @DeleteMapping("/factures-validees/{id}/mensuelle")
+    @PreAuthorize("hasAuthority('FACTURE_ABONNEMENT_CREATE')")
+    @Operation(summary = "Supprimer une facture du mois d'abonnement",
+            description = "La facture du mois ne peut être supprimée que si aucun paiement n'a été enregistré dessus (payée = 0).")
+    public ResponseEntity<Void> supprimerFactureMensuelle(@PathVariable Integer id) {
+        factureService.supprimerFactureMensuelleAbonnement(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/factures/{id}/valider")

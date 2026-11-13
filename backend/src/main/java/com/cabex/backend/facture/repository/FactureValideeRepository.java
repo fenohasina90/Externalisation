@@ -62,6 +62,20 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
     List<com.cabex.backend.facture.entity.FactureValidee> findFacturesMensuellesPourAlerte();
 
     /**
+     * Factures validées du mois liées à une ligne d'abonnement :
+     * celles directement rattachées (ligneServiceId) et celles
+     * multi-lignes dont cette ligne apparaît parmi les lignes.
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT DISTINCT f FROM com.cabex.backend.facture.entity.FactureValidee f"
+                    + " LEFT JOIN f.lignes fl"
+                    + " WHERE f.mois IS NOT NULL"
+                    + "   AND (f.ligneService.id = :ligneId"
+                    + "        OR fl.ligneService.id = :ligneId)")
+    List<com.cabex.backend.facture.entity.FactureValidee> findMensuellesPourLigne(
+            @org.springframework.data.repository.query.Param("ligneId") Integer ligneId);
+
+    /**
      * Total des factures validées <b>payables</b> (prestation + abonnement), pour une demande unique.
      * Exclut débours et facture générale UNIQUE.
      */
