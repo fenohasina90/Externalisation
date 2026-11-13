@@ -21,6 +21,8 @@ public record FactureResponse(
         Integer valideParId,
         String valideParNom,
         LocalDateTime valideLe,
-        List<FactureLigneResponse> lignes
+        List<FactureLigneResponse> lignes,
+        /** Lignes persistées de la proforma (ordre d'affichage, figées à la génération). */
+        List<FactureProformaLigneResponse> lignesProforma
 ) {
 }

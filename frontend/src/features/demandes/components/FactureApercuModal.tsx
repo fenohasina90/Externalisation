@@ -123,6 +123,61 @@ export function FactureApercuModal({
   const totalPrincipales = principales.reduce((s, l) => s + l.montant, 0)
   const totalRappels = rappels.reduce((s, l) => s + l.montant, 0)
 
+  // Lignes persistées de la proforma : affichage identique au PDF.
+  const tarifValideParLigne = new Map(
+    estProforma
+      ? (apercu.facture.lignes ?? []).map((l) => [l.ligneServiceId, l.tarif])
+      : [],
+  )
+  const lignesProforma = (estProforma ? apercu.facture.lignesProforma : undefined) ?? []
+  const estValide = estProforma && apercu.facture.statut === 'VALIDEE'
+  // Après validation : affichage du tarif validé (comme le PDF).
+  // La proforma reste figée sur ses montants avant validation.
+  const appliquerTarifValide = <T extends { pu: number; montantHtva: number; netCommercial: number; ligneServiceId: number | null }>(lignes: T[]) =>
+    !estValide
+      ? lignes
+      : lignes.map((l) => {
+          const tarifValide = l.ligneServiceId != null ? tarifValideParLigne.get(l.ligneServiceId) : undefined
+          const puValide = tarifValide ?? l.pu
+          return { ...l, pu: puValide, montantHtva: puValide, netCommercial: puValide }
+        })
+  const lignesAffichage = appliquerTarifValide(lignesProforma)
+  const aboLignes = lignesAffichage.filter((l) => l.typePrestation === 'ABONNEMENT_MENSUEL')
+  const prestaLignes = lignesAffichage.filter((l) =>
+    l.categorie === 'EXTERNALISATION' && l.typePrestation !== 'ABONNEMENT_MENSUEL')
+  const deboursLignes = lignesAffichage.filter((l) => l.categorie === 'DEBOURS')
+  const totalHt = lignesAffichage.reduce((acc, l) => acc + l.netCommercial, 0)
+  const sousTotalDe = (lignes: typeof lignesProforma) =>
+    lignes.reduce((acc, l) => acc + l.netCommercial, 0)
+
+  const rendLigneProforma = (l: (typeof lignesProforma)[number]) => (
+    <tr key={`pl-${l.ordre ?? 0}-${l.designation}`}>
+      <td>{l.designation}</td>
+      <td className="cell-number">{formatMontantMGA(l.pu)}</td>
+      <td className="cell-number">{String(l.quantite).replace(/\.0+$/, '')}</td>
+      <td className="cell-number">{formatMontantMGA(l.montantHtva)}</td>
+      <td className="cell-number">{l.remise > 0 ? formatMontantMGA(l.remise) : '-'}</td>
+      <td className="cell-number fw-600">{formatMontantMGA(l.netCommercial)}</td>
+    </tr>
+  )
+  const rendBande = (titre: string) => (
+    <tr>
+      <td colSpan={6} style={{
+        background: 'var(--vert-pale, #f0fdf4)',
+        borderLeft: '2.5px solid var(--vert-marque, #10b981)',
+        fontWeight: 700,
+        padding: '4px 10px',
+      }}>{titre}</td>
+    </tr>
+  )
+  const rendSousTotal = (titre: string, total: number) => (
+    <tr>
+      <th colSpan={3} style={{ textAlign: 'right' }}>{titre}</th>
+      <th>{formatMontantMGA(total)}</th>
+      <th>-</th>
+      <th>{formatMontantMGA(total)}</th>
+    </tr>
+  )
   const body = (
     <div
       className="modal-backdrop modal-backdrop--center"
@@ -131,7 +186,7 @@ export function FactureApercuModal({
     >
       <div
         className="modal-card"
-        style={{ maxWidth: 760 }}
+        style={{ maxWidth: 880 }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -230,48 +285,104 @@ export function FactureApercuModal({
           </section>
 
           {/* Section A — objet de la présente facture */}
-          <section>
-            <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
-              Cette facture — objet du règlement
-            </h4>
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Désignation</th>
-                    <th>Demande</th>
-                    <th>Montant</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {principales.map((l) => (
-                    <tr key={l.id}>
-                      <td>
-                        <div className="fw-600">
-                          {l.nomService && l.nomService !== l.designation ? l.nomService : l.designation}
-                        </div>
-                        {l.nomService && l.nomService !== l.designation && (
-                          <span className="text-secondary" style={{ fontSize: 12 }}>{l.designation}</span>
-                        )}
-                        {!l.nomService && l.secondary && (
-                          <span className="text-secondary" style={{ fontSize: 12 }}>{l.secondary}</span>
-                        )}
-                      </td>
-                      <td className="text-secondary">{l.referenceDemande ?? '—'}</td>
-                      <td>{formatMontantMGA(l.montant)}</td>
+          {estProforma ? (
+            <section>
+              <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
+                Cette facture — lignes persistées
+              </h4>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Désignation</th>
+                      <th>PU (Ariary)</th>
+                      <th>Qté</th>
+                      <th>Montant HTVA (Ariary)</th>
+                      <th>Remise (Ariary)</th>
+                      <th>Net commercial (Ariary)</th>
                     </tr>
-                  ))}
-                  {principales.length === 0 && (
-                    <tr><td colSpan={3} className="text-secondary">Aucune ligne principale.</td></tr>
-                  )}
-                  <tr>
-                    <th colSpan={2} style={{ textAlign: 'right' }}>Total à payer (cette facture)</th>
-                    <th>{formatMontantMGA(totalPrincipales)}</th>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
+                  </thead>
+                  <tbody>
+                    {aboLignes.length > 0 && (
+                      <>
+                        {rendBande('Abonnement mensuel :')}
+                        {aboLignes.map(rendLigneProforma)}
+                        {rendSousTotal('Sous-total Abonnement mensuel', sousTotalDe(aboLignes))}
+                      </>
+                    )}
+                    {prestaLignes.length > 0 && (
+                      <>
+                        {rendBande('Prestation:')}
+                        {prestaLignes.map(rendLigneProforma)}
+                        {rendSousTotal('Sous-total Prestation', sousTotalDe(prestaLignes))}
+                      </>
+                    )}
+                    {deboursLignes.length > 0 && (
+                      <>
+                        {rendBande("Débours à payer à l'administration")}
+                        {deboursLignes.map(rendLigneProforma)}
+                        {rendSousTotal('Sous-total Débours', sousTotalDe(deboursLignes))}
+                      </>
+                    )}
+                    {lignesAffichage.length === 0 && (
+                      <tr><td colSpan={6} className="text-secondary">Aucune ligne persistée.</td></tr>
+                    )}
+                    {lignesAffichage.length > 0 && (
+                      <tr>
+                        <th colSpan={3} style={{ textAlign: 'right' }}>TOTAL HT</th>
+                        <th>{formatMontantMGA(totalHt)}</th>
+                        <th>-</th>
+                        <th>{formatMontantMGA(totalHt)}</th>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : (
+            <section>
+              <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
+                Cette facture — objet du règlement
+              </h4>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Désignation</th>
+                      <th>Demande</th>
+                      <th>Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {principales.map((l) => (
+                      <tr key={l.id}>
+                        <td>
+                          <div className="fw-600">
+                            {l.nomService && l.nomService !== l.designation ? l.nomService : l.designation}
+                          </div>
+                          {l.nomService && l.nomService !== l.designation && (
+                            <span className="text-secondary" style={{ fontSize: 12 }}>{l.designation}</span>
+                          )}
+                          {!l.nomService && l.secondary && (
+                            <span className="text-secondary" style={{ fontSize: 12 }}>{l.secondary}</span>
+                          )}
+                        </td>
+                        <td className="text-secondary">{l.referenceDemande ?? '—'}</td>
+                        <td>{formatMontantMGA(l.montant)}</td>
+                      </tr>
+                    ))}
+                    {principales.length === 0 && (
+                      <tr><td colSpan={3} className="text-secondary">Aucune ligne principale.</td></tr>
+                    )}
+                    <tr>
+                      <th colSpan={2} style={{ textAlign: 'right' }}>Total à payer (cette facture)</th>
+                      <th>{formatMontantMGA(totalPrincipales)}</th>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           {/* Section B — rappel des impayés, NON inclus */}
           {rappels.length > 0 && (

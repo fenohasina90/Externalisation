@@ -386,26 +386,24 @@ public class DemandeGestionService {
                         .designationDebours(ligne.designationDebours().trim())
                         .statut(LigneServiceService.LIGNE_EN_ATTENTE)
                         .build();
-                // Si un montant est annoncé à la création, le débours est directement
-                // considéré validé (aucun « Valider le montant » à faire ensuite) : sa
-                // facture validée est créée immédiatement, sans facture proforma.
+                // Si un montant est annoncé à la création, le débours est figé
+                // à ce montant et il figure dans la proforma (avec la facture
+                // validée qui en découle). Un débours sans montant annoncé
+                // attend « Valider le montant ».
                 BigDecimal montantInitial = ligne.montantDebours();
                 if (montantInitial != null) {
                     creee.setMontantDebours(montantInitial);
+                    // Même valeur dans la colonne tarif : la facture validée
+                    // affiche toujours ligne_service.tarif (les débours sont
+                    // remplis si le montant est déjà validé à la création).
+                    creee.setTarif(montantInitial);
                     creee.setStatut(LigneServiceService.LIGNE_EN_COURS);
                 }
                 creee = ligneRepository.save(creee);
                 if (montantInitial != null) {
-                    // Un débours n'a pas de facture proforma : la facture validée
-                    // du débours est créée directement, comme à la « validation
-                    // du montant » sur une fiche demande.
-                    com.cabex.backend.facture.entity.FactureValidee fvDebours =
-                            factureService.creerFactureValideePourDebours(creee, montantInitial);
                     ligneServiceService.ajouterHistoriqueCreation(creee,
                             "Débours créé (montant annoncé : " + montantInitial + ") — "
-                                    + creee.getDesignationDebours()
-                                    + " — facture validée créée : "
-                                    + fvDebours.getReferenceFactureValidee());
+                                    + creee.getDesignationDebours());
                 } else {
                     ligneServiceService.ajouterHistoriqueCreation(creee,
                             "Débours ajouté à la création : " + creee.getDesignationDebours());
@@ -433,21 +431,6 @@ public class DemandeGestionService {
 
         factureService.genererPourDemande(demande.getId(),
                 request.modeFacturation() != null ? request.modeFacturation() : "PAR_SERVICE");
-
-        // Demande sans ligne EXTERNALISATION (uniquement des débours) : aucune
-        // proforma ne sera générée — le passage EN_COURS se fait à la création
-        // (débours déjà validés) au lieu de la validation proforma.
-        boolean aucuneExternalisation = lignesDemandees.stream()
-                .allMatch(l -> LigneServiceService.CATEGORIE_DEBOURS.equals(
-                        LigneServiceService.normaliserCategorie(l.categorie())));
-        boolean auMoinsUnDeboursValide = lignesDemandees.stream()
-                .anyMatch(l -> LigneServiceService.CATEGORIE_DEBOURS.equals(
-                                LigneServiceService.normaliserCategorie(l.categorie()))
-                        && l.montantDebours() != null);
-        if (aucuneExternalisation && auMoinsUnDeboursValide) {
-            passerDemandeEnCours(demande,
-                    "Demande mise EN_COURS : montant du débours validé à la création (aucune facture proforma à valider)");
-        }
 
         notificationService.notifierNouvelleDemande(demande);
 
@@ -675,22 +658,6 @@ public class DemandeGestionService {
         auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
                 Long.valueOf(demande.getId()), actuel, STATUT_TERMINEE);
         return true;
-    }
-
-    /**
-     * Met la demande EN_COURS depuis EN_ATTENTE (ou VALIDATION) — passage direct
-     * au premier fait générateur métier (validation proforma, ou débours validé
-     * sur une demande sans facture proforma).
-     */
-    private void passerDemandeEnCours(DemandeService demande, String commentaire) {
-        String actuel = statutActuel(demande.getId());
-        if (!STATUT_EN_ATTENTE.equals(actuel) && !STATUT_VALIDATION.equals(actuel)) {
-            return;
-        }
-        enviereHistorique(demande, STATUT_EN_COURS, commentaire);
-        notificationService.notifierChangementStatut(demande, STATUT_EN_COURS);
-        auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
-                Long.valueOf(demande.getId()), actuel, STATUT_EN_COURS);
     }
 
     /**

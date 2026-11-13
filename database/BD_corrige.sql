@@ -259,6 +259,47 @@ CREATE TABLE commercial (
 
 -- =========================================================
 -- 10. SERVICES
+
+-- =========================================================
+-- Facture proforma : lignes persistées (DÉSIGNATION / PU / QTÉ
+-- / MONTANT HTVA / REMISE / NET COMMERCIAL).
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS facture_proforma_ligne (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    facture_proforma_id INT NOT NULL,
+
+    ligne_service_id INT NULL,
+
+    categorie VARCHAR(30) NOT NULL DEFAULT 'EXTERNALISATION',
+
+    type_prestation VARCHAR(30) NULL,
+
+    ordre INT NOT NULL DEFAULT 0,
+
+    designation VARCHAR(255) NOT NULL,
+
+    pu DECIMAL(15,2) NOT NULL DEFAULT 0,
+
+    quantite DECIMAL(10,2) NOT NULL DEFAULT 1,
+
+    montant_htva DECIMAL(15,2) NOT NULL DEFAULT 0,
+
+    remise DECIMAL(15,2) NOT NULL DEFAULT 0,
+
+    net_commercial DECIMAL(15,2) NOT NULL DEFAULT 0,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_facture_proforma_ligne_facture (facture_proforma_id, ordre),
+    INDEX idx_facture_proforma_ligne_ligne (ligne_service_id),
+
+    FOREIGN KEY (facture_proforma_id) REFERENCES facture_proforma(id) ON DELETE CASCADE,
+    FOREIGN KEY (ligne_service_id) REFERENCES ligne_service(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+
 -- =========================================================
 
 CREATE TABLE services (

@@ -75,8 +75,9 @@ public class PdfGenerator {
     /**
      * Facture proforma au format du modèle CABEX, générée sur une seule page.
      */
+    /** Document proforma (toujours « FACTURE PROFORMA », même après validation). */
     public byte[] factureProforma(Facture facture) {
-        return generateurFacture.generer(facture);
+        return generateurFacture.generer(facture, "PROFORMA");
     }
 
     /**
@@ -103,6 +104,6 @@ public class PdfGenerator {
         if (facture.getFactureProforma() == null) {
             return PdfFactureDebours.generer(facture);
         }
-        return generateurFacture.generer(facture.getFactureProforma());
+        return generateurFacture.generer(facture.getFactureProforma(), "VALIDÉE");
     }
 }

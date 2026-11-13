@@ -281,6 +281,9 @@ public class LigneServiceService {
         }
 
         ligne.setMontantDebours(montant);
+        // Le débours devient chiffrable : on renseigne la colonne tarif
+        // utilisée par la facture validée.
+        ligne.setTarif(montant);
         ligne.setStatut(LIGNE_EN_COURS);
         ligneRepository.save(ligne);
         // Un paiement est toujours lié à une facture validée : la validation

@@ -167,12 +167,65 @@ public class FactureService {
             }
         }
 
+        for (Facture facture : crees) {
+            synchroniserLignesProforma(facture);
+        }
+
         ajouterHistoriqueDemande(demande, DEMANDE_EN_ATTENTE,
                 "Factures proforma générées (mode " + modeNormalise + ") : " + crees.size());
         auditService.log(AuditActions.CREATE, "FACTURE", "Facture",
                 null, null, demande.getReferenceDemande() + " : " + modeNormalise);
 
         return crees.stream().map(this::toResponse).toList();
+    }
+
+    /**
+     * Synchronise les lignes persistées de la proforma avec le contenu actuel :
+     * purge puis réinsère la liste (mêmes lignes reprises, même ordre).
+     */
+    private void synchroniserLignesProforma(Facture facture) {
+        Integer factureId = facture.getId();
+        List<LigneService> lignes = ligneRepository.findByDemandeIdOrderByIdAsc(facture.getDemande().getId())
+                .stream()
+                .filter(l -> l.getFacture() != null
+                        && (factureId == null
+                                ? l.getFacture() == facture
+                                : factureId.equals(l.getFacture().getId())))
+                .toList();
+        facture.getLignesProforma().clear();
+        int ordre = 1;
+        for (LigneService ligne : lignes) {
+            BigDecimal pu = montantLigne(ligne);
+            com.cabex.backend.facture.entity.FactureProformaLigne fpl =
+                    com.cabex.backend.facture.entity.FactureProformaLigne.builder()
+                            .factureProforma(facture)
+                            .ligneService(ligne)
+                            .categorie(ligne.getCategorie() != null
+                                    ? ligne.getCategorie() : com.cabex.backend.demande.service.LigneServiceService.CATEGORIE_EXTERNALISATION)
+                            .typePrestation(ligne.getTypePrestation())
+                            .ordre(ordre++)
+                            .designation(designationLigne(ligne))
+                            .pu(pu)
+                            .quantite(BigDecimal.ONE)
+                            .montantHtva(pu)
+                            .remise(BigDecimal.ZERO)
+                            .netCommercial(pu)
+                            .build();
+            facture.getLignesProforma().add(fpl);
+        }
+        factureRepository.save(facture);
+    }
+
+    /** Désignation figée affichée pour une ligne (nom du service ou désignation du débours). */
+    private static String designationLigne(LigneService ligne) {
+        if (com.cabex.backend.demande.service.LigneServiceService.estDebours(ligne)) {
+            String d = ligne.getDesignationDebours();
+            return d != null && !d.isBlank() ? d.trim() : "Débours";
+        }
+        String nomService = ligne.getService() != null ? ligne.getService().getNomService() : null;
+        return (nomService != null && !nomService.isBlank())
+                ? nomService.trim()
+                : com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(ligne);
     }
 
     /**
@@ -207,6 +260,7 @@ public class FactureService {
             }
             unique.setMontant(total);
             factureRepository.save(unique);
+            synchroniserLignesProforma(unique);
             return;
         }
         for (LigneService ligne : lignes) {
@@ -223,12 +277,16 @@ public class FactureService {
             }
         }
         // Supprime les proformas orphelines (ligne retirée).
-        for (Facture facture : factureRepository.findByDemandeId(demandeId)) {
+        List<Facture> toutesFactures = factureRepository.findByDemandeId(demandeId);
+        for (Facture facture : toutesFactures) {
             boolean rattachee = lignes.stream().anyMatch(
                     l -> l.getFacture() != null && l.getFacture().getId().equals(facture.getId()));
             if (!rattachee && MODE_PAR_SERVICE.equals(facture.getModeFacturation())) {
                 factureRepository.delete(facture);
             }
+        }
+        for (Facture facture : factureRepository.findByDemandeId(demandeId)) {
+            synchroniserLignesProforma(facture);
         }
     }
 
@@ -698,7 +756,7 @@ public class FactureService {
                                 l.getId(),
                                 fv.getFactureProforma().getDemande().getReferenceDemande(),
                                 nomService,
-                                l.getTarifProforma() != null ? l.getTarifProforma() : l.getTarif(),
+                                l.getTarif() != null ? l.getTarif() : l.getTarifProforma(),
                                 "PRINCIPALE",
                                 l.getService() != null ? l.getService().getNomService() : null);
                     })
@@ -1052,6 +1110,25 @@ public class FactureService {
                         com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(l),
                         l.getCategorie() != null ? l.getCategorie() : "EXTERNALISATION"))
                 .toList();
+        List<com.cabex.backend.facture.dto.FactureProformaLigneResponse> lignesProforma =
+                facture.getLignesProforma() != null
+                        ? facture.getLignesProforma().stream()
+                                .sorted(java.util.Comparator.comparing(
+                                        com.cabex.backend.facture.entity.FactureProformaLigne::getOrdre,
+                                        java.util.Comparator.nullsLast(Integer::compareTo)))
+                                .map(l -> new com.cabex.backend.facture.dto.FactureProformaLigneResponse(
+                                        l.getOrdre(),
+                                        l.getLigneService() != null ? l.getLigneService().getId() : null,
+                                        l.getDesignation(),
+                                        l.getCategorie(),
+                                        l.getTypePrestation(),
+                                        l.getPu(),
+                                        l.getQuantite(),
+                                        l.getMontantHtva(),
+                                        l.getRemise(),
+                                        l.getNetCommercial()))
+                                .toList()
+                        : java.util.List.of();
         com.cabex.backend.facture.entity.FactureValidee validee =
                 facture.getId() != null
                         ? factureValideeRepository.findByFactureProformaId(facture.getId()).orElse(null)
@@ -1072,7 +1149,8 @@ public class FactureService {
                         ? validee.getValidePar().getPrenom() + " " + validee.getValidePar().getNom()
                         : null,
                 validee != null ? validee.getValideLe() : null,
-                lignes);
+                lignes,
+                lignesProforma);
     }
 
     private Facture creerFacture(DemandeService demande, String mode, BigDecimal montant) {
@@ -1086,14 +1164,17 @@ public class FactureService {
     }
 
     /**
-     * Lignes reprises dans la proforma : uniquement EXTERNALISATION. Les
-     * débours n'ont pas de facture proforma — leur facture validée est créée
-     * directement à la validation de leur montant (« Valider le montant ») ou
-     * à la création de la demande quand le montant est annoncé d'emblée.
+     * Lignes reprises dans la proforma : EXTERNALISATION + les lignes DÉBOURS
+     * dont le montant est annoncé à la création — la proforma liste tout ce
+     * qui sera facturé, et la facture validée en découlera au moment de la
+     * validation. Un débours sans montant annoncé reste en attente de la
+     * « validation du montant » : sa facture validée est créée à ce moment-là,
+     * sans passer par la proforma.
      */
     private List<LigneService> lignesDansProforma(Integer demandeId) {
         return ligneRepository.findByDemandeIdOrderByIdAsc(demandeId).stream()
-                .filter(l -> !LigneServiceService.estDebours(l))
+                .filter(l -> !LigneServiceService.estDebours(l)
+                        || l.getMontantDebours() != null)
                 .toList();
     }
 

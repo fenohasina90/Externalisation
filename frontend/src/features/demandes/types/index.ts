@@ -137,6 +137,22 @@ export interface ValiderFactureLignePayload {
   montant: number
 }
 
+/** Ligne persistée de la proforma (DÉSIGNATION / PU / QTÉ / HTVA / REMISE / NET COMMERCIAL). */
+export interface FactureProformaLigne {
+  ordre: number | null
+  ligneServiceId: number | null
+  designation: string
+  /** EXTERNALISATION ou DEBOURS. */
+  categorie: string | null
+  /** PRESTATION / ABONNEMENT_MENSUEL (null pour DEBOURS). */
+  typePrestation: string | null
+  pu: number
+  quantite: number
+  montantHtva: number
+  remise: number
+  netCommercial: number
+}
+
 export interface FactureLigne {
   ligneServiceId: number
   serviceId: number | null
@@ -229,6 +245,8 @@ export interface Facture {
   valideParNom: string | null
   valideLe: string | null
   lignes: FactureLigne[]
+  /** Lignes persistées de la proforma (ordre d'affichage), contenu figé. */
+  lignesProforma: FactureProformaLigne[]
 }
 
 export interface CreateDemandePayload {

@@ -18,6 +18,7 @@ import com.lowagie.text.pdf.PdfPTable;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -31,10 +32,16 @@ final class PdfFactureProforma {
         this.configurationService = configurationService;
     }
 
-    byte[] generer(Facture facture) {
+    /**
+     * Génère le PDF avec l'en-tête demandé :
+     * « FACTURE PROFORMA » pour le document proforma (avant ou après validation),
+     * « FACTURE VALIDÉE » pour le document issu de la validation.
+     */
+    byte[] generer(Facture facture, String contexte) {
         byte[] pdf = null;
+        String titre = "VALIDÉE".equals(contexte) ? "VALIDÉE" : "PROFORMA";
         for (float echelle : PdfStyleFacture.ECHELLES) {
-            pdf = construire(facture, new PdfStyleFacture(echelle));
+            pdf = construire(facture, new PdfStyleFacture(echelle), contexte);
             if (PdfDocument.nombrePages(pdf) <= 1) {
                 break;
             }
@@ -42,22 +49,27 @@ final class PdfFactureProforma {
         return pdf;
     }
 
-    private byte[] construire(Facture facture, PdfStyleFacture st) {
-        String titreMeta = "Facture proforma " + PdfFormats.valeur(facture.getReferenceFacture());
-        return PdfDocument.generer(PdfDocument.MiseEnPage.FACTURE, "Facture proforma",
-                titreMeta, doc -> ecrire(doc, facture, st),
+    private byte[] construire(Facture facture, PdfStyleFacture st, String contexte) {
+        String titreBadge = "VALIDÉE".equals(contexte) ? "VALIDÉE" : "PROFORMA";
+        String titreMeta = "Facture " + titreBadge.toLowerCase(java.util.Locale.FRANCE) + " "
+                + PdfFormats.valeur(facture.getReferenceFacture());
+        return PdfDocument.generer(PdfDocument.MiseEnPage.FACTURE, "Facture " + titreBadge.toLowerCase(java.util.Locale.FRANCE),
+                titreMeta, doc -> ecrire(doc, facture, st, contexte),
                 "Erreur de génération de la facture proforma");
     }
 
-    private void ecrire(Document doc, Facture facture, PdfStyleFacture st) {
+    private void ecrire(Document doc, Facture facture, PdfStyleFacture st, String contexte) {
         DemandeService demande = facture.getDemande();
         Societe societe = demande != null ? demande.getSociete() : null;
+        List<LigneAffiche> lignesAffiches = construireLignesAffiches(facture, demande, contexte);
 
-        entete(doc, facture, st);
+        entete(doc, facture, st, contexte);
         destinataire(doc, demande, societe, st);
 
-        BigDecimal totalHt = totalHt(facture);
-        doc.add(tableauPrestations(facture, st, totalHt));
+        BigDecimal totalHt = lignesAffiches.stream()
+                .map(LigneAffiche::netCommercial)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        doc.add(tableauPrestations(lignesAffiches, facture, st, totalHt));
 
         BigDecimal tauxTva = lireTauxTva();
         BigDecimal tva = totalHt.multiply(tauxTva)
@@ -75,9 +87,8 @@ final class PdfFactureProforma {
     // En-tête et destinataire
     // ------------------------------------------------------------------
 
-    private static void entete(Document doc, Facture facture, PdfStyleFacture st) {
-        String sousTitre = facture.getStatut() != null && "VALIDEE".equalsIgnoreCase(facture.getStatut())
-                ? "VALIDÉE" : "PROFORMA";
+    private static void entete(Document doc, Facture facture, PdfStyleFacture st, String contexte) {
+        String sousTitre = "VALIDÉE".equals(contexte) ? "VALIDÉE" : "PROFORMA";
         PdfComposants.enteteDocument(doc, st, "FACTURE", sousTitre);
 
         DemandeService demande = facture.getDemande();
@@ -86,9 +97,9 @@ final class PdfFactureProforma {
         meta.setSpacingAfter(st.ecart * 0.8f);
         meta.addCell(PdfComposants.faMeta(st, "N° FACTURE",
                 PdfFormats.valeur(facture.getReferenceFacture()), PdfTheme.ROUGE));
-        meta.addCell(PdfComposants.faMeta(st, "DATE",
-                PdfFormats.valeurDate(facture.getCreatedAt() != null
-                        ? facture.getCreatedAt().toLocalDate() : null), PdfTheme.PRIMAIRE));
+        meta.addCell(PdfComposants.faMeta(st, "DATE DEMANDE",
+                PdfFormats.valeurDate(demande != null ? demande.getDateDemande() : null),
+                PdfTheme.PRIMAIRE));
         meta.addCell(PdfComposants.faMeta(st, "DEMANDE",
                 PdfFormats.valeur(demande != null ? demande.getReferenceDemande() : null),
                 PdfTheme.PRIMAIRE));
@@ -118,8 +129,94 @@ final class PdfFactureProforma {
     // Tableau des prestations
     // ------------------------------------------------------------------
 
-    private static PdfPTable tableauPrestations(Facture facture, PdfStyleFacture st,
-                                                BigDecimal totalHt) {
+    /** Ligne générique pour l'affichage (voie persistée ou voie historique). */
+    private record LigneAffiche(
+            String categorie,
+            String typePrestation,
+            String designation,
+            BigDecimal pu,
+            BigDecimal quantite,
+            BigDecimal montantHtva,
+            BigDecimal remise,
+            BigDecimal netCommercial
+    ) {
+    }
+
+    /**
+     * Lignes affichées dans le PDF.
+     * Voie principale : lignes persistées dans la proforma au moment de la
+     * génération — le contenu est figé (désignation, PU, quantité, HTVA, remise,
+     * net commercial). Voie de repli pour les anciennes données : les lignes de
+     * la proforma et les débours de la demande.
+     */
+    private static List<LigneAffiche> construireLignesAffiches(Facture facture, DemandeService demande,
+                                                              String contexte) {
+        boolean estValidee = "VALIDÉE".equals(contexte);
+        List<com.cabex.backend.facture.entity.FactureProformaLigne> persistees =
+                facture.getLignesProforma();
+        if (persistees != null && !persistees.isEmpty()) {
+            return persistees.stream()
+                    .sorted(java.util.Comparator.comparing(
+                            com.cabex.backend.facture.entity.FactureProformaLigne::getOrdre,
+                            java.util.Comparator.nullsLast(Integer::compareTo)))
+                    .map(l -> {
+                        BigDecimal puArbitre;
+                        if (estValidee && l.getLigneService() != null && l.getLigneService().getTarif() != null) {
+                            puArbitre = l.getLigneService().getTarif();
+                        } else {
+                            puArbitre = l.getPu();
+                        }
+                        return new LigneAffiche(
+                                l.getCategorie(),
+                                l.getTypePrestation(),
+                                l.getDesignation(),
+                                PdfFormats.montantOuZero(puArbitre),
+                                PdfFormats.montantOuZero(l.getQuantite()),
+                                PdfFormats.montantOuZero(puArbitre),
+                                PdfFormats.montantOuZero(l.getRemise()),
+                                PdfFormats.montantOuZero(puArbitre));
+                    })
+                    .toList();
+        }
+        List<LigneService> lignes = new java.util.ArrayList<>();
+        if (facture.getLignes() != null) {
+            lignes.addAll(facture.getLignes());
+        }
+        if (demande != null && demande.getLignes() != null) {
+            for (LigneService l : demande.getLignes()) {
+                if (com.cabex.backend.demande.service.LigneServiceService.estDebours(l)
+                        && l.getMontantDebours() != null
+                        && lignes.stream().noneMatch(x -> x.getId() != null && x.getId().equals(l.getId()))) {
+                    lignes.add(l);
+                }
+            }
+        }
+        return lignes.stream()
+                .map(l -> new LigneAffiche(
+                        l.getCategorie(),
+                        l.getTypePrestation(),
+                        designationLigne(l),
+                        PdfFormats.montantOuZero(tarifAffichePdf(l, facture)),
+                        BigDecimal.ONE,
+                        PdfFormats.montantOuZero(tarifAffichePdf(l, facture)),
+                        BigDecimal.ZERO,
+                        PdfFormats.montantOuZero(tarifAffichePdf(l, facture))))
+                .toList();
+    }
+
+    private static String designationLigne(LigneService ligne) {
+        if (com.cabex.backend.demande.service.LigneServiceService.estDebours(ligne)) {
+            String d = ligne.getDesignationDebours();
+            return d != null && !d.isBlank() ? d.trim() : "Débours";
+        }
+        String nomService = ligne.getService() != null ? ligne.getService().getNomService() : null;
+        return (nomService != null && !nomService.isBlank())
+                ? nomService.trim()
+                : com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(ligne);
+    }
+
+    private static PdfPTable tableauPrestations(List<LigneAffiche> lignesPdf, Facture facture,
+                                                PdfStyleFacture st, BigDecimal totalHt) {
         PdfPTable table = new PdfPTable(6);
         table.setWidthPercentage(100);
         table.setWidths(new float[]{4.4f, 1.5f, 0.7f, 1.9f, 1.3f, 1.9f});
@@ -132,47 +229,95 @@ final class PdfFactureProforma {
         PdfComposants.faTh(table, st, "REMISE\n(Ariary)", Element.ALIGN_RIGHT);
         PdfComposants.faTh(table, st, "NET COMMERCIAL\n(Ariary)", Element.ALIGN_RIGHT);
 
-        PdfPCell bande = PdfComposants.faCellule(st,
-                new Phrase("PRESTATIONS", st.section), Element.ALIGN_LEFT);
-        bande.setColspan(6);
-        bande.setBackgroundColor(PdfTheme.VERT_PALE);
-        bande.setBorder(Rectangle.LEFT);
-        bande.setBorderWidthLeft(2.5f);
-        bande.setBorderColorLeft(PdfTheme.VERT_MARQUE);
-        table.addCell(bande);
-
-        if (facture.getLignes() != null) {
-            int index = 0;
-            for (LigneService ligne : facture.getLignes()) {
-                lignesPrestation(table, st, facture, ligne, index++ % 2 == 1);
+        List<LigneAffiche> abonnements = new java.util.ArrayList<>();
+        List<LigneAffiche> prestations = new java.util.ArrayList<>();
+        List<LigneAffiche> debours = new java.util.ArrayList<>();
+        for (LigneAffiche ligne : lignesPdf) {
+            if (com.cabex.backend.demande.service.LigneServiceService.CATEGORIE_DEBOURS
+                    .equalsIgnoreCase(ligne.categorie())) {
+                debours.add(ligne);
+            } else if (com.cabex.backend.demande.service.LigneServiceService.ABONNEMENT_MENSUEL
+                    .equalsIgnoreCase(ligne.typePrestation())) {
+                abonnements.add(ligne);
+            } else {
+                prestations.add(ligne);
             }
         }
 
-        PdfComposants.faSousTotal(table, st, "Sous-total Prestation", 3);
+        int zebra = 0;
+        zebra = ajouterSection(table, st, facture, "Abonnement mensuel :",
+                "Sous-total Abonnement mensuel", abonnements, zebra);
+        zebra = ajouterSection(table, st, facture, "Prestation:",
+                "Sous-total Prestation", prestations, zebra);
+        zebra = ajouterSection(table, st, facture, "Débours à payer à l'administration",
+                "Sous-total Débours", debours, zebra);
+
+        PdfComposants.faSousTotal(table, st, "TOTAL HT", 3);
         PdfComposants.faSousTotal(table, st, PdfFormats.formatMontant(totalHt), 1);
         PdfComposants.faSousTotal(table, st, "-", 1);
         PdfComposants.faSousTotal(table, st, PdfFormats.formatMontant(totalHt), 1);
         return table;
     }
 
+    /**
+     * Ajoute une section de la facture (bande, lignes, sous-total).
+     * La section n'est insérée que s'il y a au moins une ligne.
+     * Retourne le prochain index zebrame.
+     */
+    private static int ajouterSection(PdfPTable table, PdfStyleFacture st,
+                                      Facture facture, String titre, String sousTotal,
+                                      List<LigneAffiche> lignes, int zebraDepart) {
+        if (lignes.isEmpty()) {
+            return zebraDepart;
+        }
+        PdfPCell bande = PdfComposants.faCellule(st,
+                new Phrase(titre, st.section), Element.ALIGN_LEFT);
+        bande.setColspan(6);
+        bande.setBackgroundColor(PdfTheme.VERT_PALE);
+        bande.setBorder(Rectangle.LEFT);
+        bande.setBorderWidthLeft(2.5f);
+        bande.setBorderColorLeft(PdfTheme.VERT_MARQUE);
+        table.addCell(bande);
+        BigDecimal somme = BigDecimal.ZERO;
+        int zebra = zebraDepart;
+        for (LigneAffiche ligne : lignes) {
+            BigDecimal montant = PdfFormats.montantOuZero(ligne.netCommercial());
+            somme = somme.add(montant);
+            lignesPrestation(table, st, facture, ligne, zebra++ % 2 == 1);
+        }
+        PdfComposants.faSousTotal(table, st, sousTotal, 3);
+        PdfComposants.faSousTotal(table, st, PdfFormats.formatMontant(somme), 1);
+        PdfComposants.faSousTotal(table, st, "-", 1);
+        PdfComposants.faSousTotal(table, st, PdfFormats.formatMontant(somme), 1);
+        return zebra;
+    }
+
     private static void lignesPrestation(PdfPTable table, PdfStyleFacture st,
-                                         Facture facture, LigneService ligne, boolean zebra) {
+                                         Facture facture, LigneAffiche ligne, boolean zebra) {
         Phrase designation = new Phrase();
         designation.setLeading(st.td.getSize() * 1.3f);
-        String nomService = ligne.getService() != null ? ligne.getService().getNomService() : null;
-        designation.add(new Chunk(PdfFormats.valeur(nomService != null && !nomService.isBlank()
-                ? nomService
-                : com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(ligne)), st.tdGras));
+        designation.add(new Chunk(PdfFormats.valeur(ligne.designation()), st.tdGras));
         PdfComposants.faCorps(table, st, designation, Element.ALIGN_LEFT, zebra);
-        BigDecimal tarifAffiche = tarifAffichePdf(ligne, facture);
-        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(tarifAffiche), st.td),
+        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(ligne.pu()), st.td),
                 Element.ALIGN_RIGHT, zebra);
-        PdfComposants.faCorps(table, st, new Phrase("1", st.td), Element.ALIGN_CENTER, zebra);
-        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(tarifAffiche), st.td),
+        PdfComposants.faCorps(table, st, new Phrase(formatQuantite(ligne.quantite()), st.td), Element.ALIGN_CENTER, zebra);
+        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(ligne.montantHtva()), st.td),
                 Element.ALIGN_RIGHT, zebra);
-        PdfComposants.faCorps(table, st, new Phrase("-", st.td), Element.ALIGN_RIGHT, zebra);
-        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(tarifAffiche), st.td),
+        PdfComposants.faCorps(table, st, new Phrase(formateRemiseOuTiret(ligne.remise()), st.td),
                 Element.ALIGN_RIGHT, zebra);
+        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(ligne.netCommercial()), st.td),
+                Element.ALIGN_RIGHT, zebra);
+    }
+
+    private static String formatQuantite(BigDecimal qte) {
+        BigDecimal entier = qte.stripTrailingZeros();
+        return entier.scale() <= 0 ? entier.toPlainString() : entier.toPlainString();
+    }
+
+    private static String formateRemiseOuTiret(BigDecimal remise) {
+        return remise == null || remise.signum() == 0
+                ? "-"
+                : PdfFormats.formatMontant(remise);
     }
 
     /**
@@ -190,17 +335,6 @@ final class PdfFactureProforma {
         }
         return ligne.getTarifProforma() != null ? ligne.getTarifProforma()
                 : (ligne.getTarif() != null ? ligne.getTarif() : BigDecimal.ZERO);
-    }
-
-    private static BigDecimal totalHt(Facture facture) {
-        BigDecimal total = BigDecimal.ZERO;
-        if (facture.getLignes() == null) {
-            return total;
-        }
-        for (LigneService ligne : facture.getLignes()) {
-            total = total.add(PdfFormats.montantOuZero(tarifAffichePdf(ligne, facture)));
-        }
-        return total;
     }
 
     // ------------------------------------------------------------------
@@ -223,8 +357,6 @@ final class PdfFactureProforma {
         PdfPTable totaux = new PdfPTable(2);
         totaux.setWidthPercentage(100);
         totaux.setWidths(new float[]{5f, 4.6f});
-        PdfComposants.faLigneTotaux(totaux, st, "TOTAL HT",
-                PdfFormats.formatMontant(totalHt), 0);
         PdfComposants.faLigneTotaux(totaux, st, "TVA" + (tauxTva.signum() > 0
                         ? " (" + tauxTva.stripTrailingZeros().toPlainString() + " %)" : ""),
                 PdfFormats.formatMontant(tva), 0);

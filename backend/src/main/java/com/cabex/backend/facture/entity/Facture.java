@@ -8,7 +8,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -67,4 +69,14 @@ public class Facture {
     @OneToMany(mappedBy = "facture", fetch = FetchType.LAZY)
     @Builder.Default
     private Set<com.cabex.backend.demande.entity.LigneService> lignes = new HashSet<>();
+
+    /**
+     * Lignes persistées de la proforma : contenu exact affiché (désignation, PU,
+     * quantité, HTVA, remise, net commercial), figé au moment de la génération.
+     */
+    @OneToMany(mappedBy = "factureProforma", fetch = FetchType.LAZY,
+            cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("ordre ASC")
+    @Builder.Default
+    private List<FactureProformaLigne> lignesProforma = new java.util.ArrayList<>();
 }
