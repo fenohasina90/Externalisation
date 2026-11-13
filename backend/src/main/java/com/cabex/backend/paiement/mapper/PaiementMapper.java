@@ -12,6 +12,7 @@ import com.cabex.backend.paiement.entity.ModePaiement;
 import com.cabex.backend.paiement.entity.Paiement;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public class PaiementMapper {
 
@@ -64,6 +65,23 @@ public class PaiementMapper {
     }
 
     /**
+     * Objet précis de la facture liée : désignation du débours (préfixée rien),
+     * ou nom du service ; repliés sur le libellé générique de la ligne.
+     */
+    private static String objetDetailPaiement(LigneService ligne) {
+        if (ligne == null) {
+            return null;
+        }
+        if (LigneServiceService.estDebours(ligne)) {
+            String d = ligne.getDesignationDebours();
+            return d != null && !d.isBlank() ? d.trim() : "Débours";
+        }
+        String nom = ligne.getService() != null ? ligne.getService().getNomService() : null;
+        return nom != null && !nom.isBlank() ? nom.trim()
+                : com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(ligne);
+    }
+
+    /**
      * Détail d'un paiement. {@code sommePayeeSurFacture} est la somme des
      * paiements actifs sur la facture validée concernée (le reste à payer
      * de la facture en tient compte).
@@ -82,6 +100,15 @@ public class PaiementMapper {
                                 .findFirst().orElse(null)
                         : null;
 
+        String typeFacture = fv == null ? null
+                : fv.getMois() != null ? "ABONNEMENT_MENSUEL"
+                : fv.getFactureProforma() != null ? "GENERALE"
+                : ligne != null && LigneServiceService.estDebours(ligne) ? "DEBOURS"
+                : "PRESTATION";
+        LocalDate dateFactureValidee = fv != null && fv.getValideLe() != null
+                ? fv.getValideLe().toLocalDate() : null;
+        LocalDate moisFacture = fv != null ? fv.getMois() : null;
+
         BigDecimal montantFacture = fv != null ? fv.getMontant() : null;
         BigDecimal montantPayeSurFacture = sommePayeeSurFacture != null ? sommePayeeSurFacture : BigDecimal.ZERO;
         BigDecimal resteAPayerFacture = montantFacture != null
@@ -99,11 +126,7 @@ public class PaiementMapper {
                         ? paiement.getDemande().getSociete().getNomSociete() : null,
                 fv != null ? fv.getId() : null,
                 fv != null ? fv.getReferenceFactureValidee() : null,
-                ligne != null
-                        ? (LigneServiceService.estDebours(ligne)
-                                ? (ligne.getDesignationDebours() != null ? ligne.getDesignationDebours() : "Débours")
-                                : com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(ligne))
-                        : null,
+                objetDetailPaiement(ligne),
                 paiement.getEcheance() != null ? paiement.getEcheance().getId() : null,
                 paiement.getEcheance() != null ? paiement.getEcheance().getNumeroEcheance() : null,
                 paiement.getEcheance() != null ? paiement.getEcheance().getDateEcheance() : null,
@@ -124,7 +147,10 @@ public class PaiementMapper {
                 montantPayeSurFacture,
                 resteAPayerFacture,
                 paiement.getMontantPaye() != null
-                        ? MontantEnLettres.convertir(paiement.getMontantPaye().longValue()) : null
+                        ? MontantEnLettres.convertir(paiement.getMontantPaye().longValue()) : null,
+                typeFacture,
+                dateFactureValidee,
+                moisFacture
         );
     }
 }

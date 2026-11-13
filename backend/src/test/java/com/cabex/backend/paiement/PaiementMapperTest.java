@@ -70,6 +70,9 @@ class PaiementMapperTest {
         assertEquals(new BigDecimal("700000.00"), detail.resteAPayerFacture());
         assertEquals("un million trois cent mille", detail.montantEnLettres());
         assertEquals("Système Administrateur", detail.createdByName());
+        assertEquals("GENERALE", detail.typeFacture());
+        assertNull(detail.dateFactureValidee());
+        assertNull(detail.moisFacture());
     }
 
     @Test

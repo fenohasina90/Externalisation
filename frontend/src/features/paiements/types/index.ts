@@ -59,7 +59,13 @@ export interface Paiement {
 export interface PaiementDetail extends Paiement {
   numeroEcheance: number | null
   dateEcheance: string | null
+  /** Type de facture validée liée (GENERALE | PRESTATION | DEBOURS | ABONNEMENT_MENSUEL). */
+  typeFacture: string | null
   nomService: string | null
+  /** Date d'émission de la facture validée liée. */
+  dateFactureValidee: string | null
+  /** Mois facturé (ABONNEMENT_MENSUEL uniquement). */
+  moisFacture: string | null
   /** Montant de la facture validée payée. */
   montantFactureValidee: number | null
   /** Total des paiements actifs sur cette facture (ce paiement inclus). */

@@ -9,7 +9,22 @@ import { ModePill } from '../components'
 import { paiementsApi } from '../services/paiements.service'
 import type { PaiementDetail } from '../types'
 
-/** Détail d'un paiement — reprend les informations du reçu PDF. */
+const TYPE_LABEL: Record<string, string> = {
+  GENERALE: 'Facture générale validée',
+  PRESTATION: 'Prestation (facture validée)',
+  DEBOURS: 'Débours (facture validée)',
+  ABONNEMENT_MENSUEL: 'Abonnement mensuel',
+}
+
+function formatMois(mois: string | null | undefined): string {
+  if (!mois) return '—'
+  const parsed = new Date(mois)
+  if (Number.isNaN(parsed.getTime())) return mois
+  const texte = parsed.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  return texte.charAt(0).toUpperCase() + texte.slice(1)
+}
+
+/** Détail d'un paiement — reprend complètement et précisément le reçu PDF. */
 export function PaiementDetailPage() {
   const { reference } = useParams<{ reference: string }>()
   const { data: paiement, loading, error } = useApi<PaiementDetail | null>(
@@ -54,10 +69,17 @@ export function PaiementDetailPage() {
     }
   }
 
-  const libelleEcheance =
-    paiement.numeroEcheance === null
-      ? '—'
-      : `N° ${paiement.numeroEcheance} — ${formatDate(paiement.dateEcheance)}`
+  const estDebours = paiement.typeFacture === 'DEBOURS'
+  const estAbonnement = paiement.typeFacture === 'ABONNEMENT_MENSUEL'
+  const objetLabel = estDebours ? 'Désignation du débours' : 'Nom du service'
+  const typeFactureLabel = paiement.typeFacture
+    ? (TYPE_LABEL[paiement.typeFacture] ?? paiement.typeFacture)
+    : '—'
+  const estPlan = paiement.numeroEcheance !== null && paiement.dateEcheance !== null
+  const libelleEcheance = estPlan
+    ? `N° ${paiement.numeroEcheance} — échéance du ${formatDate(paiement.dateEcheance)}`
+    : null
+  const resteAPayer = paiement.resteAPayerFacture ?? 0
 
   return (
     <div className="app-page responsables-page">
@@ -98,6 +120,10 @@ export function PaiementDetailPage() {
         <div className="card card-pad">
           <h3>Client et demande</h3>
           <div className="rc">
+            <span>Référence paiement</span>
+            <b>{paiement.referencePaiement}</b>
+          </div>
+          <div className="rc">
             <span>Client</span>
             <b>{paiement.nomSociete ?? '—'}</b>
           </div>
@@ -115,17 +141,41 @@ export function PaiementDetailPage() {
         <div className="card card-pad">
           <h3>Service et facture</h3>
           <div className="rc">
-            <span>Service</span>
+            <span>{objetLabel}</span>
             <b>{paiement.nomService ?? '—'}</b>
           </div>
           <div className="rc">
-            <span>Échéance</span>
-            <b>{libelleEcheance}</b>
+            <span>Type de facture</span>
+            <b>{typeFactureLabel}</b>
           </div>
           <div className="rc">
-            <span>Facture validée</span>
+            <span>Référence facture</span>
             <b>{paiement.referenceFactureValidee ?? '—'}</b>
           </div>
+          {estAbonnement && (
+            <>
+              <div className="rc">
+                <span>Mois facturé</span>
+                <b>{formatMois(paiement.moisFacture)}</b>
+              </div>
+              <div className="rc">
+                <span>Date d&apos;émission</span>
+                <b>{formatDate(paiement.dateFactureValidee)}</b>
+              </div>
+            </>
+          )}
+          {!estAbonnement && paiement.dateFactureValidee && (
+            <div className="rc">
+              <span>Date d&apos;émission</span>
+              <b>{formatDate(paiement.dateFactureValidee)}</b>
+            </div>
+          )}
+          {libelleEcheance && (
+            <div className="rc">
+              <span>Échéance réglée</span>
+              <b>{libelleEcheance}</b>
+            </div>
+          )}
         </div>
 
         <div className="card card-pad">
@@ -158,21 +208,35 @@ export function PaiementDetailPage() {
               <b>{paiement.numeroCheque}</b>
             </div>
           )}
+          {paiement.pieceJustificative && (
+            <div className="rc">
+              <span>Pièce justificative</span>
+              <b>{paiement.pieceJustificative}</b>
+            </div>
+          )}
+          <div className="rc">
+            <span>Commentaire</span>
+            <b>{paiement.commentaire?.trim() ? paiement.commentaire : '—'}</b>
+          </div>
         </div>
 
         <div className="card card-pad">
           <h3>Montants de la facture</h3>
           <div className="rc">
-            <span>Montant de la facture</span>
+            <span>Montant de la facture validée</span>
             <b>{formatMontantMGA(paiement.montantFactureValidee)}</b>
           </div>
           <div className="rc">
-            <span>Total payé sur la facture</span>
+            <span>Montant déjà payé</span>
             <b>{formatMontantMGA(paiement.montantPayeSurFacture)}</b>
           </div>
           <div className="rc">
+            <span>Montant reçu (ce paiement)</span>
+            <b>{formatMontantMGA(paiement.montantPaye)}</b>
+          </div>
+          <div className="rc">
             <span>Reste à payer</span>
-            <b style={paiement.resteAPayerFacture ? { color: 'var(--danger)' } : undefined}>
+            <b style={resteAPayer > 0 ? { color: 'var(--danger)' } : undefined}>
               {formatMontantMGA(paiement.resteAPayerFacture)}
             </b>
           </div>

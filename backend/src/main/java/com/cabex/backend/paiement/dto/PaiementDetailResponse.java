@@ -37,6 +37,12 @@ public record PaiementDetailResponse(
         BigDecimal montantFactureValidee,
         BigDecimal montantPayeSurFacture,
         BigDecimal resteAPayerFacture,
-        String montantEnLettres
+        String montantEnLettres,
+        /** Type de facture validée liée (GENERALE | PRESTATION | DEBOURS | ABONNEMENT_MENSUEL). */
+        String typeFacture,
+        /** Date d'émission de la facture validée liée. */
+        LocalDate dateFactureValidee,
+        /** Mois facturé (ABONNEMENT_MENSUEL uniquement, sinon null). */
+        LocalDate moisFacture
 ) {
 }
