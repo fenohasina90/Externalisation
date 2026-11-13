@@ -8,9 +8,11 @@ import com.cabex.backend.echeance.entity.ProposPaiement;
 import com.cabex.backend.facture.entity.Facture;
 import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.paiement.entity.Paiement;
+import com.cabex.backend.paiement.repository.PaiementRepository;
 
 import java.math.BigDecimal;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -34,10 +36,19 @@ public class PdfGenerator {
 
     private final PdfFactureAbonnement generateurFactureAbonnement;
 
+    private final PaiementRepository paiementRepository;
+
     public PdfGenerator(ConfigurationService configurationService) {
+        this(configurationService, null);
+    }
+
+    @Autowired
+    public PdfGenerator(ConfigurationService configurationService,
+                        PaiementRepository paiementRepository) {
         this.generateurFacture = new PdfFactureProforma(configurationService);
         this.generateurFacturePaiement = new PdfFacturePaiement(configurationService);
         this.generateurFactureAbonnement = new PdfFactureAbonnement(configurationService);
+        this.paiementRepository = paiementRepository;
     }
 
     /**
@@ -91,7 +102,19 @@ public class PdfGenerator {
      * facture proforma et demande.
      */
     public byte[] factureAbonnement(FactureValidee facture) {
-        return generateurFactureAbonnement.generer(facture);
+        return generateurFactureAbonnement.generer(facture, avancePourFv(facture));
+    }
+
+    /** Avance déjà reçue pour une facture validée liée au paiement. */
+    private BigDecimal avancePourFv(FactureValidee facture) {
+        if (paiementRepository == null) {
+            return BigDecimal.ZERO;
+        }
+        if (facture == null || facture.getId() == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal payee = paiementRepository.sommePayeeParFactureValidee(facture.getId());
+        return payee != null ? payee : BigDecimal.ZERO;
     }
 
     /**
@@ -106,11 +129,11 @@ public class PdfGenerator {
         if (facture.getLigneService() != null
                 && !com.cabex.backend.demande.service.LigneServiceService.ABONNEMENT_MENSUEL
                         .equalsIgnoreCase(facture.getLigneService().getTypePrestation())) {
-            return generateurFacturePaiement.generer(facture);
+            return generateurFacturePaiement.generer(facture, avancePourFv(facture));
         }
         if (facture.getFactureGenerale() != null) {
             if (facture.getMois() != null) {
-                return generateurFactureAbonnement.generer(facture);
+                return generateurFactureAbonnement.generer(facture, avancePourFv(facture));
             }
             return PdfFactureDetail.generer(facture);
         }

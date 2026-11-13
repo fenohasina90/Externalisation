@@ -45,10 +45,11 @@ final class PdfFacturePaiement {
      * Badge « FACTURE VALIDÉE » / « PROFORMA » selon l'état de la facture.
      * La facture enfant est toujours validée.
      */
-    byte[] generer(FactureValidee facture) {
+    byte[] generer(FactureValidee facture, BigDecimal avanceRecue) {
         byte[] pdf = null;
+        BigDecimal avance = avanceRecue != null ? avanceRecue : BigDecimal.ZERO;
         for (float echelle : PdfStyleFacture.ECHELLES) {
-            pdf = construire(facture, new PdfStyleFacture(echelle));
+            pdf = construire(facture, new PdfStyleFacture(echelle), avance);
             if (PdfDocument.nombrePages(pdf) <= 1) {
                 break;
             }
@@ -56,14 +57,14 @@ final class PdfFacturePaiement {
         return pdf;
     }
 
-    private byte[] construire(FactureValidee facture, PdfStyleFacture st) {
+    private byte[] construire(FactureValidee facture, PdfStyleFacture st, BigDecimal avance) {
         String titreMeta = "Facture validée " + PdfFormats.valeur(facture.getReferenceFactureValidee());
         return PdfDocument.generer(PdfDocument.MiseEnPage.FACTURE, "Facture validée",
-                titreMeta, doc -> ecrire(doc, facture, st),
+                titreMeta, doc -> ecrire(doc, facture, st, avance),
                 "Erreur de génération de la facture validée (liée au paiement)");
     }
 
-    private void ecrire(Document doc, FactureValidee facture, PdfStyleFacture st) {
+    private void ecrire(Document doc, FactureValidee facture, PdfStyleFacture st, BigDecimal avance) {
         DemandeService demande = facture.getDemande();
         Societe societe = demande != null ? demande.getSociete() : null;
         LigneService ligne = facture.getLigneService();
@@ -82,7 +83,9 @@ final class PdfFacturePaiement {
         BigDecimal ttc = totalHt.add(tva);
         BigDecimal netAPayer = ttc.max(BigDecimal.ZERO);
 
-        doc.add(blocBas(demande, st, totalHt, tauxTva, tva, ttc, BigDecimal.ZERO, netAPayer));
+        BigDecimal avanceEffective = avance.max(BigDecimal.ZERO).min(ttc);
+        BigDecimal netAPayerRestant = ttc.subtract(avanceEffective).max(BigDecimal.ZERO);
+        doc.add(blocBas(demande, st, totalHt, tauxTva, tva, ttc, avanceEffective, netAPayerRestant));
         doc.add(PdfFactureComposants.conditionsReglement(st));
         doc.add(signatures(st));
     }

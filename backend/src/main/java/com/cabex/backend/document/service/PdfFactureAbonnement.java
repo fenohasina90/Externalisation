@@ -39,10 +39,11 @@ final class PdfFactureAbonnement {
         this.configurationService = configurationService;
     }
 
-    byte[] generer(FactureValidee facture) {
+    byte[] generer(FactureValidee facture, BigDecimal avanceRecue) {
         byte[] pdf = null;
+        BigDecimal avance = avanceRecue != null ? avanceRecue : BigDecimal.ZERO;
         for (float echelle : PdfStyleFacture.ECHELLES) {
-            pdf = construire(facture, new PdfStyleFacture(echelle));
+            pdf = construire(facture, new PdfStyleFacture(echelle), avance);
             if (PdfDocument.nombrePages(pdf) <= 1) {
                 break;
             }
@@ -50,13 +51,13 @@ final class PdfFactureAbonnement {
         return pdf;
     }
 
-    private byte[] construire(FactureValidee facture, PdfStyleFacture st) {
+    private byte[] construire(FactureValidee facture, PdfStyleFacture st, BigDecimal avance) {
         List<FactureValideeLigne> lignes = lignesTriees(facture);
         String titreMeta = "Facture d'abonnement mensuel "
                 + PdfFormats.valeur(facture.getReferenceFactureValidee());
         return PdfDocument.generer(PdfDocument.MiseEnPage.FACTURE,
                 "Facture d'abonnement mensuel",
-                titreMeta, doc -> ecrire(doc, facture, lignes, st),
+                titreMeta, doc -> ecrire(doc, facture, lignes, st, avance),
                 "Erreur de génération de la facture d'abonnement");
     }
 
@@ -71,7 +72,8 @@ final class PdfFactureAbonnement {
     }
 
     private void ecrire(Document doc, FactureValidee facture,
-                        List<FactureValideeLigne> lignes, PdfStyleFacture st) {
+                        List<FactureValideeLigne> lignes, PdfStyleFacture st,
+                        BigDecimal avance) {
         DemandeService demande = facture.getDemande();
         Societe societe = demande != null ? demande.getSociete() : null;
 
@@ -98,7 +100,9 @@ final class PdfFactureAbonnement {
         BigDecimal ttc = totalHt.add(tva);
         BigDecimal netAPayer = ttc.max(BigDecimal.ZERO);
 
-        doc.add(blocBas(demande, st, totalHt, tauxTva, tva, ttc, BigDecimal.ZERO, netAPayer));
+        BigDecimal avanceEffective = avance.max(BigDecimal.ZERO).min(ttc);
+        BigDecimal netAPayerRestant = ttc.subtract(avanceEffective).max(BigDecimal.ZERO);
+        doc.add(blocBas(demande, st, totalHt, tauxTva, tva, ttc, avanceEffective, netAPayerRestant));
         doc.add(PdfFactureComposants.conditionsReglement(st));
         doc.add(signatures(st));
     }
