@@ -88,15 +88,30 @@ final class PdfFactureProforma {
     // ------------------------------------------------------------------
 
     private static void entete(Document doc, Facture facture, PdfStyleFacture st, String contexte) {
-        String sousTitre = "VALIDÉE".equals(contexte) ? "VALIDÉE" : "PROFORMA";
-        PdfComposants.enteteDocument(doc, st, "FACTURE", sousTitre);
+        boolean estValidee = "VALIDÉE".equals(contexte);
+        PdfComposants.enteteDocument(doc, st, "FACTURE", estValidee ? "VALIDÉE" : "PROFORMA");
 
         DemandeService demande = facture.getDemande();
-        PdfPTable meta = new PdfPTable(3);
+        String referenceValidee = null;
+        if (estValidee) {
+            try {
+                referenceValidee = facture.getFactureValidee() != null
+                        ? facture.getFactureValidee().getReferenceFactureValidee() : null;
+            } catch (RuntimeException e) {
+                referenceValidee = null;
+            }
+        }
+        PdfPTable meta = new PdfPTable(4);
         meta.setWidthPercentage(100);
         meta.setSpacingAfter(st.ecart * 0.8f);
-        meta.addCell(PdfComposants.faMeta(st, "N° FACTURE",
+        meta.addCell(PdfComposants.faMeta(st, "N° PROFORMA",
                 PdfFormats.valeur(facture.getReferenceFacture()), PdfTheme.ROUGE));
+        if (estValidee) {
+            meta.addCell(PdfComposants.faMeta(st, "N° FACTURE VALIDÉE",
+                    PdfFormats.valeur(referenceValidee), PdfTheme.PRIMAIRE));
+        } else {
+            meta.addCell(PdfComposants.faMeta(st, "ÉTAT", "PROFORMA", PdfTheme.ROUGE));
+        }
         meta.addCell(PdfComposants.faMeta(st, "DATE DEMANDE",
                 PdfFormats.valeurDate(demande != null ? demande.getDateDemande() : null),
                 PdfTheme.PRIMAIRE));

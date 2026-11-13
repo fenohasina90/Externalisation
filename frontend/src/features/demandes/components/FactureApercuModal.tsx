@@ -124,33 +124,20 @@ export function FactureApercuModal({
   const totalRappels = rappels.reduce((s, l) => s + l.montant, 0)
 
   // Lignes persistées de la proforma : affichage identique au PDF.
-  const tarifValideParLigne = new Map(
-    estProforma
-      ? (apercu.facture.lignes ?? []).map((l) => [l.ligneServiceId, l.tarif])
-      : [],
-  )
-  const lignesProforma = (estProforma ? apercu.facture.lignesProforma : undefined) ?? []
-  const estValide = estProforma && apercu.facture.statut === 'VALIDEE'
-  // Après validation : affichage du tarif validé (comme le PDF).
-  // La proforma reste figée sur ses montants avant validation.
-  const appliquerTarifValide = <T extends { pu: number; montantHtva: number; netCommercial: number; ligneServiceId: number | null }>(lignes: T[]) =>
-    !estValide
-      ? lignes
-      : lignes.map((l) => {
-          const tarifValide = l.ligneServiceId != null ? tarifValideParLigne.get(l.ligneServiceId) : undefined
-          const puValide = tarifValide ?? l.pu
-          return { ...l, pu: puValide, montantHtva: puValide, netCommercial: puValide }
-        })
-  const lignesAffichage = appliquerTarifValide(lignesProforma)
+  // La proforma est figée à la génération : consultation affiche toujours
+  // les montants de création (avant validation ou après — c'est le document
+  // PROFORMA). La facture validée (kind === 'validee') affiche le tarif
+  // validé (ligne_service.tarif).
+  const lignesAffichage = (estProforma ? apercu.facture.lignesProforma : undefined) ?? []
   const aboLignes = lignesAffichage.filter((l) => l.typePrestation === 'ABONNEMENT_MENSUEL')
   const prestaLignes = lignesAffichage.filter((l) =>
     l.categorie === 'EXTERNALISATION' && l.typePrestation !== 'ABONNEMENT_MENSUEL')
   const deboursLignes = lignesAffichage.filter((l) => l.categorie === 'DEBOURS')
   const totalHt = lignesAffichage.reduce((acc, l) => acc + l.netCommercial, 0)
-  const sousTotalDe = (lignes: typeof lignesProforma) =>
+  const sousTotalDe = (lignes: typeof lignesAffichage) =>
     lignes.reduce((acc, l) => acc + l.netCommercial, 0)
 
-  const rendLigneProforma = (l: (typeof lignesProforma)[number]) => (
+  const rendLigneProforma = (l: (typeof lignesAffichage)[number]) => (
     <tr key={`pl-${l.ordre ?? 0}-${l.designation}`}>
       <td>{l.designation}</td>
       <td className="cell-number">{formatMontantMGA(l.pu)}</td>
