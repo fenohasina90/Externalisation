@@ -32,9 +32,12 @@ public class PdfGenerator {
 
     private final PdfFacturePaiement generateurFacturePaiement;
 
+    private final PdfFactureAbonnement generateurFactureAbonnement;
+
     public PdfGenerator(ConfigurationService configurationService) {
         this.generateurFacture = new PdfFactureProforma(configurationService);
         this.generateurFacturePaiement = new PdfFacturePaiement(configurationService);
+        this.generateurFactureAbonnement = new PdfFactureAbonnement(configurationService);
     }
 
     /**
@@ -88,7 +91,7 @@ public class PdfGenerator {
      * facture proforma et demande.
      */
     public byte[] factureAbonnement(FactureValidee facture) {
-        return PdfFactureAbonnement.generer(facture);
+        return generateurFactureAbonnement.generer(facture);
     }
 
     /**
@@ -107,7 +110,7 @@ public class PdfGenerator {
         }
         if (facture.getFactureGenerale() != null) {
             if (facture.getMois() != null) {
-                return PdfFactureAbonnement.generer(facture);
+                return generateurFactureAbonnement.generer(facture);
             }
             return PdfFactureDetail.generer(facture);
         }
