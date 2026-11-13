@@ -43,6 +43,8 @@ public record FactureValideeResponse(
         /** Mois facturé (format AAAA-MM), uniquement pour les factures du mois d'abonnement. */
         String mois,
         /** UNIQUE ou PAR_SERVICE (uniquement pour les factures générales) ; null sinon. */
-        String modeFacturation
+        String modeFacturation,
+        /** Lignes de la FV générale (proforma réutilse) affichées avec tarif ligne. */
+        List<FactureProformaLigneResponse> lignesProforma
 ) {
 }

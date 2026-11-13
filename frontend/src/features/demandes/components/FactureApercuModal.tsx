@@ -37,9 +37,11 @@ export function FactureApercuModal({
 
   const estProforma = apercu.kind === 'proforma'
   /** Facture générale validée en mode « unique » : aucun paiement ne lui est lié. */
+  /** Facture générale validée en mode « unique » : aucun paiement ne lui est lié. */
   const estGeneraleUnique = !estProforma
     && apercu.facture.type === 'GENERALE'
     && apercu.facture.modeFacturation === 'UNIQUE'
+
 
   const referenceTitre = estProforma ? apercu.facture.referenceFacture : apercu.facture.referenceFactureValidee
   const telechargerPdf = async () => {
@@ -67,68 +69,16 @@ export function FactureApercuModal({
         ? { label: 'Abonnement (validée)', cls: 'pill ok' }
         : { label: 'Externalisation (validée)', cls: 'pill ok' }
 
-  const libelleLigneFallback = !estProforma ? apercu.facture.libelleLigne : null
-  type LigneAffichee = {
-    id: string | number
-    designation: string
-    referenceDemande: string | null
-    montant: number
-    secondary?: string | null
-    nomService?: string | null
-    /** PRINCIPALE = payable sur cette facture ; RAPPEL = rappel uniquement. */
-    type: 'PRINCIPALE' | 'RAPPEL'
-  }
-  const principales: LigneAffichee[] = estProforma
-    ? apercu.facture.lignes.map((l) => ({
-        id: `${apercu.facture.id}-${l.ligneServiceId}`,
-        designation: l.nomService ?? l.libelleLigne ?? '—',
-        referenceDemande: apercu.facture.referenceDemande,
-        montant: l.tarif ?? l.tarifProforma ?? 0,
-        secondary: l.libelleLigne && l.libelleLigne !== l.nomService ? l.libelleLigne : null,
-        nomService: l.nomService,
-        type: 'PRINCIPALE' as const,
-      }))
-    : apercu.facture.lignes.length > 0
-      ? apercu.facture.lignes
-          .filter((l) => l.type === 'PRINCIPALE')
-          .map((l) => ({
-            id: `${apercu.facture.id}-${l.id ?? l.ligneServiceId ?? l.designation}`,
-            designation: l.designation,
-            referenceDemande: l.referenceDemande,
-            montant: l.montant,
-            nomService: l.nomService,
-            type: 'PRINCIPALE' as const,
-          }))
-      : [{
-          id: `${apercu.facture.id}-unique`,
-          designation: apercu.facture.nomService ?? libelleLigneFallback ?? 'Facture',
-          referenceDemande: apercu.facture.referenceDemande,
-          montant: montantTotal,
-          secondary: libelleLigneFallback && apercu.facture.nomService ? libelleLigneFallback : null,
-          nomService: apercu.facture.nomService,
-          type: 'PRINCIPALE' as const,
-        }]
-  const rappels: LigneAffichee[] = !estProforma && apercu.facture.lignes.length > 0
-    ? apercu.facture.lignes
-        .filter((l) => l.type === 'RAPPEL')
-        .map((l) => ({
-          id: `${apercu.facture.id}-rappel-${l.id ?? l.ligneServiceId ?? l.designation}`,
-          designation: l.designation,
-          referenceDemande: l.referenceDemande,
-          montant: l.montant,
-          nomService: l.nomService,
-          type: 'RAPPEL' as const,
-        }))
-    : []
-  const totalPrincipales = principales.reduce((s, l) => s + l.montant, 0)
-  const totalRappels = rappels.reduce((s, l) => s + l.montant, 0)
+  // Pour les factures liées au paiement (kindest enfant ou mensuelle), seule la
+  // section « Suivi des paiements » est affichée — pas les lignes de désignation
+  // ni les rappels.
 
   // Lignes persistées de la proforma : affichage identique au PDF.
   // La proforma est figée à la génération : consultation affiche toujours
   // les montants de création (avant validation ou après — c'est le document
   // PROFORMA). La facture validée (kind === 'validee') affiche le tarif
   // validé (ligne_service.tarif).
-  const lignesAffichage = (estProforma ? apercu.facture.lignesProforma : undefined) ?? []
+  const lignesAffichage = (estProforma || estGeneraleUnique ? apercu.facture.lignesProforma : undefined) ?? []
   const aboLignes = lignesAffichage.filter((l) => l.typePrestation === 'ABONNEMENT_MENSUEL')
   const prestaLignes = lignesAffichage.filter((l) =>
     l.categorie === 'EXTERNALISATION' && l.typePrestation !== 'ABONNEMENT_MENSUEL')
@@ -173,7 +123,7 @@ export function FactureApercuModal({
     >
       <div
         className="modal-card"
-        style={{ maxWidth: 880 }}
+        style={{ maxWidth: 980 }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -272,7 +222,7 @@ export function FactureApercuModal({
           </section>
 
           {/* Section A — objet de la présente facture */}
-          {estProforma ? (
+          {(estProforma || estGeneraleUnique) ? (
             <section>
               <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
                 Cette facture — lignes persistées
@@ -326,94 +276,8 @@ export function FactureApercuModal({
                 </table>
               </div>
             </section>
-          ) : (
-            <section>
-              <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
-                Cette facture — objet du règlement
-              </h4>
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Désignation</th>
-                      <th>Demande</th>
-                      <th>Montant</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {principales.map((l) => (
-                      <tr key={l.id}>
-                        <td>
-                          <div className="fw-600">
-                            {l.nomService && l.nomService !== l.designation ? l.nomService : l.designation}
-                          </div>
-                          {l.nomService && l.nomService !== l.designation && (
-                            <span className="text-secondary" style={{ fontSize: 12 }}>{l.designation}</span>
-                          )}
-                          {!l.nomService && l.secondary && (
-                            <span className="text-secondary" style={{ fontSize: 12 }}>{l.secondary}</span>
-                          )}
-                        </td>
-                        <td className="text-secondary">{l.referenceDemande ?? '—'}</td>
-                        <td>{formatMontantMGA(l.montant)}</td>
-                      </tr>
-                    ))}
-                    {principales.length === 0 && (
-                      <tr><td colSpan={3} className="text-secondary">Aucune ligne principale.</td></tr>
-                    )}
-                    <tr>
-                      <th colSpan={2} style={{ textAlign: 'right' }}>Total à payer (cette facture)</th>
-                      <th>{formatMontantMGA(totalPrincipales)}</th>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
+          ) : null}
 
-          {/* Section B — rappel des impayés, NON inclus */}
-          {rappels.length > 0 && (
-            <section>
-              <h4 style={{ margin: '0 0 4px', fontSize: 13, color: 'var(--attention, #b45309)', textTransform: 'uppercase' }}>
-                À titre de rappel de règlement
-              </h4>
-              <p className="section-note" style={{ margin: '0 0 6px', fontSize: 13 }}>
-                Ces factures validées restent <b>impayées</b>. Elles ne sont <b>pas comptabilisées</b> dans
-                le montant de la présente facture et doivent être réglées chacune sur sa propre facture validée.
-              </p>
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Facture concernée</th>
-                      <th>Demande</th>
-                      <th>Reste</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rappels.map((l) => (
-                      <tr key={l.id}>
-                        <td>
-                          <div className="fw-600">
-                            {l.nomService && l.nomService !== l.designation ? l.nomService : l.designation}
-                          </div>
-                          {l.nomService && l.nomService !== l.designation && (
-                            <span className="text-secondary" style={{ fontSize: 12 }}>{l.designation}</span>
-                          )}
-                        </td>
-                        <td className="text-secondary">{l.referenceDemande ?? '—'}</td>
-                        <td>{formatMontantMGA(l.montant)}</td>
-                      </tr>
-                    ))}
-                    <tr>
-                      <th colSpan={2} style={{ textAlign: 'right' }}>Total des rappels impayés</th>
-                      <th>{formatMontantMGA(totalRappels)}</th>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
 
           {/* Suivi des paiements (validée uniquement) — pas en mode unique */}
           {!estProforma && estGeneraleUnique && (

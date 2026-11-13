@@ -833,6 +833,8 @@ public class FactureService {
             referenceProforma = null;
         }
         List<FactureValideeLigneResponse> lignesResp = construireLignesFacture(fv, ligne);
+        List<com.cabex.backend.facture.dto.FactureProformaLigneResponse> lignesProformaResp =
+                lignesProformaPourValidee(fv);
         String nomService = ligne != null && ligne.getService() != null
                 ? ligne.getService().getNomService() : null;
         return new FactureValideeResponse(
@@ -858,7 +860,45 @@ public class FactureService {
                         ? java.time.format.DateTimeFormatter.ofPattern("yyyy-MM").format(fv.getMois())
                         : null,
                 fv.getFactureProforma() != null
-                        ? fv.getFactureProforma().getModeFacturation() : null);
+                        ? fv.getFactureProforma().getModeFacturation() : null,
+                lignesProformaResp);
+    }
+
+    /**
+     * Lignes de la facture validée « générale » — la proforma associée,
+     * avec le tarif validé (ligne_service.tarif). Les factures validées
+     * orchestrées depuis une proforma utilisent ce même jeu de lignes.
+     */
+    private List<com.cabex.backend.facture.dto.FactureProformaLigneResponse>
+            lignesProformaPourValidee(com.cabex.backend.facture.entity.FactureValidee fv) {
+        com.cabex.backend.facture.entity.Facture proforma = fv.getFactureProforma();
+        if (proforma == null) {
+            return java.util.List.of();
+        }
+        List<com.cabex.backend.facture.entity.FactureProformaLigne> persisted = proforma.getLignesProforma();
+        if (persisted == null || persisted.isEmpty()) {
+            return java.util.List.of();
+        }
+        return persisted.stream()
+                .sorted(java.util.Comparator.comparing(
+                        com.cabex.backend.facture.entity.FactureProformaLigne::getOrdre,
+                        java.util.Comparator.nullsLast(Integer::compareTo)))
+                .map(l -> {
+                    LigneService ls = l.getLigneService();
+                    BigDecimal pu = (ls != null && ls.getTarif() != null) ? ls.getTarif() : l.getPu();
+                    return new com.cabex.backend.facture.dto.FactureProformaLigneResponse(
+                            l.getOrdre(),
+                            ls != null ? ls.getId() : null,
+                            l.getDesignation(),
+                            l.getCategorie(),
+                            l.getTypePrestation(),
+                            pu != null ? pu : BigDecimal.ZERO,
+                            l.getQuantite() != null ? l.getQuantite() : BigDecimal.ONE,
+                            pu != null ? pu : BigDecimal.ZERO,
+                            l.getRemise() != null ? l.getRemise() : BigDecimal.ZERO,
+                            pu != null ? pu : BigDecimal.ZERO);
+                })
+                .toList();
     }
 
     @Transactional

@@ -221,6 +221,8 @@ export interface FactureValidee {
   mois: string | null
   /** UNIQUE ou PAR_SERVICE (uniquement sur la facture générale validée), null sinon. */
   modeFacturation?: string | null
+  /** Lignes de la facture « générale validée » (pu validée) — sinon vide. */
+  lignesProforma?: FactureProformaLigne[]
 }
 
 export interface Facture {
