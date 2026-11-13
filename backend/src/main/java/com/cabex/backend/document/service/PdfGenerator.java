@@ -30,8 +30,11 @@ public class PdfGenerator {
 
     private final PdfFactureProforma generateurFacture;
 
+    private final PdfFacturePaiement generateurFacturePaiement;
+
     public PdfGenerator(ConfigurationService configurationService) {
         this.generateurFacture = new PdfFactureProforma(configurationService);
+        this.generateurFacturePaiement = new PdfFacturePaiement(configurationService);
     }
 
     /**
@@ -95,6 +98,13 @@ public class PdfGenerator {
      * (réutilise le rendu de la proforma).
      */
     public byte[] factureValideeDocument(com.cabex.backend.facture.entity.FactureValidee facture) {
+        // Factures enfants liées au paiement (prestation, débours, création, transaction)
+        // sauf factures du mois d'abonnement.
+        if (facture.getLigneService() != null
+                && !com.cabex.backend.demande.service.LigneServiceService.ABONNEMENT_MENSUEL
+                        .equalsIgnoreCase(facture.getLigneService().getTypePrestation())) {
+            return generateurFacturePaiement.generer(facture);
+        }
         if (facture.getFactureGenerale() != null) {
             if (facture.getMois() != null) {
                 return PdfFactureAbonnement.generer(facture);
