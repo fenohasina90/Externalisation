@@ -68,8 +68,10 @@ function construireGroupes(
   const generales = factures.filter((f) => f.type === 'GENERALE')
   const enfants = factures.filter((f) => f.type !== 'GENERALE')
 
-  // Filtre sur les dates de facture uniquement : une facture générale reste visible
-  // dès qu'au moins une de ses factures de paiement enfants correspond.
+  // Filtre sur les dates de la facture GÉNÉRALE uniquement : un groupe entier
+  // (générale + factures de paiement) est visible si et seulement si la date
+  // de la facture générale est dans la plage. Les factures de paiement, elles,
+  // ne jouent pas sur le filtre (mais gardent leur sous-contenu de règlements).
   const inRange = (d: string | null | undefined): boolean => {
     if (!dateDebut && !dateFin) return true
     if (!d) return false
@@ -77,7 +79,11 @@ function construireGroupes(
     if (dateFin && d > dateFin) return false
     return true
   }
-  const matchFacture = (f: FactureFacturation): boolean => inRange(f.dateFactureValidee)
+  // Factures enfants d'une générale : affichées quand la générale l'est (jamais elles-mêmes).
+  // Une facture de paiement sans générale parente (orphelin) se filtre sur sa propre date.
+  const matchGroupe = (g: FactureFacturation | null): boolean =>
+    inRange(g ? g.dateFactureValidee : null)
+  const matchOrphelin = (f: FactureFacturation): boolean => inRange(f.dateFactureValidee)
 
   const cmp = (a: string | null | undefined, b: string | null | undefined): number => {
     const sa = a ?? ''
@@ -102,15 +108,12 @@ function construireGroupes(
 
   const groupes: Groupe[] = []
   for (const g of [...generales].sort((a, b) => cmp(a.dateFactureValidee, b.dateFactureValidee))) {
-    const bruts = enfantsParGenerale.get(g.id) ?? []
-    const enfantsVis = (dateDebut || dateFin ? bruts.filter(matchFacture) : bruts)
+    if (!matchGroupe(g)) continue
+    const enfants = (enfantsParGenerale.get(g.id) ?? [])
       .sort((a, b) => cmp(a.dateFactureValidee, b.dateFactureValidee))
-    const match = matchFacture(g) || enfantsVis.length > 0
-    if (match) {
-      groupes.push({ key: `g-${g.id}`, general: g, enfants: enfantsVis })
-    }
+    groupes.push({ key: `g-${g.id}`, general: g, enfants })
   }
-  for (const e of orphelins.filter(matchFacture)) {
+  for (const e of orphelins.filter(matchOrphelin)) {
     groupes.push({ key: `o-${e.id}`, general: null, enfants: [e] })
   }
   groupes.sort((a, b) => {
@@ -192,17 +195,17 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
   const ligneTriFiltres = (
     <form className="filters-inline" onSubmit={(e) => e.preventDefault()} aria-label="Filtrer la facturation">
       <div className="field filter-field">
-        <label htmlFor="fact-date-debut">Date de facture (début)</label>
+        <label htmlFor="fact-date-debut">Date facture Générale (début)</label>
         <input id="fact-date-debut" type="date" value={dateDebut}
                onChange={(e) => onDateDebut(e.target.value)} />
       </div>
       <div className="field filter-field">
-        <label htmlFor="fact-date-fin">Date de facture (fin)</label>
+        <label htmlFor="fact-date-fin">Date facture Générale (fin)</label>
         <input id="fact-date-fin" type="date" value={dateFin}
                onChange={(e) => onDateFin(e.target.value)} />
       </div>
       <div className="field filter-field">
-        <label htmlFor="fact-tri">Ordre de la date de facture</label>
+        <label htmlFor="fact-tri">Ordre de la date de facture Générale</label>
         <select id="fact-tri" value={tri} onChange={(e) => onTri(e.target.value as Tri)}>
           <option value="desc">Décroissante (récente en haut)</option>
           <option value="asc">Croissante (ancienne en haut)</option>
