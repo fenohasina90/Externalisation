@@ -138,6 +138,8 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
   const [ouverts, setOuverts] = useState<Set<number>>(new Set())
   const [groupesRepliees, setGroupesRepliees] = useState<Set<number>>(new Set())
   const [page, setPage] = useState(0)
+  const [pleinEcran, setPleinEcran] = useState(false)
+  const [showFilters, setShowFilters] = useState(true)
 
   const factures = useMemo(() => data ?? [], [data])
   const groupes = useMemo(
@@ -237,19 +239,38 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                 onClick={() => { setDateDebut(''); setDateFin(''); setTri('desc'); setOuverts(new Set()); setGroupesRepliees(new Set()) }}>
           Réinitialiser
         </button>
-        <button type="button" className="btn-ghost"
-                onClick={() => (toutEstDeplie ? replierTout() : deplierTout())}>
-          {toutEstDeplie ? 'Tout replier' : 'Déplier tout'}
-        </button>
       </div>
     </form>
   )
 
   return (
-    <section className="card">
-      <div style={{ padding: '16px 16px 0' }}>
-        {ligneTriFiltres}
+    <section className={`card${pleinEcran ? ' facturation-plein-ecran' : ''}`}>
+      <div className="facture-toolbar">
+        <div className="facturation-toolbar__info">
+          <span className="facture-toolbar__titre">Facturation du client</span>
+        </div>
+        <div className="facture-toolbar__actions">
+          <button type="button" className="btn-ghost"
+                  onClick={() => setShowFilters((prev) => !prev)}
+                  aria-pressed={showFilters}>
+            {showFilters ? 'Masquer les filtres' : 'Afficher les filtres'}
+          </button>
+          <button type="button" className="btn-ghost"
+                  onClick={() => (toutEstDeplie ? replierTout() : deplierTout())}>
+            {toutEstDeplie ? 'Tout replier' : 'Déplier tout'}
+          </button>
+          <button type="button" className="btn-ghost"
+                  onClick={() => setPleinEcran((prev) => !prev)}
+                  aria-pressed={pleinEcran}>
+            {pleinEcran ? '✕ Fermer le plein écran' : '⛶ Plein écran'}
+          </button>
+        </div>
       </div>
+      {showFilters && (
+        <div style={{ padding: '0 16px' }}>
+          {ligneTriFiltres}
+        </div>
+      )}
       <div className="table-scroll-container no-global-scroll">
         <div className="table-wrap">
           <table className="table">

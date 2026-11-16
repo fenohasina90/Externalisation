@@ -4201,3 +4201,66 @@ body.page-responsables {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Onglet Facturation (fiche client) : barre d'outils et mode plein écran */
+.facture-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.facture-toolbar__info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.facture-toolbar__titre {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.facture-toolbar__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.facturation-plein-ecran {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  margin: 0;
+  border-radius: 0;
+  max-width: none;
+  max-height: none;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+}
+
+.facturation-plein-ecran .table-scroll-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: none;
+}
+
+.facturation-plein-ecran .table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  max-height: none;
+}
