@@ -136,7 +136,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
   const [dateFin, setDateFin] = useState('')
   const [tri, setTri] = useState<Tri>('desc')
   const [ouverts, setOuverts] = useState<Set<number>>(new Set())
-  const [toutDeplier, setToutDeplier] = useState(false)
+  const [groupesRepliees, setGroupesRepliees] = useState<Set<number>>(new Set())
   const [page, setPage] = useState(0)
 
   const factures = useMemo(() => data ?? [], [data])
@@ -145,7 +145,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
     [factures, dateDebut, dateFin, tri],
   )
 
-  const estOuverte = (id: number): boolean => toutDeplier || ouverts.has(id)
+  const estOuverte = (id: number): boolean => ouverts.has(id)
   const toggle = (id: number): void =>
     setOuverts((prev) => {
       const next = new Set(prev)
@@ -153,6 +153,27 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
       else next.add(id)
       return next
     })
+  const toggleGroupe = (id: number): void =>
+    setGroupesRepliees((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  const toutesFvAvecPaiements = useMemo(
+    () => factures.filter((f) => f.paiements.length > 0),
+    [factures],
+  )
+  const toutEstDeplie = groupesRepliees.size === 0
+    && toutesFvAvecPaiements.every((f) => ouverts.has(f.id))
+  const deplierTout = (): void => {
+    setGroupesRepliees(new Set())
+    setOuverts(new Set(toutesFvAvecPaiements.map((f) => f.id)))
+  }
+  const replierTout = (): void => {
+    setGroupesRepliees(new Set(factures.filter((f) => f.type === 'GENERALE').map((f) => f.id)))
+    setOuverts(new Set())
+  }
 
   const totalPages = Math.max(1, Math.ceil(groupes.length / PAGE_SIZE_GROUPES))
   const groupesPage = groupes.slice(page * PAGE_SIZE_GROUPES, page * PAGE_SIZE_GROUPES + PAGE_SIZE_GROUPES)
@@ -212,13 +233,13 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
         </select>
       </div>
       <div className="filter-actions filter-actions--bottom">
-        <button type="button" className="btn-ghost" disabled={!aFiltres && !toutDeplier}
-                onClick={() => { setDateDebut(''); setDateFin(''); setTri('desc'); setOuverts(new Set()); setToutDeplier(false) }}>
+        <button type="button" className="btn-ghost" disabled={!aFiltres && groupesRepliees.size === 0 && toutesFvAvecPaiements.every((f) => !ouverts.has(f.id))}
+                onClick={() => { setDateDebut(''); setDateFin(''); setTri('desc'); setOuverts(new Set()); setGroupesRepliees(new Set()) }}>
           Réinitialiser
         </button>
         <button type="button" className="btn-ghost"
-                onClick={() => setToutDeplier((prev) => !prev)}>
-          {toutDeplier ? 'Tout replier' : 'Déplier tout'}
+                onClick={() => (toutEstDeplie ? replierTout() : deplierTout())}>
+          {toutEstDeplie ? 'Tout replier' : 'Déplier tout'}
         </button>
       </div>
     </form>
@@ -265,20 +286,24 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                   : 0
                 const resteGeneral = general ? Math.max(0, montantGeneral - encaisseGeneral) : 0
                 const statutGeneral = general ? statutFacture(montantGeneral, encaisseGeneral) : null
+                const repliee = general ? groupesRepliees.has(general.id) : false
+                const sousContenu = general
+                  ? enfantsAffiches.length > 0 || paiementGeneral.length > 0
+                  : false
 
                 return (
                   <Fragment key={groupe.key}>
                     {general && (
                       <tr className="facture-rang-general">
                         <td className="text-secondary">
-                          {general.paiements.length > 0 && !estStandIn && (
+                          {general && sousContenu && (
                             <button type="button" className="expand-toggle"
-                                    onClick={() => toggle(general.id)}
-                                    aria-expanded={estOuverte(general.id)}
-                                    aria-label={estOuverte(general.id)
-                                      ? `Replier les paiements de ${general.referenceFactureValidee ?? 'la facture'}`
-                                      : `Déplier les paiements de ${general.referenceFactureValidee ?? 'la facture'}`}>
-                              {estOuverte(general.id) ? '▾' : '▸'}
+                                    onClick={() => toggleGroupe(general.id)}
+                                    aria-expanded={!repliee}
+                                    aria-label={repliee
+                                      ? `Déplier ${general.referenceFactureValidee ?? 'la facture'} et son contenu`
+                                      : `Replier ${general.referenceFactureValidee ?? 'la facture'} et son contenu`}>
+                              {repliee ? '▸' : '▾'}
                             </button>
                           )}
                           {formatDate(general.dateFactureValidee)}
@@ -286,12 +311,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                         <td className="fw-700">{general.referenceFactureValidee ?? '—'}</td>
                         <td><span className={TYPE_PILL[general.type] ?? 'pill info'}>● {TYPE_LABEL[general.type] ?? general.type}</span></td>
                         <td className="text-secondary">{nomClient}</td>
-                        <td>
-                          {general.objet ?? 'Facture générale'}
-                          {general.referenceDemande && (
-                            <span className="facture-sousligne">Demande {general.referenceDemande}</span>
-                          )}
-                        </td>
+                        <td>{`Facture-${general.referenceDemande ?? '—'}`}</td>
                         <td className="cell-number fw-700">{formatMontantMGA(montantGeneral)}</td>
                         <td className="cell-number fw-700">{formatMontantMGA(encaisseGeneral)}</td>
                         <td className="cell-number" style={resteGeneral > 0 ? { color: 'var(--danger)' } : undefined}>
@@ -300,11 +320,11 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                         <td>{statutGeneral && <span className={statutGeneral.pill}>{statutGeneral.libelle}</span>}</td>
                       </tr>
                     )}
-                    {general && !estStandIn && estOuverte(general.id) &&
+                    {general && !estStandIn && !repliee &&
                       paiementGeneral.map((p) => (
                         <LigneReglement key={`${general.id}-p-${p.id}`} paiement={p} nomClient={nomClient} />
                       ))}
-                    {enfantsAffiches.map((enfant) => {
+                    {!repliee && enfantsAffiches.map((enfant) => {
                       const afficherRefGenerale = !estStandIn && enfant.referenceFactureGenerale
 
                       const payeEnfant = enfant.montantPaye ?? sommePaiements(enfant.paiements)
