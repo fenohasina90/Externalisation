@@ -39,6 +39,22 @@ export const clientsApi = {
     return data
   },
 
+  /** Export PDF de la facturation du client (les filtres appliqués côté onglet sont transmis). */
+  async downloadPdfFacturation(
+    id: number,
+    params: { dateDebut?: string | null; dateFin?: string | null; ordre?: 'asc' | 'desc' },
+  ): Promise<Blob> {
+    const query = new URLSearchParams()
+    if (params.dateDebut) query.set('dateDebut', params.dateDebut)
+    if (params.dateFin) query.set('dateFin', params.dateFin)
+    query.set('ordre', params.ordre ?? 'desc')
+    const { data } = await http.get<Blob>(`/clients/${id}/factures/document`, {
+      params: query,
+      responseType: 'blob',
+    })
+    return data
+  },
+
   async create(payload: CreateSocietePayload): Promise<Societe> {
     const { data } = await http.post<Societe>('/clients', payload)
     return data

@@ -1,9 +1,12 @@
 import { Fragment, useMemo, useState } from 'react'
 import { Alert, Spinner } from '@/components/ui'
+import { Can } from '@/components/shared/Can'
 import { useApi } from '@/hooks/useApi'
 import { formatDate, formatMontantMGA } from '@/utils/format'
+import { telechargerBlob } from '@/utils/telechargement'
 import { clientsApi } from '../services/clients.service'
 import type { FactureFacturation, PaiementFacturation } from '../types'
+import { codeSociete } from '../types'
 
 type Tri = 'desc' | 'asc'
 
@@ -138,6 +141,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
   const [ouverts, setOuverts] = useState<Set<number>>(new Set())
   const [groupesRepliees, setGroupesRepliees] = useState<Set<number>>(new Set())
   const [page, setPage] = useState(0)
+  const [erreurPdf, setErreurPdf] = useState<string | null>(null)
   const [pleinEcran, setPleinEcran] = useState(false)
   const [showFilters, setShowFilters] = useState(true)
 
@@ -213,6 +217,21 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
   const onDateFin = (v: string): void => { setDateFin(v); resetPage() }
   const onTri = (v: Tri): void => { setTri(v); resetPage() }
 
+  const telechargerPdf = async (): Promise<void> => {
+    if (societeId === null) return
+    setErreurPdf(null)
+    try {
+      const pdf = await clientsApi.downloadPdfFacturation(societeId, {
+        dateDebut: dateDebut || null,
+        dateFin: dateFin || null,
+        ordre: tri,
+      })
+      telechargerBlob(pdf, `facturation-${codeSociete(societeId)}.pdf`)
+    } catch {
+      setErreurPdf("Téléchargement du PDF de facturation impossible.")
+    }
+  }
+
   const aFiltres = Boolean(dateDebut || dateFin) || tri !== 'desc'
 
   const ligneTriFiltres = (
@@ -245,6 +264,11 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
 
   return (
     <section className={`card${pleinEcran ? ' facturation-plein-ecran' : ''}`}>
+      {erreurPdf && (
+        <div style={{ padding: '16px 16px 0' }}>
+          <Alert tone="danger">{erreurPdf}</Alert>
+        </div>
+      )}
       <div className="facture-toolbar">
         <div className="facturation-toolbar__info">
           <span className="facture-toolbar__titre">Facturation du client</span>
@@ -264,6 +288,14 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                   aria-pressed={pleinEcran}>
             {pleinEcran ? '✕ Fermer le plein écran' : '⛶ Plein écran'}
           </button>
+          <Can permission="FACTURE_VIEW">
+            <button type="button" className="btn-primary" onClick={() => void telechargerPdf()}>
+              <svg className="sv" viewBox="0 0 24 24">
+                <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
+              </svg>
+              Exporter en PDF
+            </button>
+          </Can>
         </div>
       </div>
       {showFilters && (

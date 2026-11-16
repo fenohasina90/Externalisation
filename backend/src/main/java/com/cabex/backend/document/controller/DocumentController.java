@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.format.annotation.DateTimeFormat;
+import java.time.LocalDate;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -149,6 +151,20 @@ public class DocumentController {
             description = "Références affichées : facture générale validée, facture proforma et demande")
     public ResponseEntity<byte[]> factureAbonnement(@PathVariable Integer id) {
         return pdfResponse(documentService.factureAbonnement(id), "facture-abonnement-" + id + ".pdf");
+    }
+
+    @GetMapping("/clients/{id}/factures/document")
+    @PreAuthorize("hasAuthority('FACTURE_VIEW')")
+    @Operation(summary = "Exporter la facturation d'un client (PDF)",
+            description = "Même contenu que l'onglet « Facturation » de la fiche client, exporté "
+                    + "pour les dates de la facture générale sélectionnées (début/fin et ordre).")
+    public ResponseEntity<byte[]> facturationClientPdf(
+            @PathVariable Integer id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
+            @RequestParam(required = false, defaultValue = "desc") String ordre) {
+        return pdfResponse(documentService.facturationClientPdf(id, dateDebut, dateFin, ordre),
+                "facturation-client-" + id + ".pdf");
     }
 
     @GetMapping("/factures-validees/{id}/document")
