@@ -170,6 +170,8 @@ class AuditJournalisationTest {
                 eq(5L), isNull(), contains("echeance=1"));
     }
 
+    @Mock private com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository;
+
     @Test
     void televersementEtSuppressionJournalises() {
         DemandeService demande = demande();
@@ -182,7 +184,7 @@ class AuditJournalisationTest {
         DocumentGestionService service = new DocumentGestionService(
                 pieceRepository, demandeRepository, paiementRepository, proposRepository,
                 utilisateurRepository, pdfGenerator, auditService, configurationService,
-                factureRepository, dossierRepository, dossierTransactionRepository);
+                factureRepository, factureValideeRepository, dossierRepository, dossierTransactionRepository);
         ReflectionTestUtils.setField(service, "storagePath", dossierTemporaire.toString());
         ReflectionTestUtils.setField(service, "maxSize", 10 * 1024 * 1024L);
         lenient().when(configurationService.lireEntierLong(anyString(), anyLong()))

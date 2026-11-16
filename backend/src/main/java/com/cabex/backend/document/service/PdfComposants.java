@@ -96,7 +96,7 @@ final class PdfComposants {
         c.setBorder(Rectangle.LEFT);
         c.setBorderWidthLeft(2.5f);
         c.setBorderColorLeft(PdfTheme.VERT_MARQUE);
-        c.setPadding(10);
+        c.setPadding(7);
         c.addElement(new Paragraph(PdfTheme.upper(titre), PdfTheme.F_CARTE_TITRE));
         for (String[] ligne : lignes) {
             Paragraph label = new Paragraph(PdfTheme.upper(ligne[0]), PdfTheme.F_LABEL);

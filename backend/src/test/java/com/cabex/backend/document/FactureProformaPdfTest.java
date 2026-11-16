@@ -43,7 +43,7 @@ class FactureProformaPdfTest {
                 .debutService(LocalDate.of(2026, 10, 18))
                 .finService(LocalDate.of(2026, 12, 16))
                 .build();
-        Facture facture = Facture.builder().id(1).referenceFacture("PRO-2026-00001")
+        Facture facture = Facture.builder().id(1).referenceFacture("PRO-18092026-00001")
                 .demande(demande).modeFacturation("PAR_SERVICE")
                 .montant(new BigDecimal("2000000")).statut("PROFORMA")
                 .lignes(Set.of(ligne)).build();

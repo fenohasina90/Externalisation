@@ -48,6 +48,12 @@ export type StatutLigneService =
   | 'EN_ATTENTE'
   | 'EN_COURS'
   | 'TERMINE'
+  | 'NON_PAYEE'
+  | 'PARTIEL'
+  | 'PAYEE'
+  | 'ANNULEE'
+
+export type CategorieLigne = 'EXTERNALISATION' | 'DEBOURS'
 
 export interface LigneService {
   id: number
@@ -56,27 +62,58 @@ export interface LigneService {
   serviceId: number | null
   nomService: string | null
   typeService: string | null
-  tarif: number
-  debutService: string
-  finService: string
+  /** Tarif EXTERNALISATION (null pour DEBOURS). */
+  tarif: number | null
+  debutService: string | null
+  finService: string | null
   statut: StatutLigneService | string | null
   factureId: number | null
   referenceFacture: string | null
   montantPaye: number
   resteAPayer: number
+  /** Catégorie par ligne : EXTERNALISATION ou DEBOURS. */
+  categorie: CategorieLigne | string
+  /** Désignation du débours (DEBOURS uniquement). */
+  designationDebours: string | null
+  /** Montant du débours validé (DEBOURS uniquement, null tant que non validé). */
+  montantDebours: number | null
+  /** Sous-type STANDARD : PRESTATION ou ABONNEMENT_MENSUEL (EXTERNALISATION uniquement). */
+  typePrestation: TypePrestation | string | null
+  /** Libellé affiché : "Prestation", "Abonnement mensuel" ou nom du service. */
+  libelleLigne: string | null
 }
 
+export type TypePrestation = 'PRESTATION' | 'ABONNEMENT_MENSUEL'
+
 export interface CreateLignePayload {
-  serviceId: number
-  tarif: number
-  debutService: string
-  finService: string
+  /** EXTERNALISATION : requis. DEBOURS : null. */
+  serviceId?: number | null
+  /** EXTERNALISATION : requis. DEBOURS : null. */
+  tarif?: number | null
+  debutService?: string | null
+  finService?: string | null
+  /** EXTERNALISATION (défaut) ou DEBOURS. */
+  categorie?: CategorieLigne | string | null
+  /** DEBOURS : requis. EXTERNALISATION : null. */
+  designationDebours?: string | null
+  /** DEBOURS : montant saisi à la création (optionnel ; s'il est renseigné, le débours est directement validé). */
+  montantDebours?: number | null
+  /** STANDARD : PRESTATION (défaut) ou ABONNEMENT_MENSUEL. */
+  typePrestation?: TypePrestation | string | null
+}
+
+export interface ValiderMontantDeboursPayload {
+  montantDebours: number
 }
 
 export interface UpdateLignePayload {
   tarif?: number | null
   debutService?: string | null
   finService?: string | null
+  /** DEBOURS en EN_ATTENTE uniquement. */
+  designationDebours?: string | null
+  /** STANDARD : PRESTATION ou ABONNEMENT_MENSUEL. */
+  typePrestation?: TypePrestation | string | null
 }
 
 export interface HistoriqueLigne {
@@ -95,28 +132,123 @@ export type ModeFacturation = 'UNIQUE' | 'PAR_SERVICE'
 
 export type StatutFacture = 'PROFORMA' | 'VALIDEE' | 'ANNULEE'
 
+export interface ValiderFactureLignePayload {
+  ligneServiceId: number
+  montant: number
+}
+
+/** Ligne persistée de la proforma (DÉSIGNATION / PU / QTÉ / HTVA / REMISE / NET COMMERCIAL). */
+export interface FactureProformaLigne {
+  ordre: number | null
+  ligneServiceId: number | null
+  designation: string
+  /** EXTERNALISATION ou DEBOURS. */
+  categorie: string | null
+  /** PRESTATION / ABONNEMENT_MENSUEL (null pour DEBOURS). */
+  typePrestation: string | null
+  pu: number
+  quantite: number
+  montantHtva: number
+  remise: number
+  netCommercial: number
+}
+
 export interface FactureLigne {
   ligneServiceId: number
   serviceId: number | null
   nomService: string | null
-  tarif: number
-  debutService: string
-  finService: string
+  libelleLigne: string | null
+  tarif: number | null
+  /** Tarif figé au moment de la génération de la proforma. */
+  tarifProforma?: number | null
+  debutService: string | null
+  finService?: string | null
   statutLigne: string | null
+  /** EXTERNALISATION (défaut) ou DEBOURS. */
+  categorie?: 'EXTERNALISATION' | 'DEBOURS' | string | null
+}
+
+/** Ligne d'une facture validée (désignation figée à la création). */
+export interface FactureValideeLigne {
+  id: number | null
+  ligneServiceId: number | null
+  /** Référence de la demande d'où provient la ligne. */
+  referenceDemande: string | null
+  designation: string
+  montant: number
+  /** PRINCIPALE : l'abonnement (seul élément payable). RAPPEL : mention informative. */
+  type: 'PRINCIPALE' | 'RAPPEL' | string
+  /** Nom du service catalogue (null pour un débours). */
+  nomService: string | null
+}
+
+/** Élément impayé pouvant être repris dans la facture du mois. */
+export interface InclusionDisponible {
+  ligneId: number
+  demandeId: number
+  referenceDemande: string
+  designation: string
+  /** PRESTATION ou DEBOURS. */
+  type: string
+  reste: number
+}
+
+/** Facture validée telle qu'utilisée pour les paiements. */
+export interface FactureValidee {
+  id: number
+  referenceFactureValidee: string
+  /** Référence proforma (null pour débours / factures du mois). */
+  referenceFactureProforma: string | null
+  /** Référence de la facture générale validée (factures du mois d'abonnement). */
+  referenceFactureGenerale: string | null
+  factureGeneraleId: number | null
+  demandeId: number
+  referenceDemande: string
+  ligneServiceId: number | null
+  libelleLigne: string | null
+  /** Nom du service catalogue (ligne EXTERNALISATION), null pour un débours. */
+  nomService: string | null
+  montant: number
+  montantPaye: number
+  resteAPayer: number
+  /** GENERALE (proforma validée) | ABONNEMENT_MENSUEL (facture du mois) | DEBOURS. */
+  type: 'GENERALE' | 'ABONNEMENT_MENSUEL' | 'DEBOURS' | string
+  valideParNom: string | null
+  valideLe: string | null
+  /** Lignes de la facture (facture combinée du mois) ; tableau vide sinon. */
+  lignes: FactureValideeLigne[]
+  /** Mois facturé (format AAAA-MM), uniquement pour les factures du mois d'abonnement. */
+  mois: string | null
+  /** UNIQUE ou PAR_SERVICE (uniquement sur la facture générale validée), null sinon. */
+  modeFacturation?: string | null
+  /** Lignes de la facture « générale validée » (pu validée) — sinon vide. */
+  lignesProforma?: FactureProformaLigne[]
 }
 
 export interface Facture {
   id: number
+  /** Référence PROFORMA : PRO-DDMMYYYY-XXXXX (toujours visible). */
   referenceFacture: string
+  /** Référence VALIDÉE : XXXXXEXT/TNR/YYYY (null tant que proforma). */
+  referenceFactureValidee: string | null
+  /** ID de la facture validée liée — envoyée à l'API pour chaque paiement. */
+  factureValideeId: number | null
   demandeId: number
   referenceDemande: string
   modeFacturation: ModeFacturation | string
+  /** Montant proforma. */
+  montantProforma: number
+  /** Montant validé (peut différer du proforma). */
+  montantValidee: number | null
+  /** Compat : montant proforma. */
   montant: number
   statut: StatutFacture | string
   valideParId: number | null
   valideParNom: string | null
   valideLe: string | null
   lignes: FactureLigne[]
+  /** Lignes persistées de la proforma (ordre d'affichage), contenu figé. */
+  lignesProforma: FactureProformaLigne[]
 }
 
 export interface CreateDemandePayload {

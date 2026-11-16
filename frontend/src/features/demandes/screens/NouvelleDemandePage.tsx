@@ -33,19 +33,29 @@ const LABEL_CREATION = "Création d'entreprise (sans société)"
 const OPTION_SERVICE_AUTRE = 'autre'
 
 interface LigneSaisie {
+  categorie: 'EXTERNALISATION' | 'DEBOURS'
   serviceId: number | ''
   domaineId: string
   tarif: string
   debutService: string
   finService: string
+  designationDebours: string
+  /** Montant du débours saisi à la création (optionnel). */
+  montantDebours: string
+  /** STANDARD : PRESTATION ou ABONNEMENT_MENSUEL. */
+  typePrestation: string
 }
 
 const LIGNE_VIDE: LigneSaisie = {
+  categorie: 'EXTERNALISATION',
   serviceId: '',
   domaineId: '',
   tarif: '',
   debutService: '',
   finService: '',
+  designationDebours: '',
+  montantDebours: '',
+  typePrestation: 'PRESTATION',
 }
 
 /**
@@ -105,6 +115,8 @@ export function NouvelleDemandePage() {
   )
 
   const total = lignes.reduce((somme, l) => somme + (Number(l.tarif) || 0), 0)
+  const lignesDebours = lignes.filter((l) => l.categorie === 'DEBOURS')
+  const lignesExte = lignes.filter((l) => l.categorie !== 'DEBOURS')
 
   const optionsClients = useMemo(
     () => [
@@ -254,21 +266,28 @@ export function NouvelleDemandePage() {
       }
       return null
     }
-    if (lignes.length === 0) return 'Ajoutez au moins un service'
+    if (lignes.length === 0) return 'Ajoutez au moins une ligne'
     const vus = new Set<number>()
     let typeSolo = false
     for (const [i, l] of lignes.entries()) {
+      if (l.categorie === 'DEBOURS') {
+        if (!l.designationDebours.trim()) return `Ligne ${i + 1} : désignation du débours obligatoire`
+        if (l.montantDebours.trim() !== '' && Number.isNaN(Number(l.montantDebours))) return `Ligne ${i + 1} : le montant du débours doit être un nombre`
+        if (l.montantDebours.trim() !== '' && Number(l.montantDebours) < 0) return `Ligne ${i + 1} : le montant du débours doit être positif ou nul`
+        continue
+      }
       if (l.serviceId === '') return `Ligne ${i + 1} : service obligatoire`
       if (vus.has(l.serviceId)) return 'Un service ne peut pas être sélectionné deux fois'
       vus.add(l.serviceId)
       if (!l.tarif || Number(l.tarif) < 0 || Number.isNaN(Number(l.tarif))) {
         return `Ligne ${i + 1} : tarif positif ou nul obligatoire`
       }
-      if (!l.debutService || !l.finService) return `Ligne ${i + 1} : période obligatoire`
+      // if (!l.debutService || !l.finService) return `Ligne ${i + 1} : période obligatoire`
       // if (l.debutService < aujourdhui) {
       //   return `Ligne ${i + 1} : le début doit être postérieur ou égal à aujourd'hui`
       // }
-      if (l.finService <= l.debutService) {
+      if (l.typePrestation !== 'PRESTATION' && l.debutService !== '' && l.finService !== ''
+          && l.finService <= l.debutService) {
         return `Ligne ${i + 1} : la fin doit être strictement postérieure au début`
       }
       if (estTypeServiceSolo(typesServices.get(l.serviceId))) typeSolo = true
@@ -285,13 +304,31 @@ export function NouvelleDemandePage() {
     try {
       let cible = demandeCreee
       if (!cible) {
-        const payloadLignes = lignes.map((l) => ({
-          serviceId: l.serviceId as number,
-          domaineId: l.domaineId ? Number(l.domaineId) : null,
-          tarif: Number(l.tarif),
-          debutService: l.debutService,
-          finService: l.finService,
-        }))
+        const payloadLignes = lignes.map((l) =>
+          l.categorie === 'DEBOURS'
+            ? {
+                serviceId: null,
+                tarif: null,
+                debutService: null,
+                finService: null,
+                categorie: 'DEBOURS' as const,
+                designationDebours: l.designationDebours.trim(),
+                montantDebours: l.montantDebours.trim() !== '' ? Number(l.montantDebours) : null,
+              }
+            : {
+                serviceId: l.serviceId as number,
+                tarif: Number(l.tarif),
+                debutService: l.debutService,
+                finService: l.finService,
+                categorie: 'EXTERNALISATION' as const,
+                designationDebours: null,
+                // Une valeur est envoyée même hors STANDARD : le backend
+                // la refuse si elle ne correspond pas (garde explicite).
+                typePrestation: typesServices.get(l.serviceId as number) === 'STANDARD'
+                  ? (l.typePrestation || 'PRESTATION')
+                  : null,
+              },
+        )
         const creee = await demandesApi.create({
           societeId,
           clientResponsableId: responsableId,
@@ -358,9 +395,15 @@ export function NouvelleDemandePage() {
       ],
     },
     {
-      titre: 'Services',
+      titre: 'Lignes',
       lignes: [
         ...lignes.map((ligne, index) => {
+          if (ligne.categorie === 'DEBOURS') {
+            return {
+              label: `Débours ${index + 1} : ${ligne.designationDebours.trim() || '—'}`,
+              valeur: 'Montant à « Valider » sur la ligne',
+            }
+          }
           const nom =
             ligne.serviceId !== ''
               ? nomsServices.get(ligne.serviceId as number)
@@ -380,7 +423,8 @@ export function NouvelleDemandePage() {
             valeur: [tarif, periode].filter(Boolean).join(' · '),
           }
         }),
-        { label: 'Montant total', valeur: formatMontantMGA(total) },
+        { label: 'Montant total (hors débours non validés)', valeur: formatMontantMGA(total) },
+        { label: 'Débours', valeur: `${lignesDebours.length} ligne${lignesDebours.length > 1 ? 's' : ''}${lignesExte.length > 0 ? ` / ${lignesExte.length} service${lignesExte.length > 1 ? 's' : ''}` : ''}` },
       ],
     },
   ]
@@ -539,7 +583,7 @@ export function NouvelleDemandePage() {
                   {lignes.map((l, i) => (
                     <div key={i} className="card card-pad" style={{ background: 'var(--c-bg)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong>Service {i + 1}</strong>
+                        <strong>{l.categorie === 'DEBOURS' ? `Débours ${i + 1}` : `Service ${i + 1}`}</strong>
                         {lignes.length > 1 && (
                           <button
                             type="button"
@@ -551,7 +595,49 @@ export function NouvelleDemandePage() {
                         )}
                       </div>
                       <div className="form-grid form-grid--2" style={{ marginTop: 8 }}>
-
+                        <label className="field form-grid__full">
+                          Catégorie <span className="required">*</span>
+                          <select
+                            value={l.categorie}
+                            onChange={(e) => setLigne(i, { categorie: e.target.value as 'EXTERNALISATION' | 'DEBOURS' })}
+                          >
+                            <option value="EXTERNALISATION">Externalisation (service catalogue)</option>
+                            <option value="DEBOURS">Débours (désignation + montant à valider)</option>
+                          </select>
+                          <span className="form-help">
+                            {l.categorie === 'DEBOURS'
+                              ? 'Statut initial « En attente », puis « Non payé » à la validation du montant.'
+                              : 'Service du catalogue avec tarif et période.'}
+                          </span>
+                        </label>
+                        {l.categorie === 'DEBOURS' ? (
+                          <>
+                            <label className="field form-grid__full">
+                              Désignation du débours <span className="required">*</span>
+                              <input
+                                value={l.designationDebours}
+                                onChange={(e) => setLigne(i, { designationDebours: e.target.value })}
+                                placeholder="Ex. Déplacement, timbres, divers…"
+                                maxLength={255}
+                              />
+                            </label>
+                            <label className="field form-grid__full">
+                              Montant du débours (MGA) — facultatif
+                              <input
+                                type="number"
+                                min={0}
+                                step="1"
+                                value={l.montantDebours}
+                                onChange={(e) => setLigne(i, { montantDebours: e.target.value })}
+                                placeholder="Ex. 150000 — laisser vide pour valider ensuite"
+                              />
+                              <span className="form-help">
+                                Facultatif — s&apos;il est renseigné, le débours est directement validé (aucun « Valider le montant » à faire ensuite).
+                              </span>
+                            </label>
+                          </>
+                        ) : (
+                        <>
 
                         {/* Service (colonne gauche) */}
                         {/* Domaine + Service (côte à côte) */}
@@ -609,6 +695,18 @@ export function NouvelleDemandePage() {
 
                         
 
+                        {typesServices.get(l.serviceId as number) === 'STANDARD' && (
+                          <label className="field">
+                            Type de prestation <span className="required">*</span>
+                            <select
+                              value={l.typePrestation}
+                              onChange={(e) => setLigne(i, { typePrestation: e.target.value })}
+                            >
+                              <option value="PRESTATION">Prestation</option>
+                              <option value="ABONNEMENT_MENSUEL">Abonnement mensuel</option>
+                            </select>
+                          </label>
+                        )}
                         <label className="field">
                           Tarif (MGA) <span className="required">*</span>
                           <input
@@ -619,25 +717,38 @@ export function NouvelleDemandePage() {
                             placeholder="Ex. 2000000"
                           />
                         </label>
-                        <span className="field" />
+                        {/* <span className="field" /> */}
                         <label className="field">
-                          Début <span className="required">*</span>
+                          Début{
+                            l.typePrestation !== 'PRESTATION' ? (
+                              <span className="required">*</span>
+                            ) : null
+                          }
                           <input
                             type="date"
                             // min={aujourdhui}
                             value={l.debutService}
                             onChange={(e) => setLigne(i, { debutService: e.target.value })}
+                            placeholder="Ex. 2026-01-01"
+                            disabled={l.typePrestation === 'PRESTATION' ? false : false}
                           />
                         </label>
                         <label className="field">
-                          Fin <span className="required">*</span>
+                          Fin{
+                            l.typePrestation !== 'PRESTATION' ? (
+                              <span className="required">*</span>
+                            ) : null
+                          }
                           <input
                             type="date"
                             min={l.debutService}
                             value={l.finService}
                             onChange={(e) => setLigne(i, { finService: e.target.value })}
+                            placeholder="Ex. 2026-12-31"
                           />
                         </label>
+                        </>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -647,7 +758,7 @@ export function NouvelleDemandePage() {
                     style={{ alignSelf: 'flex-start' }}
                     onClick={() => setLignes((liste) => [...liste, { ...LIGNE_VIDE }])}
                   >
-                    + Ajouter un service
+                    + Ajouter une ligne
                   </button>
                 </div>
               )

@@ -202,7 +202,26 @@ export function EcheancierDetailPage() {
             </div>
           ) : (
             <div className="card-pad text-muted">
-              Le plan de paiement de ce service n&apos;est pas encore établi.
+              {ligne.typePrestation === 'PRESTATION' || ligne.typePrestation === 'ABONNEMENT_MENSUEL' ? (
+                <>
+                  <span>
+                    {ligne.typePrestation === 'PRESTATION'
+                      ? 'Prestation : paiement direct lié à la facture validée.'
+                      : 'Abonnement mensuel : paiement direct lié à la facture validée.'}
+                  </span>
+                  <Can permission="PAIEMENT_CREATE">
+                    <Link
+                      to={`/paiements/nouveau?demande=${encodeURIComponent(demande.referenceDemande)}&ligne=${ligne.ligneId}`}
+                      className="btn-link success"
+                      style={{ marginLeft: 8 }}
+                    >
+                      Enregistrer un paiement
+                    </Link>
+                  </Can>
+                </>
+              ) : (
+                'Le plan de paiement de ce service n&apos;est pas encore établi.'
+              )}
             </div>
           )}
         </section>

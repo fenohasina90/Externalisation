@@ -6,6 +6,7 @@ export type TypeNotification =
   | 'CHANGEMENT_STATUT'
   | 'ALERTE_SYSTEME'
   | 'DEMANDE_RESET_MDP'
+  | 'FACTURE_MENSUELLE_RAPPEL'
 
 export interface NotificationUser {
   id: number

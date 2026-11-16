@@ -6,6 +6,9 @@ import type {
   CreateLignePayload,
   Demande,
   Facture,
+  FactureValidee,
+  InclusionDisponible,
+  ValiderFactureLignePayload,
   HistoriqueDemande,
   HistoriqueLigne,
   LigneService,
@@ -13,6 +16,7 @@ import type {
   Statut,
   UpdateDemandePayload,
   UpdateLignePayload,
+  ValiderMontantDeboursPayload,
 } from '../types'
 import type { Dossier, DossierPayload } from '../types/dossier'
 import type { DossierTransactionImmobiliere, DossierTransactionPayload } from '../types/dossierTransaction'
@@ -26,6 +30,10 @@ export interface DemandeFiltres {
   commercialId?: number
   dateDebut?: string
   dateFin?: string
+  /** EXTERNALISATION ou DEBOURS (au moins une ligne de la demande). */
+  categorie?: string
+  /** PRESTATION ou ABONNEMENT_MENSUEL. */
+  typePrestation?: string
 }
 
 export const demandesApi = {
@@ -108,6 +116,35 @@ export const lignesApi = {
     )
     return data
   },
+
+  /** Bouton « Valider le montant » : EN_ATTENTE → EN_COURS (DEBOURS uniquement). */
+  async validerMontantDebours(
+    demandeId: number,
+    ligneId: number,
+    payload: ValiderMontantDeboursPayload,
+  ): Promise<LigneService> {
+    const { data } = await http.patch<LigneService>(
+      `/demandes/${demandeId}/services/${ligneId}/valider-montant-debours`,
+      payload,
+    )
+    return data
+  },
+
+  /** Terminer une ligne « Abonnement mensuel » (EN_COURS / règlement partiel → TERMINE). */
+  async terminerAbonnement(demandeId: number, ligneId: number): Promise<LigneService> {
+    const { data } = await http.patch<LigneService>(
+      `/demandes/${demandeId}/services/${ligneId}/terminer`,
+    )
+    return data
+  },
+
+  /** Annulation d'une ligne DEBOURS en EN_ATTENTE (EN_ATTENTE → ANNULEE). */
+  async annulerDebours(demandeId: number, ligneId: number): Promise<LigneService> {
+    const { data } = await http.patch<LigneService>(
+      `/demandes/${demandeId}/services/${ligneId}/annuler-debours`,
+    )
+    return data
+  },
 }
 
 export const facturesApi = {
@@ -128,14 +165,64 @@ export const facturesApi = {
     return data
   },
 
-  async valider(id: number, commentaire?: string | null): Promise<Facture> {
-    const { data } = await http.put<Facture>(`/factures/${id}/valider`, { commentaire: commentaire ?? null })
+  async valider(
+    id: number,
+    commentaire?: string | null,
+    montant?: number | null,
+    lignes?: ValiderFactureLignePayload[],
+  ): Promise<Facture> {
+    const { data } = await http.put<Facture>(`/factures/${id}/valider`, {
+      commentaire: commentaire ?? null,
+      montant: montant ?? null,
+      lignes: lignes ?? null,
+    })
     return data
   },
 
   /** URL de téléchargement du PDF proforma. */
   proformaUrl(id: number): string {
     return `/api/factures/${id}/document/proforma`
+  },
+}
+
+export const facturesValideesApi = {
+  async list(demandeId: number): Promise<FactureValidee[]> {
+    const { data } = await http.get<FactureValidee[]>(`/demandes/${demandeId}/factures-validees`)
+    return data
+  },
+
+  /** Éléments impayés (prestation / débours) de la même société, reprenables dans la facture du mois. */
+  async inclusionsDisponibles(demandeId: number): Promise<InclusionDisponible[]> {
+    const { data } = await http.get<InclusionDisponible[]>(
+      `/demandes/${demandeId}/factures-abonnement/inclusions-disponibles`,
+    )
+    return data
+  },
+
+  /** Créer la facture du mois d'une ligne ABONNEMENT_MENSUEL (enfant de la facture générale validée). */
+  async creerFactureAbonnement(
+    demandeId: number,
+    ligneServiceId: number,
+    dateEmission: string,
+    mois: string,
+    commentaire?: string | null,
+    inclusionLigneIds?: number[],
+  ): Promise<FactureValidee> {
+    const { data } = await http.post<FactureValidee>(
+      `/demandes/${demandeId}/factures-abonnement`,
+      { ligneServiceId, dateEmission, mois, commentaire: commentaire ?? null, inclusionLigneIds: inclusionLigneIds ?? [] },
+    )
+    return data
+  },
+
+  /** Télécharger le PDF de la facture mensuelle (références facture générale / proforma / demande). */
+  abonnementUrl(id: number): string {
+    return `/factures-validees/${id}/document/abonnement`
+  },
+
+  /** Supprimer une facture du mois — uniquement si aucun paiement n'y a été enregistré. */
+  async supprimerMensuelle(id: number): Promise<void> {
+    await http.delete(`/factures-validees/${id}/mensuelle`)
   },
 }
 

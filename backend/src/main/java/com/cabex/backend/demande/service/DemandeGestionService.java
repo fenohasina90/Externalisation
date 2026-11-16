@@ -2,6 +2,8 @@ package com.cabex.backend.demande.service;
 
 import com.cabex.backend.audit.action.AuditActions;
 import com.cabex.backend.audit.service.AuditService;
+import com.cabex.backend.configuration.service.ConfigurationKeys;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.client.entity.ClientResponsable;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.client.repository.ClientResponsableRepository;
@@ -77,6 +79,7 @@ public class DemandeGestionService {
     private final FactureService factureService;
     private final LigneServiceRepository ligneRepository;
     private final ProposPaiementRepository proposRepository;
+    private final ConfigurationService configurationService;
 
     public DemandeGestionService(DemandeServiceRepository demandeRepository,
                                  SocieteRepository societeRepository,
@@ -92,7 +95,8 @@ public class DemandeGestionService {
                                  LigneServiceService ligneServiceService,
                                  FactureService factureService,
                                  LigneServiceRepository ligneRepository,
-                                 ProposPaiementRepository proposRepository) {
+                                 ProposPaiementRepository proposRepository,
+                                 ConfigurationService configurationService) {
         this.demandeRepository = demandeRepository;
         this.societeRepository = societeRepository;
         this.responsableRepository = responsableRepository;
@@ -108,20 +112,36 @@ public class DemandeGestionService {
         this.factureService = factureService;
         this.ligneRepository = ligneRepository;
         this.proposRepository = proposRepository;
+        this.configurationService = configurationService;
     }
 
     @Transactional(readOnly = true)
     public Page<DemandeResponse> getAll(String recherche, Integer societeId, Integer serviceId,
                                         Integer commercialId, String statut,
                                         LocalDate dateDebut, LocalDate dateFin,
-                                        Boolean actif, String situation, Pageable pageable) {
+                                        Boolean actif, String situation,
+                                        String categorie, String typePrestation,
+                                        Pageable pageable) {
         Pageable tri = pageable.getSort().isSorted()
                 ? pageable
                 : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                         Sort.by(Sort.Order.desc("dateDemande"), Sort.Order.desc("id")));
+        LocalDate aujourdhui = LocalDate.now();
+        int pdJours = Math.max(0, configurationService.lireEntier(
+                ConfigurationKeys.JOURS_RETARD_PRESTATION_DEBOURS,
+                ConfigurationKeys.JOURS_RETARD_PRESTATION_DEBOURS_DEFAUT));
+        int aboJours = Math.max(0, configurationService.lireEntier(
+                ConfigurationKeys.JOURS_RETARD_ABONNEMENT,
+                ConfigurationKeys.JOURS_RETARD_ABONNEMENT_DEFAUT));
+        java.time.LocalDateTime deadlinePrestationDebours =
+                aujourdhui.minusDays(pdJours).atTime(java.time.LocalTime.MAX);
+        java.time.LocalDateTime deadlineAbonnement =
+                aujourdhui.minusDays(aboJours).atTime(java.time.LocalTime.MAX);
+
         Page<DemandeService> page = demandeRepository.rechercher(recherche, societeId, serviceId,
                 commercialId, statut, dateDebut, dateFin, actif, situation,
-                LocalDate.now(), tri);
+                categorie, typePrestation,
+                aujourdhui, deadlinePrestationDebours, deadlineAbonnement, tri);
 
         List<DemandeService> demandes = page.getContent();
         if (demandes.isEmpty()) {
@@ -143,10 +163,10 @@ public class DemandeGestionService {
                 .toList();
         Map<Integer, BigDecimal> paiementsParLigne = ligneIds.isEmpty()
                 ? Map.of()
-                : ligneRepository.sommesPayeesParLignes(ligneIds).stream()
+                : ligneIds.stream()
                         .collect(Collectors.toMap(
-                                o -> ((Number) o[0]).intValue(),
-                                o -> toBigDecimal(o[1])));
+                                id -> id,
+                                id -> ligneServiceService.montantPayeParLigne(id)));
         Map<Integer, BigDecimal> paiementsParDemande = paiementRepository
                 .sommesPayeesParDemandes(demandeIds).stream()
                 .collect(Collectors.toMap(
@@ -168,18 +188,18 @@ public class DemandeGestionService {
                                             Map<Integer, BigDecimal> paiementsParDemande,
                                             Map<Integer, String> statuts,
                                             Map<Integer, InfoSituation> situations) {
+        BigDecimal montantPaye = paiementsParDemande.getOrDefault(demande.getId(), BigDecimal.ZERO);
         List<LigneService> lignes = lignesParDemande.getOrDefault(demande.getId(), List.of());
         BigDecimal montantTotal = lignes.stream()
-                .map(l -> l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO)
+                .map(ligneServiceService::montantAttendu)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal montantPaye = paiementsParDemande.getOrDefault(demande.getId(), BigDecimal.ZERO);
         BigDecimal reste = montantTotal.subtract(montantPaye).max(BigDecimal.ZERO);
         List<LigneServiceResponse> lignesReponse = lignes.stream()
                 .map(l -> {
-                    BigDecimal tarif = l.getTarif() != null ? l.getTarif() : BigDecimal.ZERO;
+                    BigDecimal attendu = ligneServiceService.montantAttendu(l);
                     BigDecimal paye = paiementsParLigne.getOrDefault(l.getId(), BigDecimal.ZERO);
                     return DemandeMapper.toLigneResponse(l, paye,
-                            tarif.subtract(paye).max(BigDecimal.ZERO));
+                            attendu.subtract(paye).max(BigDecimal.ZERO));
                 })
                 .toList();
         InfoSituation info = situations.getOrDefault(demande.getId(), InfoSituation.NON_PLANIFIE);
@@ -247,10 +267,63 @@ public class DemandeGestionService {
             }
             lignesDemandees = List.of(new CreateLigneRequest(
                     request.serviceId(), request.tarif(),
-                    request.debutService(), request.finService()));
+                    request.debutService(), request.finService(),
+                    LigneServiceService.CATEGORIE_EXTERNALISATION, null, null, null));
         }
 
-        List<com.cabex.backend.service.entity.Service> servicesDemandes = lignesDemandees.stream()
+        // Validation de la catégorie de chaque ligne (EXTERNALISATION / DEBOURS).
+        for (CreateLigneRequest ligne : lignesDemandees) {
+            String categorie = LigneServiceService.normaliserCategorie(ligne.categorie());
+            if (LigneServiceService.CATEGORIE_DEBOURS.equals(categorie)) {
+                if (ligne.designationDebours() == null || ligne.designationDebours().isBlank()) {
+                    throw new BusinessException(ErrorMessages.DESIGNATION_DEBOURS_OBLIGATOIRE);
+                }
+                if (ligne.montantDebours() != null && ligne.montantDebours().signum() < 0) {
+                    throw new BusinessException("Le montant du débours doit être positif ou nul");
+                }
+                if (ligne.serviceId() != null || ligne.tarif() != null
+                        || ligne.debutService() != null || ligne.finService() != null) {
+                    throw new BusinessException(ErrorMessages.DEBOURS_SERVICE_INTERDIT);
+                }
+                LigneServiceService.normaliserTypePrestation(
+                        categorie, null, ligne.typePrestation());
+            } else {
+                if (ligne.designationDebours() != null && !ligne.designationDebours().isBlank()) {
+                    throw new BusinessException(
+                            "La désignation du débours ne s'applique qu'aux lignes DEBOURS");
+                }
+                if (ligne.montantDebours() != null) {
+                    throw new BusinessException(
+                            "Le montant du débours ne s'applique qu'aux lignes DEBOURS");
+                }
+                if (ligne.serviceId() == null || ligne.tarif() == null) {
+                    throw new BusinessException(ErrorMessages.DONNEES_OBLIGATOIRES);
+                }
+                // Validation des dates selon le type de prestation :
+                // - PRESTATION : début et fin optionnels (tous deux peuvent être null)
+                // - ABONNEMENT_MENSUEL : début obligatoire, fin optionnel
+                // - Autre (null) : pas de contrainte ici, validée plus tard dans ajouter()
+                if (LigneServiceService.PRESTATION.equalsIgnoreCase(
+                        ligne.typePrestation() != null ? ligne.typePrestation() : null)) {
+                    // Pas de contrainte de dates pour PRESTATION.
+                } else if (LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(
+                        ligne.typePrestation() != null ? ligne.typePrestation() : null)) {
+                    if (ligne.debutService() == null) {
+                        throw new BusinessException(ErrorMessages.DEBUT_SERVICE_OBLIGATOIRE_ABONNEMENT);
+                    }
+                    // La date fin est optionnelle pour un abonnement mensuel.
+                } else {
+                    // Cas sans typePrestation précisé : pas de contrainte ici.
+                }
+            }
+        }
+
+        List<CreateLigneRequest> lignesExte = lignesDemandees.stream()
+                .filter(l -> !LigneServiceService.CATEGORIE_DEBOURS.equals(
+                        LigneServiceService.normaliserCategorie(l.categorie())))
+                .toList();
+
+        List<com.cabex.backend.service.entity.Service> servicesDemandes = lignesExte.stream()
                 .map(l -> serviceRepository.findById(l.serviceId())
                         .orElseThrow(() -> new ResourceNotFoundException(
                                 ErrorMessages.introuvable("Service", l.serviceId()))))
@@ -269,20 +342,20 @@ public class DemandeGestionService {
                         .estTypeCreation(s.getTypeService())
                         || com.cabex.backend.dossier.DossierRegles
                         .estTypeTransactionImmobiliere(s.getTypeService()));
-        if (typeSolo && lignesDemandees.size() > 1) {
+        if (typeSolo && !lignesDemandees.isEmpty() && lignesDemandees.size() > 1) {
             throw new BusinessException(ErrorMessages.SERVICE_SOLO_CREATION_TRANSACTION);
         }
         if (societe == null && nbCreation == 0) {
             throw new BusinessException(ErrorMessages.DEMANDE_SOCIETE_REQUISE);
         }
-        for (CreateLigneRequest ligne : lignesDemandees) {
+        for (CreateLigneRequest ligne : lignesExte) {
             validateDates(ligne.debutService(), ligne.finService());
             if (ligne.tarif().signum() < 0) {
                 throw new BusinessException(ErrorMessages.TARIF_POSITIF);
             }
         }
-        long distincts = lignesDemandees.stream().map(CreateLigneRequest::serviceId).distinct().count();
-        if (distincts < lignesDemandees.size()) {
+        long distincts = lignesExte.stream().map(CreateLigneRequest::serviceId).distinct().count();
+        if (distincts < lignesExte.size()) {
             throw new BusinessException("Un service ne peut pas être sélectionné deux fois dans une demande");
         }
 
@@ -305,15 +378,51 @@ public class DemandeGestionService {
                 "Demande créée" + (request.commentaire() != null ? " : " + request.commentaire() : null));
 
         for (CreateLigneRequest ligne : lignesDemandees) {
+            String categorie = LigneServiceService.normaliserCategorie(ligne.categorie());
+            if (LigneServiceService.CATEGORIE_DEBOURS.equals(categorie)) {
+                LigneService creee = LigneService.builder()
+                        .demande(demande)
+                        .categorie(LigneServiceService.CATEGORIE_DEBOURS)
+                        .designationDebours(ligne.designationDebours().trim())
+                        .statut(LigneServiceService.LIGNE_EN_ATTENTE)
+                        .build();
+                // Si un montant est annoncé à la création, le débours est figé
+                // à ce montant et il figure dans la proforma (avec la facture
+                // validée qui en découle). Un débours sans montant annoncé
+                // attend « Valider le montant ».
+                BigDecimal montantInitial = ligne.montantDebours();
+                if (montantInitial != null) {
+                    creee.setMontantDebours(montantInitial);
+                    // Même valeur dans la colonne tarif : la facture validée
+                    // affiche toujours ligne_service.tarif (les débours sont
+                    // remplis si le montant est déjà validé à la création).
+                    creee.setTarif(montantInitial);
+                    creee.setStatut(LigneServiceService.LIGNE_EN_COURS);
+                }
+                creee = ligneRepository.save(creee);
+                if (montantInitial != null) {
+                    ligneServiceService.ajouterHistoriqueCreation(creee,
+                            "Débours créé (montant annoncé : " + montantInitial + ") — "
+                                    + creee.getDesignationDebours());
+                } else {
+                    ligneServiceService.ajouterHistoriqueCreation(creee,
+                            "Débours ajouté à la création : " + creee.getDesignationDebours());
+                }
+                continue;
+            }
             Service service = serviceRepository.findById(ligne.serviceId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             ErrorMessages.introuvable("Service", ligne.serviceId())));
+            String typePrestation = LigneServiceService.normaliserTypePrestation(
+                    categorie, service, ligne.typePrestation());
             LigneService creee = LigneService.builder()
                     .demande(demande)
                     .service(service)
                     .tarif(ligne.tarif())
                     .debutService(ligne.debutService())
                     .finService(ligne.finService())
+                    .categorie(LigneServiceService.CATEGORIE_EXTERNALISATION)
+                    .typePrestation(typePrestation)
                     .build();
             creee = ligneRepository.save(creee);
             ligneServiceService.ajouterHistoriqueCreation(creee,
@@ -366,6 +475,8 @@ public class DemandeGestionService {
                 .orElseThrow(() -> new BusinessException(ErrorMessages.STATUT_INVALIDE));
 
         String actuel = statutActuel(demande.getId());
+        // Les statuts de ligne DEBOURS (NON_PAYEE/PARTIEL/PAYEE) ne passent
+        // jamais par l'historique de la demande (statut global inchangé).
         if (!transitionAutorisee(actuel, nouveau)) {
             throw new BusinessException(ErrorMessages.TRANSITION_STATUT_INTERDITE);
         }
@@ -450,7 +561,7 @@ public class DemandeGestionService {
         }
         return switch (actuel) {
             // Annulation ordinaire uniquement depuis EN_ATTENTE (§3.2).
-            case "EN_ATTENTE" -> STATUT_VALIDATION.equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
+            case "EN_ATTENTE" -> STATUT_VALIDATION.equals(nouveau) || STATUT_EN_COURS.equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
             case "VALIDATION" -> STATUT_EN_COURS.equals(nouveau);
             case "EN_COURS" -> STATUT_TERMINEE.equals(nouveau);
             default -> false;
@@ -459,18 +570,26 @@ public class DemandeGestionService {
 
     /**
      * Garde du passage à VALIDATION : toutes les factures validées et
-     * un plan de paiement établi pour chaque ligne (contrôle backend).
+     * un plan de paiement établi pour chaque ligne EXTERNALISATION
+     * (les lignes DEBOURS sont ignorées par cette garde).
      */
     private void verifierPassageValidation(DemandeService demande) {
         List<LigneService> lignes = ligneRepository.findByDemandeId(demande.getId());
-        if (lignes.isEmpty()) {
+        // Seules les lignes EXTERNALISATION STANDARD (pas DEBOURS, pas PRESTATION, pas ABONNEMENT_MENSUEL)
+        // nécessitent un plan de paiement et une facture validée.
+        List<LigneService> externalisationStandard = lignes.stream()
+                .filter(l -> !LigneServiceService.estDebours(l)
+                        && !LigneServiceService.PRESTATION.equalsIgnoreCase(l.getTypePrestation())
+                        && !LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(l.getTypePrestation()))
+                .toList();
+        if (externalisationStandard.isEmpty()) {
             throw new BusinessException("Une demande contient au moins un service");
         }
         if (!factureService.toutesValidees(demande.getId())) {
             throw new BusinessException(
                     "Toutes les factures de la demande doivent être validées avant le passage à VALIDATION");
         }
-        for (LigneService ligne : lignes) {
+        for (LigneService ligne : externalisationStandard) {
             if (!proposRepository.existsByLigneServiceId(ligne.getId())) {
                 throw new BusinessException(
                         "Chaque service doit disposer de son plan de paiement avant le passage à VALIDATION");
@@ -484,6 +603,9 @@ public class DemandeGestionService {
      */
     @Transactional
     public void promouvoirEnCoursParLigne(LigneService ligne, String commentairePaiement) {
+        if (LigneServiceService.estDebours(ligne)) {
+            return;
+        }
         boolean ligneDemarree = ligneServiceService.avancerStatut(ligne,
                 LigneServiceService.LIGNE_EN_COURS,
                 "Service démarré : " + commentairePaiement, "AUTO");
@@ -510,7 +632,8 @@ public class DemandeGestionService {
 
     /**
      * Clôture automatique : la demande passe TERMINEE quand toutes ses lignes
-     * ont atteint leur date de fin (soldes éventuels conservés).
+     * sont TERMINEES (EXTERNALISATION full paiement / abonnement terminée
+     * manuellement) ou PAYEE (DEBOURS complet).
      */
     @Transactional
     public boolean cloturerSiTerminee(Integer demandeId) {
@@ -524,12 +647,13 @@ public class DemandeGestionService {
             return false;
         }
         boolean toutesTerminees = lignes.stream()
-                .allMatch(l -> LigneServiceService.LIGNE_TERMINE.equals(l.getStatut()));
+                .allMatch(l -> LigneServiceService.LIGNE_TERMINE.equals(l.getStatut())
+                        || LigneServiceService.LIGNE_PAYEE.equals(l.getStatut()));
         if (!toutesTerminees) {
             return false;
         }
         enviereHistorique(demande, STATUT_TERMINEE,
-                "Tous les services ont atteint leur date de fin (clôture automatique)");
+                "Tous les services sont terminés ou payés (clôture automatique)");
         notificationService.notifierChangementStatut(demande, STATUT_TERMINEE);
         auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
                 Long.valueOf(demande.getId()), actuel, STATUT_TERMINEE);
@@ -554,6 +678,12 @@ public class DemandeGestionService {
             seq++;
         } while (demandeRepository.existsByReferenceDemande(reference));
         return reference;
+    }
+
+    /** Statut actuel de la demande (EN_ATTENTE / VALIDATION / EN_COURS / TERMINEE / ANNULEE). */
+    @Transactional(readOnly = true)
+    public String statutDemandeActuel(Integer demandeId) {
+        return statutActuel(demandeId);
     }
 
     private String statutActuel(Integer demandeId) {

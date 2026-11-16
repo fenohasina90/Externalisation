@@ -15,6 +15,9 @@ import java.util.Optional;
 
 public interface DemandeServiceRepository extends JpaRepository<DemandeService, Integer> {
 
+    @Query("SELECT d FROM DemandeService d WHERE d.societe.id = :societeId AND d.actif = true ORDER BY d.id ASC")
+    List<DemandeService> findBySocieteIdAndActifTrueOrderByIdAsc(@Param("societeId") Integer societeId);
+
     Optional<DemandeService> findByReferenceDemande(String referenceDemande);
 
     boolean existsByReferenceDemande(String referenceDemande);
@@ -59,6 +62,16 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
         WHERE (:recherche IS NULL OR (
                 LOWER(d.referenceDemande) LIKE LOWER(CONCAT('%', :recherche, '%'))
              OR (s IS NOT NULL AND LOWER(s.nomSociete) LIKE LOWER(CONCAT('%', :recherche, '%')))
+             OR (c IS NOT NULL AND LOWER(c.nomCommercial) LIKE LOWER(CONCAT('%', :recherche, '%')))
+             OR EXISTS (SELECT 1 FROM LigneService l
+                          WHERE l.demande = d
+                            AND LOWER(l.service.nomService) LIKE LOWER(CONCAT('%', :recherche, '%')))
+             OR EXISTS (SELECT 1 FROM Facture f
+                          WHERE f.demande = d
+                            AND LOWER(f.referenceFacture) LIKE LOWER(CONCAT('%', :recherche, '%')))
+             OR EXISTS (SELECT 1 FROM FactureValidee v
+                          WHERE v.demande = d
+                            AND LOWER(v.referenceFactureValidee) LIKE LOWER(CONCAT('%', :recherche, '%')))
           ))
           AND (:societeId IS NULL OR s.id = :societeId)
           AND (:serviceId IS NULL OR EXISTS (
@@ -78,49 +91,101 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                   AND h.statut.statut = :statut
                   AND h.id = (SELECT MAX(h2.id) FROM HistoriqueDemande h2 WHERE h2.demande = d)
               ))
-          AND (
-            :situation IS NULL
+          AND (:categorie IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = d AND l.categorie = :categorie))
+          AND (:typePrestation IS NULL OR EXISTS (
+                SELECT 1 FROM LigneService l
+                WHERE l.demande = d AND l.typePrestation = :typePrestation))
+          AND (:situation IS NULL
             OR (:situation = 'PAYE'
-                AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                AND (
+                  (NOT EXISTS (SELECT 1 FROM EcheancePaiement e
                                 WHERE e.proposPaiement.demande = d
                                   AND e.montantPaye < e.montantAttendu)
-                AND EXISTS (SELECT 1 FROM EcheancePaiement e
-                            WHERE e.proposPaiement.demande = d))
+                   AND EXISTS (SELECT 1 FROM EcheancePaiement e
+                               WHERE e.proposPaiement.demande = d))
+                  OR (NOT EXISTS (SELECT 1 FROM LigneService l
+                                   WHERE l.demande = d
+                                     AND (l.statut IS NULL
+                                          OR l.statut NOT IN ('TERMINE','PAYEE','ANNULEE')))
+                      AND EXISTS (SELECT 1 FROM LigneService l WHERE l.demande = d))))
             OR (:situation = 'EN_RETARD'
-                AND EXISTS (SELECT 1 FROM EcheancePaiement e
+                AND (
+                  EXISTS (SELECT 1 FROM EcheancePaiement e
                             WHERE e.proposPaiement.demande = d
                               AND e.dateEcheance < :aujourdhui
-                              AND e.montantPaye < e.montantAttendu))
-            OR (:situation = 'PARTIEL'
-                AND EXISTS (SELECT 1 FROM EcheancePaiement e
-                            WHERE e.proposPaiement.demande = d
                               AND e.montantPaye < e.montantAttendu)
-                AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
-                                WHERE e.proposPaiement.demande = d
-                                  AND e.dateEcheance < :aujourdhui
-                                  AND e.montantPaye < e.montantAttendu)
-                AND EXISTS (SELECT 1 FROM EcheancePaiement e
-                            WHERE e.proposPaiement.demande = d AND e.montantPaye > 0))
-            OR (:situation = 'EN_ATTENTE'
-                AND EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d)
-                AND (
-                  NOT EXISTS (SELECT 1 FROM EcheancePaiement e
-                              WHERE e.proposPaiement.demande = d)
-                  OR (
-                    EXISTS (SELECT 1 FROM EcheancePaiement e
-                            WHERE e.proposPaiement.demande = d
-                              AND e.montantPaye < e.montantAttendu)
-                    AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
-                                    WHERE e.proposPaiement.demande = d
-                                      AND e.dateEcheance < :aujourdhui
-                                      AND e.montantPaye < e.montantAttendu)
-                    AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
-                                    WHERE e.proposPaiement.demande = d AND e.montantPaye > 0)
-                  )
+                  OR EXISTS (SELECT 1 FROM FactureValidee fv LEFT JOIN fv.factureProforma fp
+                            WHERE fv.demande = d
+                              AND fv.mois IS NULL
+                              AND fv.valideLe <= :deadlinePrestationDebours
+                              AND (SELECT COALESCE(SUM(p.montantPaye), 0)
+                                   FROM Paiement p
+                                   WHERE p.factureValidee.id = fv.id AND p.actif = true) < fv.montant
+                              AND (fp IS NULL OR fp.modeFacturation <> 'UNIQUE'))
+                  OR EXISTS (SELECT 1 FROM FactureValidee fv LEFT JOIN fv.factureProforma fp
+                            WHERE fv.demande = d
+                              AND fv.mois IS NOT NULL
+                              AND fv.valideLe <= :deadlineAbonnement
+                              AND (SELECT COALESCE(SUM(p.montantPaye), 0)
+                                   FROM Paiement p
+                                   WHERE p.factureValidee.id = fv.id AND p.actif = true) < fv.montant
+                              AND (fp IS NULL OR fp.modeFacturation <> 'UNIQUE'))
                 ))
+            OR (:situation = 'PARTIEL'
+                AND (
+                  (EXISTS (SELECT 1 FROM EcheancePaiement e
+                            WHERE e.proposPaiement.demande = d
+                              AND e.montantPaye < e.montantAttendu)
+                   AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                                   WHERE e.proposPaiement.demande = d
+                                     AND e.dateEcheance < :aujourdhui
+                                     AND e.montantPaye < e.montantAttendu)
+                   AND EXISTS (SELECT 1 FROM EcheancePaiement e
+                               WHERE e.proposPaiement.demande = d AND e.montantPaye > 0))
+                  OR (EXISTS (SELECT 1 FROM LigneService l
+                               WHERE l.demande = d AND l.statut = 'PARTIEL')
+                      AND NOT EXISTS (SELECT 1 FROM LigneService l
+                                       WHERE l.demande = d
+                                         AND (l.statut IS NULL
+                                              OR l.statut NOT IN ('TERMINE','PAYEE','ANNULEE','PARTIEL'))))))
+            OR (:situation = 'EN_ATTENTE'
+                AND (
+                  (EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d)
+                   AND (
+                     NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                                 WHERE e.proposPaiement.demande = d)
+                     OR (
+                       EXISTS (SELECT 1 FROM EcheancePaiement e
+                               WHERE e.proposPaiement.demande = d
+                                 AND e.montantPaye < e.montantAttendu)
+                       AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                                       WHERE e.proposPaiement.demande = d
+                                         AND e.dateEcheance < :aujourdhui
+                                         AND e.montantPaye < e.montantAttendu)
+                       AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                                       WHERE e.proposPaiement.demande = d AND e.montantPaye > 0)
+                     )
+                   ))
+                  OR (NOT EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d)
+                      AND EXISTS (SELECT 1 FROM LigneService l
+                                   WHERE l.demande = d
+                                     AND (l.statut IS NULL
+                                          OR l.statut = 'EN_ATTENTE'
+                                          OR l.statut = 'EN_COURS'
+                                          OR l.statut = 'VALIDE'
+                                          OR l.statut = 'NON_PAYEE')
+                                     AND NOT EXISTS (SELECT 1 FROM LigneService l2
+                                                      WHERE l2.demande = d
+                                                        AND l2.statut IN
+                                                            ('TERMINE','PAYEE','ANNULEE','PARTIEL'))))))
             OR (:situation = 'NON_PLANIFIE'
-                AND NOT EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d))
-          )
+                AND NOT EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d)
+                AND NOT EXISTS (SELECT 1 FROM LigneService l
+                                WHERE l.demande = d
+                                  AND l.statut IN ('TERMINE','PAYEE','PARTIEL')))
+            )
         """)
     Page<DemandeService> rechercher(@Param("recherche") String recherche,
                                     @Param("societeId") Integer societeId,
@@ -131,7 +196,11 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                                     @Param("dateFin") LocalDate dateFin,
                                     @Param("actif") Boolean actif,
                                     @Param("situation") String situation,
+                                    @Param("categorie") String categorie,
+                                    @Param("typePrestation") String typePrestation,
                                     @Param("aujourdhui") LocalDate aujourdhui,
+                                    @Param("deadlinePrestationDebours") java.time.LocalDateTime deadlinePrestationDebours,
+                                    @Param("deadlineAbonnement") java.time.LocalDateTime deadlineAbonnement,
                                     Pageable pageable);
 
     /**
@@ -139,6 +208,8 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
      * en une seule requête (évite un aller-retour par ligne de liste).
      * Colonnes : id, nb plans, nb échéances, nb avec reste, nb en retard,
      * nb payées — agrégats interpreétés par {@code SituationPaiement.classer}.
+     * Les trois dernières colonnes (nb lignes, nb lignes payées, nb partielles)
+     * permettent de classer les demandes sans plan de paiement.
      */
     @Query("""
         SELECT d.id,
@@ -147,7 +218,10 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                SUM(CASE WHEN e.montantPaye < e.montantAttendu THEN 1 ELSE 0 END),
                SUM(CASE WHEN e.dateEcheance < :aujourdhui AND e.montantPaye < e.montantAttendu
                         THEN 1 ELSE 0 END),
-               SUM(CASE WHEN e.montantPaye > 0 THEN 1 ELSE 0 END)
+               SUM(CASE WHEN e.montantPaye > 0 THEN 1 ELSE 0 END),
+               COUNT(DISTINCT l.id),
+               COUNT(DISTINCT CASE WHEN l.statut IN ('TERMINE','PAYEE') THEN l.id END),
+               COUNT(DISTINCT CASE WHEN l.statut = 'PARTIEL' THEN l.id END)
         FROM DemandeService d
         LEFT JOIN LigneService l ON l.demande = d
         LEFT JOIN ProposPaiement p ON p.ligneService = l
@@ -159,21 +233,6 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
 
     List<DemandeService> findByDateDemandeGreaterThanEqualAndDateDemandeLessThanEqual(
             LocalDate dateDebut, LocalDate dateFin);
-
-    @Query("""
-        SELECT COALESCE(SUM(l.tarif), 0) FROM DemandeService d JOIN d.lignes l
-        LEFT JOIN d.societe s LEFT JOIN d.commercial c
-        WHERE (:dateDebut IS NULL OR l.debutService >= :dateDebut)
-          AND (:dateFin IS NULL OR l.finService <= :dateFin)
-          AND (:societeId IS NULL OR s.id = :societeId)
-          AND (:serviceId IS NULL OR l.service.id = :serviceId)
-          AND (:commercialId IS NULL OR c.id = :commercialId)
-        """)
-    BigDecimal sommeTarifTotal(@Param("dateDebut") LocalDate dateDebut,
-                               @Param("dateFin") LocalDate dateFin,
-                               @Param("societeId") Integer societeId,
-                               @Param("serviceId") Integer serviceId,
-                               @Param("commercialId") Integer commercialId);
 
     @Query("""
         SELECT h.statut.statut, COUNT(DISTINCT d.id)
@@ -217,6 +276,12 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                 SELECT 1 FROM LigneService l
                 WHERE l.demande = d AND LOWER(l.service.nomService) LIKE LOWER(CONCAT('%', :q, '%')))
            OR (c IS NOT NULL AND LOWER(c.nomCommercial) LIKE LOWER(CONCAT('%', :q, '%')))
+           OR EXISTS (SELECT 1 FROM Facture f
+                          WHERE f.demande = d
+                            AND LOWER(f.referenceFacture) LIKE LOWER(CONCAT('%', :q, '%')))
+           OR EXISTS (SELECT 1 FROM FactureValidee v
+                          WHERE v.demande = d
+                            AND LOWER(v.referenceFactureValidee) LIKE LOWER(CONCAT('%', :q, '%')))
            OR LOWER(COALESCE(d.commentaire, '')) LIKE LOWER(CONCAT('%', :q, '%'))
         ORDER BY d.dateDemande DESC
         """)
@@ -331,41 +396,6 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                                            @Param("serviceId") Integer serviceId);
 
     @Query("""
-        SELECT l.service.id, l.service.nomService, COUNT(DISTINCT l.demande.id), COALESCE(SUM(l.tarif), 0)
-        FROM LigneService l JOIN l.demande d
-        LEFT JOIN d.societe s
-        WHERE d.actif = true
-          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
-          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
-          AND (:societeId IS NULL OR s.id = :societeId)
-          AND (:serviceId IS NULL OR l.service.id = :serviceId)
-        GROUP BY l.service.id, l.service.nomService
-        ORDER BY COALESCE(SUM(l.tarif), 0) DESC
-        """)
-    List<Object[]> revenuParServiceFiltre(@Param("dateDebut") LocalDate dateDebut,
-                                          @Param("dateFin") LocalDate dateFin,
-                                          @Param("societeId") Integer societeId,
-                                          @Param("serviceId") Integer serviceId);
-
-    @Query("""
-        SELECT s.id, s.nomSociete, COUNT(DISTINCT d.id), COALESCE(SUM(l.tarif), 0)
-        FROM DemandeService d
-        LEFT JOIN d.lignes l ON (:serviceId IS NULL OR l.service.id = :serviceId)
-        LEFT JOIN d.societe s
-        WHERE d.actif = true
-          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
-          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
-          AND (:societeId IS NULL OR s.id = :societeId)
-          AND (:serviceId IS NULL OR l.service.id = :serviceId)
-        GROUP BY s.id, s.nomSociete
-        ORDER BY COUNT(DISTINCT d.id) DESC
-        """)
-    List<Object[]> demandesParSocieteFiltre(@Param("dateDebut") LocalDate dateDebut,
-                                            @Param("dateFin") LocalDate dateFin,
-                                            @Param("societeId") Integer societeId,
-                                            @Param("serviceId") Integer serviceId);
-
-    @Query("""
         SELECT d.commercial.id, d.commercial.nomCommercial, COUNT(DISTINCT d.id)
         FROM DemandeService d
         LEFT JOIN d.societe s
@@ -384,21 +414,6 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                                               @Param("dateFin") LocalDate dateFin,
                                               @Param("societeId") Integer societeId,
                                               @Param("serviceId") Integer serviceId);
-
-    @Query("""
-        SELECT COALESCE(SUM(l.tarif), 0)
-        FROM DemandeService d JOIN d.lignes l
-        LEFT JOIN d.societe s
-        WHERE d.actif = true
-          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
-          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
-          AND (:societeId IS NULL OR s.id = :societeId)
-          AND (:serviceId IS NULL OR l.service.id = :serviceId)
-        """)
-    BigDecimal sommeTarifDashboard(@Param("dateDebut") LocalDate dateDebut,
-                                   @Param("dateFin") LocalDate dateFin,
-                                   @Param("societeId") Integer societeId,
-                                   @Param("serviceId") Integer serviceId);
 
     @Query("""
         SELECT COUNT(DISTINCT l.service.id)

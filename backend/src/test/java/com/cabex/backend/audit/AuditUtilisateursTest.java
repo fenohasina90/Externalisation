@@ -8,6 +8,7 @@ import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.HistoriqueDemande;
 import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.entity.StatutDemande;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.demande.repository.StatutDemandeRepository;
@@ -68,6 +69,7 @@ class AuditUtilisateursTest {
     @Mock private com.cabex.backend.facture.service.FactureService factureService;
     @Mock private com.cabex.backend.demande.repository.LigneServiceRepository ligneRepository;
     @Mock private com.cabex.backend.echeance.repository.ProposPaiementRepository proposRepository;
+    @Mock private ConfigurationService configurationService;
 
     @AfterEach
     void nettoyerContexte() {
@@ -162,7 +164,7 @@ class AuditUtilisateursTest {
                 demandeRepository, societeRepository, responsableRepository, commercialRepository,
                 serviceRepository, historiqueRepository, statutRepository, paiementRepository,
                 utilisateurRepository, notificationService, auditService,
-                ligneServiceService, factureService, ligneRepository, proposRepository);
+                ligneServiceService, factureService, ligneRepository, proposRepository, configurationService);
 
         service.promouvoirEnCoursParLigne(ligne, "paiement PAY-2026-00001 (échéance n°1)");
 

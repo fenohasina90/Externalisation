@@ -4,10 +4,13 @@ import { Alert, Autocomplete, Spinner } from '@/components/ui'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { messageErreur } from '@/constants/messages'
 import { useAuth } from '@/features/auth/hooks/useAuth'
+import { useApi } from '@/hooks/useApi'
 import { SelectionFichiers, documentsApi } from '@/features/documents'
+import { demandesApi } from '@/features/demandes/services/demandes.service'
+import type { Demande } from '@/features/demandes/types'
 import { formatDate, formatMontantMGA } from '@/utils/format'
 import { telechargerBlob } from '@/utils/telechargement'
-import { VIREMENT } from '../constants/labels'
+import { CHEQUE, VIREMENT } from '../constants/labels'
 import { EcheancePill } from '../components'
 import { useDemandesReglables, useEcheancesReglables, useModesPaiement } from '../hooks'
 import { paiementsApi } from '../services/paiements.service'
@@ -34,6 +37,7 @@ export function NouveauPaiementPage() {
   const [params] = useSearchParams()
   const location = useLocation()
   const referenceParam = params.get('demande')
+  const ligneIdParam = params.get('ligne')
   const echeanceIdParam =
     (location.state as { echeanceId?: number } | null)?.echeanceId ?? NaN
 
@@ -47,15 +51,36 @@ export function NouveauPaiementPage() {
     error: errorEcheances,
   } = useEcheancesReglables(demandeId)
 
+  // Résolution directe de la référence d'URL : l'appel ne passe pas par la
+  // liste des demandes (jusqu'à 200 éléments). Le formulaire s'initialise
+  // donc immédiatement, au lieu d'attendre la liste complète.
+  const { data: demandeDepuisReference, loading: loadingReference } = useApi<Demande | null>(
+    () => (referenceParam
+      ? demandesApi.getByReference(referenceParam).catch(() => null)
+      : Promise.resolve(null)),
+    [referenceParam],
+  )
+
   const { data: modes } = useModesPaiement()
 
   const echeances = useMemo(() => reglatable?.echeances ?? [], [reglatable])
+  const deboursList = useMemo(() => reglatable?.debours ?? [], [reglatable])
+  const lignesDirectesList = useMemo(() => reglatable?.lignesDirectes ?? [], [reglatable])
+  const [typeReglement, setTypeReglement] = useState<'ECHEANCE' | 'DEBOURS' | 'LIGNE_DIRECTE'>('ECHEANCE')
+  const [ligneDeboursChoisie, setLigneDeboursChoisie] = useState<number | null>(
+    ligneIdParam ? Number(ligneIdParam) : null,
+  )
   const [echeanceChoisie, setEcheanceChoisie] = useState<number | null>(
     Number.isFinite(echeanceIdParam) ? echeanceIdParam : null,
+  )
+  const [ligneDirecteChoisie, setLigneDirecteChoisie] = useState<number | null>(
+    ligneIdParam ? Number(ligneIdParam) : null,
   )
   const [datePaiement, setDatePaiement] = useState(aujourdhui)
   const [modeId, setModeId] = useState<number | null>(null)
   const [refVirement, setRefVirement] = useState('')
+  const [banque, setBanque] = useState('')
+  const [numeroCheque, setNumeroCheque] = useState('')
   const [commentaire, setCommentaire] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -79,14 +104,19 @@ export function NouveauPaiementPage() {
     [listeDemandes],
   )
 
-  // Résout la référence de l'URL en demande dès que la liste est chargée.
+  // Résolution de la référence d'URL → demande : tentative directe (une seule
+  // ligne) puis repli sur la liste si celle-ci arrive la première.
+  // Patron « au-render-time, une seule fois » (même style que le reste).
   const [referenceTraitee, setReferenceTraitee] = useState(false)
-  if (!referenceTraitee && referenceParam && listeDemandes.length > 0) {
-    setReferenceTraitee(true)
-    const trouve = listeDemandes.find((d) => d.referenceDemande === referenceParam)
-    if (trouve) {
-      setDemandeId(trouve.id)
-      setDemandeTexte(`${trouve.referenceDemande} — ${trouve.nomSociete ?? 'Sans société'}`)
+  if (!referenceTraitee && referenceParam) {
+    const directe = demandeDepuisReference
+    const incluse = directe
+      ?? listeDemandes.find((d) => d.referenceDemande === referenceParam)
+      ?? null
+    if (incluse) {
+      setReferenceTraitee(true)
+      setDemandeId(incluse.id)
+      setDemandeTexte(`${incluse.referenceDemande} — ${incluse.nomSociete ?? 'Sans société'}`)
     }
   }
 
@@ -103,35 +133,85 @@ export function NouveauPaiementPage() {
     [echeances, echeanceId],
   )
 
+  const deboursChoisi = useMemo(
+    () => deboursList.find((d) => d.ligneId === ligneDeboursChoisie) ?? null,
+    [deboursList, ligneDeboursChoisie],
+  )
+  const ligneDirecteSelectionnee = lignesDirectesList.find((d) => d.ligneId === ligneDirecteChoisie) ?? null
+  const estDeboursSelectionne = typeReglement === 'DEBOURS' && deboursChoisi !== null
+  const estLigneDirecteSelectionne = typeReglement === 'LIGNE_DIRECTE' && ligneDirecteSelectionnee !== null
+  // Libellé complet de la cible du règlement (nom du service inclus).
+  const libelleCible = estDeboursSelectionne
+    ? deboursChoisi?.designation ?? null
+    : estLigneDirecteSelectionne
+      ? ligneDirecteSelectionnee
+        ? `${ligneDirecteSelectionnee.nomService ?? ligneDirecteSelectionnee.ligneLabel} (${ligneDirecteSelectionnee.typePrestation === 'PRESTATION' ? 'Prestation' : 'Abonnement mensuel'})`
+        : null
+      : choisie?.ligneLabel ?? null
+  const referenceFactureCible = estDeboursSelectionne
+    ? deboursChoisi?.referenceFactureValidee ?? null
+    : estLigneDirecteSelectionne
+      ? ligneDirecteSelectionnee?.referenceFactureValidee ?? null
+      : choisie?.referenceFactureValidee ?? null
+
   const montant =
     montantSaisi && montantSaisi.echeanceId === echeanceId
       ? montantSaisi.montant
-      : (choisie?.echeance.reste ?? 0)
+      : estDeboursSelectionne
+        ? (deboursChoisi?.reste ?? 0)
+        : estLigneDirecteSelectionne
+          ? (ligneDirecteSelectionnee?.resteAPayer ?? 0)
+          : (choisie?.echeance.reste ?? 0)
 
   // Mode effectif : le premier disponible tant que l'utilisateur n'a pas choisi.
   const modeChoisi = modes?.find((m) => m.id === modeId) ?? modes?.[0] ?? null
   const estVirement = modeChoisi?.code?.toUpperCase() === VIREMENT
+  const estCheque = modeChoisi?.code?.toUpperCase() === CHEQUE
 
-  const attendu = choisie?.echeance.montantAttendu ?? 0
-  const dejaPaye = choisie?.echeance.montantPaye ?? 0
-  const reste = choisie?.echeance.reste ?? 0
+  const attendu = estDeboursSelectionne
+    ? (deboursChoisi?.montantDebours ?? 0)
+    : estLigneDirecteSelectionne
+      ? (ligneDirecteSelectionnee
+          ? ligneDirecteSelectionnee.montantPaye + ligneDirecteSelectionnee.resteAPayer
+          : 0)
+      : (choisie?.echeance.montantAttendu ?? 0)
+  const dejaPaye = estDeboursSelectionne
+    ? (deboursChoisi?.montantPaye ?? 0)
+    : estLigneDirecteSelectionne
+      ? (ligneDirecteSelectionnee?.montantPaye ?? 0)
+      : (choisie?.echeance.montantPaye ?? 0)
+  const reste = estDeboursSelectionne
+    ? (deboursChoisi?.reste ?? 0)
+    : estLigneDirecteSelectionne
+      ? (ligneDirecteSelectionnee?.resteAPayer ?? 0)
+      : (choisie?.echeance.reste ?? 0)
+  const cible = estDeboursSelectionne || estLigneDirecteSelectionne ? null : choisie
   const apresPaiement = reste - montant
   const tauxEcheance = attendu > 0 ? Math.min(100, Math.round((dejaPaye / attendu) * 100)) : 0
 
   const montantDepasse = montant > reste
   const dateHorsPeriode =
-    Boolean(choisie) &&
+    !estDeboursSelectionne &&
+    !estLigneDirecteSelectionne &&
+    Boolean(cible) &&
     Boolean(datePaiement) &&
-    ((choisie!.debutService !== null && datePaiement < choisie!.debutService) ||
-      (choisie!.finService !== null && datePaiement > choisie!.finService))
+    ((cible!.debutService !== null && datePaiement < cible!.debutService) ||
+      (cible!.finService !== null && datePaiement > cible!.finService))
+  const cibleValide =
+    estDeboursSelectionne
+      ? Boolean(deboursChoisi && deboursChoisi.factureValideeId != null)
+      : estLigneDirecteSelectionne
+        ? Boolean(ligneDirecteSelectionnee && ligneDirecteSelectionnee.factureValideeId != null)
+        : Boolean(cible && cible.factureValideeId != null)
   const champValide =
-    Boolean(choisie) &&
+    Boolean(cibleValide) &&
     Boolean(modeChoisi) &&
     Boolean(datePaiement) &&
     montant > 0 &&
     !montantDepasse &&
     !dateHorsPeriode &&
-    (!estVirement || refVirement.trim().length > 0)
+    (!estVirement || refVirement.trim().length > 0) &&
+    (!estCheque || (banque.trim().length > 0 && numeroCheque.trim().length > 0))
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -142,8 +222,30 @@ export function NouveauPaiementPage() {
       setError('Sélectionnez une demande.')
       return
     }
-    if (!choisie) {
+    if (typeReglement === 'DEBOURS' && !deboursChoisi) {
+      setError('Sélectionnez un débours à régler.')
+      return
+    }
+    if (typeReglement === 'ECHEANCE' && !choisie) {
       setError('Sélectionnez une échéance à régler.')
+      return
+    }
+    if (typeReglement === 'LIGNE_DIRECTE' && !ligneDirecteSelectionnee) {
+      setError('Sélectionnez une ligne à régler.')
+      return
+    }
+    if (typeReglement === 'DEBOURS' && deboursChoisi?.factureValideeId == null) {
+      setError('Ce débours n’a pas de facture validée : validez d’abord son montant.')
+      return
+    }
+    if (typeReglement === 'LIGNE_DIRECTE' && ligneDirecteSelectionnee?.factureValideeId == null) {
+      setError(ligneDirecteSelectionnee!.factureMensuelleRequise
+        ? 'Créez d’abord la facture du mois dans le détail de la demande.'
+        : 'Cette ligne n’a pas de facture validée à régler.')
+      return
+    }
+    if (typeReglement === 'ECHEANCE' && choisie?.factureValideeId == null) {
+      setError('L’échéance n’a pas de facture validée associée.')
       return
     }
     if (!modeChoisi) {
@@ -164,7 +266,7 @@ export function NouveauPaiementPage() {
     }
     if (dateHorsPeriode) {
       setError(
-        `Le paiement doit être effectué entre le début et la fin du service (${formatDate(choisie!.debutService)} – ${formatDate(choisie!.finService)}).`,
+        `Le paiement doit être effectué entre le début et la fin du service (${formatDate(cible!.debutService)} – ${formatDate(cible!.finService)}).`,
       )
       return
     }
@@ -172,12 +274,24 @@ export function NouveauPaiementPage() {
       setError('La référence du virement est obligatoire pour un virement.')
       return
     }
+    if (estCheque && !banque.trim()) {
+      setError('La banque est obligatoire pour un chèque.')
+      return
+    }
+    if (estCheque && !numeroCheque.trim()) {
+      setError('Le numéro de chèque est obligatoire pour un chèque.')
+      return
+    }
 
     setConfirmation(true)
   }
 
   async function confirmerEnregistrement() {
-    if (!choisie || !modeChoisi || !demandeId) return
+    if (
+      (!estDeboursSelectionne && !choisie && !estLigneDirecteSelectionne)
+      || !modeChoisi
+      || !demandeId
+    ) return
 
     setSubmitting(true)
     try {
@@ -185,11 +299,18 @@ export function NouveauPaiementPage() {
       if (!paiement) {
         const cree = await paiementsApi.create({
           demandeId,
-          echeanceId: choisie.echeance.id,
+          factureValideeId: estLigneDirecteSelectionne
+            ? ligneDirecteSelectionnee!.factureValideeId!
+            : estDeboursSelectionne
+              ? deboursChoisi!.factureValideeId!
+              : choisie!.factureValideeId!,
+          echeanceId: estDeboursSelectionne || estLigneDirecteSelectionne ? null : choisie!.echeance.id,
           modePaiementId: modeChoisi.id,
           datePaiement,
           montantPaye: montant,
           referenceVirement: estVirement ? refVirement.trim() : null,
+          banque: estCheque ? banque.trim() : null,
+          numeroCheque: estCheque ? numeroCheque.trim() : null,
           commentaire: commentaire.trim() || null,
         })
         paiement = { id: cree.id, reference: cree.referencePaiement }
@@ -205,14 +326,16 @@ export function NouveauPaiementPage() {
         await documentsApi.uploadPaiement(paiement.id, fichier, null)
       }
 
-      navigate(`/paiements/echeanciers/${choisie.referenceDemande}`)
+      navigate(estDeboursSelectionne || estLigneDirecteSelectionne
+        ? `/demandes/${reglatable?.demande?.referenceDemande ?? referenceParam ?? ''}`
+        : `/paiements/echeanciers/${choisie!.referenceDemande}`)
     } catch (err) {
       setErreurEnregistrement(messageErreur(err))
       setSubmitting(false)
     }
   }
 
-  const chargement = loadingDemandes || loadingEcheances
+  const chargement = loadingDemandes || loadingEcheances || loadingReference
 
   return (
     <div className="app-page responsables-page">
@@ -245,7 +368,7 @@ export function NouveauPaiementPage() {
                 </div>
               )}
 
-              <h3>1 · Demande et échéance</h3>
+              <h3>1 · Demande et règlement</h3>
               <div className="form-grid">
                 <label className="field form-grid__full">
                   Demande <span className="required">*</span>
@@ -257,12 +380,14 @@ export function NouveauPaiementPage() {
                       // affichée doit toujours correspondre à la saisie.
                       setDemandeId(null)
                       setEcheanceChoisie(null)
+                      setLigneDirecteChoisie(null)
                       setError(null)
                     }}
                     onPick={(option) => {
                       if (!option) return
                       setDemandeId(Number(option.id))
                       setEcheanceChoisie(null)
+                      setLigneDirecteChoisie(null)
                       setError(null)
                     }}
                     options={optionsDemandes}
@@ -275,6 +400,25 @@ export function NouveauPaiementPage() {
                   </span>
                 </label>
 
+                <div className="field form-grid__full">
+                  <span className="field-label">Type de règlement</span>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input type="radio" name="typeReglement" checked={typeReglement === 'ECHEANCE'} onChange={() => setTypeReglement('ECHEANCE')} />
+                      Échéance (Externalisation)
+                    </label>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input type="radio" name="typeReglement" checked={typeReglement === 'DEBOURS'} onChange={() => setTypeReglement('DEBOURS')} disabled={deboursList.length === 0} />
+                      Débours (ligne)
+                    </label>
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input type="radio" name="typeReglement" checked={typeReglement === 'LIGNE_DIRECTE'} onChange={() => setTypeReglement('LIGNE_DIRECTE')} disabled={lignesDirectesList.length === 0} />
+                      Ligne directe (Prestation / Abonnement)
+                    </label>
+                  </div>
+                </div>
+
+                {typeReglement === 'ECHEANCE' ? (
                 <label className="field form-grid__full">
                   Échéance <span className="required">*</span>
                   <select
@@ -299,16 +443,123 @@ export function NouveauPaiementPage() {
                     restent dues sont listées.
                   </span>
                 </label>
+                ) : typeReglement === 'DEBOURS' ? (
+                <label className="field form-grid__full">
+                  Débours <span className="required">*</span>
+                  <select
+                    value={ligneDeboursChoisie ?? ''}
+                    onChange={(e) => setLigneDeboursChoisie(e.target.value ? Number(e.target.value) : null)}
+                    required
+                  >
+                    <option value="">— Choisir —</option>
+                    {deboursList.map((d) => (
+                      <option key={d.ligneId} value={d.ligneId}>
+                        {d.designation}{d.referenceFactureValidee ? ` (facture ${d.referenceFactureValidee})` : ''} — reste {formatMontantMGA(d.reste)}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="form-help">Lignes DEBOURS non soldées (Non payé / Partiel).</span>
+                  {deboursChoisi && deboursChoisi.factureValideeId == null && (
+                    <Alert tone="warning">
+                      Ce débours n’a pas de facture validée : validez son montant depuis la fiche
+                      demande (bouton « Valider le montant », onglet Services) — la facture
+                      validée du débours est créée à ce moment-là.
+                    </Alert>
+                  )}
+                </label>
+                ) : (
+                <label className="field form-grid__full">
+                  Ligne à régler <span className="required">*</span>
+                  <select
+                    value={ligneDirecteChoisie ?? ''}
+                    onChange={(e) => setLigneDirecteChoisie(e.target.value ? Number(e.target.value) : null)}
+                    required
+                  >
+                    <option value="">— Choisir —</option>
+                    {lignesDirectesList.map((d) => (
+                      <option key={d.ligneId} value={d.ligneId} disabled={d.factureMensuelleRequise}>
+                        {d.nomService ?? d.ligneLabel} ({d.typePrestation === 'PRESTATION' ? 'Prestation' : 'Abonnement mensuel'}) —{' '}
+                        {d.factureMensuelleRequise
+                          ? 'facture du mois à créer'
+                          : `reste ${formatMontantMGA(d.resteAPayer)}`}
+                      </option>
+                    ))}
+                  </select>
+                  {ligneDirecteSelectionnee?.factureMensuelleRequise && (
+                    <Alert tone="warning">
+                      Aucune facture du mois n&apos;est ouverte pour cet abonnement.{' '}
+                      <Link
+                        to={`/demandes/${encodeURIComponent(ligneDirecteSelectionnee.referenceDemande)}`}
+                      >
+                        Créez la facture du mois dans le détail de la demande
+                      </Link>{' '}
+                      puis revenez ici pour l&apos;encaisser.
+                    </Alert>
+                  )}
+                  {ligneDirecteSelectionnee && !ligneDirecteSelectionnee.factureMensuelleRequise && (
+                    <p className="form-help">
+                      {ligneDirecteSelectionnee.typePrestation === 'ABONNEMENT_MENSUEL'
+                        ? `Facture du mois ${ligneDirecteSelectionnee.referenceFactureValidee ?? ''}`
+                          + ` (facture générale ${ligneDirecteSelectionnee.referenceFactureGenerale ?? '—'}`
+                          + `${ligneDirecteSelectionnee.referenceFactureProforma ? ` · proforma ${ligneDirecteSelectionnee.referenceFactureProforma}` : ''}).`
+                        : `Facture validée ${ligneDirecteSelectionnee.referenceFactureValidee ?? ''}.`}
+                    </p>
+                  )}
+                  <span className="form-help">
+                    Lignes PRESTATION / ABONNEMENT_MENSUEL réglables directement sur la facture validée (pas d’échéance ni de plan de paiement).
+                  </span>
+                </label>
+                )}
               </div>
 
-              {demandeId && !chargement && echeances.length === 0 && (
+              {demandeId && !chargement && typeReglement === 'ECHEANCE' && echeances.length === 0 && deboursList.length === 0 && lignesDirectesList.length === 0 && (
                 <Alert tone="warning">
-                  Cette demande n&apos;a aucune échéance non soldée. Un plan de paiement doit être
-                  établi — et sa facture validée — avant tout règlement.
+                  Cette demande n&apos;a aucune échéance non soldée ni ligne réglable.
+                  {(reglatable?.deboursEnAttente?.length ?? 0) > 0 ? (
+                    <>
+                      {' '}Des débours sont en attente de validation du montant ({reglatable?.deboursEnAttente?.map((d) => d.designation).join(', ')}) :
+                      {' '}
+                      <Link
+                        className="btn-link"
+                        to={`/demandes/${encodeURIComponent(reglatable?.demande?.referenceDemande ?? '')}?onglet=services`}
+                      >
+                        ouvrez la fiche demande → Services
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      {' '}Un plan de paiement doit être établi — et sa facture validée — avant tout règlement.
+                    </>
+                  )}
+                </Alert>
+              )}
+              {demandeId && !chargement && (reglatable?.deboursEnAttente?.length ?? 0) > 0 && deboursList.length === 0 && (
+                <Alert tone="warning">
+                  Demande&nbsp;: certaines lignes débours sont <b>en attente de validation du montant</b>
+                  {' '}({reglatable?.deboursEnAttente?.map((d) => d.designation).join(', ')}) et ne sont
+                  donc pas réglables ici. Validez d'abord leur montant depuis la fiche de la demande,
+                  onglet Services (bouton « Valider le montant ») :
+                  {' '}
+                  <Link
+                    className="btn-link"
+                    to={`/demandes/${encodeURIComponent(reglatable?.demande?.referenceDemande ?? '')}?onglet=services`}
+                  >
+                    Ouvrir la fiche demande →
+                  </Link>
+                </Alert>
+              )}
+              {demandeId && !chargement && typeReglement === 'DEBOURS' && deboursList.length === 0 && (reglatable?.deboursEnAttente?.length ?? 0) === 0 && (
+                <Alert tone="warning">
+                  Cette demande n&apos;a aucun débours à régler (montant validé avec reste dû).
+                </Alert>
+              )}
+              {demandeId && !chargement && typeReglement === 'LIGNE_DIRECTE' && lignesDirectesList.length === 0 && (
+                <Alert tone="warning">
+                  Cette demande n&apos;a aucune ligne Prestation / Abonnement mensuel réglable directement.
                 </Alert>
               )}
 
-              {choisie && (
+              {cibleValide && (
                 <>
                   <h3 style={{ marginTop: 24 }}>2 · Règlement</h3>
                   <div className="form-grid">
@@ -318,14 +569,14 @@ export function NouveauPaiementPage() {
                       <input
                         type="date"
                         value={datePaiement}
-                        min={choisie.debutService ?? undefined}
-                        max={choisie.finService ?? undefined}
+                        min={cible?.debutService ?? undefined}
+                        max={cible?.finService ?? undefined}
                         onChange={(e) => setDatePaiement(e.target.value)}
                         required
                       />
                       <span className="form-help">
-                        {choisie.debutService || choisie.finService
-                          ? `Période du service : ${formatDate(choisie.debutService)} – ${formatDate(choisie.finService)}.`
+                        {cible?.debutService || cible?.finService
+                          ? `Période du service : ${formatDate(cible?.debutService)} – ${formatDate(cible?.finService)}.`
                           : 'La date doit être comprise dans la période du service.'}
                       </span>
                     </label>
@@ -356,7 +607,7 @@ export function NouveauPaiementPage() {
                         </button>
                       </div>
                       <span className="form-help">
-                        Reste à payer sur l&apos;échéance : {formatMontantMGA(reste)}.
+                        Reste à payer : {formatMontantMGA(reste)}.
                       </span>
                     </div>
 
@@ -378,6 +629,10 @@ export function NouveauPaiementPage() {
                               onChange={() => {
                                 setModeId(m.id)
                                 if (m.code?.toUpperCase() !== VIREMENT) setRefVirement('')
+                                if (m.code?.toUpperCase() !== CHEQUE) {
+                                  setBanque('')
+                                  setNumeroCheque('')
+                                }
                               }}
                             />
                             {m.libelle}
@@ -403,6 +658,34 @@ export function NouveauPaiementPage() {
                           Obligatoire pour un règlement par virement (150 caractères maximum).
                         </span>
                       </label>
+                    )}
+                    {estCheque && (
+                      <>
+                        <label className="field">
+                          Banque <span className="required">*</span>
+                          <input
+                            value={banque}
+                            onChange={(e) => setBanque(e.target.value)}
+                            placeholder="Ex. BNI Madagascar"
+                            maxLength={150}
+                            required
+                          />
+                        </label>
+                        <label className="field">
+                          N° de chèque <span className="required">*</span>
+                          <input
+                            value={numeroCheque}
+                            onChange={(e) => setNumeroCheque(e.target.value)}
+                            placeholder="Ex. 00004521"
+                            maxLength={100}
+                            inputMode="numeric"
+                            required
+                          />
+                        </label>
+                        <p className="form-help form-grid__full" style={{ margin: 0 }}>
+                          Obligatoires pour un règlement par chèque : la banque émettrice et le numéro du chèque.
+                        </p>
+                      </>
                     )}
                   </div>
                 </>
@@ -453,25 +736,33 @@ export function NouveauPaiementPage() {
           <h3>Récapitulatif</h3>
           <div className="rc">
             <span>Client</span>
-            <strong>{choisie?.nomSociete ?? '—'}</strong>
+            <strong>{choisie?.nomSociete ?? reglatable?.demande?.nomSociete ?? '—'}</strong>
           </div>
           <div className="rc">
             <span>Demande</span>
-            <strong>{choisie?.referenceDemande ?? '—'}</strong>
+            <strong>{choisie?.referenceDemande ?? reglatable?.demande?.referenceDemande ?? '—'}</strong>
           </div>
           <div className="rc">
-            <span>Service</span>
-            <strong>{choisie?.ligneLabel ?? '—'}</strong>
+            <span>{estDeboursSelectionne ? 'Débours' : 'Service'}</span>
+            <strong>{libelleCible ?? '—'}</strong>
           </div>
+          {referenceFactureCible && (
+            <div className="rc">
+              <span>Facture validée</span>
+              <strong>{referenceFactureCible}</strong>
+            </div>
+          )}
           <div className="rc">
             <span>Échéance</span>
             <strong>
-              {choisie
+              {estDeboursSelectionne || estLigneDirecteSelectionne
+                ? '— (sans échéance)'
+                : choisie
                 ? `N° ${choisie.echeance.numeroEcheance} - ${formatDate(choisie.echeance.dateEcheance)}`
                 : '—'}
             </strong>
           </div>
-          {choisie && (
+          {choisie && !estDeboursSelectionne && (
             <div style={{ margin: '4px 0 8px' }}>
               <EcheancePill statut={choisie.echeance.statut} />
             </div>
@@ -490,10 +781,10 @@ export function NouveauPaiementPage() {
             <strong style={{ color: 'var(--danger)' }}>{formatMontantMGA(reste)}</strong>
           </div>
 
-          {choisie && (
+          {cibleValide && (
             <div className="progression" style={{ marginTop: 4 }}>
               <div className="progression__label" style={{ marginBottom: 0 }}>
-                <span>Échéance réglée</span>
+                <span>{estDeboursSelectionne ? 'Débours réglé' : estLigneDirecteSelectionne ? 'Ligne réglée' : 'Échéance réglée'}</span>
                 <strong>{tauxEcheance} %</strong>
               </div>
               <div
@@ -513,8 +804,16 @@ export function NouveauPaiementPage() {
             {montant <= 0
               ? 'saisissez un montant supérieur à 0.'
               : apresPaiement <= 0
-                ? `échéance n° ${choisie?.echeance.numeroEcheance} soldée (0 MGA).`
-                : `reste ${formatMontantMGA(apresPaiement)} sur l'échéance n° ${choisie?.echeance.numeroEcheance}.`}
+                ? estDeboursSelectionne
+                  ? `débours « ${deboursChoisi?.designation ?? ''} » soldé (0 MGA).`
+                  : estLigneDirecteSelectionne
+                    ? `ligne « ${libelleCible ?? ''} » soldée (0 MGA).`
+                    : `échéance n° ${choisie?.echeance.numeroEcheance} soldée (0 MGA).`
+                : estDeboursSelectionne
+                  ? `reste ${formatMontantMGA(apresPaiement)} sur le débours « ${deboursChoisi?.designation ?? ''} ».`
+                  : estLigneDirecteSelectionne
+                    ? `reste ${formatMontantMGA(apresPaiement)} sur la ligne « ${libelleCible ?? ''} ».`
+                    : `reste ${formatMontantMGA(apresPaiement)} sur l'échéance n° ${choisie?.echeance.numeroEcheance}.`}
           </div>
 
           {(montantDepasse || dateHorsPeriode) && (
@@ -527,7 +826,7 @@ export function NouveauPaiementPage() {
             </div>
           )}
 
-          {choisie && (
+          {cibleValide && (
             <div style={{ marginTop: 14 }}>
               <div className="rc">
                 <span>Mode</span>
@@ -539,16 +838,30 @@ export function NouveauPaiementPage() {
                   <strong>{refVirement.trim() || '—'}</strong>
                 </div>
               )}
+              {estCheque && (
+                <>
+                  <div className="rc">
+                    <span>Banque</span>
+                    <strong>{banque.trim() || '—'}</strong>
+                  </div>
+                  <div className="rc">
+                    <span>N° de chèque</span>
+                    <strong>{numeroCheque.trim() || '—'}</strong>
+                  </div>
+                </>
+              )}
               <div className="rc">
                 <span>Date</span>
                 <strong>{datePaiement ? formatDate(datePaiement) : '—'}</strong>
               </div>
+              {!estDeboursSelectionne && choisie && (
               <Link
                 to={`/paiements/echeanciers/${choisie.referenceDemande}`}
                 className="btn-link success"
               >
                 Voir l&apos;échéancier ›
               </Link>
+              )}
             </div>
           )}
         </aside>
@@ -558,7 +871,11 @@ export function NouveauPaiementPage() {
         open={confirmation}
         titre="Confirmer l'enregistrement du paiement"
         message={
-          choisie
+          estDeboursSelectionne
+            ? `Ce règlement sera imputé sur le débours « ${deboursChoisi?.designation ?? ''} » de la demande ${reglatable?.demande?.referenceDemande ?? ''}. L'opération est définitive : le reçu PDF pourra être téléchargé depuis l'historique.`
+          : estLigneDirecteSelectionne
+            ? `Ce règlement sera imputé sur la facture validée ${referenceFactureCible ?? ''} du service « ${libelleCible ?? ''} » de la demande ${reglatable?.demande?.referenceDemande ?? ''}. L'opération est définitive : le reçu PDF pourra être téléchargé depuis l'historique.`
+          : choisie
             ? `Ce règlement sera imputé sur l'échéance n° ${choisie.echeance.numeroEcheance} du service « ${choisie.ligneLabel} » de la demande ${choisie.referenceDemande}. L'opération est définitive : le reçu PDF pourra être téléchargé depuis l'historique.`
             : ''
         }
@@ -574,25 +891,30 @@ export function NouveauPaiementPage() {
         }}
         onConfirmer={() => void confirmerEnregistrement()}
         details={
-          choisie ? (
+          cibleValide ? (
             <div style={{ marginTop: 14 }}>
               <div className="rc">
                 <span>Demande</span>
-                <strong>{choisie.referenceDemande}</strong>
+                <strong>{choisie?.referenceDemande ?? reglatable?.demande?.referenceDemande ?? ''}</strong>
               </div>
               <div className="rc">
                 <span>Client</span>
-                <strong>{choisie.nomSociete ?? '—'}</strong>
+                <strong>{choisie?.nomSociete ?? reglatable?.demande?.nomSociete ?? '—'}</strong>
               </div>
               <div className="rc">
-                <span>Service</span>
-                <strong>{choisie.ligneLabel}</strong>
+                <span>{estDeboursSelectionne ? 'Débours' : 'Service'}</span>
+                <strong>{libelleCible ?? ''}</strong>
               </div>
+              {referenceFactureCible && (
+                <div className="rc">
+                  <span>Facture validée</span>
+                  <strong>{referenceFactureCible}</strong>
+                </div>
+              )}
               <div className="rc">
                 <span>Échéance</span>
                 <strong>
-                  N° {choisie.echeance.numeroEcheance} —{' '}
-                  {formatDate(choisie.echeance.dateEcheance)}
+                  {estDeboursSelectionne || estLigneDirecteSelectionne ? '—' : choisie ? `N° ${choisie.echeance.numeroEcheance} — ${formatDate(choisie.echeance.dateEcheance)}` : '—'}
                 </strong>
               </div>
               <div className="rc">
@@ -610,6 +932,18 @@ export function NouveauPaiementPage() {
                   <span>Réf. virement</span>
                   <strong>{refVirement.trim() || '—'}</strong>
                 </div>
+              )}
+              {estCheque && (
+                <>
+                  <div className="rc">
+                    <span>Banque</span>
+                    <strong>{banque.trim() || '—'}</strong>
+                  </div>
+                  <div className="rc">
+                    <span>N° de chèque</span>
+                    <strong>{numeroCheque.trim() || '—'}</strong>
+                  </div>
+                </>
               )}
               <div className="rc">
                 <span>Date</span>

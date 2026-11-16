@@ -11,7 +11,15 @@ public record CreatePaiementRequest(
         @NotNull(message = "La demande est obligatoire")
         Integer demandeId,
 
-        @NotNull(message = "L'échéance est obligatoire")
+        /**
+         * Facture validée liée au paiement. Toujours requise :
+         * - EXTERNALISATION : facture validée issue de la proforma
+         * - DEBOURS : facture validée créée pour le débours
+         */
+        @NotNull(message = "La facture validée est obligatoire")
+        Integer factureValideeId,
+
+        /** Échéance réglée (EXTERNALISATION avec plan de paiement). NULL sinon. */
         Integer echeanceId,
 
         @NotNull(message = "Le mode de paiement est obligatoire")
@@ -26,6 +34,14 @@ public record CreatePaiementRequest(
 
         @Size(max = 150, message = "La référence de virement ne doit pas dépasser 150 caractères")
         String referenceVirement,
+
+        /** Banque émettrice du chèque (mode CHÈQUE). */
+        @Size(max = 150, message = "La banque ne doit pas dépasser 150 caractères")
+        String banque,
+
+        /** Numéro de chèque (mode CHÈQUE). */
+        @Size(max = 100, message = "Le numéro de chèque ne doit pas dépasser 100 caractères")
+        String numeroCheque,
 
         String commentaire,
 

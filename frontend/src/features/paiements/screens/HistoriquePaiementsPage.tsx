@@ -14,7 +14,7 @@ export function HistoriquePaiementsPage() {
   const { data: modes } = useModesPaiement()
 
   const exporter = () => {
-    const header = 'Reference;Demande;Client;Date;Montant;Mode;Utilisateur;RefVirement'
+    const header = 'Reference;Demande;Client;Date;Montant;Mode;Utilisateur;RefVirement;Banque;NumeroCheque'
     const rows = items.map((p) =>
       [
         p.referencePaiement,
@@ -25,6 +25,8 @@ export function HistoriquePaiementsPage() {
         p.libelleMode,
         p.createdByName ?? '',
         p.referenceVirement ?? '',
+        p.banque ?? '',
+        p.numeroCheque ?? '',
       ].join(';'),
     )
     const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8' })

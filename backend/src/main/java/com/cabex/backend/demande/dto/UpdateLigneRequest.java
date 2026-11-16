@@ -6,6 +6,10 @@ import java.time.LocalDate;
 public record UpdateLigneRequest(
         BigDecimal tarif,
         LocalDate debutService,
-        LocalDate finService
+        LocalDate finService,
+        /** Désignation (DEBOURS en EN_ATTENTE uniquement). */
+        String designationDebours,
+        /** Sous-type PRESTATION / ABONNEMENT_MENSUEL (EXTERNALISATION + STANDARD). */
+        String typePrestation
 ) {
 }

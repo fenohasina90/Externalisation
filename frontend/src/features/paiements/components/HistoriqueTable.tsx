@@ -44,6 +44,8 @@ export function HistoriqueTable({ items }: { items:Paiement[] }) {
           <th>Mode de paiement</th>
           <th>Utilisateur</th>
           <th>Réf. virement</th>
+          <th>Banque</th>
+          <th>N° chèque</th>
           <th>Détail</th>
           <th>Reçu</th>
         </tr>
@@ -61,6 +63,8 @@ export function HistoriqueTable({ items }: { items:Paiement[] }) {
             </td>
             <td>{p.createdByName ?? '—'}</td>
             <td className="text-secondary">{p.referenceVirement ?? '—'}</td>
+            <td className="text-secondary">{p.banque ?? '—'}</td>
+            <td className="text-secondary">{p.numeroCheque ?? '—'}</td>
             <td>
               <Link
                 to={`/paiements/historique/${encodeURIComponent(p.referencePaiement)}`}

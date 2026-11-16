@@ -46,20 +46,23 @@ public class DemandeController {
     @GetMapping
     @PreAuthorize("hasAuthority('DEMANDE_VIEW')")
     @Operation(summary = "Lister / rechercher / filtrer les demandes",
-            description = "Pagination, recherche par référence, filtres société/service/commercial/statut/dates/actif")
+            description = "Pagination, recherche par référence, filtres société/service/commercial/statut/dates/actif/situation/catégorie/type de prestation")
     public ResponseEntity<Page<DemandeResponse>> getAll(
             @RequestParam(required = false) String recherche,
             @RequestParam(required = false) Integer societeId,
             @RequestParam(required = false) Integer serviceId,
             @RequestParam(required = false) Integer commercialId,
-@RequestParam(required = false) String statut,
+            @RequestParam(required = false) String statut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(required = false) Boolean actif,
             @RequestParam(required = false) String situation,
+            @RequestParam(required = false) String categorie,
+            @RequestParam(required = false) String typePrestation,
             Pageable pageable) {
         return ResponseEntity.ok(demandeService.getAll(recherche, societeId, serviceId,
-                commercialId, statut, dateDebut, dateFin, actif, situation, pageable));
+                commercialId, statut, dateDebut, dateFin, actif, situation,
+                normaliser(categorie), normaliser(typePrestation), pageable));
     }
 
     @GetMapping("/{id}")
@@ -124,5 +127,14 @@ public class DemandeController {
     @Operation(summary = "Lister les statuts possibles d'une demande")
     public ResponseEntity<List<StatutResponse>> getStatuts() {
         return ResponseEntity.ok(demandeService.getStatuts());
+    }
+
+    /** Normalise les filtres texte : trim + majuscules. */
+    private static String normaliser(String valeur) {
+        if (valeur == null) {
+            return null;
+        }
+        String trim = valeur.trim();
+        return trim.isEmpty() ? null : trim.toUpperCase(java.util.Locale.ROOT);
     }
 }

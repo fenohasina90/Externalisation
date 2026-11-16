@@ -1,7 +1,6 @@
 package com.cabex.backend.facture.entity;
 
 import com.cabex.backend.demande.entity.DemandeService;
-import com.cabex.backend.utilisateur.entity.Utilisateur;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -9,15 +8,22 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
- * Facture proforma puis validée. Mode UNIQUE : une facture pour toute la
- * demande ; mode PAR_SERVICE : une facture par ligne de service.
+ * Facture <b>proforma</b> (table {@code facture_proforma}).
+ * Mode UNIQUE : une facture pour toute la demande ;
+ * mode PAR_SERVICE : une facture par ligne de service.
+ * Le montant proforma est modifiable tant que PROFORMA ; à la validation,
+ * une ligne de {@link FactureValidee} est créée avec son propre montant
+ * (qui peut différer) et sa référence XXXXXEXT/TNR/YYYY. La proforma
+ * reste visible/appelable après validation.
  */
 @Entity
-@Table(name = "facture")
+@Table(name = "facture_proforma")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -29,6 +35,7 @@ public class Facture {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    /** Référence PROFORMA : PRO-DDMMYYYY-XXXXX (toujours visible). */
     @Column(name = "reference_facture", nullable = false, unique = true, length = 100)
     private String referenceFacture;
 
@@ -47,12 +54,9 @@ public class Facture {
     @Builder.Default
     private String statut = "PROFORMA";
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "valide_par")
-    private Utilisateur validePar;
-
-    @Column(name = "valide_le")
-    private LocalDateTime valideLe;
+    /** Facture validée correspondante (null tant que PROFORMA). */
+    @OneToOne(mappedBy = "factureProforma", fetch = FetchType.LAZY)
+    private FactureValidee factureValidee;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -65,4 +69,14 @@ public class Facture {
     @OneToMany(mappedBy = "facture", fetch = FetchType.LAZY)
     @Builder.Default
     private Set<com.cabex.backend.demande.entity.LigneService> lignes = new HashSet<>();
+
+    /**
+     * Lignes persistées de la proforma : contenu exact affiché (désignation, PU,
+     * quantité, HTVA, remise, net commercial), figé au moment de la génération.
+     */
+    @OneToMany(mappedBy = "factureProforma", fetch = FetchType.LAZY,
+            cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("ordre ASC")
+    @Builder.Default
+    private List<FactureProformaLigne> lignesProforma = new java.util.ArrayList<>();
 }

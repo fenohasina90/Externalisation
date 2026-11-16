@@ -68,7 +68,7 @@ export function DemandesTable({ items }: Props) {
         {items.map((d) => {
           const nbServices = d.lignes?.length ?? 0
           const noms = (d.lignes ?? [])
-            .map((l) => l.nomService)
+            .map((l) => (l.categorie === 'DEBOURS' ? l.designationDebours : l.nomService))
             .filter((n): n is string => n !== null)
           const premier = noms[0] ?? '—'
           return (
@@ -77,6 +77,9 @@ export function DemandesTable({ items }: Props) {
               <td>{d.nomSociete ?? '—'}</td>
               <td>
                 <span className="fw-600">{premier}</span>
+                {(d.lignes ?? []).some((l) => l.categorie === 'DEBOURS') && (
+                  <div className="cell-hint">Débours</div>
+                )}
                 {nbServices > 1 && <div className="cell-hint">+ {nbServices - 1} autre{nbServices > 2 ? 's' : ''}</div>}
               </td>
               <td className="fw-600">{formatMontantMGA(d.montantTotal)}</td>

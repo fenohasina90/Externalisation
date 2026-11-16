@@ -20,6 +20,10 @@ DROP TABLE IF EXISTS echeance_paiement;
 DROP TABLE IF EXISTS propos_paiement;
 DROP TABLE IF EXISTS historique_ligne_service;
 DROP TABLE IF EXISTS ligne_service;
+DROP TABLE IF EXISTS facture_validee_ligne;
+DROP TABLE IF EXISTS facture_validee;
+DROP TABLE IF EXISTS facture_proforma;
+-- Ancien nom (rétro-compatibilité)
 DROP TABLE IF EXISTS facture;
 DROP TABLE IF EXISTS dossier_transaction_immobiliere;
 DROP TABLE IF EXISTS dossier_associe;
@@ -255,6 +259,47 @@ CREATE TABLE commercial (
 
 -- =========================================================
 -- 10. SERVICES
+
+-- =========================================================
+-- Facture proforma : lignes persistées (DÉSIGNATION / PU / QTÉ
+-- / MONTANT HTVA / REMISE / NET COMMERCIAL).
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS facture_proforma_ligne (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    facture_proforma_id INT NOT NULL,
+
+    ligne_service_id INT NULL,
+
+    categorie VARCHAR(30) NOT NULL DEFAULT 'EXTERNALISATION',
+
+    type_prestation VARCHAR(30) NULL,
+
+    ordre INT NOT NULL DEFAULT 0,
+
+    designation VARCHAR(255) NOT NULL,
+
+    pu DECIMAL(15,2) NOT NULL DEFAULT 0,
+
+    quantite DECIMAL(10,2) NOT NULL DEFAULT 1,
+
+    montant_htva DECIMAL(15,2) NOT NULL DEFAULT 0,
+
+    remise DECIMAL(15,2) NOT NULL DEFAULT 0,
+
+    net_commercial DECIMAL(15,2) NOT NULL DEFAULT 0,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_facture_proforma_ligne_facture (facture_proforma_id, ordre),
+    INDEX idx_facture_proforma_ligne_ligne (ligne_service_id),
+
+    FOREIGN KEY (facture_proforma_id) REFERENCES facture_proforma(id) ON DELETE CASCADE,
+    FOREIGN KEY (ligne_service_id) REFERENCES ligne_service(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+
 -- =========================================================
 
 CREATE TABLE services (
@@ -706,6 +751,11 @@ CREATE TABLE paiement (
 
     demande_id INT NOT NULL,
 
+    -- Facture validée liée au paiement (toujours renseignée)
+    facture_validee_id INT NOT NULL,
+
+    -- Échéance réglée (EXTERNALISATION avec plan de paiement).
+    -- NULL pour DEBOURS / PRESTATION / ABONNEMENT_MENSUEL.
     echeance_id INT NULL,
 
     mode_paiement_id INT NOT NULL,
@@ -715,6 +765,11 @@ CREATE TABLE paiement (
     montant_paye DECIMAL(15,2) NOT NULL,
 
     reference_virement VARCHAR(150) NULL,
+
+    -- Chèque : banque et numéro de chèque (autres modes : NULL)
+    banque VARCHAR(150) NULL,
+
+    numero_cheque VARCHAR(100) NULL,
 
     commentaire TEXT,
 
@@ -733,6 +788,11 @@ CREATE TABLE paiement (
     CONSTRAINT fk_paiement_demande
         FOREIGN KEY (demande_id)
         REFERENCES demande_service(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_paiement_facture_validee
+        FOREIGN KEY (facture_validee_id)
+        REFERENCES facture_validee(id)
         ON DELETE RESTRICT,
 
     CONSTRAINT fk_paiement_echeance
@@ -757,6 +817,9 @@ CREATE TABLE paiement (
 CREATE INDEX idx_paiement_demande
 ON paiement(demande_id);
 
+CREATE INDEX idx_paiement_facture_validee
+ON paiement(facture_validee_id);
+
 CREATE INDEX idx_paiement_echeance
 ON paiement(echeance_id);
 
@@ -765,6 +828,7 @@ ON paiement(date_paiement);
 
 CREATE INDEX idx_paiement_mode
 ON paiement(mode_paiement_id);
+
 
 -- =========================================================
 -- 19. PIECES JOINTES
@@ -1024,7 +1088,8 @@ INSERT INTO mode_paiement
 (code, libelle)
 VALUES
 ('ESPECES', 'Espèces'),
-('VIREMENT', 'Virement bancaire');
+('VIREMENT', 'Virement bancaire'),
+('CHEQUE', 'Chèque');
 
 -- =========================================================
 -- 27. PERMISSIONS
@@ -1240,6 +1305,9 @@ VALUES
 ('FACTURE_VALIDATE', 'Valider une facture',
  'FACTURE', 'Valider une facture proforma'),
 
+('FACTURE_ABONNEMENT_CREATE', 'Créer la facture mensuelle d''abonnement',
+ 'FACTURE', 'Créer la facture du mois d''un abonnement (enfant de la facture générale validée)'),
+
 -- Sauvegarde (module hors ligne)
 ('BACKUP_VIEW', 'Consulter les sauvegardes',
  'SAUVEGARDE', 'Lister et télécharger les sauvegardes de la base'),
@@ -1351,7 +1419,8 @@ AND p.code_permission IN (
 
     'DOSSIER_VIEW',
 
-    'FACTURE_VIEW'
+    'FACTURE_VIEW',
+    'FACTURE_ABONNEMENT_CREATE'
 );
 
 -- =========================================================
@@ -1437,28 +1506,53 @@ VALUES
     'http://localhost:5173',
     'STRING',
     'URL de base du frontend utilisée pour construire les liens envoyés par email'
+),
+
+(
+    'JOURS_RETARD_PRESTATION_DEBOURS',
+    '5',
+    'INTEGER',
+    'Alerte de retard de paiement (prestation et débours) : nombre de jours après la validation de la facture avant déclenchement de la notification'
+),
+
+(
+    'JOURS_RETARD_ABONNEMENT',
+    '7',
+    'INTEGER',
+    'Alerte de retard de paiement (abonnement mensuel) : nombre de jours après la date d''émission de la facture mensuelle avant déclenchement de la notification'
+),
+
+(
+    'JOUR_CREATION_FACTURE_MENSUELLE',
+    '15',
+    'INTEGER',
+    'Jour du mois de création de la facture mensuelle d''abonnement (rappel uniquement — la facture peut être créée à n''importe quelle date)'
+),
+
+(
+    'JOURS_RAPPEL_AVANT_CREATION_MENSUELLE',
+    '5',
+    'INTEGER',
+    'Nombre de jours avant la création de la facture mensuelle pour envoyer un rappel (le jour J, un rappel est également émis)'
 );
 
 -- =========================================================
--- 32. FACTURES (PROFORMA PUIS VALIDÉES)
+-- 32. FACTURES PROFORMA puis VALIDÉES (deux tables)
 -- =========================================================
 
-CREATE TABLE facture (
+CREATE TABLE facture_proforma (
     id INT AUTO_INCREMENT PRIMARY KEY,
 
+    -- Référence PROFORMA : PRO-DDMMYYYY-XXXXX (toujours visible)
     reference_facture VARCHAR(100) NOT NULL UNIQUE,
 
     demande_id INT NOT NULL,
 
     mode_facturation ENUM('UNIQUE', 'PAR_SERVICE') NOT NULL DEFAULT 'PAR_SERVICE',
 
-    montant DECIMAL(15,2) NOT NULL,
+    montant DECIMAL(15,2) NOT NULL COMMENT 'Montant proforma',
 
     statut VARCHAR(50) NOT NULL DEFAULT 'PROFORMA',
-
-    valide_par INT NULL,
-
-    valide_le DATETIME NULL,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -1470,20 +1564,133 @@ CREATE TABLE facture (
         REFERENCES demande_service(id)
         ON DELETE RESTRICT,
 
-    CONSTRAINT fk_facture_valide_par
-        FOREIGN KEY (valide_par)
-        REFERENCES utilisateur(id)
-        ON DELETE SET NULL,
-
     CONSTRAINT chk_facture_montant
         CHECK (montant >= 0)
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_facture_demande
-ON facture(demande_id);
+ON facture_proforma(demande_id);
 
 CREATE INDEX idx_facture_reference
-ON facture(reference_facture);
+ON facture_proforma(reference_facture);
+
+CREATE TABLE facture_validee (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    -- Référence VALIDÉE : XXXXXEXT/TNR/YYYY
+    reference_facture_validee VARCHAR(50) NOT NULL UNIQUE,
+
+    -- NULL pour une validée sans proforma (débours)
+    facture_proforma_id INT NULL UNIQUE,
+
+    -- Pour ABONNEMENT_MENSUEL : facture validée "générale" de l'abonnement.
+    -- NULL si cette facture est elle-même la générale (ou pour les cas simples).
+    facture_generale_id INT NULL,
+
+    -- Ligne DEBOURS concernée (NULL pour EXTERNALISATION)
+    ligne_service_id INT NULL,
+
+    demande_id INT NOT NULL,
+
+    -- Mois facturé par une facture du mois d'abonnement (premier du mois), NULL sinon
+    mois DATE NULL COMMENT 'Mois facturé par la facture du mois d''abonnement',
+
+    montant DECIMAL(15,2) NOT NULL COMMENT 'Montant validé (peut différer du proforma)',
+
+    valide_par INT NULL,
+
+    valide_le DATETIME NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_facture_validee_proforma
+        FOREIGN KEY (facture_proforma_id)
+        REFERENCES facture_proforma(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_facture_validee_generale
+        FOREIGN KEY (facture_generale_id)
+        REFERENCES facture_validee(id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_facture_validee_ligne
+        FOREIGN KEY (ligne_service_id)
+        REFERENCES ligne_service(id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_facture_validee_demande
+        FOREIGN KEY (demande_id)
+        REFERENCES demande_service(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT fk_facture_validee_valide_par
+        FOREIGN KEY (valide_par)
+        REFERENCES utilisateur(id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT chk_facture_validee_montant
+        CHECK (montant >= 0)
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_facture_validee_demande
+ON facture_validee(demande_id);
+
+CREATE INDEX idx_facture_validee_generale
+ON facture_validee(facture_generale_id);
+
+CREATE INDEX idx_facture_validee_ligne
+ON facture_validee(ligne_service_id);
+
+-- =========================================================
+-- 32bis. LIGNES D'UNE FACTURE VALIDÉE (facture mensuelle d'abonnement)
+-- Une facture validée peut être multi-lignes (facture combinée du mois) :
+-- chaque ligne porte sa propre désignation et son montant ; la somme des
+-- lignes correspond au montant de la facture validée.
+-- =========================================================
+
+CREATE TABLE facture_validee_ligne (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    facture_validee_id INT NOT NULL,
+
+    -- Ligne de service incluse (abonnement lui-même, prestation incluse, débours inclus)
+    ligne_service_id INT NOT NULL,
+
+    -- Désignation figée au moment de la création de la facture
+    designation VARCHAR(255) NOT NULL,
+
+    -- Nature de la ligne : PRINCIPALE (l'abonnement, seul élément payable sur cette facture)
+    -- ou RAPPEL (prestation / débours impayé mentionné à titre d'information ; se règle sur sa propre facture validée)
+    type VARCHAR(20) NOT NULL DEFAULT 'PRINCIPALE' COMMENT 'PRINCIPALE ou RAPPEL',
+
+    -- Montant à facturer pour cette ligne (tarif mensuel pour l'abonnement,
+    -- reste dû pour les éléments inclus)
+    montant DECIMAL(15,2) NOT NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_facture_validee_ligne_facture
+        FOREIGN KEY (facture_validee_id)
+        REFERENCES facture_validee(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_facture_validee_ligne_ligne
+        FOREIGN KEY (ligne_service_id)
+        REFERENCES ligne_service(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT chk_facture_validee_ligne_montant
+        CHECK (montant >= 0)
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_facture_validee_ligne_facture
+ON facture_validee_ligne(facture_validee_id);
+
+CREATE INDEX idx_facture_validee_ligne_ligne
+ON facture_validee_ligne(ligne_service_id);
 
 -- =========================================================
 -- 33. LIGNES DE SERVICE (UN SERVICE AU SEIN D'UNE DEMANDE)
@@ -1494,15 +1701,30 @@ CREATE TABLE ligne_service (
 
     demande_id INT NOT NULL,
 
-    service_id INT NOT NULL,
+    -- NULL pour les lignes DEBOURS (sans service catalogue)
+    service_id INT NULL,
 
-    tarif DECIMAL(15,2) NOT NULL,
+    tarif DECIMAL(15,2) NULL,
 
-    debut_service DATE NOT NULL,
+    -- Tarif figé à la génération de la proforma (la ligne peut ensuite évoluer)
+    tarif_proforma DECIMAL(15,2) NULL COMMENT 'Tarif figé à la génération de la proforma',
 
-    fin_service DATE NOT NULL,
+    debut_service DATE NULL,
+
+    fin_service DATE NULL,
 
     statut VARCHAR(50) NULL,
+
+    -- Catégorie par ligne : EXTERNALISATION ou DEBOURS
+    categorie VARCHAR(30) NOT NULL DEFAULT 'EXTERNALISATION',
+
+    -- DEBOURS uniquement (NULL pour EXTERNALISATION)
+    designation_debours VARCHAR(255) NULL,
+
+    montant_debours DECIMAL(15,2) NULL,
+
+    -- Sous-type STANDARD (EXTERNALISATION uniquement) : PRESTATION / ABONNEMENT_MENSUEL
+    type_prestation VARCHAR(30) NULL,
 
     facture_id INT NULL,
 
@@ -1523,18 +1745,30 @@ CREATE TABLE ligne_service (
 
     CONSTRAINT fk_ligne_facture
         FOREIGN KEY (facture_id)
-        REFERENCES facture(id)
+        REFERENCES facture_proforma(id)
         ON DELETE SET NULL,
 
     CONSTRAINT chk_ligne_dates
-        CHECK (fin_service >= debut_service),
+        CHECK (fin_service IS NULL OR debut_service IS NULL OR fin_service >= debut_service),
 
     CONSTRAINT chk_ligne_tarif
-        CHECK (tarif >= 0)
+        CHECK (tarif IS NULL OR tarif >= 0),
+
+    CONSTRAINT chk_ligne_montant_debours
+        CHECK (montant_debours IS NULL OR montant_debours > 0),
+
+    CONSTRAINT chk_ligne_type_prestation
+        CHECK (type_prestation IS NULL OR type_prestation IN ('PRESTATION', 'ABONNEMENT_MENSUEL'))
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_ligne_demande
 ON ligne_service(demande_id);
+
+CREATE INDEX idx_ligne_categorie
+ON ligne_service(categorie);
+
+CREATE INDEX idx_ligne_type_prestation
+ON ligne_service(type_prestation);
 
 CREATE INDEX idx_ligne_service
 ON ligne_service(service_id);

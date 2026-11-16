@@ -3,13 +3,17 @@ package com.cabex.backend.paiement;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.client.repository.SocieteRepository;
 import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
+import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.echeance.entity.ProposPaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import com.cabex.backend.echeance.repository.ProposPaiementRepository;
-import com.cabex.backend.demande.entity.LigneService;
-import com.cabex.backend.demande.repository.LigneServiceRepository;
+import com.cabex.backend.facture.entity.Facture;
+import com.cabex.backend.facture.entity.FactureValidee;
+import com.cabex.backend.facture.repository.FactureRepository;
+import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.paiement.entity.ModePaiement;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.cabex.backend.paiement.repository.ModePaiementRepository;
@@ -56,6 +60,10 @@ class PaiementRechercheTest {
     private ServiceRepository serviceRepository;
     @Autowired
     private DomaineServiceRepository domaineRepository;
+    @Autowired
+    private FactureRepository factureRepository;
+    @Autowired
+    private FactureValideeRepository factureValideeRepository;
 
     private ModePaiement virement;
 
@@ -68,11 +76,27 @@ class PaiementRechercheTest {
                 .build());
     }
 
+    private FactureValidee factureValidee(DemandeService demande, BigDecimal montant) {
+        Facture proforma = factureRepository.save(Facture.builder()
+                .referenceFacture("PRO-" + String.format("%05d", demande.getId()))
+                .demande(demande)
+                .montant(montant)
+                .statut("VALIDEE")
+                .build());
+        return factureValideeRepository.save(FactureValidee.builder()
+                .referenceFactureValidee(String.format("%05d/EXT/TNR/2026", demande.getId()))
+                .factureProforma(proforma)
+                .demande(demande)
+                .montant(montant)
+                .build());
+    }
+
     private Paiement paiement(String reference, DemandeService demande, ModePaiement mode,
-                              String refVirement, boolean actif) {
+                              String refVirement, boolean actif, FactureValidee fv) {
         return paiementRepository.save(Paiement.builder()
                 .referencePaiement(reference)
                 .demande(demande)
+                .factureValidee(fv)
                 .modePaiement(mode)
                 .datePaiement(LocalDate.of(2026, 10, 20))
                 .montantPaye(new BigDecimal("250000"))
@@ -138,10 +162,12 @@ class PaiementRechercheTest {
                 .build());
 
         DemandeService d1 = demandeAvecEcheance("DEM-2026-00017", atlas, "1000000");
-        paiement("PAY-2026-00001", d1, virement, "VIR-2026-1004", true);
+        FactureValidee fv1 = factureValidee(d1, new BigDecimal("1000000"));
+        paiement("PAY-2026-00001", d1, virement, "VIR-2026-1004", true, fv1);
 
         DemandeService d2 = demande("DEM-2026-00018", null);
-        paiement("PAY-2026-00002", d2, especes, null, true);
+        FactureValidee fv2 = factureValidee(d2, new BigDecimal("500000"));
+        paiement("PAY-2026-00002", d2, especes, null, true, fv2);
     }
 
     @Test
@@ -173,8 +199,6 @@ class PaiementRechercheTest {
                 "atlas", null, null, null, null, Pageable.unpaged());
         assertEquals(1, parClient.getTotalElements());
 
-        // Libellé du mode sans accent à tester (« Virement »), la comparaison
-        // étant faite sur LOWER().
         var parMode = paiementRepository.rechercher(
                 "virement", null, null, null, null, Pageable.unpaged());
         assertEquals(1, parMode.getTotalElements());
@@ -209,7 +233,9 @@ class PaiementRechercheTest {
     @Test
     void paiementArchiveExcluDuFiltre() {
         jeuDeDonnees();
-        paiement("PAY-2026-00009", demande("DEM-2026-00019", null), virement, null, false);
+        DemandeService d9 = demande("DEM-2026-00019", null);
+        FactureValidee fv9 = factureValidee(d9, new BigDecimal("500000"));
+        paiement("PAY-2026-00009", d9, virement, null, false, fv9);
 
         var page = paiementRepository.rechercher(
                 "DEM-2026-00019", null, null, null, null, Pageable.unpaged());
@@ -222,7 +248,8 @@ class PaiementRechercheTest {
     void paiementArchiveExcluDeLaRechercheGlobale() {
         jeuDeDonnees();
         DemandeService dArchive = demande("DEM-2026-00021", null);
-        paiement("PAY-2026-00010", dArchive, virement, null, true);
+        FactureValidee fv21 = factureValidee(dArchive, new BigDecimal("500000"));
+        paiement("PAY-2026-00010", dArchive, virement, null, true, fv21);
 
         var resultats = paiementRepository.rechercherGlobale(
                 "DEM-2026-00021", Pageable.unpaged());

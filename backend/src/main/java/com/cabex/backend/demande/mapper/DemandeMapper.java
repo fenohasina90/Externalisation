@@ -11,6 +11,7 @@ import com.cabex.backend.demande.entity.HistoriqueDemande;
 import com.cabex.backend.demande.entity.HistoriqueLigneService;
 import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.entity.StatutDemande;
+import com.cabex.backend.demande.service.LigneServiceService;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -135,6 +136,7 @@ public class DemandeMapper {
         if (l == null) {
             return null;
         }
+        String libelleLigne = libelleLigne(l);
         return new LigneServiceResponse(
                 l.getId(),
                 l.getDemande() != null ? l.getDemande().getId() : null,
@@ -149,8 +151,32 @@ public class DemandeMapper {
                 l.getFacture() != null ? l.getFacture().getId() : null,
                 l.getFacture() != null ? l.getFacture().getReferenceFacture() : null,
                 montantPaye,
-                resteAPayer
+                resteAPayer,
+                l.getCategorie() != null ? l.getCategorie() : "EXTERNALISATION",
+                l.getDesignationDebours(),
+                l.getMontantDebours(),
+                l.getTypePrestation(),
+                libelleLigne
         );
+    }
+
+    /**
+     * Libellé affiché pour une ligne : "Prestation" pour PRESTATION,
+     * "Abonnement mensuel" pour ABONNEMENT_MENSUEL, "Débours — désignation"
+     * pour DEBOURS, sinon le nom du service.
+     */
+    public static String libelleLigne(LigneService l) {
+        if (LigneServiceService.estDebours(l)) {
+            String d = l.getDesignationDebours();
+            return "Débours — " + (d != null && !d.isBlank() ? d.trim() : "Débours");
+        }
+        if (LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(l.getTypePrestation())) {
+            return "Abonnement mensuel";
+        }
+        if (LigneServiceService.PRESTATION.equalsIgnoreCase(l.getTypePrestation())) {
+            return "Prestation";
+        }
+        return l.getService() != null ? l.getService().getNomService() : null;
     }
 
     public static HistoriqueLigneResponse toHistoriqueLigneResponse(HistoriqueLigneService h,

@@ -1,6 +1,8 @@
 export { DemandesTable, StatutDemandePill, PaiementPill, SituationPaiementPill } from './DemandesTable'
 export { DemandeStepper } from './DemandeStepper'
 export { ChangerStatutModal } from './ChangerStatutModal'
+export { FactureApercuModal } from './FactureApercuModal'
+export type { FactureApercu } from './FactureApercuModal'
 export { DossierEntrepriseDetail } from './DossierEntrepriseDetail'
 export { DossierEntrepriseFormModal } from './DossierEntrepriseFormModal'
 export { DossierTransactionImmobiliereDetail } from './DossierTransactionImmobiliereDetail'

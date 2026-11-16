@@ -86,6 +86,8 @@ export interface PaiementFiche {
   datePaiement: string | null
   montantPaye: number | null
   referenceVirement: string | null
+  banque: string | null
+  numeroCheque: string | null
 }
 
 export interface PieceJointeFiche {

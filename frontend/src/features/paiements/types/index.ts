@@ -37,45 +37,68 @@ export interface Paiement {
   referenceDemande: string
   societeId: number | null
   nomSociete: string | null
+  factureValideeId: number | null
+  referenceFactureValidee: string | null
   echeanceId: number | null
   modePaiementId: number
   libelleMode: string
   datePaiement: string
   montantPaye: number
   referenceVirement: string | null
+  /** Banque émettrice du chèque (mode CHÈQUE, sinon null). */
+  banque: string | null
+  /** Numéro de chèque (mode CHÈQUE, sinon null). */
+  numeroCheque: string | null
   commentaire: string | null
   pieceJustificative: string | null
   createdById: number | null
   createdByName: string | null
 }
 
-/** Détail d'un paiement : informations du reçu PDF (échéance, montants, montant en lettres). */
+/** Détail d'un paiement : informations du reçu PDF (facture validée, montants, montant en lettres). */
 export interface PaiementDetail extends Paiement {
   numeroEcheance: number | null
   dateEcheance: string | null
+  /** Type de facture validée liée (GENERALE | PRESTATION | DEBOURS | ABONNEMENT_MENSUEL). */
+  typeFacture: string | null
   nomService: string | null
-  montantAttendu: number | null
-  montantPayeEcheance: number | null
-  resteAPayer: number | null
+  /** Date d'émission de la facture validée liée. */
+  dateFactureValidee: string | null
+  /** Mois facturé (ABONNEMENT_MENSUEL uniquement). */
+  moisFacture: string | null
+  /** Montant de la facture validée payée. */
+  montantFactureValidee: number | null
+  /** Total des paiements actifs sur cette facture (ce paiement inclus). */
+  montantPayeSurFacture: number | null
+  /** Reste à payer sur la facture (tient compte de tous les paiements). */
+  resteAPayerFacture: number | null
   montantEnLettres: string | null
 }
 
 export interface CreatePaiementPayload {
   demandeId: number
-  echeanceId: number
+  /** Facture validée liée au paiement (toujours requise). */
+  factureValideeId: number
+  /** Échéance réglée (EXTERNALISATION avec plan de paiement). NULL sinon. */
+  echeanceId?: number | null
   modePaiementId: number
   datePaiement: string
   montantPaye: number
   referenceVirement?: string | null
+  /** Banque émettrice du chèque (mode CHÈQUE). */
+  banque?: string | null
+  /** Numéro de chèque (mode CHÈQUE). */
+  numeroCheque?: string | null
   commentaire?: string | null
   pieceJustificative?: string | null
 }
 
 export interface UpdatePaiementPayload {
-  echeanceId?: number | null
   datePaiement: string
   montantPaye: number
   referenceVirement?: string | null
+  banque?: string | null
+  numeroCheque?: string | null
   commentaire?: string | null
 }
 
@@ -90,12 +113,17 @@ export interface EcheanceReglable {
   /** Période de service : le backend borne la date du paiement à cet intervalle. */
   debutService: string | null
   finService: string | null
+  /** Facture validée de la ligne (proforma validée), liée au paiement. */
+  factureValideeId: number | null
+  /** Référence de la facture validée (pour affichage). */
+  referenceFactureValidee: string | null
 }
 
 /** Plan d'une ligne de service avec son rattachement (utilisé par les écrans d'échéancier). */
 export interface PlanParLigne {
   ligneId: number
   ligneLabel: string
+  typePrestation: string | null
   debutService: string | null
   finService: string | null
   plan: PlanPaiement | null

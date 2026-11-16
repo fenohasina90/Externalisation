@@ -20,6 +20,11 @@ final class PdfDocument {
         /** Facture proforma : pied de page ancré en bas, sans pagination. */
         FACTURE(PdfTheme.MARGE_DOCUMENT, PdfTheme.MARGE_DOCUMENT, 26,
                 PdfTheme.HAUTEUR_PIED_FACTURE, PdfDecor.Mode.FACTURE),
+
+
+        /** Reçu de paiement : en-tête complet compact pour tenir sur une page. */
+        RECU_PAIEMENT(PdfTheme.MARGE_DOCUMENT, PdfTheme.MARGE_DOCUMENT, 78,
+                30, PdfDecor.Mode.ENTETE),
         /** Fiche de création : aucun décor. */
         FICHE(PdfTheme.MARGE_DOCUMENT, PdfTheme.MARGE_DOCUMENT, 26, 40, PdfDecor.Mode.SANS_PIED);
 

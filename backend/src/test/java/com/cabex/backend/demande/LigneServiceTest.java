@@ -16,6 +16,8 @@ import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ResourceNotFoundException;
+import com.cabex.backend.facture.entity.FactureValidee;
+import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.facture.service.FactureService;
 import com.cabex.backend.service.entity.Service;
 import com.cabex.backend.service.repository.ServiceRepository;
@@ -52,6 +54,9 @@ class LigneServiceTest {
     @Mock private UtilisateurRepository utilisateurRepository;
     @Mock private AuditService auditService;
     @Mock private FactureService factureService;
+    @Mock private com.cabex.backend.paiement.repository.PaiementRepository paiementRepository;
+    @Mock private FactureValideeRepository factureValideeRepository;
+    @Mock private com.cabex.backend.facture.repository.FactureValideeLigneRepository factureValideeLigneRepository;
 
     private LigneServiceService service;
 
@@ -60,7 +65,9 @@ class LigneServiceTest {
         service = new LigneServiceService(ligneRepository, historiqueLigneRepository,
                 demandeRepository, historiqueDemandeRepository, statutDemandeRepository,
                 serviceRepository, proposRepository, utilisateurRepository,
-                auditService, factureService);
+                auditService, factureService, paiementRepository, factureValideeRepository,
+                factureValideeLigneRepository);
+        lenient().when(paiementRepository.sommePayeeParFactureValidee(anyInt())).thenReturn(BigDecimal.ZERO);
         lenient().when(historiqueDemandeRepository.findFirstByDemandeIdOrderByIdDesc(any()))
                 .thenReturn(Optional.of(HistoriqueDemande.builder()
                         .statut(StatutDemande.builder().statut("EN_ATTENTE").build()).build()));
@@ -73,6 +80,10 @@ class LigneServiceTest {
                 l.setId(1);
             }
             return l;
+        });
+        lenient().when(ligneRepository.findById(1)).thenAnswer(inv -> {
+            LigneService l = LigneService.builder().id(1).build();
+            return Optional.of(l);
         });
     }
 
@@ -91,7 +102,8 @@ class LigneServiceTest {
 
     private CreateLigneRequest requete(Integer serviceId, String tarif) {
         return new CreateLigneRequest(serviceId, new BigDecimal(tarif),
-                LocalDate.of(2026, 10, 18), LocalDate.of(2026, 12, 16));
+                LocalDate.of(2026, 10, 18), LocalDate.of(2026, 12, 16),
+                "EXTERNALISATION", null, null, null);
     }
 
     @Test
@@ -186,7 +198,7 @@ class LigneServiceTest {
         when(ligneRepository.findById(1)).thenReturn(Optional.of(ligne));
 
         var reponse = service.modifier(1, new UpdateLigneRequest(
-                new BigDecimal("2500000"), null, null));
+                new BigDecimal("2500000"), null, null, null, null));
 
         assertEquals(new BigDecimal("2500000"), reponse.tarif());
         verify(factureService).actualiserPourDemande(17);
@@ -196,7 +208,7 @@ class LigneServiceTest {
     void ligneInexistante404() {
         when(ligneRepository.findById(999)).thenReturn(Optional.empty());
         assertThrows(ResourceNotFoundException.class,
-                () -> service.modifier(999, new UpdateLigneRequest(null, null, null)));
+                () -> service.modifier(999, new UpdateLigneRequest(null, null, null, null, null)));
     }
 
     @Test
@@ -224,7 +236,7 @@ class LigneServiceTest {
         when(ligneRepository.findById(1)).thenReturn(Optional.of(ligne));
 
         assertThrows(BusinessException.class, () -> service.modifier(1,
-                new UpdateLigneRequest(new BigDecimal("2500000"), null, null)));
+                new UpdateLigneRequest(new BigDecimal("2500000"), null, null, null, null)));
         assertThrows(BusinessException.class, () -> service.retirer(1));
     }
 }
