@@ -311,7 +311,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                         <td className="fw-700">{general.referenceFactureValidee ?? '—'}</td>
                         <td><span className={TYPE_PILL[general.type] ?? 'pill info'}>● {TYPE_LABEL[general.type] ?? general.type}</span></td>
                         <td className="text-secondary">{nomClient}</td>
-                        <td>{`Facture-${general.referenceDemande ?? '—'}`}</td>
+                        <td>{`Facture générale ${general.referenceDemande ?? '—'}`}</td>
                         <td className="cell-number fw-700">{formatMontantMGA(montantGeneral)}</td>
                         <td className="cell-number fw-700">{formatMontantMGA(encaisseGeneral)}</td>
                         <td className="cell-number" style={resteGeneral > 0 ? { color: 'var(--danger)' } : undefined}>
