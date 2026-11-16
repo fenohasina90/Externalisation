@@ -26,6 +26,8 @@ public record FactureValideeFicheResponse(
         String referenceDemande,
         /** Objet précis : nom du service, désignation du débours ou « Facture générale ». */
         String objet,
+        /** Type sous-jacent : PRESTATION | DEBOURS | ABONNEMENT_MENSUEL (ou GENERALE si indéterminée). */
+        String objetType,
         /** Mois facturé au format AAAA-MM (ABONNEMENT_MENSUEL uniquement). */
         String mois,
         BigDecimal montant,

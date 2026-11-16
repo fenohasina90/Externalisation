@@ -95,6 +95,10 @@ class FactureFacturationClientTest {
                 .tarif(new BigDecimal("95000")).facture(proforma).build();
 
         Utilisateur agent = Utilisateur.builder().id(7).prenom("Système").nom("Administrateur").build();
+        org.mockito.Mockito.lenient()
+                .when(ligneRepository.findByDemandeIdOrderByIdAsc(11))
+                .thenReturn(List.of(lignePrestation));
+
         FactureValidee generale = FactureValidee.builder().id(101)
                 .referenceFactureValidee("00001EXT/TNR/2026")
                 .factureProforma(proforma).demande(demande)
@@ -144,12 +148,14 @@ class FactureFacturationClientTest {
 
         FactureValideeFicheResponse g = fiches.get(0);
         assertEquals("GENERALE", g.type());
-        assertEquals("Facture générale — DEM-2026-00011", g.objet());
+        assertEquals("Déclaration sociale", g.objet());
+        assertEquals("PRESTATION", g.objetType());
         assertEquals(new BigDecimal("165000"), g.montant());
 
         FactureValideeFicheResponse presta = fichePaiementAvecPaiement("00002EXT/TNR/2026",
                 new BigDecimal("75000"), new BigDecimal("25000"));
         assertEquals("PRESTATION", presta.type());
+        assertEquals("PRESTATION", presta.objetType());
         assertEquals(101, presta.factureGeneraleId());
         assertEquals("00001EXT/TNR/2026", presta.referenceFactureGenerale());
         assertEquals("Déclaration sociale", presta.objet());
@@ -162,6 +168,7 @@ class FactureFacturationClientTest {
         FactureValideeFicheResponse mois = fichePaiementAvecPaiement("00003EXT/TNR/2026",
                 new BigDecimal("95000"), new BigDecimal("30000"));
         assertEquals("ABONNEMENT_MENSUEL", mois.type());
+        assertEquals("ABONNEMENT_MENSUEL", mois.objetType());
         assertEquals("Comptabilité mensuelle", mois.objet());
         assertEquals("2026-11", mois.mois());
         assertEquals(new BigDecimal("30000"), mois.montantPaye());

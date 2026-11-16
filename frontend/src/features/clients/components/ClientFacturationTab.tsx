@@ -249,6 +249,13 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
               {groupesPage.map((groupe) => {
                 const general = groupe.general
                 const enfants = groupe.enfants
+                // Facture générale sans sous-facture mais réglée directement :
+                // elle s'affiche comme sa propre sous-facture pour montrer
+                // son objet et son type (prestation / débours / abonnement).
+                const estStandIn = enfants.length === 0 && !!general
+                const enfantsAffiches = estStandIn && general
+                  ? [{ ...general, type: general.objetType ?? 'PRESTATION' }]
+                  : enfants
                 const paiementGeneral = general ? general.paiements : []
                 const montantGeneral = general
                   ? (enfants.length > 0 ? sommeFactures(enfants) : (general.montant ?? 0))
@@ -264,7 +271,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                     {general && (
                       <tr className="facture-rang-general">
                         <td className="text-secondary">
-                          {general.paiements.length > 0 && (
+                          {general.paiements.length > 0 && !estStandIn && (
                             <button type="button" className="expand-toggle"
                                     onClick={() => toggle(general.id)}
                                     aria-expanded={estOuverte(general.id)}
@@ -293,11 +300,13 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                         <td>{statutGeneral && <span className={statutGeneral.pill}>{statutGeneral.libelle}</span>}</td>
                       </tr>
                     )}
-                    {general && estOuverte(general.id) &&
+                    {general && !estStandIn && estOuverte(general.id) &&
                       paiementGeneral.map((p) => (
                         <LigneReglement key={`${general.id}-p-${p.id}`} paiement={p} nomClient={nomClient} />
                       ))}
-                    {enfants.map((enfant) => {
+                    {enfantsAffiches.map((enfant) => {
+                      const afficherRefGenerale = !estStandIn && enfant.referenceFactureGenerale
+
                       const payeEnfant = enfant.montantPaye ?? sommePaiements(enfant.paiements)
                       const montantEnfant = enfant.montant ?? 0
                       const resteEnfant = Math.max(0, montantEnfant - payeEnfant)
@@ -330,18 +339,13 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                             </td>
                             <td className="fw-700">
                               {enfant.referenceFactureValidee ?? '—'}
-                              {enfant.referenceFactureGenerale && (
+                              {afficherRefGenerale && (
                                 <span className="facture-sousligne">Générale {enfant.referenceFactureGenerale}</span>
                               )}
                             </td>
                             <td><span className={TYPE_PILL[enfant.type] ?? 'pill wt'}>● {TYPE_LABEL[enfant.type] ?? enfant.type}</span></td>
                             <td className="text-secondary">{nomClient}</td>
-                            <td>
-                              {designation}
-                              {enfant.referenceDemande && (
-                                <span className="facture-sousligne">Demande {enfant.referenceDemande}</span>
-                              )}
-                            </td>
+                            <td>{designation}</td>
                             <td className="cell-number">{formatMontantMGA(montantEnfant)}</td>
                             <td className="cell-number">{formatMontantMGA(payeEnfant)}</td>
                             <td className="cell-number" style={resteEnfant > 0 ? { color: 'var(--danger)' } : undefined}>

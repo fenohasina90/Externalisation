@@ -136,6 +136,12 @@ export interface FactureFacturation {
   referenceDemande: string | null
   /** Objet précis : nom du service, désignation du débours ou « Facture générale ». */
   objet: string | null
+  /**
+   * Type sous-jacent de la facture : PRESTATION | DEBOURS | ABONNEMENT_MENSUEL.
+   * Pour une facture générale adossée à des lignes de proforma, on y lit le type
+   * de sa première ligne (utile quand elle est réglée directement).
+   */
+  objetType: string | null
   /** Format AAAA-MM (ABONNEMENT_MENSUEL uniquement). */
   mois: string | null
   montant: number | null

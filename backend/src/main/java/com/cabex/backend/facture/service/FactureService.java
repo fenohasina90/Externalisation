@@ -781,6 +781,45 @@ public class FactureService {
         return List.of();
     }
 
+    /**
+     * Ligne de service liée à la facture validée : la ligne directe (enfant),
+     * ou la première ligne de la proforma (facture générale proforma validée).
+     */
+    private LigneService resolveLignePourValidee(FactureValidee fv) {
+        LigneService ligne = fv.getLigneService();
+        if (ligne == null && fv.getFactureProforma() != null
+                && fv.getFactureProforma().getDemande() != null) {
+            List<LigneService> lignesProforma = ligneRepository
+                    .findByDemandeIdOrderByIdAsc(fv.getFactureProforma().getDemande().getId()).stream()
+                    .filter(l -> l.getFacture() != null
+                            && l.getFacture().getId().equals(fv.getFactureProforma().getId()))
+                    .toList();
+            ligne = lignesProforma.isEmpty() ? null : lignesProforma.get(0);
+        }
+        return ligne;
+    }
+
+    /** Type sous-jacent d'une facture générale (PRESTATION / DEBOURS / ABONNEMENT_MENSUEL), ou le type propre d'un enfant. */
+    private String typeObjetFiche(FactureValidee fv, LigneService ligne) {
+        if (fv.getFactureGenerale() != null) {
+            return typeFactureValidee(fv, ligne);
+        }
+        if (ligne != null && LigneServiceService.estDebours(ligne)) {
+            return "DEBOURS";
+        }
+        if (ligne != null && LigneServiceService.ABONNEMENT_MENSUEL
+                .equalsIgnoreCase(ligne.getTypePrestation())) {
+            return "ABONNEMENT_MENSUEL";
+        }
+        if (ligne != null) {
+            return "PRESTATION";
+        }
+        if (fv.getFactureProforma() == null) {
+            return "DEBOURS";
+        }
+        return "GENERALE";
+    }
+
     /** Type de la facture validée : GENERALE (proforma validée), sinon enfant lié à la générale. */
     private String typeFactureValidee(FactureValidee fv, LigneService ligne) {
         if (fv.getFactureGenerale() != null) {
@@ -828,7 +867,7 @@ public class FactureService {
         BigDecimal montant = fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO;
         BigDecimal reste = montant.subtract(paye).max(BigDecimal.ZERO);
 
-        LigneService ligne = fv.getLigneService();
+        LigneService ligne = resolveLignePourValidee(fv);
         List<FactureValideeFicheResponse.PaiementFicheItem> items = paiements.stream()
                 .map(p -> new FactureValideeFicheResponse.PaiementFicheItem(
                         p.getId(),
@@ -853,6 +892,7 @@ public class FactureService {
                 fv.getDemande() != null ? fv.getDemande().getId() : null,
                 fv.getDemande() != null ? fv.getDemande().getReferenceDemande() : null,
                 objetFicheFacture(fv, ligne),
+                typeObjetFiche(fv, ligne),
                 fv.getMois() != null
                         ? java.time.format.DateTimeFormatter.ofPattern("yyyy-MM").format(fv.getMois()) : null,
                 montant,
@@ -888,17 +928,7 @@ public class FactureService {
         BigDecimal montant = fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO;
         BigDecimal reste = montant.subtract(paye).max(BigDecimal.ZERO);
 
-        LigneService ligne = fv.getLigneService();
-        // Pour une facture générale (proforma validée), la ligne vient de la proforma.
-        if (ligne == null && fv.getFactureProforma() != null
-                && fv.getFactureProforma().getDemande() != null) {
-            List<LigneService> lignesProforma = ligneRepository
-                    .findByDemandeIdOrderByIdAsc(fv.getFactureProforma().getDemande().getId()).stream()
-                    .filter(l -> l.getFacture() != null
-                            && l.getFacture().getId().equals(fv.getFactureProforma().getId()))
-                    .toList();
-            ligne = lignesProforma.isEmpty() ? null : lignesProforma.get(0);
-        }
+        LigneService ligne = resolveLignePourValidee(fv);
         String libelleLigne;
         if (ligne != null && LigneServiceService.estDebours(ligne)) {
             libelleLigne = ligne.getDesignationDebours() != null ? ligne.getDesignationDebours() : "Débours";
