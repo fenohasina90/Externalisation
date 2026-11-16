@@ -263,6 +263,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                 <th>Montant facturé</th>
                 <th>Montant encaissé</th>
                 <th>Montant impayé</th>
+                <th>État de paiement</th>
                 <th>Observation</th>
               </tr>
             </thead>
@@ -318,6 +319,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                           {formatMontantMGA(resteGeneral)}
                         </td>
                         <td>{statutGeneral && <span className={statutGeneral.pill}>{statutGeneral.libelle}</span>}</td>
+                        <td className="text-secondary">—</td>
                       </tr>
                     )}
                     {general && !estStandIn && !repliee &&
@@ -372,6 +374,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                               {formatMontantMGA(resteEnfant)}
                             </td>
                             <td><span className={statutEnfant.pill}>{statutEnfant.libelle}</span></td>
+                            <td className="text-secondary">—</td>
                           </tr>
                           {estOuverte(enfant.id) &&
                             triPaiements.map((p) => (
@@ -401,6 +404,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                   <td className="cell-number fw-700" style={totaux.montant - totaux.paye > 0 ? { color: 'var(--danger)' } : undefined}>
                     {formatMontantMGA(Math.max(0, totaux.montant - totaux.paye))}
                   </td>
+                  <td />
                   <td />
                 </tr>
               </tfoot>
@@ -449,16 +453,12 @@ function LigneReglement({ paiement, nomClient }: { paiement: PaiementFacturation
       </td>
       <td><span className="pill ok">● Règlement</span></td>
       <td className="text-secondary">{nomClient}</td>
-      <td>
-        {libelleMode}
-        {paiement.commentaire && paiement.commentaire.trim() && (
-          <span className="facture-sousligne">{paiement.commentaire}</span>
-        )}
-      </td>
+      <td>{libelleMode}</td>
       <td className="text-secondary">—</td>
       <td className="cell-number">{formatMontantMGA(montant)}</td>
       <td className="text-secondary">—</td>
       <td><span className="pill ok">Encaissé</span></td>
+      <td className="facture-observation">{paiement.commentaire?.trim() || '—'}</td>
     </tr>
   )
 }

@@ -4193,3 +4193,11 @@ body.page-responsables {
   font-size: 11.5px;
   color: var(--text-muted);
 }
+
+/* Onglet Facturation : cellule observation compacte (ellipse pour les commentaires longs) */
+.facture-observation {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
