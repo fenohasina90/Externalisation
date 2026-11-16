@@ -52,6 +52,19 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
     @Query("SELECT p FROM Paiement p WHERE p.demande.societe.id = :societeId AND p.actif = true ORDER BY p.datePaiement DESC")
     List<Paiement> findBySocieteId(@Param("societeId") Integer societeId);
 
+    /**
+     * Paiements d'un client pour l'onglet « Facturation » (fiche client).
+     * Charge le mode et l'auteur du paiement pour l'affichage du sous-contenu.
+     */
+    @Query("""
+        SELECT p FROM Paiement p
+        JOIN FETCH p.modePaiement
+        LEFT JOIN FETCH p.createdBy
+        WHERE p.demande.societe.id = :societeId AND p.actif = true
+        ORDER BY p.datePaiement ASC, p.id ASC
+        """)
+    List<Paiement> findBySocieteIdForFacturation(@Param("societeId") Integer societeId);
+
     @Query("""
         SELECT p.demande.societe.id, COALESCE(SUM(p.montantPaye), 0)
         FROM Paiement p

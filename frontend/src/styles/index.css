@@ -4145,3 +4145,51 @@ body.page-responsables {
     order: -1;
   }
 }
+
+/* Onglet Facturation (fiche client) : hiérarchie générale → paiement → règlement */
+.facture-rang-general td {
+  background: var(--bg-soft);
+  font-weight: 600;
+}
+
+.facture-rang-reglement td {
+  background: #fcfdfc;
+  color: var(--text-secondary);
+}
+
+.facture-indent-1 {
+  padding-left: 30px !important;
+}
+
+.facture-indent-2 {
+  padding-left: 56px !important;
+}
+
+.expand-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.expand-toggle:hover {
+  background: var(--bg-soft);
+}
+
+.facture-sousligne {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}

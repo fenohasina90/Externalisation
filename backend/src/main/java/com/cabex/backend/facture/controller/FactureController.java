@@ -3,6 +3,7 @@ package com.cabex.backend.facture.controller;
 import com.cabex.backend.facture.dto.CreerFactureAbonnementRequest;
 import com.cabex.backend.facture.dto.FactureResponse;
 import com.cabex.backend.facture.dto.FactureValideeResponse;
+import com.cabex.backend.facture.dto.FactureValideeFicheResponse;
 import com.cabex.backend.facture.dto.GenererFacturesRequest;
 import com.cabex.backend.facture.dto.InclusionDisponibleResponse;
 import com.cabex.backend.facture.dto.ValiderFactureRequest;
@@ -65,6 +66,17 @@ public class FactureController {
     @Operation(summary = "Lister les factures validées d'une demande (suivi paiements)")
     public ResponseEntity<List<FactureValideeResponse>> listerValidees(@PathVariable Integer demandeId) {
         return ResponseEntity.ok(factureService.listerFacturesValidees(demandeId));
+    }
+
+    @GetMapping("/clients/{id}/factures")
+    @PreAuthorize("hasAuthority('FACTURE_VIEW')")
+    @Operation(summary = "Facturation d'un client depuis son enregistrement",
+            description = "Toutes les factures validées liées au client : factures générales, "
+                    + "factures de paiement enfants (prestation, débours, abonnement mensuel), "
+                    + "avec les paiements rattachés à chaque facture.")
+    public ResponseEntity<List<FactureValideeFicheResponse>> listerFacturationParClient(
+            @PathVariable Integer id) {
+        return ResponseEntity.ok(factureService.listerFacturationParClient(id));
     }
 
     @PostMapping("/demandes/{demandeId}/factures-abonnement")

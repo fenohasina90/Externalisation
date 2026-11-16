@@ -20,6 +20,10 @@ import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.facture.dto.FactureLigneResponse;
 import com.cabex.backend.facture.dto.FactureResponse;
 import com.cabex.backend.facture.dto.FactureValideeLigneResponse;
+import com.cabex.backend.facture.dto.FactureValideeFicheResponse;
+import com.cabex.backend.paiement.entity.Paiement;
+import java.util.Map;
+import java.util.stream.Collectors;
 import com.cabex.backend.facture.dto.FactureValideeResponse;
 import com.cabex.backend.facture.dto.InclusionDisponibleResponse;
 import com.cabex.backend.facture.entity.Facture;
@@ -777,6 +781,105 @@ public class FactureService {
         return List.of();
     }
 
+    /** Type de la facture validée : GENERALE (proforma validée), sinon enfant lié à la générale. */
+    private String typeFactureValidee(FactureValidee fv, LigneService ligne) {
+        if (fv.getFactureGenerale() != null) {
+            if (fv.getMois() != null) {
+                return "ABONNEMENT_MENSUEL";
+            } else if (ligne != null && LigneServiceService.estDebours(ligne)) {
+                return "DEBOURS";
+            } else if (ligne != null && ligne.getTypePrestation() != null) {
+                return ligne.getTypePrestation();
+            } else if (ligne != null && ligne.getService() != null
+                    && ligne.getService().getTypeService() != null
+                    && !"STANDARD".equalsIgnoreCase(ligne.getService().getTypeService())) {
+                return ligne.getService().getTypeService();
+            } else {
+                return "PRESTATION";
+            }
+        } else if (fv.getFactureProforma() == null) {
+            return "DEBOURS";
+        } else {
+            return "GENERALE";
+        }
+    }
+
+    /** Objet précis d'une facture (onglet Facturation) : nom du service, désignation du débours ou « Facture générale ». */
+    private String objetFicheFacture(FactureValidee fv, LigneService ligne) {
+        if (ligne != null) {
+            if (LigneServiceService.estDebours(ligne)) {
+                String d = ligne.getDesignationDebours();
+                return d != null && !d.isBlank() ? d.trim() : "Débours";
+            }
+            String nom = ligne.getService() != null ? ligne.getService().getNomService() : null;
+            return nom != null && !nom.isBlank() ? nom.trim() : DemandeMapper.libelleLigne(ligne);
+        }
+        if (fv.getDemande() != null && fv.getDemande().getReferenceDemande() != null) {
+            return "Facture générale — " + fv.getDemande().getReferenceDemande();
+        }
+        return "Facture générale";
+    }
+
+    private FactureValideeFicheResponse toFicheResponse(FactureValidee fv, List<Paiement> paiements) {
+        BigDecimal paye = paiements.stream()
+                .map(Paiement::getMontantPaye)
+                .filter(m -> m != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal montant = fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO;
+        BigDecimal reste = montant.subtract(paye).max(BigDecimal.ZERO);
+
+        LigneService ligne = fv.getLigneService();
+        List<FactureValideeFicheResponse.PaiementFicheItem> items = paiements.stream()
+                .map(p -> new FactureValideeFicheResponse.PaiementFicheItem(
+                        p.getId(),
+                        p.getReferencePaiement(),
+                        p.getModePaiement() != null ? p.getModePaiement().getLibelle() : null,
+                        p.getModePaiement() != null ? p.getModePaiement().getCode() : null,
+                        p.getDatePaiement(),
+                        p.getMontantPaye(),
+                        p.getReferenceVirement(),
+                        p.getBanque(),
+                        p.getNumeroCheque(),
+                        p.getCommentaire(),
+                        p.getCreatedBy() != null
+                                ? p.getCreatedBy().getPrenom() + " " + p.getCreatedBy().getNom() : null))
+                .toList();
+        return new FactureValideeFicheResponse(
+                fv.getId(),
+                fv.getReferenceFactureValidee(),
+                typeFactureValidee(fv, ligne),
+                fv.getFactureGenerale() != null ? fv.getFactureGenerale().getId() : null,
+                fv.getFactureGenerale() != null ? fv.getFactureGenerale().getReferenceFactureValidee() : null,
+                fv.getDemande() != null ? fv.getDemande().getId() : null,
+                fv.getDemande() != null ? fv.getDemande().getReferenceDemande() : null,
+                objetFicheFacture(fv, ligne),
+                fv.getMois() != null
+                        ? java.time.format.DateTimeFormatter.ofPattern("yyyy-MM").format(fv.getMois()) : null,
+                montant,
+                paye,
+                reste,
+                fv.getValideLe() != null ? fv.getValideLe().toLocalDate() : null,
+                items);
+    }
+
+    /**
+     * Facturation complète d'un client : toutes les factures validées liées au client
+     * depuis son enregistrement, de la plus ancienne à la plus récente, paiements inclus.
+     */
+    @Transactional(readOnly = true)
+    public List<FactureValideeFicheResponse> listerFacturationParClient(Integer societeId) {
+        List<FactureValidee> fvs = factureValideeRepository.findBySocieteId(societeId);
+        if (fvs.isEmpty()) {
+            return List.of();
+        }
+        Map<Integer, List<Paiement>> parFv = paiementRepository.findBySocieteIdForFacturation(societeId)
+                .stream()
+                .collect(Collectors.groupingBy(p -> p.getFactureValidee().getId()));
+        return fvs.stream()
+                .map(fv -> toFicheResponse(fv, parFv.getOrDefault(fv.getId(), List.of())))
+                .toList();
+    }
+
     private FactureValideeResponse toFactureValideeResponse(FactureValidee fv) {
         BigDecimal paye = fv.getId() != null ? paiementRepository.sommePayeeParFactureValidee(fv.getId()) : BigDecimal.ZERO;
         if (paye == null) {
@@ -804,26 +907,7 @@ public class FactureService {
         } else {
             libelleLigne = null;
         }
-        String type;
-        if (fv.getFactureGenerale() != null) {
-            if (fv.getMois() != null) {
-                type = "ABONNEMENT_MENSUEL";
-            } else if (ligne != null && LigneServiceService.estDebours(ligne)) {
-                type = "DEBOURS";
-            } else if (ligne != null && ligne.getTypePrestation() != null) {
-                type = ligne.getTypePrestation();
-            } else if (ligne != null && ligne.getService() != null
-                    && ligne.getService().getTypeService() != null
-                    && !"STANDARD".equalsIgnoreCase(ligne.getService().getTypeService())) {
-                type = ligne.getService().getTypeService();
-            } else {
-                type = "PRESTATION";
-            }
-        } else if (fv.getFactureProforma() == null) {
-            type = "DEBOURS";
-        } else {
-            type = "GENERALE";
-        }
+        String type = typeFactureValidee(fv, ligne);
         String referenceProforma;
         if (fv.getFactureProforma() != null) {
             referenceProforma = fv.getFactureProforma().getReferenceFacture();

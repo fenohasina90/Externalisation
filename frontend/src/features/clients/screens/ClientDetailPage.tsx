@@ -7,10 +7,11 @@ import type { AuditEntry } from '@/features/administration/types'
 import { formatDate, formatDateHeure, formatMontantMGA, formatTailleOctets } from '@/utils/format'
 import { getLibelleActionAudit } from '@/features/administration/constants/labels'
 import { clientsApi } from '../services/clients.service'
+import { ClientFacturationTab } from '../components'
 import type { Societe, SocieteDetail } from '../types'
 import { codeSociete, idDepuisCodeSociete, statutSociete } from '../types'
 
-type Onglet = 'informations' | 'demandes' | 'paiements' | 'documents' | 'historique'
+type Onglet = 'informations' | 'demandes' | 'paiements' | 'facturation' | 'documents' | 'historique'
 
 function initiales(nomComplet: string): string {
   const parts = nomComplet.trim().split(/\s+/).filter(Boolean)
@@ -203,6 +204,7 @@ export function ClientDetailPage() {
             ['informations', 'Informations'],
             ['demandes', 'Demandes'],
             ['paiements', 'Paiements'],
+            ['facturation', 'Facturation'],
             ['documents', 'Documents'],
             ['historique', 'Historique'],
           ] as Array<[Onglet, string]>
@@ -499,6 +501,10 @@ export function ClientDetailPage() {
             )}
           </div>
         </section>
+      )}
+
+      {onglet === 'facturation' && (
+        <ClientFacturationTab societeId={societeId} nomClient={client.nomSociete} />
       )}
 
       {onglet === 'documents' && (

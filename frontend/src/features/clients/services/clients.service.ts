@@ -1,6 +1,6 @@
 import { buildQuery, http } from '@/api/http'
 import type { ApiPage, PageQuery } from '@/types'
-import type { CreateSocietePayload, Societe, SocieteDetail, UpdateSocietePayload } from '../types'
+import type { CreateSocietePayload, FactureFacturation, Societe, SocieteDetail, UpdateSocietePayload } from '../types'
 
 export interface ClientsFiltres {
   actif?: boolean
@@ -30,6 +30,12 @@ export const clientsApi = {
 
   async getDetail(id: number): Promise<SocieteDetail> {
     const { data } = await http.get<SocieteDetail>(`/clients/${id}`)
+    return data
+  },
+
+  /** Facturation complète du client depuis son enregistrement (onglet Facturation). */
+  async factures(id: number): Promise<FactureFacturation[]> {
+    const { data } = await http.get<FactureFacturation[]>(`/clients/${id}/factures`)
     return data
   },
 
