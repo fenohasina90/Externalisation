@@ -213,7 +213,15 @@ public class DocumentGestionService {
         BigDecimal somme = paiement.getFactureValidee() != null
                 ? paiementRepository.sommePayeeParFactureValidee(paiement.getFactureValidee().getId())
                 : BigDecimal.ZERO;
-        return pdfGenerator.recuPaiement(paiement, somme != null ? somme : BigDecimal.ZERO);
+        return pdfGenerator.recuPaiement(paiement, somme != null ? somme : BigDecimal.ZERO,
+                objetRecu(paiement));
+    }
+
+    /** Objet précis de la facture validée liée au paiement (service / débours / facture générale). */
+    private com.cabex.backend.facture.dto.ObjetFactureValideeResponse objetRecu(Paiement paiement) {
+        return paiement.getFactureValidee() != null
+                ? factureService.objetFactureValidee(paiement.getFactureValidee())
+                : null;
     }
 
     /** Export PDF de la facturation complète du client (onglet Facturation, filtre date appliqué). */
@@ -304,7 +312,11 @@ public class DocumentGestionService {
     @Transactional
     public DocumentResponse sauvegarderRecu(Integer paiementId) {
         Paiement paiement = verifierPaiement(paiementId);
-        byte[] contenu = pdfGenerator.recuPaiement(paiement);
+        BigDecimal somme = paiement.getFactureValidee() != null
+                ? paiementRepository.sommePayeeParFactureValidee(paiement.getFactureValidee().getId())
+                : null;
+        byte[] contenu = pdfGenerator.recuPaiement(paiement,
+                somme != null ? somme : BigDecimal.ZERO, objetRecu(paiement));
         DemandeService demande = paiement.getDemande();
         return enregistrerFichier(demande, paiement,
                 "recu-paiement-" + paiement.getReferencePaiement() + ".pdf",

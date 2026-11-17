@@ -21,6 +21,7 @@ import com.cabex.backend.facture.dto.FactureLigneResponse;
 import com.cabex.backend.facture.dto.FactureResponse;
 import com.cabex.backend.facture.dto.FactureValideeLigneResponse;
 import com.cabex.backend.facture.dto.FactureValideeFicheResponse;
+import com.cabex.backend.facture.dto.ObjetFactureValideeResponse;
 import com.cabex.backend.paiement.entity.Paiement;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -806,6 +807,70 @@ public class FactureService {
             ligne = lignesProforma.isEmpty() ? null : lignesProforma.get(0);
         }
         return ligne;
+    }
+
+    /**
+     * Lignes liées à une facture validée pour l'objet du reçu : la ligne directe
+     * (facture enfant / débours), sinon les lignes de la proforma validée
+     * (facture générale) ; sinon liste vide (« Facture générale »).
+     */
+    private List<LigneService> lignesLieesValidee(FactureValidee fv) {
+        if (fv.getLigneService() != null) {
+            return List.of(fv.getLigneService());
+        }
+        if (fv.getFactureProforma() != null
+                && fv.getFactureProforma().getDemande() != null) {
+            Integer demandeId = fv.getFactureProforma().getDemande().getId();
+            Integer proformaId = fv.getFactureProforma().getId();
+            return ligneRepository.findByDemandeIdOrderByIdAsc(demandeId).stream()
+                    .filter(l -> l.getFacture() != null && proformaId.equals(l.getFacture().getId()))
+                    .toList();
+        }
+        return List.of();
+    }
+
+    /**
+     * Objet le plus précis d'une facture validée pour le reçu de paiement :
+     * nom du service, désignation du débours, services facturés (générale multi-services),
+     * ou « Facture générale » à défaut.
+     */
+    @Transactional(readOnly = true)
+    public ObjetFactureValideeResponse objetFactureValidee(Integer factureValideeId) {
+        FactureValidee fv = factureValideeRepository.findById(factureValideeId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Facture validée", factureValideeId)));
+        return objetFactureValidee(fv);
+    }
+
+    /** Variante interne : la facture validée est déjà chargée (contexte transactionnel). */
+    public ObjetFactureValideeResponse objetFactureValidee(FactureValidee fv) {
+        if (fv == null) {
+            return null;
+        }
+        List<LigneService> lignes = lignesLieesValidee(fv);
+        List<String> designations = lignes.stream()
+                .map(FactureService::designationLigne)
+                .filter(d -> d != null && !d.isBlank())
+                .distinct()
+                .toList();
+        String libelle;
+        String objet;
+        if (designations.isEmpty()) {
+            String refDemande = fv.getDemande() != null ? fv.getDemande().getReferenceDemande() : null;
+            objet = refDemande != null ? "Facture générale — " + refDemande : "Facture générale";
+            libelle = "Objet de la facture";
+        } else {
+            objet = String.join(", ", designations);
+            boolean tousDebours = lignes.stream().allMatch(LigneServiceService::estDebours);
+            if (tousDebours) {
+                libelle = "Désignation du débours";
+            } else if (lignes.size() == 1) {
+                libelle = "Nom du service";
+            } else {
+                libelle = "Services facturés";
+            }
+        }
+        return new ObjetFactureValideeResponse(libelle, objet);
     }
 
     /** Type sous-jacent d'une facture générale (PRESTATION / DEBOURS / ABONNEMENT_MENSUEL), ou le type propre d'un enfant. */

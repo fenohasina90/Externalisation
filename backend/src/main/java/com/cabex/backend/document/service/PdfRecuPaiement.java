@@ -21,8 +21,9 @@ import java.util.Locale;
  * <p>Même charte graphique que le cabEx : titre en tête, bandeau vert, cartes
  * « Client et demande », « Service et facture », « Règlement » et
  * « Montants de la facture », montant en lettres, signatures.</p>
- * <p>Le reçu affiche uniquement la référence de la facture validée liée
- * directement à ce paiement.</p>
+ * <p>Le reçu affiche l'objet précis de la facture validée liée à ce paiement
+ * (service / débours résolu côté service, avec repli « Facture générale »),
+ * ainsi que la référence de la facture.</p>
  */
 final class PdfRecuPaiement {
 
@@ -30,17 +31,27 @@ final class PdfRecuPaiement {
     }
 
     static byte[] generer(Paiement paiement, BigDecimal sommePayeeSurFacture) {
+        return generer(paiement, sommePayeeSurFacture, null);
+    }
+
+    /**
+     * @param resolu objet précis de la facture validée (service / débours / services facturés)
+     *               résolu côté service ; null → déduction depuis l'entité, avec repli « Facture générale ».
+     */
+    static byte[] generer(Paiement paiement, BigDecimal sommePayeeSurFacture,
+                          com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu) {
         return PdfDocument.generer(PdfDocument.MiseEnPage.RECU_PAIEMENT, "Reçu de paiement",
                 "Reçu de paiement " + PdfFormats.valeur(paiement.getReferencePaiement()),
-                doc -> ecrire(doc, paiement, sommePayeeSurFacture),
+                doc -> ecrire(doc, paiement, sommePayeeSurFacture, resolu),
                 "Erreur de génération du reçu de paiement");
     }
 
-    private static void ecrire(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture) {
+    private static void ecrire(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture,
+                               com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu) {
         PdfComposants.titreDocument(doc, "Reçu de paiement",
                 "Référence paiement : " + PdfFormats.valeur(paiement.getReferencePaiement()));
         doc.add(bandeauMontant(paiement));
-        cartes(doc, paiement, sommePayeeSurFacture);
+        cartes(doc, paiement, sommePayeeSurFacture, resolu);
         montantEnLettres(doc, paiement);
         signatures(doc, paiement);
     }
@@ -72,14 +83,15 @@ final class PdfRecuPaiement {
     // Cartes
     // ------------------------------------------------------------------
 
-    private static void cartes(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture) {
+    private static void cartes(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture,
+                               com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu) {
         DemandeService demande = paiement.getDemande();
         FactureValidee fv = paiement.getFactureValidee();
         Societe societe = demande != null ? demande.getSociete() : null;
 
         String type = typeFactureValidee(fv);
-        String objetLabel = objetLabelFor(type);
-        String objetValeur = objetValeurFor(type, fv);
+        String objetLabel = resolu != null ? resolu.libelleObjet() : objetLabelFor(type);
+        String objetValeur = resolu != null ? resolu.objet() : objetValeurFor(type, fv);
 
         // Rangée 1 : client / service
         PdfPCell cClient = PdfComposants.carte("Client et demande", new String[][]{
