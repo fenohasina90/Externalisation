@@ -286,8 +286,7 @@ export function NouvelleDemandePage() {
       // if (l.debutService < aujourdhui) {
       //   return `Ligne ${i + 1} : le début doit être postérieur ou égal à aujourd'hui`
       // }
-      if (l.typePrestation !== 'PRESTATION' && l.debutService !== '' && l.finService !== ''
-          && l.finService <= l.debutService) {
+      if (l.debutService !== '' && l.finService !== '' && l.finService <= l.debutService) {
         return `Ligne ${i + 1} : la fin doit être strictement postérieure au début`
       }
       if (estTypeServiceSolo(typesServices.get(l.serviceId))) typeSolo = true
@@ -719,26 +718,16 @@ export function NouvelleDemandePage() {
                         </label>
                         {/* <span className="field" /> */}
                         <label className="field">
-                          Début{
-                            l.typePrestation !== 'PRESTATION' ? (
-                              <span className="required">*</span>
-                            ) : null
-                          }
+                          Début
                           <input
                             type="date"
-                            // min={aujourdhui}
                             value={l.debutService}
                             onChange={(e) => setLigne(i, { debutService: e.target.value })}
                             placeholder="Ex. 2026-01-01"
-                            disabled={l.typePrestation === 'PRESTATION' ? false : false}
                           />
                         </label>
                         <label className="field">
-                          Fin{
-                            l.typePrestation !== 'PRESTATION' ? (
-                              <span className="required">*</span>
-                            ) : null
-                          }
+                          Fin
                           <input
                             type="date"
                             min={l.debutService}

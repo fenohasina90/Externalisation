@@ -1563,10 +1563,6 @@ function LigneFormModal({
     // Sous-type de la ligne (défaut PRESTATION — même règle que le backend).
     const estPrestation = typeCourant === 'PRESTATION'
     const estAbonnement = typeCourant === 'ABONNEMENT_MENSUEL'
-    if (estAbonnement && !debut) {
-      setErreur('La date de début est obligatoire pour un abonnement mensuel')
-      return
-    }
     if (!estPrestation && !estAbonnement && (!debut || !fin)) {
       setErreur('La période est obligatoire')
       return
@@ -1712,7 +1708,7 @@ function LigneFormModal({
             </label>
             <span className="field" />
             <label className="field">
-              Début {typeCourant === 'ABONNEMENT_MENSUEL' && <span className="required">*</span>}
+              Début
               <input type="date" value={debut} onChange={(e) => setDebut(e.target.value)} />
             </label>
             <label className="field">

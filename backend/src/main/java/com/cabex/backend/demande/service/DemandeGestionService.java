@@ -301,20 +301,9 @@ public class DemandeGestionService {
                 }
                 // Validation des dates selon le type de prestation :
                 // - PRESTATION : début et fin optionnels (tous deux peuvent être null)
-                // - ABONNEMENT_MENSUEL : début obligatoire, fin optionnel
+                // - ABONNEMENT_MENSUEL : début et fin optionnels (tous deux peuvent être null)
                 // - Autre (null) : pas de contrainte ici, validée plus tard dans ajouter()
-                if (LigneServiceService.PRESTATION.equalsIgnoreCase(
-                        ligne.typePrestation() != null ? ligne.typePrestation() : null)) {
-                    // Pas de contrainte de dates pour PRESTATION.
-                } else if (LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(
-                        ligne.typePrestation() != null ? ligne.typePrestation() : null)) {
-                    if (ligne.debutService() == null) {
-                        throw new BusinessException(ErrorMessages.DEBUT_SERVICE_OBLIGATOIRE_ABONNEMENT);
-                    }
-                    // La date fin est optionnelle pour un abonnement mensuel.
-                } else {
-                    // Cas sans typePrestation précisé : pas de contrainte ici.
-                }
+                // (L'ordre des dates est toujours vérifié quand les deux sont renseignées.)
             }
         }
 

@@ -167,16 +167,13 @@ public class LigneServiceService {
         }
         // Validation des dates selon le type de prestation :
         // - PRESTATION : début et fin optionnels (tous deux peuvent être null)
-        // - ABONNEMENT_MENSUEL : début obligatoire, fin optionnel
+        // - ABONNEMENT_MENSUEL : début et fin optionnels (tous deux peuvent être null)
         // - Autre : début et fin requis
-        if (LigneServiceService.PRESTATION.equalsIgnoreCase(request.typePrestation())) {
-            // Pas de contrainte de dates pour PRESTATION.
-        } else if (LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(
-                request.typePrestation())) {
-            if (request.debutService() == null) {
-                throw new BusinessException(ErrorMessages.DEBUT_SERVICE_OBLIGATOIRE_ABONNEMENT);
-            }
-            // La date fin est optionnelle pour un abonnement mensuel.
+        // (L'ordre des dates est toujours vérifié par verifierDates quand les deux sont renseignées.)
+        if (LigneServiceService.PRESTATION.equalsIgnoreCase(request.typePrestation())
+                || LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(
+                        request.typePrestation())) {
+            // Pas de contrainte de dates pour PRESTATION / ABONNEMENT_MENSUEL.
         } else {
             if (request.debutService() == null || request.finService() == null) {
                 throw new BusinessException(ErrorMessages.DONNEES_OBLIGATOIRES);
@@ -466,11 +463,7 @@ public class LigneServiceService {
                     CATEGORIE_EXTERNALISATION, svc, request.typePrestation());
             details.append("type=").append(ligne.getTypePrestation()).append("→").append(type);
             ligne.setTypePrestation(type);
-            // Pour ABONNEMENT_MENSUEL, la date début est obligatoire.
-            if (ABONNEMENT_MENSUEL.equalsIgnoreCase(type)
-                    && (ligne.getDebutService() == null)) {
-                throw new BusinessException(ErrorMessages.DEBUT_SERVICE_OBLIGATOIRE_ABONNEMENT);
-            }
+            // Pour ABONNEMENT_MENSUEL, les dates début et fin sont optionnelles.
         }
         if (request.tarif() != null) {
             if (request.tarif().signum() < 0) {
