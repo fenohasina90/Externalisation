@@ -191,6 +191,12 @@ export const facturesValideesApi = {
     return data
   },
 
+  /** Facture validée par identifiant (consultation depuis une notification de retard de paiement). */
+  async get(id: number): Promise<FactureValidee> {
+    const { data } = await http.get<FactureValidee>(`/factures-validees/${id}`)
+    return data
+  },
+
   /** Éléments impayés (prestation / débours) de la même société, reprenables dans la facture du mois. */
   async inclusionsDisponibles(demandeId: number): Promise<InclusionDisponible[]> {
     const { data } = await http.get<InclusionDisponible[]>(

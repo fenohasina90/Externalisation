@@ -117,6 +117,15 @@ public class FactureService {
         return toResponse(getFacture(id));
     }
 
+    /** Facture validée par identifiant (pour exposition REST, sans ouverture de l'aperçu PDF). */
+    @Transactional(readOnly = true)
+    public FactureValideeResponse getFactureValideeById(Integer id) {
+        com.cabex.backend.facture.entity.FactureValidee fv = factureValideeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Facture validée", id)));
+        return toFactureValideeResponse(fv);
+    }
+
     /** Toutes les factures de la demande existent et sont validées. */
     @Transactional(readOnly = true)
     public boolean toutesValidees(Integer demandeId) {

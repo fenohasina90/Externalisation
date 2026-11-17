@@ -4,7 +4,7 @@ import { Alert, Spinner } from '@/components/ui'
 import { messageErreur } from '@/constants/messages'
 import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { useAuth } from '@/features/auth/hooks/useAuth'
-import { demandesApi } from '@/features/demandes/services/demandes.service'
+import { demandesApi, facturesValideesApi } from '@/features/demandes/services/demandes.service'
 import { echeancesApi } from '@/features/echeances/services/echeances.service'
 import { paiementsApi } from '@/features/paiements/services/paiements.service'
 import { NotificationsList } from '../components'
@@ -196,9 +196,23 @@ export function NotificationsPage() {
         case 'ECHEANCE':
           if (notification.referenceId) {
             const echeance = await echeancesApi.get(notification.referenceId)
-            navigate(`/paiements/echeanciers/${encodeURIComponent(echeance.referenceDemande)}`)
+            // Paiement en retard (deadline dépassée) → ouvrir la demande concernée ;
+            // échéance proche → ouvrir l'échéancier de la demande.
+            const rubrique =
+              notification.typeNotification === 'PAIEMENT_RETARD'
+                ? `/demandes/${encodeURIComponent(echeance.referenceDemande)}`
+                : `/paiements/echeanciers/${encodeURIComponent(echeance.referenceDemande)}`
+            navigate(rubrique)
           } else {
-            navigate('/paiements/echeanciers')
+            navigate('/demandes')
+          }
+          break
+        case 'FACTURE_VALIDEE':
+          if (notification.referenceId) {
+            const facture = await facturesValideesApi.get(notification.referenceId)
+            navigate(`/demandes/${encodeURIComponent(facture.referenceDemande)}`)
+          } else {
+            navigate('/demandes')
           }
           break
         case 'PAIEMENT':
