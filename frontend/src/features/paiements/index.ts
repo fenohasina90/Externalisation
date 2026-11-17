@@ -17,7 +17,6 @@ export {
   useDemandesReglables,
   useEcheancierDemande,
   useEcheanciers,
-  useEcheancesReglables,
   useModesPaiement,
   usePaiementsList,
   useSuiviPaiements,

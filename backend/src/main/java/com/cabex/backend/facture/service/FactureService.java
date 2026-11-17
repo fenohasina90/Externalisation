@@ -242,6 +242,17 @@ public class FactureService {
                 : com.cabex.backend.demande.mapper.DemandeMapper.libelleLigne(ligne);
     }
 
+    /** Désignation d'une ligne dans la facture mensuelle (préfixe « Abonnement mensuel » pour l'abonnement). */
+    private static String designationLigneMensuelle(LigneService ligne) {
+        if (com.cabex.backend.demande.service.LigneServiceService.ABONNEMENT_MENSUEL
+                .equalsIgnoreCase(ligne.getTypePrestation())) {
+            String nomService = ligne.getService() != null ? ligne.getService().getNomService() : null;
+            return "Abonnement mensuel" + (nomService != null && !nomService.isBlank()
+                    ? " — " + nomService.trim() : "");
+        }
+        return designationLigne(ligne);
+    }
+
     /**
      * Actualise les montants après ajout/modification/retrait d'une ligne.
      * Bloqué dès que la demande a quitté EN_ATTENTE ou qu'une facture est validée.
@@ -339,10 +350,19 @@ public class FactureService {
     }
 
     /**
-     * Facture du mois d'un abonnement : facture validée enfant de la facture
-     * générale, montant = tarif mensuel de la ligne. Dans la facture, on voit :
-     * la référence de la facture générale validée, la référence de la facture
-     * proforma et la référence de la demande.
+     * Crée la facture du mois d'un abonnement (ou des abonnements d'une demande UNIQUE).
+     *
+     * <ul>
+     *   <li>1ʳᵉ facture du mois d'une facture validée : renvoie la facture validée elle-même,
+     *       seulement marquée du mois choisi (mois = AAAA-MM). Les lignes de la proforma
+     *       deviennent les lignes PRINCIPALE de la facture (prestation + abonnement + débours) ;
+     *       montant = montant de la facture validée (validé pour la demande entière).</li>
+     *   <li>Factures suivantes : nouvelle facture validée « du mois », montant = somme des
+     *       tarifs validés des abonnements encore actifs ; lignes PRINCIPALE = ces abonnements,
+     *       lignes RAPPEL = éléments impayés repris (option). La première mensuelle fait
+     *       référence de facture générale.</li>
+     *</ul>
+     *<p>Les factures rappels ne comptent jamais dans le montant de la facture.</p>
      */
     @Transactional
     public FactureValideeResponse creerFactureMensuelleAbonnement(Integer demandeId,
@@ -364,22 +384,14 @@ public class FactureService {
         try {
             moisAnnee = java.time.YearMonth.parse(mois);
         } catch (java.time.format.DateTimeParseException e) {
-            throw new BusinessException("Le mois facturé est obligatoire et doit être au format AAAA-MM (ex. 2026-01)");
+            throw new BusinessException(
+                    "Le mois facturé est obligatoire et doit être au format AAAA-MM (ex. 2026-01)");
         }
         java.time.LocalDate moisDebut = moisAnnee.atDay(1);
-        java.time.format.DateTimeFormatter libelleMois =
-                java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale.FRANCE);
-        String moisLabel = libelleMois.format(moisAnnee);
-        moisLabel = Character.toUpperCase(moisLabel.charAt(0)) + moisLabel.substring(1);
+        String moisLabel = moisAnnee.getMonth().getDisplayName(java.time.format.TextStyle.FULL,
+                java.util.Locale.FRANCE);
+        moisLabel = Character.toUpperCase(moisLabel.charAt(0)) + moisLabel.substring(1) + " " + moisAnnee.getYear();
 
-        // Un mois ne peut être facturé qu'une fois par abonnement (pas de facture de novembre 2026 en double).
-        com.cabex.backend.facture.entity.FactureValidee dejaExistante =
-                factureValideeRepository.findByLigneServiceIdAndMois(ligneServiceId, moisDebut);
-        if (dejaExistante != null) {
-            throw new BusinessException(
-                    "Une facture pour le mois " + moisLabel + " existe déjà pour cet abonnement "
-                            + "(" + dejaExistante.getReferenceFactureValidee() + ")");
-        }
         LigneService ligne = ligneRepository.findById(ligneServiceId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Ligne de service", ligneServiceId)));
@@ -391,7 +403,8 @@ public class FactureService {
             throw new BusinessException(
                     "Cette action est réservée aux lignes « Abonnement mensuel »");
         }
-        if (!LigneServiceService.LIGNE_EN_COURS.equals(ligne.getStatut())) {
+        if (!LigneServiceService.LIGNE_EN_COURS.equals(ligne.getStatut())
+                && !LigneServiceService.LIGNE_PARTIEL.equals(ligne.getStatut())) {
             throw new BusinessException(
                     "La facture du mois n'est disponible que pour un abonnement EN_COURS");
         }
@@ -403,106 +416,182 @@ public class FactureService {
         FactureValidee generale = factureValideeRepository.findByFactureProformaId(proforma.getId())
                 .orElseThrow(() -> new BusinessException(
                         "La facture validée associée à la proforma est introuvable"));
-        // Le montant appliqué est le montant validé de la LIGNE d'abonnement
-        // (le tarif figé par la validation de la proforma), et non celui de la
-        // facture générale validée : en mode « unique », celle-ci couvre
-        // plusieurs services.
-        BigDecimal tarif = montantLigne(ligne);
-        if (tarif == null) {
-            throw new BusinessException("Le montant de l'abonnement est manquant");
-        }
+        String mode = proforma.getModeFacturation() != null
+                ? proforma.getModeFacturation()
+                : MODE_PAR_SERVICE;
 
-        // --- Lignes de la facture du mois --------------------------------
-        // La facture du mois est UNIQUEMENT l'objet payable (l'abonnement) ;
-        // les prestations / débours impayés mentionnés dans la facture ne sont là
-        // qu'à titre de rappel et ne constituent pas une ligne payable ici.
-        List<com.cabex.backend.facture.entity.FactureValideeLigne> lignesFacture =
-                new ArrayList<>();
-        String nomServiceAbo = ligne.getService() != null ? ligne.getService().getNomService() : null;
-        lignesFacture.add(com.cabex.backend.facture.entity.FactureValideeLigne.builder()
-                .ligneService(ligne)
-                .designation("Abonnement mensuel"
-                        + (nomServiceAbo != null ? " — " + nomServiceAbo : ""))
-                .montant(tarif)
-                .type("PRINCIPALE")
-                .build());
-        BigDecimal montantTotal = tarif;
-        List<String> inclusionsNote = new ArrayList<>();
-        List<Integer> idsVus = new ArrayList<>();
-        Integer societeId = demande.getSociete() != null ? demande.getSociete().getId() : null;
-        if (inclusionLigneIds != null) {
-            for (Integer inclusionId : inclusionLigneIds) {
-                if (inclusionId == null) {
-                    continue;
-                }
-                if (idsVus.contains(inclusionId)) {
-                    throw new BusinessException(
-                            "La ligne n° " + inclusionId + " est incluse deux fois dans la facture");
-                }
-                idsVus.add(inclusionId);
-                if (inclusionId.equals(ligne.getId())) {
-                    throw new BusinessException(
-                            "La ligne d'abonnement est déjà la ligne principale de la facture");
-                }
-                LigneService inclusion = ligneRepository.findById(inclusionId)
-                        .orElseThrow(() -> new ResourceNotFoundException(
-                                ErrorMessages.introuvable("Ligne de service", inclusionId)));
-                if (inclusion.getDemande() == null
-                        || inclusion.getDemande().getSociete() == null
-                        || !inclusion.getDemande().getSociete().getId().equals(societeId)) {
-                    throw new BusinessException(
-                            "L'élément n° " + inclusionId
-                                    + " n'appartient pas à la même société (client)");
-                }
-                InclusionDisponibleResponse candidat = inclusionPourLigne(inclusion,
-                        statutActuelDemande(inclusion.getDemande().getId()));
-                if (candidat == null) {
-                    throw new BusinessException(
-                            "L'élément n° " + inclusionId
-                                    + " n'est pas reprenable dans la facture "
-                                    + "(déjà soldé, ou demande terminée/annulée)");
-                }
-                lignesFacture.add(com.cabex.backend.facture.entity.FactureValideeLigne.builder()
-                        .ligneService(inclusion)
-                        .designation(candidat.designation())
-                        .montant(candidat.reste())
-                        .type("RAPPEL")
-                        .build());
-                inclusionsNote.add(candidat.designation() + " (" + candidat.reste() + ")");
+        // Déduplication : un document par mois et par demande (UNIQUE) ou par ligne (PAR_SERVICE).
+        java.util.List<com.cabex.backend.facture.entity.FactureValidee> mensuels =
+                factureValideeRepository.findByDemandeIdAndMoisIsNotNull(demandeId);
+        if (MODE_UNIQUE.equals(mode)) {
+            boolean dejaMensuel = mensuels.stream().anyMatch(f ->
+                    f.getMois() != null && f.getMois().equals(moisDebut));
+            if (dejaMensuel) {
+                throw new BusinessException(
+                        "Une facture du mois de " + moisLabel + " existe déjà pour cette demande");
+            }
+        } else {
+            boolean existe = mensuels.stream().anyMatch(f ->
+                    f.getLigneService() != null
+                            && f.getLigneService().getId().equals(ligne.getId())
+                            && f.getMois() != null
+                            && f.getMois().equals(moisDebut));
+            if (existe) {
+                throw new BusinessException(
+                        "Une facture du mois de " + moisLabel + " existe déjà pour cet abonnement");
             }
         }
 
+        if (generale.getMois() == null) {
+            // ── 1ʳᵉ facture du mois : elle EST la facture validée, marquée du mois choisi. ──
+            return creerPremiereFactureMensuelle(generale, proforma, demande, moisAnnee, moisDebut,
+                    moisLabel, dateEmission, commentaire, inclusionLigneIds, ligne, mensuels);
+        }
+        // ── Factures du mois suivantes : nouvelles factures, montant abonnements actifs. ──
+        return creerFactureMensuelleSuivante(generale, proforma, demande, moisAnnee, moisDebut,
+                moisLabel, dateEmission, commentaire, inclusionLigneIds, ligne, mode);
+    }
+
+    /**
+     * 1ʳᵉ facture du mois : réutilise la facture validée — pose le mois choisi,
+     * insère ses lignes PRINCIPALE depuis la proforma (montants validés).
+     * Montant inchangé : montant de la facture validée.
+     */
+    private FactureValideeResponse creerPremiereFactureMensuelle(FactureValidee generale,
+                                                                 Facture proforma,
+                                                                 DemandeService demande,
+                                                                 java.time.YearMonth moisAnnee,
+                                                                 java.time.LocalDate moisDebut,
+                                                                 String moisLabel,
+                                                                 LocalDate dateEmission,
+                                                                 String commentaire,
+                                                                 List<Integer> inclusionLigneIds,
+                                                                 LigneService ligne,
+                                                                 List<com.cabex.backend.facture.entity.FactureValidee> mensuels) {
+        List<LigneService> lignesProforma = ligneRepository.findByDemandeIdOrderByIdAsc(demande.getId()).stream()
+                .filter(l -> l.getFacture() != null && l.getFacture().getId().equals(proforma.getId()))
+                .toList();
+        List<com.cabex.backend.facture.entity.FactureValideeLigne> lignesFacture = new ArrayList<>();
+        for (LigneService l : lignesProforma) {
+            lignesFacture.add(com.cabex.backend.facture.entity.FactureValideeLigne.builder()
+                    .factureValidee(generale)
+                    .ligneService(l)
+                    .designation(designationLigneMensuelle(l))
+                    .montant(montantLigne(l))
+                    .type("PRINCIPALE")
+                    .build());
+        }
+        List<String> inclusionsNote = new ArrayList<>();
+        List<String> fabriquer = fabriquerInclusions(demande, ligne, inclusionLigneIds, lignesFacture,
+                inclusionsNote, generale);
+        generale.setMois(moisDebut);
+        if (generale.getLignes() != null) {
+            generale.getLignes().clear();
+        } else {
+            generale.setLignes(new HashSet<>());
+        }
+        for (com.cabex.backend.facture.entity.FactureValideeLigne fvl : lignesFacture) {
+            fvl.setFactureValidee(generale);
+            generale.getLignes().add(fvl);
+        }
+        generale = factureValideeRepository.save(generale);
+        String note = "Facture mensuelle de " + moisLabel + " créée : "
+                + generale.getReferenceFactureValidee()
+                + " — facture " + generale.getReferenceFactureValidee()
+                + ", mois " + moisLabel + ", proforma " + proforma.getReferenceFacture()
+                + ", demande " + demande.getReferenceDemande()
+                + (inclusionsNote.isEmpty() ? "" : " + " + inclusionsNote.size() + " élément(s) inclus : "
+                        + String.join(" ; ", inclusionsNote))
+                + (commentaire != null && !commentaire.isBlank() ? " — " + commentaire.trim() : "");
+        ajouterHistoriqueLigne(ligne, ligne.getStatut(), note);
+        String statutCourantNote = statutActuelDemande(demande.getId());
+        ajouterHistoriqueDemande(demande,
+                statutCourantNote != null ? statutCourantNote : DEMANDE_EN_ATTENTE,
+                note);
+        auditService.log(AuditActions.CREATE, "FACTURE", "FactureValidee",
+                generale.getId() != null ? Long.valueOf(generale.getId()) : null,
+                generale.getReferenceFactureValidee(), note);
+        return toFactureValideeResponse(generale);
+    }
+
+    /**
+     * Factures du mois suivantes : nouvelle facture validée, montant = Σ tarifs validés
+     * des abonnements actifs ; lignes PRINCIPALE = ces abonnements uniquement.
+     */
+    private FactureValideeResponse creerFactureMensuelleSuivante(FactureValidee generale,
+                                                                 Facture proforma,
+                                                                 DemandeService demande,
+                                                                 java.time.YearMonth moisAnnee,
+                                                                 java.time.LocalDate moisDebut,
+                                                                 String moisLabel,
+                                                                 LocalDate dateEmission,
+                                                                 String commentaire,
+                                                                 List<Integer> inclusionLigneIds,
+                                                                 LigneService ligne,
+                                                                 String mode) {
+        List<LigneService> lignesActives = ligneRepository.findByDemandeId(demande.getId()).stream()
+                .filter(l -> LigneServiceService.CATEGORIE_EXTERNALISATION.equalsIgnoreCase(l.getCategorie())
+                        && LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(l.getTypePrestation()))
+                .filter(l -> LigneServiceService.LIGNE_EN_COURS.equals(l.getStatut())
+                        || LigneServiceService.LIGNE_PARTIEL.equals(l.getStatut()))
+                .collect(java.util.stream.Collectors.toList());
+        if (!MODE_UNIQUE.equals(mode)) {
+            lignesActives = lignesActives.stream()
+                    .filter(l -> l.getId().equals(ligne.getId()))
+                    .collect(java.util.stream.Collectors.toList());
+        }
+        if (lignesActives.isEmpty()) {
+            throw new BusinessException(
+                    "Aucun abonnement actif dans cette demande : impossible de créer la facture du mois");
+        }
+
+        List<com.cabex.backend.facture.entity.FactureValideeLigne> lignesFacture = new ArrayList<>();
+        BigDecimal montantTotal = BigDecimal.ZERO;
+        for (LigneService l : lignesActives) {
+            BigDecimal tarif = montantLigne(l);
+            if (tarif != null) {
+                montantTotal = montantTotal.add(tarif);
+            }
+            String nomServiceAbo = l.getService() != null ? l.getService().getNomService() : null;
+            lignesFacture.add(com.cabex.backend.facture.entity.FactureValideeLigne.builder()
+                    .ligneService(l)
+                    .designation("Abonnement mensuel" + (nomServiceAbo != null ? " — " + nomServiceAbo : ""))
+                    .montant(tarif)
+                    .type("PRINCIPALE")
+                    .build());
+        }
+        List<String> inclusionsNote = new ArrayList<>();
+        List<String> inclusionsCreees = fabriquerInclusions(demande, ligne, inclusionLigneIds,
+                lignesFacture, inclusionsNote, generale);
+
         Utilisateur validateur = currentUtilisateur();
-        // La date d'émission de la facture est celle saisie par l'utilisateur ;
-        // created_at (timestamp automatique) garde l'horodatage réel de saisie.
         LocalDateTime valideLe = dateEmission.atStartOfDay();
-        FactureValidee child = FactureValidee.builder()
-                .referenceFactureValidee(genererReferenceValidee(valideLe.getYear()))
-                .factureProforma(null)
-                .factureGenerale(generale)
-                .ligneService(ligne)
-                .demande(demande)
-                .montant(montantTotal)
-                .mois(moisDebut)
-                .validePar(validateur)
-                .valideLe(valideLe)
-                .build();
+        com.cabex.backend.facture.entity.FactureValidee child =
+                com.cabex.backend.facture.entity.FactureValidee.builder()
+                        .referenceFactureValidee(genererReferenceValidee(valideLe.getYear()))
+                        .factureProforma(null)
+                        .factureGenerale(generale)
+                        .ligneService(lignesActives.size() == 1 ? lignesActives.get(0) : null)
+                        .demande(demande)
+                        .montant(montantTotal)
+                        .validePar(validateur)
+                        .valideLe(valideLe)
+                        .mois(moisDebut)
+                        .build();
         child.setLignes(new HashSet<>());
         for (com.cabex.backend.facture.entity.FactureValideeLigne fvl : lignesFacture) {
             fvl.setFactureValidee(child);
             child.getLignes().add(fvl);
         }
         child = factureValideeRepository.save(child);
-        String note = "Facture mensuelle d'abonnement " + child.getReferenceFactureValidee()
-                + " — mois " + moisAnnee
-                + " — émise le " + dateEmission
+        String note = "Facture du mois " + moisLabel + " "
+                + child.getReferenceFactureValidee()
+                + " — mois " + moisLabel + " — facture " + child.getReferenceFactureValidee()
                 + " — facture générale " + generale.getReferenceFactureValidee()
                 + ", proforma " + proforma.getReferenceFacture()
                 + ", demande " + demande.getReferenceDemande()
-                + (inclusionsNote.isEmpty()
-                        ? ""
-                        : " + " + inclusionsNote.size() + " élément(s) inclus : "
-                                + String.join(" ; ", inclusionsNote))
+                + (inclusionsNote.isEmpty() ? "" : " + " + inclusionsNote.size() + " élément(s) inclus : "
+                        + String.join(" ; ", inclusionsNote))
                 + (commentaire != null && !commentaire.isBlank() ? " — " + commentaire.trim() : "");
         ajouterHistoriqueLigne(ligne, ligne.getStatut(), note);
         String statutCourantNote = statutActuelDemande(demande.getId());
@@ -511,11 +600,72 @@ public class FactureService {
                 note);
         auditService.log(AuditActions.CREATE, "FACTURE", "FactureValidee",
                 child.getId() != null ? Long.valueOf(child.getId()) : null,
-                null, note);
+                child.getReferenceFactureValidee(), note);
         return toFactureValideeResponse(child);
     }
 
     /**
+     * Ajoute les lignes inclusibles (RAPPEL, montant NON inclus) à la facture mensuelle ;
+     * alimente la note d'audit. Renvoie la liste des identifiants réservés (inutilisée).
+     */
+    private List<String> fabriquerInclusions(DemandeService demande,
+                                             LigneService ligne,
+                                             List<Integer> inclusionLigneIds,
+                                             List<com.cabex.backend.facture.entity.FactureValideeLigne> lignesFacture,
+                                             List<String> inclusionsNote,
+                                             FactureValidee generale) {
+        List<String> resultat = new ArrayList<>();
+        if (inclusionLigneIds == null || inclusionLigneIds.isEmpty()) {
+            return resultat;
+        }
+        Integer societeId = demande.getSociete() != null ? demande.getSociete().getId() : null;
+        List<Integer> idsVus = new ArrayList<>();
+        for (Integer inclusionId : inclusionLigneIds) {
+            if (inclusionId == null) {
+                continue;
+            }
+            if (idsVus.contains(inclusionId)) {
+                throw new BusinessException(
+                        "La ligne n° " + inclusionId + " est incluse deux fois dans la facture");
+            }
+            idsVus.add(inclusionId);
+            if (inclusionId.equals(ligne.getId())) {
+                throw new BusinessException(
+                        "La ligne d'abonnement est déjà la ligne principale de la facture");
+            }
+            LigneService inclusion = ligneRepository.findById(inclusionId)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            ErrorMessages.introuvable("Ligne de service", inclusionId)));
+            if (inclusion.getDemande() == null
+                    || inclusion.getDemande().getSociete() == null
+                    || societeId == null
+                    || !inclusion.getDemande().getSociete().getId().equals(societeId)) {
+                throw new BusinessException(
+                        "L'élément n° " + inclusionId
+                                + " n'appartient pas à la même société (client)");
+            }
+            InclusionDisponibleResponse candidat = inclusionPourLigne(inclusion,
+                    statutActuelDemande(inclusion.getDemande().getId()));
+            if (candidat == null) {
+                throw new BusinessException(
+                        "L'élément n° " + inclusionId
+                                + " n'est pas reprenable dans la facture "
+                                + "(déjà soldé, ou demande terminée/annulée)");
+            }
+            lignesFacture.add(com.cabex.backend.facture.entity.FactureValideeLigne.builder()
+                    .factureValidee(generale)
+                    .ligneService(inclusion)
+                    .designation(candidat.designation())
+                    .montant(candidat.reste())
+                    .type("RAPPEL")
+                    .build());
+            inclusionsNote.add(candidat.designation() + " (" + candidat.reste() + ")");
+        }
+        return resultat;
+    }
+
+    /**
+     * Supprime une facture du mois d'abonnement — autorisée uniquement    /**
      * Supprime une facture du mois d'abonnement — autorisée uniquement
      * si aucun paiement n'a été enregistré dessus (payée = 0).
      * Les lignes de la facture sont supprimées en cascade (orphanRemoval).
@@ -526,6 +676,10 @@ public class FactureService {
                 .findById(factureValideeId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Facture validée", factureValideeId)));
+        if (fv.getFactureProforma() != null) {
+            throw new BusinessException(
+                    "La facture validée ne peut pas être supprimée : elle est la facture du 1er mois");
+        }
         if (fv.getMois() == null) {
             throw new BusinessException(
                     "Seule une facture du mois d'abonnement peut être supprimée (mois facturé requis)");
@@ -910,6 +1064,8 @@ public class FactureService {
             } else {
                 return "PRESTATION";
             }
+        } else if (fv.getMois() != null) {
+            return "ABONNEMENT_MENSUEL";
         } else if (fv.getFactureProforma() == null) {
             return "DEBOURS";
         } else {
@@ -1033,7 +1189,7 @@ public class FactureService {
                 fv.getFactureGenerale() != null ? fv.getFactureGenerale().getId() : null,
                 fv.getDemande() != null ? fv.getDemande().getId() : null,
                 fv.getDemande() != null ? fv.getDemande().getReferenceDemande() : null,
-                ligne != null ? ligne.getId() : null,
+                fv.getLigneService() != null ? fv.getLigneService().getId() : null,
                 libelleLigne,
                 nomService,
                 montant,
@@ -1221,45 +1377,10 @@ public class FactureService {
         List<LigneService> lignes = ligneRepository.findByDemandeId(facture.getDemande().getId());
         DemandeService demande = facture.getDemande();
 
-        // En mode UNIQUE (« facture générale unique »), chaque service possède sa
-        // propre facture validée pour payer : création automatique des factures
-        // enfant (PRESTATION / débours annoncé / créations / transactions), liées
-        // à la facture générale validée.
-        // L'abonnement mensuel n'a pas de facture enfant : il se règle via la
-        // facture du mois (créée manuellement).
-        if (MODE_UNIQUE.equals(facture.getModeFacturation())) {
-            Utilisateur validateurEnfant = validateur;
-            for (LigneService ligne : lignesLignees) {
-                boolean estAbonnement = LigneServiceService.CATEGORIE_EXTERNALISATION
-                        .equalsIgnoreCase(ligne.getCategorie())
-                        && LigneServiceService.ABONNEMENT_MENSUEL
-                                .equalsIgnoreCase(ligne.getTypePrestation());
-                if (estAbonnement) {
-                    continue;
-                }
-                com.cabex.backend.facture.entity.FactureValidee enfant =
-                        com.cabex.backend.facture.entity.FactureValidee.builder()
-                                .referenceFactureValidee(genererReferenceValidee(valideLe.getYear()))
-                                .factureProforma(null)
-                                .factureGenerale(validee)
-                                .ligneService(ligne)
-                                .demande(demande)
-                                .montant(montantLigne(ligne))
-                                .validePar(validateurEnfant)
-                                .valideLe(valideLe)
-                                .build();
-                factureValideeRepository.save(enfant);
-                ajouterHistoriqueLigne(ligne,
-                        ligne.getStatut() != null ? ligne.getStatut() : LigneServiceService.LIGNE_EN_COURS,
-                        "Facture créée pour le paiement : " + enfant.getReferenceFactureValidee()
-                                + " — facture générale " + validee.getReferenceFactureValidee());
-                auditService.log(AuditActions.CREATE, "FACTURE", "FactureValidee",
-                        enfant.getId() != null ? Long.valueOf(enfant.getId()) : null,
-                        null, "Facture de service " + enfant.getReferenceFactureValidee()
-                                + " liée à la facture générale " + validee.getReferenceFactureValidee()
-                                + " (ligne " + ligne.getId() + ")");
-            }
-        }
+        // Plus de factures enfant de paiement (PRESTATION/DEBOURS) : en mode
+        // UNIQUE, la facture validée (générale) est directement liée aux paiements.
+        // Les abonnements se règlent via la facture du mois (créée manuellement a
+        // partir de la facture validée).
 
         // Pour chaque ligne EXTERNALISATION de la demande liée à cette facture,
         // passer le statut à EN_COURS (VALIDATION automatique après validation proforma).

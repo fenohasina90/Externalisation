@@ -113,10 +113,12 @@ class FactureAbonnementCreationTest {
         return ligne;
     }
 
-    private void stubAbonnement(LigneService ligne) {
+    private FactureValidee stubAbonnement(LigneService ligne) {
         DemandeService d = ligne.getDemande();
         lenient().when(demandeRepository.findById(d.getId())).thenReturn(Optional.of(d));
         lenient().when(ligneRepository.findById(ligne.getId())).thenReturn(Optional.of(ligne));
+        lenient().when(ligneRepository.findByDemandeIdOrderByIdAsc(d.getId()))
+                .thenReturn(List.of(ligne));
         Facture proforma = ligne.getFacture();
         FactureValidee generale = FactureValidee.builder().id(1)
                 .referenceFactureValidee("00001/EXT/TNR/2026")
@@ -128,6 +130,10 @@ class FactureAbonnementCreationTest {
                 .thenReturn(Optional.of(generale));
         lenient().when(factureValideeRepository.findByDemandeIdOrderByIdAsc(anyInt()))
                 .thenReturn(List.of());
+        lenient().when(factureValideeRepository.findByDemandeIdAndMoisIsNotNull(anyInt()))
+                .thenReturn(List.of());
+        lenient().when(ligneRepository.findByDemandeId(d.getId())).thenReturn(List.of(ligne));
+        return generale;
     }
 
     @Test
@@ -162,13 +168,16 @@ class FactureAbonnementCreationTest {
     void creationFactureMemeMoisRefusee() {
         LigneService abonnement = abonnement(7, 1, new BigDecimal("1500000"));
         stubAbonnement(abonnement);
-        lenient().when(factureValideeRepository.findByLigneServiceIdAndMois(anyInt(), any()))
-                .thenReturn(com.cabex.backend.facture.entity.FactureValidee.builder()
+        // Mensuel déjà créé pour ce mois (mensuelle 1 ou 2+)
+        lenient().when(factureValideeRepository.findByDemandeIdAndMoisIsNotNull(anyInt()))
+                .thenReturn(List.of(com.cabex.backend.facture.entity.FactureValidee.builder()
                         .id(77)
                         .referenceFactureValidee("00077/EXT/TNR/2026")
                         .demande(abonnement.getDemande())
                         .montant(new BigDecimal("1500000"))
-                        .build());
+                        .mois(LocalDate.of(2026, 11, 1))
+                        .ligneService(abonnement)
+                        .build()));
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> service.creerFactureMensuelleAbonnement(
@@ -206,6 +215,41 @@ class FactureAbonnementCreationTest {
                 .anyMatch(l -> l.designation().startsWith("Abonnement mensuel")
                         && l.montant().compareTo(new BigDecimal("1200000")) == 0),
                 "la ligne d'abonnement reprend le montant validé");
+    }
+
+    @Test
+    void creationAtteinte_mois1_utiliseLaFactureValidee() {
+        // Mensuelle 1 : réutilise la facture validée (même référence), marque le mois.
+        LigneService abonnement = abonnement(7, 1, new BigDecimal("1500000"));
+        FactureValidee generale = stubAbonnement(abonnement);
+        abonnement.getFacture().setModeFacturation("UNIQUE");
+
+        com.cabex.backend.facture.dto.FactureValideeResponse reponse =
+                service.creerFactureMensuelleAbonnement(
+                        7, 1, LocalDate.of(2026, 11, 10), "2026-11", null, List.of());
+
+        assertEquals("00001/EXT/TNR/2026", reponse.referenceFactureValidee());
+        assertEquals(LocalDate.of(2026, 11, 1), generale.getMois());
+        assertEquals(new BigDecimal("1500000"), reponse.montant());
+        assertEquals("ABONNEMENT_MENSUEL", reponse.type());
+    }
+
+    @Test
+    void creationMensuel2_separeDeFactureGenerale() {
+        // Mensuelle 2 : nouvelle facture du mois, enfant de la facture validée.
+        LigneService abonnement = abonnement(7, 1, new BigDecimal("1500000"));
+        FactureValidee generale = stubAbonnement(abonnement);
+        abonnement.getFacture().setModeFacturation("UNIQUE");
+        generale.setMois(LocalDate.of(2026, 11, 1)); // mensuelle 1 déjà créée
+
+        com.cabex.backend.facture.dto.FactureValideeResponse reponse =
+                service.creerFactureMensuelleAbonnement(
+                        7, 1, LocalDate.of(2026, 12, 10), "2026-12", null, List.of());
+
+        assertNotEquals("00001/EXT/TNR/2026", reponse.referenceFactureValidee());
+        assertEquals("ABONNEMENT_MENSUEL", reponse.type());
+        assertEquals(new BigDecimal("1500000"), reponse.montant());
+        assertEquals("00001/EXT/TNR/2026", reponse.referenceFactureGenerale());
     }
 
     @Test

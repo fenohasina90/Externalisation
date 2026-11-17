@@ -6,9 +6,4 @@ export { useEcheanciers, FILTRES_ECHEANCIERS_DEFAUT } from './useEcheanciers'
 export type { EcheanciersFiltresUI } from './useEcheanciers'
 export { useEcheancierDemande } from './useEcheancierDemande'
 export type { EcheancierDemande } from './useEcheancierDemande'
-export {
-  useDemandesReglables,
-  useEcheancesReglables,
-  useModesPaiement,
-} from './useEcheancesReglables'
-export type { DemandeReglable } from './useEcheancesReglables'
+export { useDemandesReglables, useModesPaiement } from './useEcheancesReglables'

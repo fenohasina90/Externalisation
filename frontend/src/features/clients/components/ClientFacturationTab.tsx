@@ -71,8 +71,13 @@ function construireGroupes(
   recherche: string,
 ): Groupe[] {
   const parId = new Map(factures.map((f) => [f.id, f]))
-  const generales = factures.filter((f) => f.type === 'GENERALE')
-  const enfants = factures.filter((f) => f.type !== 'GENERALE')
+  // Mensuelle 1 d'une demande avec abonnement est la facture validée elle-même,
+  // rendue visible ici comme groupe « générale » (sa référence est celle de la
+  // facture validée, son montant = TTC validé de la demande).
+  const estMensuel1 = (f: FactureFacturation) =>
+    f.type === 'ABONNEMENT_MENSUEL' && f.factureGeneraleId == null
+  const generales = factures.filter((f) => f.type === 'GENERALE' || estMensuel1(f))
+  const enfants = factures.filter((f) => !generales.includes(f))
 
   // Filtre sur les dates de la facture GÉNÉRALE uniquement : un groupe entier
   // (générale + factures de paiement) est visible si et seulement si la date
@@ -115,7 +120,7 @@ function construireGroupes(
   const orphelins: FactureFacturation[] = []
   for (const e of enfants) {
     const parent = e.factureGeneraleId != null ? parId.get(e.factureGeneraleId) : undefined
-    if (parent && parent.type === 'GENERALE') {
+    if (parent && (parent.type === 'GENERALE' || (parent.type === 'ABONNEMENT_MENSUEL' && parent.factureGeneraleId == null))) {
       const liste = enfantsParGenerale.get(parent.id) ?? []
       liste.push(e)
       enfantsParGenerale.set(parent.id, liste)
@@ -262,7 +267,14 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
     setOuverts(new Set(toutesFvAvecPaiements.map((f) => f.id)))
   }
   const replierTout = (): void => {
-    setGroupesRepliees(new Set(factures.filter((f) => f.type === 'GENERALE').map((f) => f.id)))
+    setGroupesRepliees(
+      new Set(
+        factures
+          .filter((f) => f.type === 'GENERALE'
+            || (f.type === 'ABONNEMENT_MENSUEL' && f.factureGeneraleId == null))
+          .map((f) => f.id),
+      ),
+    )
     setOuverts(new Set())
   }
 

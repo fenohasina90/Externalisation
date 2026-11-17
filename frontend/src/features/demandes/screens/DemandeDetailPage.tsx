@@ -477,8 +477,9 @@ function FacturesTab({
     reloadValidees()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [factures])
-  // Les factures du mois d'abonnement restent dans l'onglet « Factures mensuelles ».
-  const validees = (facturesValidees ?? []).filter((f) => f.type !== 'ABONNEMENT_MENSUEL')
+  // La facture validée est affichée ici (la mensuelle 1 — la facture validée
+  // elle-même — et mensuelle 2 enfant son visibles également).
+  const validees = facturesValidees ?? []
   const nbSoldees = validees.filter((f) => f.resteAPayer <= 0).length
   const proformas = factures.filter((f) => f.statut === 'PROFORMA')
   const toutesLignes = factures.flatMap((f) =>
@@ -540,7 +541,6 @@ function FacturesTab({
                 <thead>
                   <tr>
                     <th>Service</th>
-                    <th>Période</th>
                     <th>Tarif</th>
                     <th>Facture</th>
                   </tr>
@@ -553,9 +553,6 @@ function FacturesTab({
                         {l.nomService && l.libelleLigne && l.libelleLigne !== l.nomService && (
                           <span className="text-secondary" style={{ fontSize: 12 }}>{l.libelleLigne}</span>
                         )}
-                      </td>
-                      <td className="text-secondary">
-                        {formatDate(l.debutService)} → {formatDate(l.finService)}
                       </td>
                       <td>{formatMontantMGA(montantLigneFacture(l))}</td>
                       <td>
@@ -650,7 +647,6 @@ function FacturesTab({
                   const montantPaye = f.montantPaye ?? 0
                   const reste = f.resteAPayer ?? Math.max(f.montant - montantPaye, 0)
                   const taux = f.montant > 0 ? Math.min(100, Math.round((montantPaye / f.montant) * 100)) : 0
-                  const estGeneraleUnique = f.type === 'GENERALE' && f.modeFacturation === 'UNIQUE'
                   return (
                     <tr key={f.id}>
                       <td className="fw-600">
@@ -690,34 +686,26 @@ function FacturesTab({
                       </td>
                       <td>{formatMontantMGA(f.montant)}</td>
                       <td>
-                        {estGeneraleUnique ? (
-                          <span className="text-secondary" style={{ fontSize: 12 }}>
-                            Règlement par service (chaque facture de service porte sa référence)
-                          </span>
-                        ) : (
-                          <div className="progression">
-                            <div className="progression__label">
-                              <span>{formatMontantMGA(montantPaye)} payé</span>
-                              <strong style={{ color: reste > 0 ? 'var(--danger)' : 'var(--success)' }}>
-                                {reste > 0 ? `${formatMontantMGA(reste)} restants` : 'Soldée'}
-                              </strong>
-                            </div>
-                            <div
-                              className="trk"
-                              role="progressbar"
-                              aria-valuenow={taux}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            >
-                              <i style={{ width: `${taux}%` }} />
-                            </div>
+                        <div className="progression">
+                          <div className="progression__label">
+                            <span>{formatMontantMGA(montantPaye)} payé</span>
+                            <strong style={{ color: reste > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                              {reste > 0 ? `${formatMontantMGA(reste)} restants` : 'Soldée'}
+                            </strong>
                           </div>
-                        )}
+                          <div
+                            className="trk"
+                            role="progressbar"
+                            aria-valuenow={taux}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                          >
+                            <i style={{ width: `${taux}%` }} />
+                          </div>
+                        </div>
                       </td>
                       <td>
-                        {estGeneraleUnique ? (
-                          <span className="text-secondary">—</span>
-                        ) : reste > 0 ? (
+                        {reste > 0 ? (
                           <button
                             type="button"
                             className="btn-primary"
@@ -1235,12 +1223,6 @@ function LigneCard({
         ) : (
           <>
         <div className="info-item">
-          <span>Période</span>
-          <b>
-            {formatDate(ligne.debutService)} → {formatDate(ligne.finService)}
-          </b>
-        </div>
-        <div className="info-item">
           <span>Payé / Reste</span>
           <b>
             {formatMontantMGA(ligne.montantPaye)} / {formatMontantMGA(ligne.resteAPayer)}
@@ -1415,8 +1397,6 @@ function LigneFormModal({
   const [serviceId, setServiceId] = useState<number | ''>('')
   const [typePrestation, setTypePrestation] = useState<'PRESTATION' | 'ABONNEMENT_MENSUEL'>('PRESTATION')
   const [tarif, setTarif] = useState('')
-  const [debut, setDebut] = useState('')
-  const [fin, setFin] = useState('')
   const [categorie, setCategorie] = useState<'EXTERNALISATION' | 'DEBOURS'>('EXTERNALISATION')
   const [designation, setDesignation] = useState('')
   const [montantDebours, setMontantDebours] = useState('')
@@ -1437,8 +1417,6 @@ function LigneFormModal({
       setServiceId(ligne?.serviceId ?? '')
       setTypePrestation((ligne?.typePrestation as 'PRESTATION' | 'ABONNEMENT_MENSUEL') ?? 'PRESTATION')
       setTarif(ligne?.tarif != null ? String(ligne.tarif) : '')
-      setDebut(ligne?.debutService ?? '')
-      setFin(ligne?.finService ?? '')
       setCategorie((ligne?.categorie as 'EXTERNALISATION' | 'DEBOURS') ?? 'EXTERNALISATION')
       setDesignation(ligne?.designationDebours ?? '')
       setMontantDebours(ligne?.montantDebours != null ? String(ligne.montantDebours) : '')
@@ -1518,27 +1496,22 @@ function LigneFormModal({
       setErreur('Le tarif doit être positif ou nul')
       return
     }
-    // Tous les services acceptent PRESTATION / ABONNEMENT_MENSUEL ; la période est optionnelle
-    if (debut && fin && fin <= debut) {
-      setErreur('La fin doit être strictement postérieure au début')
-      return
-    }
     setEnregistrement(true)
     setErreur(null)
     try {
       if (ligne) {
         await lignesApi.update(demandeId, ligne.id, {
           tarif: Number(tarif),
-          debutService: debut || null,
-          finService: fin || null,
+          debutService: null,
+          finService: null,
           typePrestation,
         })
       } else {
         await lignesApi.create(demandeId, {
           serviceId: serviceId as number,
           tarif: Number(tarif),
-          debutService: debut || null,
-          finService: fin || null,
+          debutService: null,
+          finService: null,
           categorie: 'EXTERNALISATION',
           designationDebours: null,
           typePrestation,
@@ -1660,14 +1633,7 @@ function LigneFormModal({
               />
             </label>
             <span className="field" />
-            <label className="field">
-              Début
-              <input type="date" value={debut} onChange={(e) => setDebut(e.target.value)} />
-            </label>
-            <label className="field">
-              Fin
-              <input type="date" value={fin} min={debut || undefined} onChange={(e) => setFin(e.target.value)} />
-            </label>
+
             </>
             )}
           </div>
@@ -2233,8 +2199,13 @@ function FacturesAbonnementSection({
 
       {/* Création — des abonnements actifs ; la terminée reste consultable */}
       {abonnementLignes.map((ligne) => {
-        const enfants = (facturesValidees ?? []).filter(
-          (f) => f.ligneServiceId === ligne.id && f.type === 'ABONNEMENT_MENSUEL',
+        // La mensuelle 1 (la facture validée elle-même) porte son abo dans ses
+        // lignes PRINCIPALE : elle est liée à ce service ici (ligne_service_id=null).
+        const enfants = (facturesValidees ?? []).filter((f) =>
+          f.type === 'ABONNEMENT_MENSUEL'
+          && (f.ligneServiceId === ligne.id
+            || (f.ligneServiceId == null
+              && (f.lignes ?? []).some((l) => l.ligneServiceId === ligne.id))),
         )
         const restant = enfants.filter((f) => f.resteAPayer > 0)
         const actif = ligne.statut === 'EN_COURS' || ligne.statut === 'PARTIEL'
@@ -2358,7 +2329,7 @@ function FacturesAbonnementSection({
                                     Encaisser
                                   </button>
                                 )}
-                                {f.montantPaye === 0 && demande.statutActuel !== 'TERMINEE' && demande.statutActuel !== 'ANNULEE' && (
+                                {f.factureGeneraleId != null && f.montantPaye === 0 && demande.statutActuel !== 'TERMINEE' && demande.statutActuel !== 'ANNULEE' && (
                                   <button
                                     type="button"
                                     className="btn-ghost"

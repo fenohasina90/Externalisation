@@ -137,6 +137,11 @@ public class PaiementGestionService {
             throw new BusinessException(
                     "La demande est " + statutDemande + " : aucun paiement n'est possible");
         }
+        // Aucun paiement en pièce avant création de la facture (demande EN_ATTENTE).
+        if ("EN_ATTENTE".equals(statutDemande)) {
+            throw new BusinessException(
+                    "La demande est EN_ATTENTE : validez la facture avant d'enregistrer un paiement");
+        }
 
         ModePaiement mode = modeRepository.findById(request.modePaiementId())
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -148,14 +153,22 @@ public class PaiementGestionService {
                         .orElseThrow(() -> new ResourceNotFoundException(
                                 ErrorMessages.introuvable("Facture validée", request.factureValideeId())));
 
-        // En mode « facture générale unique », la facture générale couvre
-        // plusieurs services : elle n'est pas un objet de règlement —
-        // chaque service possède sa propre facture pour le paiement.
-        if (factureValidee.getFactureProforma() != null
-                && "UNIQUE".equals(factureValidee.getFactureProforma().getModeFacturation())) {
+        // Mensuelle 1 : la facture validée devient la facture du 1er mois dès
+        // la création de la facture du mois (mois choisi). Avant ça,Aucun paiement.
+        boolean demandeAvecAbonnement = false;
+        for (LigneService ligneDemande : ligneRepository.findByDemandeId(demande.getId())) {
+            if (LigneServiceService.CATEGORIE_EXTERNALISATION.equalsIgnoreCase(ligneDemande.getCategorie())
+                    && LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(ligneDemande.getTypePrestation())) {
+                demandeAvecAbonnement = true;
+                break;
+            }
+        }
+        boolean mensuelleCreee = factureValideeRepository.findByDemandeIdAndMoisIsNotNull(demande.getId())
+                .stream().findAny().isPresent();
+        if (demandeAvecAbonnement && !mensuelleCreee) {
             throw new BusinessException(
-                    "La facture générale couvre plusieurs services : chaque service se règle "
-                            + "sur sa propre facture validée");
+                    "La facture du mois n'est pas encore créée pour cette demande : "
+                            + "créez la facture du mois (onglet Factures mensuelles) avant d'enregistrer un paiement");
         }
 
         if (factureValidee.getDemande() == null
@@ -401,9 +414,17 @@ public class PaiementGestionService {
         if (fv == null) {
             return List.of();
         }
-        // Facture du mois : seul le règlement de l'abonnement est imputé sur la ligne
-        // d'abonnement. Les lignes RAPPEL ne décrivent que des règlements séparés.
+        // Facture combinée du mois (mensuelle 1 et factures suivantes) : seul le
+        // règlement des lignes PRINCIPALE est imputé aux lignes — les lignes
+        // RAPPEL ne servent que d'information.
         if (fv.getFactureGenerale() != null) {
+            if (fv.getLignes() != null && !fv.getLignes().isEmpty()) {
+                return fv.getLignes().stream()
+                        .filter(l -> !"RAPPEL".equalsIgnoreCase(l.getType()))
+                        .map(com.cabex.backend.facture.entity.FactureValideeLigne::getLigneService)
+                        .filter(java.util.Objects::nonNull)
+                        .toList();
+            }
             return fv.getLigneService() != null ? List.of(fv.getLigneService()) : List.of();
         }
         List<LigneService> lignes = new ArrayList<>();

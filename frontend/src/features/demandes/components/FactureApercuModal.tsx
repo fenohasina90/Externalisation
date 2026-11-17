@@ -37,12 +37,6 @@ export function FactureApercuModal({
 
   const estProforma = apercu.kind === 'proforma'
   /** Facture générale validée en mode « unique » : aucun paiement ne lui est lié. */
-  /** Facture générale validée en mode « unique » : aucun paiement ne lui est lié. */
-  const estGeneraleUnique = !estProforma
-    && apercu.facture.type === 'GENERALE'
-    && apercu.facture.modeFacturation === 'UNIQUE'
-
-
   const referenceTitre = estProforma ? apercu.facture.referenceFacture : apercu.facture.referenceFactureValidee
   const telechargerPdf = async () => {
     const url = estProforma
@@ -78,7 +72,7 @@ export function FactureApercuModal({
   // les montants de création (avant validation ou après — c'est le document
   // PROFORMA). La facture validée (kind === 'validee') affiche le tarif
   // validé (ligne_service.tarif).
-  const lignesAffichage = (estProforma || estGeneraleUnique ? apercu.facture.lignesProforma : undefined) ?? []
+  const lignesAffichage = apercu.facture.lignesProforma ?? []
   const aboLignes = lignesAffichage.filter((l) => l.typePrestation === 'ABONNEMENT_MENSUEL')
   const prestaLignes = lignesAffichage.filter((l) =>
     l.categorie === 'EXTERNALISATION' && l.typePrestation !== 'ABONNEMENT_MENSUEL')
@@ -222,7 +216,7 @@ export function FactureApercuModal({
           </section>
 
           {/* Section A — objet de la présente facture */}
-          {(estProforma || estGeneraleUnique) ? (
+          {
             <section>
               <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
                 Cette facture — lignes persistées
@@ -276,24 +270,11 @@ export function FactureApercuModal({
                 </table>
               </div>
             </section>
-          ) : null}
+          }
 
 
-          {/* Suivi des paiements (validée uniquement) — pas en mode unique */}
-          {!estProforma && estGeneraleUnique && (
-            <section>
-              <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
-                Suivi des paiements
-              </h4>
-              <p className="section-note" style={{ margin: '0 0 4px' }}>
-                Cette facture générale couvre plusieurs services : <strong>aucun paiement ne lui est lié.</strong>
-              </p>
-              <p className="section-note" style={{ margin: 0 }}>
-                Chaque service se règle sur sa propre facture validée (factures de service ci-dessous).
-              </p>
-            </section>
-          )}
-          {!estProforma && !estGeneraleUnique && (
+          {/* Suivi des paiements — règle générale : chaque facture est liée au paiement */}
+          {!estProforma && (
             <section>
               <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
                 Suivi des paiements
