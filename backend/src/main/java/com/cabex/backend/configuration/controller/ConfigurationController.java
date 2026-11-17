@@ -44,7 +44,8 @@ public class ConfigurationController {
         return ResponseEntity.ok(new ConfigurationPubliqueResponse(
                 configurationService.lireValeur("NOM_APPLICATION", "Gestion Externalisation"),
                 configurationService.lireValeur("DEVISE", "MGA"),
-                configurationService.lireEntier("PAGINATION_TAILLE_DEFAUT", 20)));
+                configurationService.lireEntier("PAGINATION_TAILLE_DEFAUT", 20),
+                configurationService.lireEntier("PAGINATION_FACTURATION", 15)));
     }
 
     @GetMapping("/{cle}")

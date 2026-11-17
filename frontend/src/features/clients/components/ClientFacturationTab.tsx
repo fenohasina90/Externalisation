@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Alert, Spinner } from '@/components/ui'
 import { Can } from '@/components/shared/Can'
 import { useApi } from '@/hooks/useApi'
+import { useTaillePaginationFacturation } from '@/hooks/useTaillePaginationFacturation'
 import { useDebounce } from '@/hooks/useDebounce'
 import { formatDate, formatMontantMGA } from '@/utils/format'
 import { telechargerBlob } from '@/utils/telechargement'
@@ -208,7 +209,6 @@ function aplatirLignes(
   return lignes
 }
 
-const PAGE_SIZE_LIGNES = 15
 
 /** Onglet « Facturation » de la fiche client : toutes les factures depuis l'enregistrement. */
 export function ClientFacturationTab({ societeId, nomClient }: { societeId: number | null; nomClient: string }) {
@@ -228,6 +228,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
   const [showFilters, setShowFilters] = useState(true)
 
   const terme = useDebounce(recherche, 300)
+  const PAGE_SIZE_LIGNES = useTaillePaginationFacturation()
 
   const factures = useMemo(() => data ?? [], [data])
   const groupes = useMemo(

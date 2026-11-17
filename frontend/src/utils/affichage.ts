@@ -8,7 +8,12 @@ let promesse: Promise<ConfigurationPublique> | null = null
 let courante: ConfigurationPublique | null = null
 
 function repli(): ConfigurationPublique {
-  return { nomApplication: document.title, devise: 'MGA', taillePagination: 8 }
+  return {
+    nomApplication: document.title,
+    devise: 'MGA',
+    taillePagination: 8,
+    taillePaginationFacturation: 15,
+  }
 }
 
 /**

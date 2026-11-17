@@ -1481,6 +1481,13 @@ VALUES
 ),
 
 (
+    'PAGINATION_FACTURATION',
+    '15',
+    'INTEGER',
+    'Nombre de lignes affichées par page dans l''onglet Facturation du client'
+),
+
+(
     'HEURE_SAUVEGARDE_AUTOMATIQUE',
     '02:00',
     'TIME',

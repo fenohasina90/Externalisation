@@ -185,6 +185,7 @@ export interface ConfigurationPublique {
   nomApplication: string
   devise: string
   taillePagination: number
+  taillePaginationFacturation: number
 }
 
 export const configurationApi = {
