@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { Alert, Spinner } from '@/components/ui'
 import { Can } from '@/components/shared/Can'
 import { useApi } from '@/hooks/useApi'
+import { useDebounce } from '@/hooks/useDebounce'
 import { formatDate, formatMontantMGA } from '@/utils/format'
 import { telechargerBlob } from '@/utils/telechargement'
 import { clientsApi } from '../services/clients.service'
@@ -66,6 +67,7 @@ function construireGroupes(
   dateDebut: string,
   dateFin: string,
   tri: Tri,
+  recherche: string,
 ): Groupe[] {
   const parId = new Map(factures.map((f) => [f.id, f]))
   const generales = factures.filter((f) => f.type === 'GENERALE')
@@ -82,6 +84,18 @@ function construireGroupes(
     if (dateFin && d > dateFin) return false
     return true
   }
+  // Filtre par recherche sur référence demande, facture ou paiement (insensible à la casse).
+  const terme = recherche.trim().toLowerCase()
+  const matchRecherche = (f: FactureFacturation): boolean => {
+    if (!terme) return true
+    const hay = [
+      f.referenceFactureValidee ?? '',
+      f.referenceDemande ?? '',
+      ...f.paiements.map((p) => p.referencePaiement ?? ''),
+    ].join(' ').toLowerCase()
+    return hay.includes(terme)
+  }
+
   // Factures enfants d'une générale : affichées quand la générale l'est (jamais elles-mêmes).
   // Une facture de paiement sans générale parente (orphelin) se filtre sur sa propre date.
   const matchGroupe = (g: FactureFacturation | null): boolean =>
@@ -114,9 +128,11 @@ function construireGroupes(
     if (!matchGroupe(g)) continue
     const enfants = (enfantsParGenerale.get(g.id) ?? [])
       .sort((a, b) => cmp(a.dateFactureValidee, b.dateFactureValidee))
+    if (terme && !matchRecherche(g) && !enfants.some(matchRecherche)) continue
     groupes.push({ key: `g-${g.id}`, general: g, enfants })
   }
   for (const e of orphelins.filter(matchOrphelin)) {
+    if (terme && !matchRecherche(e)) continue
     groupes.push({ key: `o-${e.id}`, general: null, enfants: [e] })
   }
   groupes.sort((a, b) => {
@@ -137,6 +153,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
   )
   const [dateDebut, setDateDebut] = useState('')
   const [dateFin, setDateFin] = useState('')
+  const [recherche, setRecherche] = useState('')
   const [tri, setTri] = useState<Tri>('desc')
   const [ouverts, setOuverts] = useState<Set<number>>(new Set())
   const [groupesRepliees, setGroupesRepliees] = useState<Set<number>>(new Set())
@@ -145,10 +162,12 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
   const [pleinEcran, setPleinEcran] = useState(false)
   const [showFilters, setShowFilters] = useState(true)
 
+  const terme = useDebounce(recherche, 300)
+
   const factures = useMemo(() => data ?? [], [data])
   const groupes = useMemo(
-    () => construireGroupes(factures, dateDebut, dateFin, tri),
-    [factures, dateDebut, dateFin, tri],
+    () => construireGroupes(factures, dateDebut, dateFin, tri, terme),
+    [factures, dateDebut, dateFin, tri, terme],
   )
 
   const estOuverte = (id: number): boolean => ouverts.has(id)
@@ -215,6 +234,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
   const resetPage = (): void => setPage(0)
   const onDateDebut = (v: string): void => { setDateDebut(v); resetPage() }
   const onDateFin = (v: string): void => { setDateFin(v); resetPage() }
+  const onRecherche = (v: string): void => { setRecherche(v); resetPage() }
   const onTri = (v: Tri): void => { setTri(v); resetPage() }
 
   const telechargerPdf = async (): Promise<void> => {
@@ -225,6 +245,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
         dateDebut: dateDebut || null,
         dateFin: dateFin || null,
         ordre: tri,
+        recherche,
       })
       telechargerBlob(pdf, `facturation-${codeSociete(societeId)}.pdf`)
     } catch {
@@ -232,10 +253,16 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
     }
   }
 
-  const aFiltres = Boolean(dateDebut || dateFin) || tri !== 'desc'
+  const aFiltres = Boolean(dateDebut || dateFin || terme) || tri !== 'desc'
 
   const ligneTriFiltres = (
     <form className="filters-inline" onSubmit={(e) => e.preventDefault()} aria-label="Filtrer la facturation">
+      <div className="field filter-field">
+        <label htmlFor="fact-recherche">Rechercher</label>
+        <input id="fact-recherche" type="text" value={recherche}
+               placeholder="Réf. demande, facture ou paiement…"
+               onChange={(e) => onRecherche(e.target.value)} />
+      </div>
       <div className="field filter-field">
         <label htmlFor="fact-date-debut">Date facture Générale (début)</label>
         <input id="fact-date-debut" type="date" value={dateDebut}
@@ -255,7 +282,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
       </div>
       <div className="filter-actions filter-actions--bottom">
         <button type="button" className="btn-ghost" disabled={!aFiltres && groupesRepliees.size === 0 && toutesFvAvecPaiements.every((f) => !ouverts.has(f.id))}
-                onClick={() => { setDateDebut(''); setDateFin(''); setTri('desc'); setOuverts(new Set()); setGroupesRepliees(new Set()) }}>
+                onClick={() => { setDateDebut(''); setDateFin(''); setRecherche(''); setTri('desc'); setOuverts(new Set()); setGroupesRepliees(new Set()) }}>
           Réinitialiser
         </button>
       </div>
@@ -442,7 +469,9 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
               {groupes.length === 0 && (
                 <tr>
                   <td colSpan={11} className="text-muted">
-                    {aFiltres ? 'Aucune facture ne correspond aux filtres.'
+                    {aFiltres
+                      ? (terme ? `Aucune facture ne correspond à « ${terme} ».`
+                                : 'Aucune facture ne correspond aux filtres.')
                       : 'Aucune facture pour ce client depuis son enregistrement.'}
                   </td>
                 </tr>

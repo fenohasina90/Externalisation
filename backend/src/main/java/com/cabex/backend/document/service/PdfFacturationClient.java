@@ -46,9 +46,9 @@ final class PdfFacturationClient {
 
     static byte[] generer(Societe societe,
                           List<FactureValideeFicheResponse> fiches,
-                          LocalDate debut, LocalDate fin, String ordre) {
+                          LocalDate debut, LocalDate fin, String ordre, String recherche) {
         boolean ordreAsc = "ASC".equalsIgnoreCase(ordre);
-        List<Groupe> groupes = construireGroupes(fiches, debut, fin, ordreAsc);
+        List<Groupe> groupes = construireGroupes(fiches, debut, fin, ordreAsc, recherche);
         String client = societe != null && societe.getNomSociete() != null
                 ? societe.getNomSociete() : "—";
         int idClient = societe != null && societe.getId() != null ? societe.getId() : 0;
@@ -124,6 +124,12 @@ final class PdfFacturationClient {
 
     private static List<Groupe> construireGroupes(List<FactureValideeFicheResponse> fiches,
                                                   LocalDate debut, LocalDate fin, boolean asc) {
+        return construireGroupes(fiches, debut, fin, asc, null);
+    }
+
+    private static List<Groupe> construireGroupes(List<FactureValideeFicheResponse> fiches,
+                                                  LocalDate debut, LocalDate fin, boolean asc,
+                                                  String recherche) {
         Comparator<LocalDate> cmp = asc
                 ? Comparator.nullsLast(Comparator.naturalOrder())
                 : Comparator.nullsLast(Comparator.reverseOrder());
@@ -153,15 +159,38 @@ final class PdfFacturationClient {
             }
         }
 
+        // Filtre par recherche sur référence demande, facture et paiement.
+        String terme = recherche != null ? recherche.trim().toLowerCase() : "";
+        java.util.function.Predicate<FactureValideeFicheResponse> matchRecherche = f -> {
+            if (terme.isEmpty()) {
+                return true;
+            }
+            StringBuilder hay = new StringBuilder();
+            hay.append(f.referenceFactureValidee() != null ? f.referenceFactureValidee() : "").append(' ');
+            hay.append(f.referenceDemande() != null ? f.referenceDemande() : "").append(' ');
+            f.paiements().forEach(p ->
+                hay.append(p.referencePaiement() != null ? p.referencePaiement() : "").append(' '));
+            return hay.toString().toLowerCase().contains(terme);
+        };
+
         List<Groupe> groupes = new ArrayList<>();
         for (FactureValideeFicheResponse g : generales) {
             if (!inRange(g.dateFactureValidee(), debut, fin)) {
                 continue;
             }
-            groupes.add(new Groupe(g, enfantsParGeneral.getOrDefault(g.id(), List.of())));
+            List<FactureValideeFicheResponse> enfantsG =
+                    enfantsParGeneral.getOrDefault(g.id(), List.of());
+            if (!terme.isEmpty() && !matchRecherche.test(g)
+                    && enfantsG.stream().noneMatch(matchRecherche)) {
+                continue;
+            }
+            groupes.add(new Groupe(g, enfantsG));
         }
         for (FactureValideeFicheResponse e : orphelins) {
             if (!inRange(e.dateFactureValidee(), debut, fin)) {
+                continue;
+            }
+            if (!terme.isEmpty() && !matchRecherche.test(e)) {
                 continue;
             }
             groupes.add(new Groupe(null, List.of(e)));

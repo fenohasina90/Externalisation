@@ -219,14 +219,14 @@ public class DocumentGestionService {
     /** Export PDF de la facturation complète du client (onglet Facturation, filtre date appliqué). */
     @Transactional(readOnly = true)
     public byte[] facturationClientPdf(Integer societeId, LocalDate dateDebut, LocalDate dateFin,
-                                       String ordre) {
+                                       String ordre, String recherche) {
         com.cabex.backend.client.entity.Societe societe = societeRepository
                 .findById(societeId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Client", societeId)));
         List<com.cabex.backend.facture.dto.FactureValideeFicheResponse> fiches =
                 factureService.listerFacturationParClient(societeId);
-        return pdfGenerator.facturationClientPdf(societe, fiches, dateDebut, dateFin, ordre);
+        return pdfGenerator.facturationClientPdf(societe, fiches, dateDebut, dateFin, ordre, recherche);
     }
 
     public byte[] planPaiement(Integer demandeId) {

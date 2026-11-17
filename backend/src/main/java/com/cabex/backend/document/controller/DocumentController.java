@@ -162,8 +162,9 @@ public class DocumentController {
             @PathVariable Integer id,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
-            @RequestParam(required = false, defaultValue = "desc") String ordre) {
-        return pdfResponse(documentService.facturationClientPdf(id, dateDebut, dateFin, ordre),
+            @RequestParam(required = false, defaultValue = "desc") String ordre,
+            @RequestParam(required = false) String recherche) {
+        return pdfResponse(documentService.facturationClientPdf(id, dateDebut, dateFin, ordre, recherche),
                 "facturation-client-" + id + ".pdf");
     }
 

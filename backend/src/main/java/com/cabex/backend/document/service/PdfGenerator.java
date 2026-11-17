@@ -83,8 +83,9 @@ public class PdfGenerator {
     /** Export PDF de la facturation client (onglet Facturation), avec filtre de dates appliqué. */
     public byte[] facturationClientPdf(Societe societe,
                                        List<FactureValideeFicheResponse> fiches,
-                                       LocalDate dateDebut, LocalDate dateFin, String ordre) {
-        return PdfFacturationClient.generer(societe, fiches, dateDebut, dateFin, ordre);
+                                       LocalDate dateDebut, LocalDate dateFin, String ordre,
+                                       String recherche) {
+        return PdfFacturationClient.generer(societe, fiches, dateDebut, dateFin, ordre, recherche);
     }
 
     public byte[] recuPaiement(Paiement paiement) {
