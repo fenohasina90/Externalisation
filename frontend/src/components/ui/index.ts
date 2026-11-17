@@ -14,3 +14,4 @@ export {
   Spinner,
 } from './content'
 export { TablePagination } from './TablePagination'
+export { MonthPicker } from './MonthPicker'

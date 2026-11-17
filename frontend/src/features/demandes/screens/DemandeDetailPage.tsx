@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Can } from '@/components/shared/Can'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { FormEtapes } from '@/components/shared/FormEtapes'
-import { Spinner } from '@/components/ui'
+import { MonthPicker, Spinner } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
 import { http } from '@/api/http'
 import { messageErreur } from '@/constants/messages'
@@ -2565,23 +2565,25 @@ function FacturesAbonnementSection({
                         <Fragment key={f.id}>
                           <tr>
                             <td className="fw-600">
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 {(f.lignes ?? []).length > 0 && (
                                   <button
                                     type="button"
-                                    className="btn-ghost"
-                                    style={{
-                                      minWidth: 30,
-                                      width: 30,
-                                      padding: 0,
-                                      lineHeight: 1.4,
-                                    }}
+                                    className={`btn-expand${detailOuvert ? ' btn-expand--ouvert' : ''}`}
                                     onClick={() => toggleLignesOuvertes(f.id)}
                                     aria-expanded={detailOuvert}
-                                    aria-label={detailOuvert ? 'Cacher les lignes de la facture' : 'Afficher les lignes de la facture'}
-                                    title={detailOuvert ? 'Cacher les lignes' : 'Afficher les lignes'}
+                                    aria-controls={`lignes-facture-${f.id}`}
+                                    aria-label={`${detailOuvert ? 'Replier' : 'Déplier'} les lignes de la facture (${(f.lignes ?? []).length})`}
+                                    title={`${detailOuvert ? 'Replier' : 'Déplier'} les lignes de la facture`}
                                   >
-                                    {detailOuvert ? '▾' : '▸'}
+                                    <svg className="btn-expand__icone" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.8"
+                                        strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                    <span className="btn-expand__libelle">
+                                      {detailOuvert ? 'Replier' : 'Lignes'}
+                                    </span>
+                                    <span className="btn-expand__count">{(f.lignes ?? []).length}</span>
                                   </button>
                                 )}
                                 <button
@@ -2638,7 +2640,7 @@ function FacturesAbonnementSection({
                             </td>
                           </tr>
                           {detailOuvert && (f.lignes ?? []).length > 0 && (
-                            <tr>
+                            <tr id={`lignes-facture-${f.id}`}>
                               <td colSpan={9}>
                                 <div style={{
                                   display: 'flex',
@@ -2737,16 +2739,12 @@ function FacturesAbonnementSection({
                 autoFocus
               />
             </label>
-            <label className="field">
-              Mois facturé <span className="required">*</span>
-              <input
-                type="month"
-                lang="fr-FR"
-                value={moisActuel}
-                onChange={(e) => setMoisActuel(e.target.value)}
-                required
-              />
-            </label>
+            <div className="field">
+              <span className="field-label">
+                Mois facturé <span className="required">*</span>
+              </span>
+              <MonthPicker value={moisActuel} onChange={setMoisActuel} />
+            </div>
             {(inclusionsDisponibles ?? []).length > 0 && (
               <fieldset
                 style={{
