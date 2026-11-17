@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Alert, Spinner } from '@/components/ui'
 import { Can } from '@/components/shared/Can'
 import { useApi } from '@/hooks/useApi'
@@ -143,7 +143,72 @@ function construireGroupes(
   return groupes
 }
 
-const PAGE_SIZE_GROUPES = 6
+
+type LigneAplatie =
+  | { kind: 'general'; key: string; general: FactureFacturation; enfants: FactureFacturation[]; estStandIn: boolean; repliee: boolean }
+  | { kind: 'enfant'; key: string; enfant: FactureFacturation; estStandIn: boolean }
+  | { kind: 'reglement'; key: string; paiement: PaiementFacturation }
+
+/** Aplatit les groupes de facturation en lignes affichables (générale → enfants → règlements). */
+function aplatirLignes(
+  groupes: Groupe[],
+  repliees: Set<number>,
+  ouverts: Set<number>,
+  tri: Tri,
+): LigneAplatie[] {
+  const lignes: LigneAplatie[] = []
+  for (const groupe of groupes) {
+    const general = groupe.general
+    const enfants = groupe.enfants
+    const estStandIn = enfants.length === 0 && !!general
+    const enfantsAffiches = estStandIn && general
+      ? [{ ...general, type: general.objetType ?? 'PRESTATION' as FactureFacturation['type'] }]
+      : enfants
+    const repliee = general ? repliees.has(general.id) : false
+    if (general) {
+      lignes.push({ kind: 'general', key: `g-${general.id}`, general, enfants, estStandIn, repliee })
+      if (!estStandIn && !repliee) {
+        for (const p of general.paiements) {
+          lignes.push({ kind: 'reglement', key: `gp-${general.id}-${p.id}`, paiement: p })
+        }
+      }
+      if (!repliee) {
+        for (const enfant of enfantsAffiches) {
+          lignes.push({ kind: 'enfant', key: `e-${enfant.id}`, enfant, estStandIn })
+          const triesPaiements = [...enfant.paiements].sort((a, b) => {
+            const da = a.datePaiement ?? ''
+            const db = b.datePaiement ?? ''
+            const ordre = da < db ? -1 : da > db ? 1 : 0
+            return tri === 'desc' ? -ordre : ordre
+          })
+          if (ouverts.has(enfant.id)) {
+            for (const p of triesPaiements) {
+              lignes.push({ kind: 'reglement', key: `ep-${enfant.id}-${p.id}`, paiement: p })
+            }
+          }
+        }
+      }
+    } else {
+      for (const enfant of enfants) {
+        lignes.push({ kind: 'enfant', key: `o-${enfant.id}`, enfant, estStandIn: false })
+        const triesPaiements = [...enfant.paiements].sort((a, b) => {
+          const da = a.datePaiement ?? ''
+          const db = b.datePaiement ?? ''
+          const ordre = da < db ? -1 : da > db ? 1 : 0
+          return tri === 'desc' ? -ordre : ordre
+        })
+        if (ouverts.has(enfant.id)) {
+          for (const p of triesPaiements) {
+            lignes.push({ kind: 'reglement', key: `ep-${enfant.id}-${p.id}`, paiement: p })
+          }
+        }
+      }
+    }
+  }
+  return lignes
+}
+
+const PAGE_SIZE_LIGNES = 15
 
 /** Onglet « Facturation » de la fiche client : toutes les factures depuis l'enregistrement. */
 export function ClientFacturationTab({ societeId, nomClient }: { societeId: number | null; nomClient: string }) {
@@ -200,8 +265,16 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
     setOuverts(new Set())
   }
 
-  const totalPages = Math.max(1, Math.ceil(groupes.length / PAGE_SIZE_GROUPES))
-  const groupesPage = groupes.slice(page * PAGE_SIZE_GROUPES, page * PAGE_SIZE_GROUPES + PAGE_SIZE_GROUPES)
+  const lignesAffichees = useMemo(
+    () => aplatirLignes(groupes, groupesRepliees, ouverts, tri),
+    [groupes, groupesRepliees, ouverts, tri],
+  )
+  const totalPages = Math.max(1, Math.ceil(lignesAffichees.length / PAGE_SIZE_LIGNES))
+  const pageActuelle = Math.min(page, totalPages - 1)
+  const lignesPage = lignesAffichees.slice(
+    pageActuelle * PAGE_SIZE_LIGNES,
+    pageActuelle * PAGE_SIZE_LIGNES + PAGE_SIZE_LIGNES,
+  )
 
   const totaux = useMemo(
     () => groupes.reduce((acc, g) => {
@@ -374,36 +447,30 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
               </tr>
             </thead>
             <tbody>
-              {groupesPage.map((groupe) => {
-                const general = groupe.general
-                const enfants = groupe.enfants
-                // Facture générale sans sous-facture mais réglée directement :
-                // elle s'affiche comme sa propre sous-facture pour montrer
-                // son objet et son type (prestation / débours / abonnement).
-                const estStandIn = enfants.length === 0 && !!general
-                const enfantsAffiches = estStandIn && general
-                  ? [{ ...general, type: general.objetType ?? 'PRESTATION' }]
-                  : enfants
-                const paiementGeneral = general ? general.paiements : []
-                const montantGeneral = general
-                  ? (enfants.length > 0 ? sommeFactures(enfants) : (general.montant ?? 0))
-                  : 0
-                const encaisseGeneral = general
-                  ? sommePayeeFactures(enfants) + sommePaiements(paiementGeneral)
-                  : 0
-                const resteGeneral = general ? Math.max(0, montantGeneral - encaisseGeneral) : 0
-                const statutGeneral = general ? statutFacture(montantGeneral, encaisseGeneral) : null
-                const repliee = general ? groupesRepliees.has(general.id) : false
-                const sousContenu = general
-                  ? enfantsAffiches.length > 0 || paiementGeneral.length > 0
-                  : false
+              {lignesPage.map((ligne) => {
+                switch (ligne.kind) {
+                  case 'general': {
+                    const general = ligne.general
+                    const enfants = ligne.enfants
+                    const estStandIn = ligne.estStandIn
+                    const repliee = ligne.repliee
+                    const montantGeneral = enfants.length > 0
+                      ? sommeFactures(enfants)
+                      : (general.montant ?? 0)
+                    const encaisseGeneral = (enfants.length > 0
+                      ? sommePayeeFactures(enfants)
+                      : (general.montantPaye ?? 0)) + sommePaiements(general.paiements ?? [])
+                    const resteGeneral = Math.max(0, montantGeneral - encaisseGeneral)
+                    const statutGeneral = statutFacture(montantGeneral, encaisseGeneral)
+                    const enfantsAffiches = estStandIn && general
+                      ? [{ ...general, type: general.objetType ?? 'PRESTATION' as FactureFacturation['type'] }]
+                      : enfants
+                    const sousContenu = enfantsAffiches.length > 0 || general.paiements.length > 0
 
-                return (
-                  <Fragment key={groupe.key}>
-                    {general && (
-                      <tr className="facture-rang-general">
+                    return (
+                      <tr key={ligne.key} className="facture-rang-general">
                         <td className="text-secondary">
-                          {general && sousContenu && (
+                          {sousContenu && (
                             <button type="button" className="expand-toggle"
                                     onClick={() => toggleGroupe(general.id)}
                                     aria-expanded={!repliee}
@@ -424,73 +491,63 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                         <td className="cell-number" style={resteGeneral > 0 ? { color: 'var(--danger)' } : undefined}>
                           {formatMontantMGA(resteGeneral)}
                         </td>
-                        <td>{statutGeneral && <span className={statutGeneral.pill}>{statutGeneral.libelle}</span>}</td>
+                        <td><span className={statutGeneral.pill}>{statutGeneral.libelle}</span></td>
                         <td className="text-secondary">—</td>
                       </tr>
-                    )}
-                    {general && !estStandIn && !repliee &&
-                      paiementGeneral.map((p) => (
-                        <LigneReglement key={`${general.id}-p-${p.id}`} paiement={p} nomClient={nomClient} />
-                      ))}
-                    {!repliee && enfantsAffiches.map((enfant) => {
-                      const afficherRefGenerale = !estStandIn && enfant.referenceFactureGenerale
+                    )
+                  }
+                  case 'enfant': {
+                    const enfant = ligne.enfant
+                    const estStandIn = ligne.estStandIn
+                    const afficherRefGenerale = !estStandIn && enfant.referenceFactureGenerale
+                    const payeEnfant = enfant.montantPaye ?? sommePaiements(enfant.paiements)
+                    const montantEnfant = enfant.montant ?? 0
+                    const resteEnfant = Math.max(0, montantEnfant - payeEnfant)
+                    const statutEnfant = statutFacture(montantEnfant, payeEnfant)
+                    const aPaiements = enfant.paiements.length > 0
+                    const designation = enfant.type === 'ABONNEMENT_MENSUEL'
+                      ? `${enfant.objet ?? 'Abonnement'}${enfant.mois ? ` (${formatMois(enfant.mois)})` : ''}`
+                      : enfant.objet ?? '—'
 
-                      const payeEnfant = enfant.montantPaye ?? sommePaiements(enfant.paiements)
-                      const montantEnfant = enfant.montant ?? 0
-                      const resteEnfant = Math.max(0, montantEnfant - payeEnfant)
-                      const statutEnfant = statutFacture(montantEnfant, payeEnfant)
-                      const aPaiements = enfant.paiements.length > 0
-                      const designation = enfant.type === 'ABONNEMENT_MENSUEL'
-                        ? `${enfant.objet ?? 'Abonnement'}${enfant.mois ? ` (${formatMois(enfant.mois)})` : ''}`
-                        : enfant.objet ?? '—'
-                      const triPaiements = [...enfant.paiements].sort((a, b) => {
-                        const da = a.datePaiement ?? ''
-                        const db = b.datePaiement ?? ''
-                        const ordre = da < db ? -1 : da > db ? 1 : 0
-                        return tri === 'desc' ? -ordre : ordre
-                      })
-                      return (
-                        <Fragment key={enfant.id}>
-                          <tr>
-                            <td className="facture-indent-1 text-secondary">
-                              {aPaiements && (
-                                <button type="button" className="expand-toggle"
-                                        onClick={() => toggle(enfant.id)}
-                                        aria-expanded={estOuverte(enfant.id)}
-                                        aria-label={estOuverte(enfant.id)
-                                          ? `Replier les paiements de ${enfant.referenceFactureValidee ?? 'la facture'}`
-                                          : `Déplier les paiements de ${enfant.referenceFactureValidee ?? 'la facture'}`}>
-                                  {estOuverte(enfant.id) ? '▾' : '▸'}
-                                </button>
-                              )}
-                              {formatDate(enfant.dateFactureValidee)}
-                            </td>
-                            <td className="fw-700">
-                              {enfant.referenceFactureValidee ?? '—'}
-                              {afficherRefGenerale && (
-                                <span className="facture-sousligne">Générale {enfant.referenceFactureGenerale}</span>
-                              )}
-                            </td>
-                            <td><span className={TYPE_PILL[enfant.type] ?? 'pill wt'}>● {TYPE_LABEL[enfant.type] ?? enfant.type}</span></td>
-                            <td className="text-secondary">{nomClient}</td>
-                            <td>{designation}</td>
-                            <td className="cell-number">{formatMontantMGA(montantEnfant)}</td>
-                            <td className="cell-number">{formatMontantMGA(payeEnfant)}</td>
-                            <td className="cell-number" style={resteEnfant > 0 ? { color: 'var(--danger)' } : undefined}>
-                              {formatMontantMGA(resteEnfant)}
-                            </td>
-                            <td><span className={statutEnfant.pill}>{statutEnfant.libelle}</span></td>
-                            <td className="text-secondary">—</td>
-                          </tr>
-                          {estOuverte(enfant.id) &&
-                            triPaiements.map((p) => (
-                              <LigneReglement key={`${enfant.id}-p-${p.id}`} paiement={p} nomClient={nomClient} />
-                            ))}
-                        </Fragment>
-                      )
-                    })}
-                  </Fragment>
-                )
+                    return (
+                      <tr key={ligne.key}>
+                        <td className="facture-indent-1 text-secondary">
+                          {aPaiements && (
+                            <button type="button" className="expand-toggle"
+                                    onClick={() => toggle(enfant.id)}
+                                    aria-expanded={estOuverte(enfant.id)}
+                                    aria-label={estOuverte(enfant.id)
+                                      ? `Replier les paiements de ${enfant.referenceFactureValidee ?? 'la facture'}`
+                                      : `Déplier les paiements de ${enfant.referenceFactureValidee ?? 'la facture'}`}>
+                              {estOuverte(enfant.id) ? '▾' : '▸'}
+                            </button>
+                          )}
+                          {formatDate(enfant.dateFactureValidee)}
+                        </td>
+                        <td className="fw-700">
+                          {enfant.referenceFactureValidee ?? '—'}
+                          {afficherRefGenerale && (
+                            <span className="facture-sousligne">Générale {enfant.referenceFactureGenerale}</span>
+                          )}
+                        </td>
+                        <td><span className={TYPE_PILL[enfant.type] ?? 'pill wt'}>● {TYPE_LABEL[enfant.type] ?? enfant.type}</span></td>
+                        <td className="text-secondary">{nomClient}</td>
+                        <td>{designation}</td>
+                        <td className="cell-number">{formatMontantMGA(montantEnfant)}</td>
+                        <td className="cell-number">{formatMontantMGA(payeEnfant)}</td>
+                        <td className="cell-number" style={resteEnfant > 0 ? { color: 'var(--danger)' } : undefined}>
+                          {formatMontantMGA(resteEnfant)}
+                        </td>
+                        <td><span className={statutEnfant.pill}>{statutEnfant.libelle}</span></td>
+                        <td className="text-secondary">—</td>
+                      </tr>
+                    )
+                  }
+                  case 'reglement':
+                    return <LigneReglement key={ligne.key} paiement={ligne.paiement} nomClient={nomClient} />
+                  default:
+                    return null
+                }
               })}
               {groupes.length === 0 && (
                 <tr>
@@ -519,18 +576,21 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
             )}
           </table>
         </div>
-        {groupes.length > 0 && (
+        {lignesAffichees.length > 0 && (
           <div className="table-footer">
             <span>
-              {groupes.length} groupe{groupes.length > 1 ? 's' : ''} de facturation
+              Affichage {pageActuelle * PAGE_SIZE_LIGNES + 1} à{' '}
+              {Math.min(lignesAffichees.length, pageActuelle * PAGE_SIZE_LIGNES + PAGE_SIZE_LIGNES)}{' '}
+              sur {lignesAffichees.length} ligne{lignesAffichees.length > 1 ? 's' : ''}
             </span>
             <div className="pagination">
               {Array.from({ length: totalPages }).map((_, i) => (
                 <button
                   key={i}
                   type="button"
-                  className={`pagination-item ${i === page ? 'active' : ''}`}
+                  className={`pagination-item ${i === pageActuelle ? 'active' : ''}`}
                   onClick={() => setPage(i)}
+                  aria-label={`Page ${i + 1}`}
                 >
                   {i + 1}
                 </button>
