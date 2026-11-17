@@ -229,6 +229,19 @@ public class DocumentGestionService {
         return pdfGenerator.facturationClientPdf(societe, fiches, dateDebut, dateFin, ordre, recherche);
     }
 
+    /** Export Excel de la facturation complète du client (onglet Facturation, filtre appliqué). */
+    @Transactional(readOnly = true)
+    public byte[] facturationClientExcel(Integer societeId, LocalDate dateDebut, LocalDate dateFin,
+                                         String ordre, String recherche) {
+        com.cabex.backend.client.entity.Societe societe = societeRepository
+                .findById(societeId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Client", societeId)));
+        List<com.cabex.backend.facture.dto.FactureValideeFicheResponse> fiches =
+                factureService.listerFacturationParClient(societeId);
+        return pdfGenerator.facturationClientExcel(societe, fiches, dateDebut, dateFin, ordre, recherche);
+    }
+
     public byte[] planPaiement(Integer demandeId) {
         ProposPaiement propos = proposRepository
                 .findFirstByDemandeIdAndStatutOrderByCreatedAtDesc(demandeId, "ACTIF")

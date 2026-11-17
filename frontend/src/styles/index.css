@@ -4210,6 +4210,11 @@ body.page-responsables {
   gap: 12px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
+  flex-wrap: nowrap;
+}
+
+.facture-toolbar__titre {
+  white-space: nowrap;
 }
 
 .facture-toolbar__info {
@@ -4228,9 +4233,15 @@ body.page-responsables {
 
 .facture-toolbar__actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .facture-toolbar__actions {
+    flex-wrap: wrap;
+  }
 }
 
 .facturation-plein-ecran {

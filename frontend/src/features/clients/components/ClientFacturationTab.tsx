@@ -253,6 +253,22 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
     }
   }
 
+  const telechargerExcel = async (): Promise<void> => {
+    if (societeId === null) return
+    setErreurPdf(null)
+    try {
+      const excel = await clientsApi.downloadExcelFacturation(societeId, {
+        dateDebut: dateDebut || null,
+        dateFin: dateFin || null,
+        ordre: tri,
+        recherche,
+      })
+      telechargerBlob(excel, `facturation-${codeSociete(societeId)}.xlsx`)
+    } catch {
+      setErreurPdf("Téléchargement de l'Excel de facturation impossible.")
+    }
+  }
+
   const aFiltres = Boolean(dateDebut || dateFin || terme) || tri !== 'desc'
 
   const ligneTriFiltres = (
@@ -316,11 +332,21 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
             {pleinEcran ? '✕ Fermer le plein écran' : '⛶ Plein écran'}
           </button>
           <Can permission="FACTURE_VIEW">
-            <button type="button" className="btn-primary" onClick={() => void telechargerPdf()}>
+            <button type="button" className="btn-primary" onClick={() => void telechargerPdf()}
+                    title="Exporter en PDF">
               <svg className="sv" viewBox="0 0 24 24">
                 <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
               </svg>
               Exporter en PDF
+            </button>
+            <button type="button" className="btn-ghost" onClick={() => void telechargerExcel()}
+                    title="Exporter en Excel (.xlsx)">
+              <svg className="sv" viewBox="0 0 24 24">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <path d="M14 2v6h6" />
+                <path d="M9 15l2-2m0 0l2 2m-2-2v6" />
+              </svg>
+              Exporter en Excel
             </button>
           </Can>
         </div>

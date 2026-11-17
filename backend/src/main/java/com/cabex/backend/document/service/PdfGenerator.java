@@ -88,6 +88,14 @@ public class PdfGenerator {
         return PdfFacturationClient.generer(societe, fiches, dateDebut, dateFin, ordre, recherche);
     }
 
+    /** Export Excel de la facturation client (onglet Facturation), avec filtre appliqué. */
+    public byte[] facturationClientExcel(Societe societe,
+                                         List<FactureValideeFicheResponse> fiches,
+                                         LocalDate dateDebut, LocalDate dateFin, String ordre,
+                                         String recherche) {
+        return ExcelFacturationClient.generer(societe, fiches, dateDebut, dateFin, ordre, recherche);
+    }
+
     public byte[] recuPaiement(Paiement paiement) {
         return PdfRecuPaiement.generer(paiement, null);
     }
