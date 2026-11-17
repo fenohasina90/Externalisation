@@ -531,7 +531,8 @@ CREATE TABLE dossier_transaction_immobiliere (
     observations TEXT NULL,
     nombre_commerciaux_terrain INT NULL,
     commission_cn DECIMAL(15,2) NULL,
-    prestation_abonnement_mensuel BOOLEAN NOT NULL DEFAULT FALSE,
+    type_prestation_dossier VARCHAR(30) NOT NULL DEFAULT 'PRESTATION'
+        COMMENT 'PRESTATION (payable après facture validée) ou ABONNEMENT_MENSUEL (facture du mois)',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         ON UPDATE CURRENT_TIMESTAMP,
@@ -562,7 +563,10 @@ CREATE TABLE dossier_transaction_immobiliere (
             AND (commission_cn IS NULL OR commission_cn >= 0)),
 
     CONSTRAINT chk_dti_commerciaux
-        CHECK (nombre_commerciaux_terrain IS NULL OR nombre_commerciaux_terrain >= 0)
+        CHECK (nombre_commerciaux_terrain IS NULL OR nombre_commerciaux_terrain >= 0),
+
+    CONSTRAINT chk_dti_type_prestation_dossier
+        CHECK (type_prestation_dossier IN ('PRESTATION', 'ABONNEMENT_MENSUEL'))
 ) ENGINE=InnoDB;
 
 -- =========================================================

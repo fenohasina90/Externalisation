@@ -321,11 +321,8 @@ export function NouvelleDemandePage() {
                 finService: l.finService,
                 categorie: 'EXTERNALISATION' as const,
                 designationDebours: null,
-                // Une valeur est envoyée même hors STANDARD : le backend
-                // la refuse si elle ne correspond pas (garde explicite).
-                typePrestation: typesServices.get(l.serviceId as number) === 'STANDARD'
-                  ? (l.typePrestation || 'PRESTATION')
-                  : null,
+                // Tous les services acceptent PRESTATION / ABONNEMENT_MENSUEL
+                typePrestation: l.typePrestation || 'PRESTATION',
               },
         )
         const creee = await demandesApi.create({
@@ -694,18 +691,17 @@ export function NouvelleDemandePage() {
 
                         
 
-                        {typesServices.get(l.serviceId as number) === 'STANDARD' && (
-                          <label className="field">
-                            Type de prestation <span className="required">*</span>
-                            <select
-                              value={l.typePrestation}
-                              onChange={(e) => setLigne(i, { typePrestation: e.target.value })}
-                            >
-                              <option value="PRESTATION">Prestation</option>
-                              <option value="ABONNEMENT_MENSUEL">Abonnement mensuel</option>
-                            </select>
-                          </label>
-                        )}
+                        {/* Tous les services (STANDARD, CREATION, TRANSACTION) acceptent les deux valeurs */}
+                        <label className="field">
+                          Type de prestation <span className="required">*</span>
+                          <select
+                            value={l.typePrestation}
+                            onChange={(e) => setLigne(i, { typePrestation: e.target.value })}
+                          >
+                            <option value="PRESTATION">Prestation</option>
+                            <option value="ABONNEMENT_MENSUEL">Abonnement mensuel</option>
+                          </select>
+                        </label>
                         <label className="field">
                           Tarif (MGA) <span className="required">*</span>
                           <input

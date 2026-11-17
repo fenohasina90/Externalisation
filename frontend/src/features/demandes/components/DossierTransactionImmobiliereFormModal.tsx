@@ -209,7 +209,7 @@ export function DossierTransactionImmobiliereFormModal({
   const suiviRenseigne =
     form.nombreCommerciauxTerrain !== null ||
     form.commissionCn !== null ||
-    form.prestationAbonnementMensuel
+    form.typePrestationDossier === 'ABONNEMENT_MENSUEL'
 
   const recapSections: SectionRecapitulatif[] = [
     {
@@ -291,8 +291,10 @@ export function DossierTransactionImmobiliereFormModal({
               },
               { label: 'Commission CN', valeur: montant(form.commissionCn) },
               {
-                label: 'Abonnement mensuel',
-                valeur: form.prestationAbonnementMensuel ? 'Oui' : 'Non',
+                label: 'Type de prestation',
+                valeur: form.typePrestationDossier === 'ABONNEMENT_MENSUEL'
+                  ? 'Abonnement mensuel'
+                  : 'Prestation',
               },
             ],
           },
@@ -690,12 +692,29 @@ export function DossierTransactionImmobiliereFormModal({
                         />
                       </label>
                       <div className="form-grid__full">
-                        <Case
-                          name="prestationAbonnementMensuel"
-                          label="Prestation abonnement mensuel"
-                          checked={form.prestationAbonnementMensuel}
-                          onChange={handleChange}
-                        />
+                        <span className="field-label" style={{ marginBottom: 6, display: 'block' }}>
+                          Type de prestation <span className="required">*</span>
+                        </span>
+                        <div className="rd-group" role="radiogroup" aria-label="Type de prestation">
+                          {([
+                            { valeur: 'PRESTATION', libelle: 'Prestation' },
+                            { valeur: 'ABONNEMENT_MENSUEL', libelle: 'Abonnement mensuel' },
+                          ] as const).map((opt) => (
+                            <label
+                              key={opt.valeur}
+                              className={`rd${form.typePrestationDossier === opt.valeur ? ' on' : ''}`}
+                            >
+                              <input
+                                type="radio"
+                                name="typePrestationDossier"
+                                value={opt.valeur}
+                                checked={form.typePrestationDossier === opt.valeur}
+                                onChange={() => set('typePrestationDossier', opt.valeur)}
+                              />
+                              {opt.libelle}
+                            </label>
+                          ))}
+                        </div>
                       </div>
                     </div>
                     <p className="form-help">

@@ -45,7 +45,7 @@ class DossierTransactionImmobiliereControllerTest {
                 null, null, null, null, null, null, null,
                 "COMMUNAL_DOMAINE", "TITRE_BORNE",
                 true, false, true, false, true,
-                "Observation importante", 2, new BigDecimal("50000.00"), true);
+                "Observation importante", 2, new BigDecimal("50000.00"), "ABONNEMENT_MENSUEL");
     }
 
     private String corpsCreation() {

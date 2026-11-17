@@ -61,7 +61,7 @@ class FicheTransactionImmobilierePdfTest {
                 .observations("Dossier complet")
                 .nombreCommerciauxTerrain(2)
                 .commissionCn(new BigDecimal("50000"))
-                .prestationAbonnementMensuel(true)
+                .typePrestationDossier("ABONNEMENT_MENSUEL")
                 .build();
 
         byte[] pdf = new PdfGenerator(configurationService)

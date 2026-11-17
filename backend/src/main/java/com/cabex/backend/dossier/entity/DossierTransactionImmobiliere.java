@@ -133,9 +133,10 @@ public class DossierTransactionImmobiliere {
     @Column(name = "commission_cn", precision = 15, scale = 2)
     private BigDecimal commissionCn;
 
-    @Column(name = "prestation_abonnement_mensuel", nullable = false)
+    /** Type de prestation suivi du dossier : PRESTATION (défaut) ou ABONNEMENT_MENSUEL. */
+    @Column(name = "type_prestation_dossier", nullable = false, length = 30)
     @Builder.Default
-    private Boolean prestationAbonnementMensuel = false;
+    private String typePrestationDossier = "PRESTATION";
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

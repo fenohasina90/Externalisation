@@ -195,8 +195,12 @@ public class DossierTransactionImmobiliereService {
         dossier.setObservations(trim(request.observations()));
         dossier.setNombreCommerciauxTerrain(request.nombreCommerciauxTerrain());
         dossier.setCommissionCn(request.commissionCn());
-        dossier.setPrestationAbonnementMensuel(
-                Boolean.TRUE.equals(request.prestationAbonnementMensuel()));
+        String typePrestation = DossierTransactionImmobiliereRegles
+                .normaliserTypePrestationDossier(request.typePrestationDossier());
+        if (typePrestation == null) {
+            throw new BusinessException(ErrorMessages.TYPE_PRESTATION_INVALIDE);
+        }
+        dossier.setTypePrestationDossier(typePrestation);
         return dossier;
     }
 

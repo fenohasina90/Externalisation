@@ -63,6 +63,6 @@ public final class DossierTransactionImmobiliereMapper {
                 dossier.getObservations(),
                 dossier.getNombreCommerciauxTerrain(),
                 dossier.getCommissionCn(),
-                dossier.getPrestationAbonnementMensuel());
+                dossier.getTypePrestationDossier());
     }
 }

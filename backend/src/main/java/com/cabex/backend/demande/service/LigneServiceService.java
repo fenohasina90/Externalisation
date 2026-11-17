@@ -165,20 +165,9 @@ public class LigneServiceService {
         if (request.tarif().signum() < 0) {
             throw new BusinessException(ErrorMessages.TARIF_POSITIF);
         }
-        // Validation des dates selon le type de prestation :
-        // - PRESTATION : début et fin optionnels (tous deux peuvent être null)
-        // - ABONNEMENT_MENSUEL : début et fin optionnels (tous deux peuvent être null)
-        // - Autre : début et fin requis
+        // Validation des dates : PRESTATION et ABONNEMENT_MENSUEL (uniques choix possibles
+        // depuis la normalisation) n'ont pas de contrainte — début et fin optionnels.
         // (L'ordre des dates est toujours vérifié par verifierDates quand les deux sont renseignées.)
-        if (LigneServiceService.PRESTATION.equalsIgnoreCase(request.typePrestation())
-                || LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(
-                        request.typePrestation())) {
-            // Pas de contrainte de dates pour PRESTATION / ABONNEMENT_MENSUEL.
-        } else {
-            if (request.debutService() == null || request.finService() == null) {
-                throw new BusinessException(ErrorMessages.DONNEES_OBLIGATOIRES);
-            }
-        }
         String typePrestation = normaliserTypePrestation(
                 CATEGORIE_EXTERNALISATION, service, request.typePrestation());
 
@@ -752,26 +741,15 @@ public class LigneServiceService {
         return normalisee;
     }
 
-    public static boolean estStandard(Service service) {
-        return service != null && service.getTypeService() != null
-                && "STANDARD".equalsIgnoreCase(service.getTypeService().trim());
-    }
-
     /**
      * Valide/normalise le sous-type d'une ligne EXTERNALISATION.
-     * STANDARD → PRESTATION (défaut) ou ABONNEMENT_MENSUEL.
-     * CREATION / TRANSACTION → null obligatoire.
-     * doit être appelé après chargement du service.
+     * Tous les services (STANDARD, CREATION, TRANSACTION_IMMOBILIERE) acceptent
+     * PRESTATION (défaut) ou ABONNEMENT_MENSUEL, comme pour un service catalogue.
+     * DEBOURS : null obligatoire.
      */
     public static String normaliserTypePrestation(String categorie, Service service,
                                                   String typePrestation) {
         if (CATEGORIE_DEBOURS.equalsIgnoreCase(categorie)) {
-            if (typePrestation != null && !typePrestation.isBlank()) {
-                throw new BusinessException(ErrorMessages.TYPE_PRESTATION_INTERDIT);
-            }
-            return null;
-        }
-        if (!estStandard(service)) {
             if (typePrestation != null && !typePrestation.isBlank()) {
                 throw new BusinessException(ErrorMessages.TYPE_PRESTATION_INTERDIT);
             }

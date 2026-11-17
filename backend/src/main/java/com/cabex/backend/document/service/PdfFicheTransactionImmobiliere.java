@@ -315,12 +315,20 @@ final class PdfFicheTransactionImmobiliere {
 
         PdfPCell droite = celluleBloc(st);
         droite.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        Paragraph abonnement = new Paragraph();
-        abonnement.setLeading(st.td.getSize() * 1.45f);
-        abonnement.add(new Chunk(coche(Boolean.TRUE.equals(dossier.getPrestationAbonnementMensuel())),
-                st.td));
-        abonnement.add(new Chunk("  Prestation abonnement mensuel", st.td));
-        droite.addElement(abonnement);
+        boolean estPresta = "PRESTATION".equalsIgnoreCase(dossier.getTypePrestationDossier());
+        Paragraph titreSuivi = new Paragraph("Type de prestation", st.td);
+        titreSuivi.setLeading(st.td.getSize() * 1.45f);
+        droite.addElement(titreSuivi);
+        Paragraph presta = new Paragraph();
+        presta.setLeading(st.td.getSize() * 1.45f);
+        presta.add(new Chunk(coche(estPresta), st.td));
+        presta.add(new Chunk("  Prestation", st.td));
+        droite.addElement(presta);
+        Paragraph abo = new Paragraph();
+        abo.setLeading(st.td.getSize() * 1.45f);
+        abo.add(new Chunk(coche(!estPresta), st.td));
+        abo.add(new Chunk("  Abonnement mensuel", st.td));
+        droite.addElement(abo);
         t.addCell(droite);
         doc.add(t);
     }

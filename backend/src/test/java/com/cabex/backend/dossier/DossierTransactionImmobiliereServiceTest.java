@@ -95,7 +95,7 @@ class DossierTransactionImmobiliereServiceTest {
                 null, null, null, null, null, null, null,
                 "communal_domaine", "titre_borne",
                 true, false, true, false, true,
-                "  Observation importante  ", 2, new BigDecimal("50000.00"), true);
+                "  Observation importante  ", 2, new BigDecimal("50000.00"), "ABONNEMENT_MENSUEL");
     }
 
     private UpdateDossierTransactionImmobiliereRequest requeteUpdate() {
@@ -108,7 +108,7 @@ class DossierTransactionImmobiliereServiceTest {
                 new BigDecimal("250.00"), "Plan B", "Axe sud", true, true,
                 new BigDecimal("2000000.00"), true,
                 null, null, false, false, false, false, false,
-                "Mise à jour", 1, new BigDecimal("75000.00"), false);
+                "Mise à jour", 1, new BigDecimal("75000.00"), "PRESTATION");
     }
 
     @Test
@@ -143,7 +143,7 @@ class DossierTransactionImmobiliereServiceTest {
         assertEquals("COMMUNAL_DOMAINE", reponse.regularisationTypeTerrain());
         assertEquals("TITRE_BORNE", reponse.regularisationSituationTerrain());
         assertEquals("Observation importante", reponse.observations());
-        assertTrue(reponse.prestationAbonnementMensuel());
+        assertEquals("ABONNEMENT_MENSUEL", reponse.typePrestationDossier());
         verify(auditService).log(eq("CREATE"), eq("DOSSIER"),
                 eq("DossierTransactionImmobiliere"), eq(1L), isNull(),
                 contains("REF-2026-126"));
@@ -203,7 +203,7 @@ class DossierTransactionImmobiliereServiceTest {
                 c.regularisationSituationTerrain(), c.documentPvReconnaissance(),
                 c.documentNumeroDemandeAcquisition(), c.documentActeVentePriveeCommunale(),
                 c.documentSituationJuridique(), c.documentActeNotoriete(), c.observations(),
-                c.nombreCommerciauxTerrain(), c.commissionCn(), c.prestationAbonnementMensuel());
+                c.nombreCommerciauxTerrain(), c.commissionCn(), c.typePrestationDossier());
 
         var ex = assertThrows(BusinessException.class,
                 () -> dossierService.create(126, requete));
@@ -223,7 +223,7 @@ class DossierTransactionImmobiliereServiceTest {
                 c.regularisationSituationTerrain(), c.documentPvReconnaissance(),
                 c.documentNumeroDemandeAcquisition(), c.documentActeVentePriveeCommunale(),
                 c.documentSituationJuridique(), c.documentActeNotoriete(), c.observations(),
-                c.nombreCommerciauxTerrain(), c.commissionCn(), c.prestationAbonnementMensuel());
+                c.nombreCommerciauxTerrain(), c.commissionCn(), c.typePrestationDossier());
 
         var ex = assertThrows(BusinessException.class,
                 () -> dossierService.create(126, requete));
@@ -244,7 +244,7 @@ class DossierTransactionImmobiliereServiceTest {
                 c.regularisationSituationTerrain(), c.documentPvReconnaissance(),
                 c.documentNumeroDemandeAcquisition(), c.documentActeVentePriveeCommunale(),
                 c.documentSituationJuridique(), c.documentActeNotoriete(), c.observations(),
-                c.nombreCommerciauxTerrain(), c.commissionCn(), c.prestationAbonnementMensuel());
+                c.nombreCommerciauxTerrain(), c.commissionCn(), c.typePrestationDossier());
 
         var ex = assertThrows(BusinessException.class,
                 () -> dossierService.create(126, requete));
@@ -264,7 +264,7 @@ class DossierTransactionImmobiliereServiceTest {
                 c.regularisationSituationTerrain(), c.documentPvReconnaissance(),
                 c.documentNumeroDemandeAcquisition(), c.documentActeVentePriveeCommunale(),
                 c.documentSituationJuridique(), c.documentActeNotoriete(), c.observations(),
-                c.nombreCommerciauxTerrain(), c.commissionCn(), c.prestationAbonnementMensuel());
+                c.nombreCommerciauxTerrain(), c.commissionCn(), c.typePrestationDossier());
 
         var ex = assertThrows(BusinessException.class,
                 () -> dossierService.create(126, requete));
@@ -286,7 +286,7 @@ class DossierTransactionImmobiliereServiceTest {
                 c.documentPvReconnaissance(), c.documentNumeroDemandeAcquisition(),
                 c.documentActeVentePriveeCommunale(), c.documentSituationJuridique(),
                 c.documentActeNotoriete(), c.observations(), c.nombreCommerciauxTerrain(),
-                c.commissionCn(), c.prestationAbonnementMensuel());
+                c.commissionCn(), c.typePrestationDossier());
         var exType = assertThrows(BusinessException.class,
                 () -> dossierService.create(126, mauvaisType));
         assertEquals(ErrorMessages.DOSSIER_TRANSACTION_TYPE_TERRAIN_INVALIDE,
@@ -301,7 +301,7 @@ class DossierTransactionImmobiliereServiceTest {
                 c.documentPvReconnaissance(), c.documentNumeroDemandeAcquisition(),
                 c.documentActeVentePriveeCommunale(), c.documentSituationJuridique(),
                 c.documentActeNotoriete(), c.observations(), c.nombreCommerciauxTerrain(),
-                c.commissionCn(), c.prestationAbonnementMensuel());
+                c.commissionCn(), c.typePrestationDossier());
         var exSituation = assertThrows(BusinessException.class,
                 () -> dossierService.create(126, mauvaiseSituation));
         assertEquals(ErrorMessages.DOSSIER_TRANSACTION_SITUATION_TERRAIN_INVALIDE,
@@ -321,7 +321,7 @@ class DossierTransactionImmobiliereServiceTest {
                 c.regularisationSituationTerrain(), c.documentPvReconnaissance(),
                 c.documentNumeroDemandeAcquisition(), c.documentActeVentePriveeCommunale(),
                 c.documentSituationJuridique(), c.documentActeNotoriete(), c.observations(),
-                c.nombreCommerciauxTerrain(), c.commissionCn(), c.prestationAbonnementMensuel());
+                c.nombreCommerciauxTerrain(), c.commissionCn(), c.typePrestationDossier());
 
         var ex = assertThrows(BusinessException.class,
                 () -> dossierService.create(126, requete));
