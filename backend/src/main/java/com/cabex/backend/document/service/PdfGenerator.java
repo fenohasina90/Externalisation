@@ -5,12 +5,16 @@ import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.dossier.entity.DossierCreation;
 import com.cabex.backend.dossier.entity.DossierTransactionImmobiliere;
 import com.cabex.backend.echeance.entity.ProposPaiement;
+import com.cabex.backend.facture.dto.FactureValideeFicheResponse;
 import com.cabex.backend.facture.entity.Facture;
 import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.cabex.backend.paiement.repository.PaiementRepository;
+import com.cabex.backend.client.entity.Societe;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -76,6 +80,22 @@ public class PdfGenerator {
     }
 
     /** Reçu de paiement standard. Le total payé sur la facture est recalculé si fourni. */
+    /** Export PDF de la facturation client (onglet Facturation), avec filtre de dates appliqué. */
+    public byte[] facturationClientPdf(Societe societe,
+                                       List<FactureValideeFicheResponse> fiches,
+                                       LocalDate dateDebut, LocalDate dateFin, String ordre,
+                                       String recherche) {
+        return PdfFacturationClient.generer(societe, fiches, dateDebut, dateFin, ordre, recherche);
+    }
+
+    /** Export Excel de la facturation client (onglet Facturation), avec filtre appliqué. */
+    public byte[] facturationClientExcel(Societe societe,
+                                         List<FactureValideeFicheResponse> fiches,
+                                         LocalDate dateDebut, LocalDate dateFin, String ordre,
+                                         String recherche) {
+        return ExcelFacturationClient.generer(societe, fiches, dateDebut, dateFin, ordre, recherche);
+    }
+
     public byte[] recuPaiement(Paiement paiement) {
         return PdfRecuPaiement.generer(paiement, null);
     }

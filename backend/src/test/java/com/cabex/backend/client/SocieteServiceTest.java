@@ -17,6 +17,7 @@ import com.cabex.backend.exception.DuplicateResourceException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.paiement.repository.PaiementRepository;
+import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.service.repository.DomaineServiceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,7 @@ class SocieteServiceTest {
     @Mock private DemandeServiceRepository demandeRepository;
     @Mock private HistoriqueDemandeRepository historiqueRepository;
     @Mock private PaiementRepository paiementRepository;
+    @Mock private FactureValideeRepository factureValideeRepository;
     @Mock private EcheancePaiementRepository echeanceRepository;
     @Mock private PieceJointeRepository pieceJointeRepository;
     @Mock private RisqueService risqueService;
@@ -58,7 +60,7 @@ class SocieteServiceTest {
                 societeRepository, responsableRepository, demandeRepository,
                 historiqueRepository, paiementRepository, echeanceRepository,
                 pieceJointeRepository, risqueService, auditService,
-                configurationService);
+                configurationService, factureValideeRepository);
     }
 
     private Societe societe(Integer id, String nom, boolean actif, boolean archivee) {

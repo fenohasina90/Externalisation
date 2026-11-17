@@ -108,6 +108,51 @@ export interface SyntheseFiche {
   nombreEcheancesEnRetard: number | null
 }
 
+export interface PaiementFacturation {
+  id: number
+  referencePaiement: string
+  libelleMode: string | null
+  /** Code du mode (ESPECES, VIREMENT, CHEQUE, ...). */
+  codeMode: string | null
+  datePaiement: string | null
+  montantPaye: number | null
+  referenceVirement: string | null
+  banque: string | null
+  numeroCheque: string | null
+  commentaire: string | null
+  createdByName: string | null
+}
+
+/** Facture validée du client (générale ou de paiement) — onglet Facturation. */
+export interface FactureFacturation {
+  id: number
+  referenceFactureValidee: string | null
+  /** GENERALE | PRESTATION | DEBOURS | ABONNEMENT_MENSUEL */
+  type: string
+  /** Facture générale parente (null pour la générale elle-même). */
+  factureGeneraleId: number | null
+  referenceFactureGenerale: string | null
+  demandeId: number | null
+  referenceDemande: string | null
+  /** Objet précis : nom du service, désignation du débours ou « Facture générale ». */
+  objet: string | null
+  /**
+   * Type sous-jacent de la facture : PRESTATION | DEBOURS | ABONNEMENT_MENSUEL.
+   * Pour une facture générale adossée à des lignes de proforma, on y lit le type
+   * de sa première ligne (utile quand elle est réglée directement).
+   */
+  objetType: string | null
+  /** Format AAAA-MM (ABONNEMENT_MENSUEL uniquement). */
+  mois: string | null
+  montant: number | null
+  montantPaye: number | null
+  resteAPayer: number | null
+  /** Date d'émission de la facture (AAAA-MM-JJ). */
+  dateFactureValidee: string | null
+  /** Paiements actifs rattachés à cette facture (sous-contenu). */
+  paiements: PaiementFacturation[]
+}
+
 /** Fiche 360° : GET /api/clients/{id} (synthèse nulle = masquée, ex. ACCUEIL). */
 export interface SocieteDetail {
   societe: Societe

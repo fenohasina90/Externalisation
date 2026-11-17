@@ -17,6 +17,21 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
     long countByReferenceFactureValideeEndingWith(String suffixe);
 
     /**
+     * Toutes les factures validées liées à un client, de la plus ancienne à la plus
+     * récente. Charge la demande et la société, la ligne de service et son service
+     * pour la composition de l'onglet « Facturation » de la fiche client.
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT fv FROM FactureValidee fv"
+                    + " JOIN FETCH fv.demande d JOIN FETCH d.societe s"
+                    + " LEFT JOIN FETCH fv.ligneService l LEFT JOIN FETCH l.service svc"
+                    + " LEFT JOIN FETCH fv.factureGenerale fg"
+                    + " WHERE s.id = :societeId"
+                    + " ORDER BY fv.valideLe ASC")
+    List<com.cabex.backend.facture.entity.FactureValidee> findBySocieteId(
+            @org.springframework.data.repository.query.Param("societeId") Integer societeId);
+
+    /**
      * Ancienne donnée : facture validée sans proforma (ancien modèle DEBOURS),
      * non liée à une ligne de service, pour une demande donnée.
      * Retournée en {@code Optional} (au plus une) — les factures enfants

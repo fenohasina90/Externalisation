@@ -25,6 +25,8 @@ final class PdfDocument {
         /** Reçu de paiement : en-tête complet compact pour tenir sur une page. */
         RECU_PAIEMENT(PdfTheme.MARGE_DOCUMENT, PdfTheme.MARGE_DOCUMENT, 78,
                 30, PdfDecor.Mode.ENTETE),
+        /** Facturation client : tableau multi-pages en paysage. */
+        FACTURATION(22, 22, 70, 30, PdfDecor.Mode.FACTURATION),
         /** Fiche de création : aucun décor. */
         FICHE(PdfTheme.MARGE_DOCUMENT, PdfTheme.MARGE_DOCUMENT, 26, 40, PdfDecor.Mode.SANS_PIED);
 
@@ -54,8 +56,15 @@ final class PdfDocument {
 
     static byte[] generer(MiseEnPage miseEnPage, String libelleDocument, String titreMeta,
                           Contenu contenu, String messageErreur) {
+        return generer(new com.lowagie.text.Rectangle(595, 842), miseEnPage, libelleDocument,
+                titreMeta, contenu, messageErreur);
+    }
+
+    static byte[] generer(com.lowagie.text.Rectangle pageSize, MiseEnPage miseEnPage,
+                          String libelleDocument,
+                          String titreMeta, Contenu contenu, String messageErreur) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        Document doc = new Document(PageSize.A4, miseEnPage.margeGauche, miseEnPage.margeDroite,
+        Document doc = new Document(pageSize, miseEnPage.margeGauche, miseEnPage.margeDroite,
                 miseEnPage.margeHaut, miseEnPage.margeBas);
         try {
             PdfWriter writer = PdfWriter.getInstance(doc, out);

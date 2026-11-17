@@ -4,6 +4,7 @@ package com.cabex.backend.configuration.dto;
 public record ConfigurationPubliqueResponse(
         String nomApplication,
         String devise,
-        int taillePagination
+        int taillePagination,
+        int taillePaginationFacturation
 ) {
 }

@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.format.annotation.DateTimeFormat;
+import java.time.LocalDate;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -151,6 +153,36 @@ public class DocumentController {
         return pdfResponse(documentService.factureAbonnement(id), "facture-abonnement-" + id + ".pdf");
     }
 
+    @GetMapping("/clients/{id}/factures/document")
+    @PreAuthorize("hasAuthority('FACTURE_VIEW')")
+    @Operation(summary = "Exporter la facturation d'un client (PDF)",
+            description = "Même contenu que l'onglet « Facturation » de la fiche client, exporté "
+                    + "pour les dates de la facture générale sélectionnées (début/fin et ordre).")
+    public ResponseEntity<byte[]> facturationClientPdf(
+            @PathVariable Integer id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
+            @RequestParam(required = false, defaultValue = "desc") String ordre,
+            @RequestParam(required = false) String recherche) {
+        return pdfResponse(documentService.facturationClientPdf(id, dateDebut, dateFin, ordre, recherche),
+                "facturation-client-" + id + ".pdf");
+    }
+
+    @GetMapping("/clients/{id}/factures/excel")
+    @PreAuthorize("hasAuthority('FACTURE_VIEW')")
+    @Operation(summary = "Exporter la facturation d'un client (Excel)",
+            description = "Même contenu que l'onglet « Facturation » de la fiche client, exporté "
+                    + "en classeur Excel .xlsx avec le filtre appliqué.")
+    public ResponseEntity<byte[]> facturationClientExcel(
+            @PathVariable Integer id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
+            @RequestParam(required = false, defaultValue = "desc") String ordre,
+            @RequestParam(required = false) String recherche) {
+        return excelResponse(documentService.facturationClientExcel(id, dateDebut, dateFin, ordre, recherche),
+                "facturation-client-" + id + ".xlsx");
+    }
+
     @GetMapping("/factures-validees/{id}/document")
     @PreAuthorize("hasAuthority('FACTURE_VIEW')")
     @Operation(summary = "Télécharger la facture validée (PDF)",
@@ -166,6 +198,16 @@ public class DocumentController {
             // nom générique
         }
         return pdfResponse(documentService.factureValideeDocument(id), nomFichier);
+    }
+
+    private ResponseEntity<byte[]> excelResponse(byte[] contenu, String nomFichier) {
+        String contentDisposition = "inline; filename*=UTF-8''"
+                + URLEncoder.encode(nomFichier, StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
+                .body(contenu);
     }
 
     private ResponseEntity<byte[]> pdfResponse(byte[] contenu, String nomFichier) {

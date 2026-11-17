@@ -44,11 +44,18 @@ const SECTIONS: SectionDef[] = [
     cles: ['HEURE_SAUVEGARDE_AUTOMATIQUE'],
   },
   {
+    id: 'pagination',
+    icone: '📄',
+    titre: 'Pagination',
+    sousTitre: 'Nombre de lignes affichées par page dans les tableaux.',
+    cles: ['PAGINATION_TAILLE_DEFAUT', 'PAGINATION_FACTURATION'],
+  },
+  {
     id: 'technique',
     icone: '⚙️',
     titre: 'Fichiers, session et affichage',
-    sousTitre: 'Limites techniques de l’application et pagination des listes.',
-    cles: ['TAILLE_MAX_FICHIER', 'DUREE_SESSION_MINUTES', 'PAGINATION_TAILLE_DEFAUT'],
+    sousTitre: 'Limites techniques de l’application.',
+    cles: ['TAILLE_MAX_FICHIER', 'DUREE_SESSION_MINUTES'],
   },
   {
     id: 'securite',
@@ -97,6 +104,7 @@ const LIBELLES: Record<string, { label: string; unite?: string; aide?: string }>
   TAILLE_MAX_FICHIER: { label: 'Taille maximale des fichiers', unite: 'octets', aide: 'Taille maximale d’un fichier pièce jointe (≈ 10 Mo par défaut).' },
   DUREE_SESSION_MINUTES: { label: 'Durée de session', unite: 'minutes', aide: 'Durée avant expiration automatique d’une session inactive.' },
   PAGINATION_TAILLE_DEFAUT: { label: 'Taille de page par défaut', unite: 'éléments', aide: 'Nombre de résultats affichés par page dans les listes.' },
+  PAGINATION_FACTURATION: { label: 'Pagination de Facturation', unite: 'lignes', aide: 'Nombre de lignes affichées par page dans le tableau de facturation de la fiche client (PAGINATION_FACTURATION).' },
 
   DUREE_VALIDITE_DEMANDE_RESET: {
     label: 'Validité de la demande de réinitialisation',

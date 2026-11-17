@@ -2,6 +2,7 @@ package com.cabex.backend.document.service;
 
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
+import com.lowagie.text.Font;
 import com.lowagie.text.Image;
 import com.lowagie.text.Phrase;
 import com.lowagie.text.Rectangle;
@@ -25,6 +26,8 @@ final class PdfDecor extends PdfPageEventHelper {
         ENTETE,
         /** Pied facture ancré en bas de page (groupe, contacts, mentions), sans pagination. */
         FACTURE,
+        /** Facturation client : en-tête (logo + « Facturation du client <nom> ») répété sur chaque page, pied paginé avec date de génération. */
+        FACTURATION,
         /** Aucun en-tête ni pied. */
         SANS_PIED
     }
@@ -47,7 +50,7 @@ final class PdfDecor extends PdfPageEventHelper {
     public void onOpenDocument(PdfWriter writer, Document document) {
         total = writer.getDirectContent().createTemplate(24, 10);
         policeMention = PdfTheme.baseFontMention();
-        if (mode == Mode.ENTETE) {
+        if (mode == Mode.ENTETE || mode == Mode.FACTURATION) {
             logo = PdfTheme.chargerLogo();
         }
     }
@@ -64,6 +67,11 @@ final class PdfDecor extends PdfPageEventHelper {
 
         if (mode == Mode.FACTURE) {
             dessinerPiedFacture(cb, gauche, droite);
+            return;
+        }
+        if (mode == Mode.FACTURATION) {
+            dessinerEnteteFacturation(cb, page, gauche, droite);
+            dessinerPiedFacturation(cb, writer, gauche, droite);
             return;
         }
         if (mode == Mode.ENTETE) {
@@ -112,6 +120,56 @@ final class PdfDecor extends PdfPageEventHelper {
                 droite, haut - 31, 0);
 
         dessinerFilets(cb, gauche, droite, haut - 60);
+    }
+
+    /** En-tête de la facturation client (logo + « Facturation du client <nom> »). */
+    private void dessinerEnteteFacturation(PdfContentByte cb, Rectangle page,
+                                          float gauche, float droite) {
+        float haut = page.getHeight();
+        float x = gauche;
+        if (logo == null) {
+            logo = PdfTheme.chargerLogo();
+        }
+        if (logo != null) {
+            logo.scaleToFit(44, 44);
+            logo.setAbsolutePosition(gauche, haut - 14 - logo.getScaledHeight());
+            try {
+                cb.addImage(logo);
+            } catch (Exception e) {
+                // Logo ignoré si son insertion échoue.
+            }
+            x += logo.getScaledWidth() + 10;
+        }
+        ColumnText.showTextAligned(cb, Element.ALIGN_LEFT,
+                new Phrase(PdfTheme.upper("Facturation du client"), PdfTheme.F_MENTION),
+                x, haut - 22, 0);
+        ColumnText.showTextAligned(cb, Element.ALIGN_LEFT,
+                new Phrase(libelleDocument, PdfTheme.font(15, Font.BOLD, PdfTheme.PRIMAIRE)),
+                x, haut - 39, 0);
+    }
+
+    /** Pied de la facturation client (identité + date de génération à droite). */
+    private void dessinerPiedFacturation(PdfContentByte cb, PdfWriter writer,
+                                         float gauche, float droite) {
+        cb.setColorStroke(PdfTheme.GRIS_BORDURE);
+        cb.setLineWidth(0.5f);
+        cb.moveTo(gauche, 38);
+        cb.lineTo(droite, 38);
+        cb.stroke();
+
+        ColumnText.showTextAligned(cb, Element.ALIGN_LEFT, coordonneesCabinet(), gauche, 27, 0);
+
+        String pageTexte = "Page " + writer.getPageNumber() + " /";
+        float totalWidth = policeMention.getWidthPoint(pageTexte, 7) + 14;
+        // « Généré le … » puis « Page y / N » sur la même ligne, à droite
+        String genereTexte = "Généré le " + LocalDate.now().format(PdfTheme.DATE_FMT) + "  ·  ";
+        float x = droite - totalWidth - policeMention.getWidthPoint(genereTexte, 7) - 6;
+        ColumnText.showTextAligned(cb, Element.ALIGN_LEFT,
+                new Phrase(genereTexte, PdfTheme.F_MENTION), x, 27, 0);
+        ColumnText.showTextAligned(cb, Element.ALIGN_LEFT,
+                new Phrase(pageTexte, PdfTheme.F_MENTION), x + policeMention.getWidthPoint(genereTexte, 7), 27, 0);
+        cb.addTemplate(total,
+                x + policeMention.getWidthPoint(genereTexte, 7) + policeMention.getWidthPoint(pageTexte, 7), 27 - 2);
     }
 
     /** Double filet façon logo : vert sur toute la largeur, rouge sur le début. */

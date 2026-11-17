@@ -27,6 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -51,6 +52,8 @@ public class DocumentGestionService {
     private final com.cabex.backend.dossier.repository.DossierCreationRepository dossierRepository;
     private final com.cabex.backend.dossier.repository.DossierTransactionImmobiliereRepository
             dossierTransactionRepository;
+    private final com.cabex.backend.client.repository.SocieteRepository societeRepository;
+    private final com.cabex.backend.facture.service.FactureService factureService;
 
     @Value("${app.document.storage-path}")
     private String storagePath;
@@ -70,7 +73,9 @@ public class DocumentGestionService {
                                   com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository,
                                   com.cabex.backend.dossier.repository.DossierCreationRepository dossierRepository,
                                   com.cabex.backend.dossier.repository.DossierTransactionImmobiliereRepository
-                                          dossierTransactionRepository) {
+                                          dossierTransactionRepository,
+                                  com.cabex.backend.client.repository.SocieteRepository societeRepository,
+                                  com.cabex.backend.facture.service.FactureService factureService) {
         this.pieceRepository = pieceRepository;
         this.demandeRepository = demandeRepository;
         this.paiementRepository = paiementRepository;
@@ -83,6 +88,8 @@ public class DocumentGestionService {
         this.factureValideeRepository = factureValideeRepository;
         this.dossierRepository = dossierRepository;
         this.dossierTransactionRepository = dossierTransactionRepository;
+        this.societeRepository = societeRepository;
+        this.factureService = factureService;
     }
 
     /**
@@ -207,6 +214,32 @@ public class DocumentGestionService {
                 ? paiementRepository.sommePayeeParFactureValidee(paiement.getFactureValidee().getId())
                 : BigDecimal.ZERO;
         return pdfGenerator.recuPaiement(paiement, somme != null ? somme : BigDecimal.ZERO);
+    }
+
+    /** Export PDF de la facturation complète du client (onglet Facturation, filtre date appliqué). */
+    @Transactional(readOnly = true)
+    public byte[] facturationClientPdf(Integer societeId, LocalDate dateDebut, LocalDate dateFin,
+                                       String ordre, String recherche) {
+        com.cabex.backend.client.entity.Societe societe = societeRepository
+                .findById(societeId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Client", societeId)));
+        List<com.cabex.backend.facture.dto.FactureValideeFicheResponse> fiches =
+                factureService.listerFacturationParClient(societeId);
+        return pdfGenerator.facturationClientPdf(societe, fiches, dateDebut, dateFin, ordre, recherche);
+    }
+
+    /** Export Excel de la facturation complète du client (onglet Facturation, filtre appliqué). */
+    @Transactional(readOnly = true)
+    public byte[] facturationClientExcel(Integer societeId, LocalDate dateDebut, LocalDate dateFin,
+                                         String ordre, String recherche) {
+        com.cabex.backend.client.entity.Societe societe = societeRepository
+                .findById(societeId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Client", societeId)));
+        List<com.cabex.backend.facture.dto.FactureValideeFicheResponse> fiches =
+                factureService.listerFacturationParClient(societeId);
+        return pdfGenerator.facturationClientExcel(societe, fiches, dateDebut, dateFin, ordre, recherche);
     }
 
     public byte[] planPaiement(Integer demandeId) {

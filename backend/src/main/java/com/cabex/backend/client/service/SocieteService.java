@@ -38,6 +38,8 @@ import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.cabex.backend.paiement.repository.PaiementRepository;
+import com.cabex.backend.facture.repository.FactureValideeRepository;
+import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.security.SecurityUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -59,6 +61,7 @@ public class SocieteService {
     private final DemandeServiceRepository demandeRepository;
     private final HistoriqueDemandeRepository historiqueRepository;
     private final PaiementRepository paiementRepository;
+    private final FactureValideeRepository factureValideeRepository;
     private final EcheancePaiementRepository echeanceRepository;
     private final PieceJointeRepository pieceJointeRepository;
     private final RisqueService risqueService;
@@ -74,12 +77,14 @@ public class SocieteService {
                           PieceJointeRepository pieceJointeRepository,
                           RisqueService risqueService,
                           AuditService auditService,
-                          ConfigurationService configurationService) {
+                          ConfigurationService configurationService,
+                          FactureValideeRepository factureValideeRepository) {
         this.societeRepository = societeRepository;
         this.responsableRepository = responsableRepository;
         this.demandeRepository = demandeRepository;
         this.historiqueRepository = historiqueRepository;
         this.paiementRepository = paiementRepository;
+        this.factureValideeRepository = factureValideeRepository;
         this.echeanceRepository = echeanceRepository;
         this.pieceJointeRepository = pieceJointeRepository;
         this.risqueService = risqueService;
@@ -229,15 +234,39 @@ public class SocieteService {
                                                  List<PaiementFicheResponse> paiements,
                                                  List<EcheanceFicheResponse> echeances,
                                                  Integer societeId) {
-        BigDecimal montantTotal = demandes.stream()
-                .flatMap(d -> d.getLignes() != null
-                        ? d.getLignes().stream()
-                        : java.util.stream.Stream.empty())
-                .map(l -> l.getTarif() == null ? BigDecimal.ZERO : l.getTarif())
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal montantPaye = paiements.stream()
-                .map(PaiementFicheResponse::montantPaye)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Montants basés sur les factures validées liées à un paiement (onglet
+        // « Facturation » de la fiche client) : factures de paiement (enfants liées
+        // à la facture générale) + générales réglées directement (sans sous-facture).
+        // La générale adossée à des enfants n'est pas comptée deux fois.
+        List<FactureValidee> factures = factureValideeRepository.findBySocieteId(societeId);
+        Map<Integer, BigDecimal> payeParFv = paiementRepository.findBySocieteIdForFacturation(societeId)
+                .stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        p -> p.getFactureValidee().getId(),
+                        java.util.stream.Collectors.reducing(BigDecimal.ZERO,
+                                Paiement::getMontantPaye, BigDecimal::add)));
+        Map<Integer, Boolean> fvAvecEnfants = new LinkedHashMap<>();
+        for (FactureValidee fv : factures) {
+            if (fv.getFactureGenerale() != null) {
+                fvAvecEnfants.put(fv.getFactureGenerale().getId(), Boolean.TRUE);
+            }
+        }
+        BigDecimal montantTotal = BigDecimal.ZERO;
+        BigDecimal montantPaye = BigDecimal.ZERO;
+        for (FactureValidee fv : factures) {
+            if (fv.getFactureGenerale() != null) {
+                BigDecimal montant = fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO;
+                montantTotal = montantTotal.add(montant);
+                montantPaye = montantPaye.add(payeParFv.getOrDefault(fv.getId(), BigDecimal.ZERO));
+            }
+        }
+        for (FactureValidee fv : factures) {
+            if (fv.getFactureGenerale() == null && !fvAvecEnfants.getOrDefault(fv.getId(), Boolean.FALSE)) {
+                BigDecimal montant = fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO;
+                montantTotal = montantTotal.add(montant);
+                montantPaye = montantPaye.add(payeParFv.getOrDefault(fv.getId(), BigDecimal.ZERO));
+            }
+        }
         BigDecimal resteAPayer = montantTotal.subtract(montantPaye).max(BigDecimal.ZERO);
 
         long enRetard = echeances.stream()
