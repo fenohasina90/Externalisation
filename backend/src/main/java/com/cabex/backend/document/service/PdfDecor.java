@@ -146,7 +146,6 @@ final class PdfDecor extends PdfPageEventHelper {
         ColumnText.showTextAligned(cb, Element.ALIGN_LEFT,
                 new Phrase(libelleDocument, PdfTheme.font(15, Font.BOLD, PdfTheme.PRIMAIRE)),
                 x, haut - 39, 0);
-        dessinerFilets(cb, gauche, droite, haut - 56);
     }
 
     /** Pied de la facturation client (identité + date de génération à droite). */
