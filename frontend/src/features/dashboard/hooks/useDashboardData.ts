@@ -29,18 +29,18 @@ export function useDashboardData(vue: VueDashboard, filtres: DashboardFiltres) {
         demandesMois,
         servicesTop,
         paiements: null,
-        echeances: null,
+        paiementsEnRetard: [],
         servicesRevenu: [],
         performances,
       }
     }
 
     if (vue === 'ECONOMAT') {
-      const [summary, performances, paiements, echeances, servicesRevenu] = await Promise.all([
+      const [summary, performances, paiements, paiementsEnRetard, servicesRevenu] = await Promise.all([
         dashboardApi.getSummary(filtresApi),
         dashboardApi.getPerformances(filtresApi),
         dashboardApi.getPaiements(filtresApi),
-        dashboardApi.getEcheances(filtresApi),
+        dashboardApi.getPaiementsEnRetard(filtresApi),
         dashboardApi.getServices(filtresApi),
       ])
       return {
@@ -49,13 +49,13 @@ export function useDashboardData(vue: VueDashboard, filtres: DashboardFiltres) {
         demandesMois: [],
         servicesTop: [],
         paiements,
-        echeances,
+        paiementsEnRetard,
         servicesRevenu,
         performances,
       }
     }
 
-    const [summary, performances, statuts, demandesMois, servicesTop, paiements, echeances, servicesRevenu] =
+    const [summary, performances, statuts, demandesMois, servicesTop, paiements, paiementsEnRetard, servicesRevenu] =
       await Promise.all([
         dashboardApi.getSummary(filtresApi),
         dashboardApi.getPerformances(filtresApi),
@@ -63,7 +63,7 @@ export function useDashboardData(vue: VueDashboard, filtres: DashboardFiltres) {
         dashboardApi.getDemandesParMois(filtresApi),
         dashboardApi.getDemandesParService(filtresApi),
         dashboardApi.getPaiements(filtresApi),
-        dashboardApi.getEcheances(filtresApi),
+        dashboardApi.getPaiementsEnRetard(filtresApi),
         dashboardApi.getServices(filtresApi),
       ])
     return {
@@ -72,7 +72,7 @@ export function useDashboardData(vue: VueDashboard, filtres: DashboardFiltres) {
       demandesMois,
       servicesTop,
       paiements,
-      echeances,
+      paiementsEnRetard,
       servicesRevenu,
       performances,
     }

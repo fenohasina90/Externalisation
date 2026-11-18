@@ -11,8 +11,8 @@ import com.cabex.backend.dashboard.dto.DashboardFiltresResponse;
 import com.cabex.backend.dashboard.dto.DashboardSummaryResponse;
 import com.cabex.backend.dashboard.dto.DemandeMoisResponse;
 import com.cabex.backend.dashboard.dto.DemandeTermineeMoisResponse;
-import com.cabex.backend.dashboard.dto.EcheanceAlerteResponse;
-import com.cabex.backend.dashboard.dto.EcheanceDashboardResponse;
+import com.cabex.backend.dashboard.dto.PaiementRetardResponse;
+import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.dashboard.dto.ModeMontantResponse;
 import com.cabex.backend.dashboard.dto.MoisMontantResponse;
 import com.cabex.backend.dashboard.dto.PaiementDashboardResponse;
@@ -22,8 +22,6 @@ import com.cabex.backend.dashboard.dto.ServiceTopResponse;
 import com.cabex.backend.dashboard.dto.StatutCountResponse;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
-import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.paiement.repository.PaiementRepository;
 import com.cabex.backend.security.SecurityUtils;
@@ -36,7 +34,6 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
-import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -52,7 +49,7 @@ public class DashboardService {
     private final HistoriqueDemandeRepository historiqueRepository;
     private final ServiceRepository serviceRepository;
     private final PaiementRepository paiementRepository;
-    private final EcheancePaiementRepository echeanceRepository;
+    private final LigneServiceRepository ligneServiceRepository;
     private final FactureValideeRepository factureValideeRepository;
     private final ConfigurationService configurationService;
 
@@ -61,7 +58,7 @@ public class DashboardService {
                             HistoriqueDemandeRepository historiqueRepository,
                             ServiceRepository serviceRepository,
                             PaiementRepository paiementRepository,
-                            EcheancePaiementRepository echeanceRepository,
+                            LigneServiceRepository ligneServiceRepository,
                             FactureValideeRepository factureValideeRepository,
                             ConfigurationService configurationService) {
         this.societeRepository = societeRepository;
@@ -69,22 +66,15 @@ public class DashboardService {
         this.historiqueRepository = historiqueRepository;
         this.serviceRepository = serviceRepository;
         this.paiementRepository = paiementRepository;
-        this.echeanceRepository = echeanceRepository;
+        this.ligneServiceRepository = ligneServiceRepository;
         this.factureValideeRepository = factureValideeRepository;
         this.configurationService = configurationService;
-    }
-
-    private int joursAlerte() {
-        return Math.max(configurationService.lireEntier(
-                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE,
-                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE_DEFAUT), 1);
     }
 
     @Transactional(readOnly = true)
     public DashboardSummaryResponse summary(DashboardFilter filtre) {
         LocalDate today = LocalDate.now();
         String role = SecurityUtils.currentRoleName();
-        int joursAlerte = joursAlerte();
 
         Map<String, Long> parStatut = groupStatuts(filtre);
         long demandesEnCours = parStatut.getOrDefault("EN_COURS", 0L);
@@ -97,10 +87,8 @@ public class DashboardService {
             return new DashboardSummaryResponse(
                     null, null, null,
                     montantTotal, montantPaye, reste,
-                    echeanceRepository.countEnRetardFiltre(today,
-                            filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId()),
-                    countProches(today, filtre, joursAlerte),
-                    null, null, joursAlerte);
+                    Long.valueOf(paiementsEnRetard(today, filtre).size()),
+                    null, null);
         }
 
         long clients = filtre.aDesFiltres()
@@ -118,8 +106,8 @@ public class DashboardService {
             return new DashboardSummaryResponse(
                     clients, demandes, services,
                     null, null, null,
-                    null, null,
-                    demandesEnAttente, demandesEnCours, joursAlerte);
+                    null,
+                    demandesEnAttente, demandesEnCours);
         }
 
         BigDecimal montantTotal = sommeFacturesPayables(filtre);
@@ -129,21 +117,19 @@ public class DashboardService {
         return new DashboardSummaryResponse(
                 clients, demandes, services,
                 montantTotal, montantPaye, reste,
-                echeanceRepository.countEnRetardFiltre(today,
-                        filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId()),
-                countProches(today, filtre, joursAlerte),
-                demandesEnAttente, demandesEnCours, joursAlerte);
+                Long.valueOf(paiementsEnRetard(today, filtre).size()),
+                demandesEnAttente, demandesEnCours);
     }
 
     @Transactional(readOnly = true)
     public PerformanceIndicateursResponse performances(DashboardFilter filtre) {
         String role = SecurityUtils.currentRoleName();
-        BigDecimal tauxPaiementATemps = tauxPaiementATemps(filtre);
 
         if ("ECONOMAT".equalsIgnoreCase(role)) {
             return new PerformanceIndicateursResponse(
-                    null, null, null, null, tauxPaiementATemps,
-                    null, null, List.of());
+                    null, null,
+                    null, null,
+                    List.of());
         }
 
         List<Object[]> termeinees = historiqueRepository.termeineesEtDatesFiltrees(
@@ -152,25 +138,9 @@ public class DashboardService {
         long totalDemandes = demandeRepository.countFiltre(filtre.dateDebut(), filtre.dateFin(),
                 filtre.clientId(), filtre.serviceId());
 
-        BigDecimal delaiMoyen = BigDecimal.ZERO;
-        if (nbTerminees > 0) {
-            long totalJours = 0;
-            for (Object[] o : termeinees) {
-                LocalDate dateDemande = (LocalDate) o[1];
-                LocalDateTime termineeAt = (LocalDateTime) o[2];
-                totalJours += ChronoUnit.DAYS.between(dateDemande, termineeAt.toLocalDate());
-            }
-            delaiMoyen = BigDecimal.valueOf(totalJours)
-                    .divide(BigDecimal.valueOf(nbTerminees), 2, RoundingMode.HALF_UP);
-        }
-
         BigDecimal tauxTerminees = totalDemandes == 0 ? BigDecimal.ZERO
                 : BigDecimal.valueOf(nbTerminees * 100.0 / totalDemandes)
                         .setScale(2, RoundingMode.HALF_UP);
-
-        BigDecimal montantTotal = sommeFacturesPayables(filtre);
-        BigDecimal montantMoyen = totalDemandes == 0 ? BigDecimal.ZERO
-                : montantTotal.divide(BigDecimal.valueOf(totalDemandes), 2, RoundingMode.HALF_UP);
 
         ServiceTopResponse serviceTop = null;
         List<Object[]> services = demandeRepository.compterParServiceFiltre(
@@ -199,13 +169,12 @@ public class DashboardService {
 
         if ("ACCUEIL".equalsIgnoreCase(role)) {
             return new PerformanceIndicateursResponse(
-                    delaiMoyen, nbTerminees, tauxTerminees, montantMoyen, null,
+                    nbTerminees, tauxTerminees,
                     serviceTop, commercialTop, parMoisList);
         }
 
         return new PerformanceIndicateursResponse(
-                delaiMoyen, nbTerminees, tauxTerminees, montantMoyen, tauxPaiementATemps,
-                serviceTop, commercialTop, parMoisList);
+                nbTerminees, tauxTerminees, serviceTop, commercialTop, parMoisList);
     }
 
     @Transactional(readOnly = true)
@@ -239,22 +208,75 @@ public class DashboardService {
         return new PaiementDashboardResponse(parMode, parMois);
     }
 
+    /**
+     * Paiements en retard — factures validées non soldées, au-delà des délais
+     * d'alerte configurés (prestation/débours ou mensuelle). La date limite
+     * est la date d'émission de la facture validée.
+     */
     @Transactional(readOnly = true)
-    public EcheanceDashboardResponse echeances(DashboardFilter filtre) {
-        LocalDate today = LocalDate.now();
-        LocalDate limite = today.plusDays(joursAlerte());
-        List<EcheanceAlerteResponse> enRetard = echeanceRepository.findEnRetardFiltre(
-                        today, filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
-                .stream()
-                .map(e -> toAlerte(e, "EN_RETARD"))
-                .toList();
-        List<EcheanceAlerteResponse> aVenir = echeanceRepository.findAVenirFiltre(
-                        today, limite, filtre.dateDebut(), filtre.dateFin(),
-                        filtre.clientId(), filtre.serviceId())
-                .stream()
-                .map(e -> toAlerte(e, "PROCHE"))
-                .toList();
-        return new EcheanceDashboardResponse(enRetard, aVenir);
+    public List<PaiementRetardResponse> paiementsEnRetard(DashboardFilter filtre) {
+        return paiementsEnRetard(LocalDate.now(), filtre);
+    }
+
+    private List<PaiementRetardResponse> paiementsEnRetard(LocalDate aujourdhui,
+                                                           DashboardFilter filtre) {
+        int pdJours = Math.max(0, configurationService.lireEntier(
+                ConfigurationKeys.JOURS_RETARD_PRESTATION_DEBOURS,
+                ConfigurationKeys.JOURS_RETARD_PRESTATION_DEBOURS_DEFAUT));
+        int aboJours = Math.max(0, configurationService.lireEntier(
+                ConfigurationKeys.JOURS_RETARD_ABONNEMENT,
+                ConfigurationKeys.JOURS_RETARD_ABONNEMENT_DEFAUT));
+        LocalDate limitePrestationDebours = aujourdhui.minusDays(pdJours);
+        LocalDate limiteAbonnement = aujourdhui.minusDays(aboJours);
+
+        List<com.cabex.backend.facture.entity.FactureValidee> candidates = new java.util.ArrayList<>();
+        candidates.addAll(factureValideeRepository.findFacturesPourAlertesPaiement());
+        candidates.addAll(factureValideeRepository.findFacturesMensuellesPourAlerte());
+        List<PaiementRetardResponse> resultat = new java.util.ArrayList<>();
+        for (com.cabex.backend.facture.entity.FactureValidee f : candidates) {
+            if (f.getValideLe() == null) {
+                continue;
+            }
+            LocalDate emission = f.getValideLe().toLocalDate();
+            boolean mensuelle = f.getMois() != null;
+            if (mensuelle) {
+                if (emission.isAfter(limiteAbonnement)) continue;
+            } else {
+                if (emission.isAfter(limitePrestationDebours)) continue;
+            }
+            if (filtre.dateDebut() != null && emission.isBefore(filtre.dateDebut())) continue;
+            if (filtre.dateFin() != null && emission.isAfter(filtre.dateFin())) continue;
+            com.cabex.backend.demande.entity.DemandeService d = f.getDemande();
+            Integer societeId = d != null && d.getSociete() != null ? d.getSociete().getId() : null;
+            if (filtre.clientId() != null && !filtre.clientId().equals(societeId)) continue;
+            Integer demandeId = d != null ? d.getId() : null;
+            if (filtre.serviceId() != null) {
+                if (demandeId == null) continue;
+                if (!ligneServiceRepository.existsByDemandeIdAndServiceId(demandeId, filtre.serviceId())) {
+                    continue;
+                }
+            }
+            BigDecimal payee = paiementRepository.sommePayeeParFactureValidee(f.getId());
+            if (payee == null) payee = BigDecimal.ZERO;
+            BigDecimal montant = f.getMontant() != null ? f.getMontant() : BigDecimal.ZERO;
+            BigDecimal reste = montant.subtract(payee);
+            if (reste.signum() <= 0) continue;
+            String nomSociete = d != null && d.getSociete() != null ? d.getSociete().getNomSociete() : null;
+            String referenceDemande = d != null ? d.getReferenceDemande() : null;
+            resultat.add(new PaiementRetardResponse(
+                    f.getId() != null ? f.getId().longValue() : null,
+                    societeId,
+                    nomSociete,
+                    demandeId,
+                    referenceDemande,
+                    emission,
+                    montant,
+                    payee,
+                    reste,
+                    "EN_RETARD"));
+        }
+        resultat.sort(java.util.Comparator.comparing(PaiementRetardResponse::reste).reversed());
+        return resultat;
     }
 
     @Transactional(readOnly = true)
@@ -344,11 +366,6 @@ public class DashboardService {
         return map;
     }
 
-    private long countProches(LocalDate today, DashboardFilter filtre, int joursAlerte) {
-        return echeanceRepository.countProchesFiltre(today, today.plusDays(joursAlerte),
-                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
-    }
-
     /**
      * Chiffre d'affaires prévu — somme des factures validées <b>payables</b>
      * (enfant du mode UNIQUE, facture PAR_SERVICE, mensualité d'abonnement),
@@ -370,34 +387,6 @@ public class DashboardService {
         BigDecimal montant = paiementRepository.sommePayeeFacturesPayables(
                 filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId());
         return montant == null ? BigDecimal.ZERO : montant;
-    }
-
-    private BigDecimal tauxPaiementATemps(DashboardFilter filtre) {
-        // Les paiements sont maintenant liés aux factures validées, pas aux échéances.
-        return BigDecimal.ZERO;
-    }
-
-    private EcheanceAlerteResponse toAlerte(EcheancePaiement e, String statut) {
-        BigDecimal montantAttendu = e.getMontantAttendu();
-        BigDecimal montantPaye = e.getMontantPaye() == null ? BigDecimal.ZERO : e.getMontantPaye();
-        return new EcheanceAlerteResponse(
-                e.getId().longValue(),
-                e.getProposPaiement() != null && e.getProposPaiement().getDemande() != null
-                        && e.getProposPaiement().getDemande().getSociete() != null
-                        ? e.getProposPaiement().getDemande().getSociete().getId() : null,
-                e.getProposPaiement() != null && e.getProposPaiement().getDemande() != null
-                        && e.getProposPaiement().getDemande().getSociete() != null
-                        ? e.getProposPaiement().getDemande().getSociete().getNomSociete() : null,
-                e.getProposPaiement() != null && e.getProposPaiement().getDemande() != null
-                        ? e.getProposPaiement().getDemande().getId() : null,
-                e.getProposPaiement() != null && e.getProposPaiement().getDemande() != null
-                        ? e.getProposPaiement().getDemande().getReferenceDemande() : null,
-                e.getDateEcheance(),
-                montantAttendu,
-                montantPaye,
-                montantAttendu.subtract(montantPaye),
-                statut
-        );
     }
 
     private BigDecimal toBigDecimal(Object o) {

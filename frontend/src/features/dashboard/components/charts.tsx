@@ -3,8 +3,8 @@ import { formatMontantMGA } from '@/utils/format'
 import type {
   AlerteDashboard,
   DemandeMois,
-  EcheanceAlerte,
   MoisMontant,
+  PaiementRetard,
   ServiceRevenu,
   ServiceTop,
   StatutCount,
@@ -333,35 +333,35 @@ export function BarresPaiementsMensuels({
   )
 }
 
-/* ---------------- Retards par tranche ---------------- */
+/* ---------------- Paiements en retard ---------------- */
 
-export function TranchesRetard({ echeances }: { echeances: EcheanceAlerte[] }) {
+export function PaiementsRetard({ retards }: { retards: PaiementRetard[] }) {
   const aujourdHui = new Date()
   aujourdHui.setHours(0, 0, 0, 0)
 
   const tranches = [
-    { tranche: '1 à 15 jours', min: 0, max: 15, ton: 'orange' as const, echeances: 0, montant: 0 },
-    { tranche: '16 à 30 jours', min: 16, max: 30, ton: 'orange' as const, echeances: 0, montant: 0 },
-    { tranche: 'Plus de 30 jours', min: 31, max: Infinity, ton: 'rouge' as const, echeances: 0, montant: 0 },
+    { tranche: '1 à 15 jours', min: 0, max: 15, ton: 'orange' as const, retards: 0, montant: 0 },
+    { tranche: '16 à 30 jours', min: 16, max: 30, ton: 'orange' as const, retards: 0, montant: 0 },
+    { tranche: 'Plus de 30 jours', min: 31, max: Infinity, ton: 'rouge' as const, retards: 0, montant: 0 },
   ]
 
-  echeances.forEach((e) => {
-    const date = new Date(`${e.dateEcheance}T00:00:00`)
+  retards.forEach((e) => {
+    const date = new Date(`${e.dateEmission}T00:00:00`)
     const jours = Math.max(0, Math.floor((aujourdHui.getTime() - date.getTime()) / 86400000))
     const tranche = tranches.find((t) => jours >= t.min && jours <= t.max)
     if (tranche) {
-      tranche.echeances += 1
+      tranche.retards += 1
       tranche.montant += e.reste
     }
   })
 
-  const visibles = tranches.filter((t) => t.echeances > 0)
+  const visibles = tranches.filter((t) => t.retards > 0)
   if (visibles.length === 0) {
-    return <p className="section-note">Aucune échéance en retard.</p>
+    return <p className="section-note">Aucun paiement en retard.</p>
   }
 
   const max = Math.max(1, ...visibles.map((t) => t.montant))
-  const totalEcheances = visibles.reduce((s, t) => s + t.echeances, 0)
+  const totalRetards = visibles.reduce((s, t) => s + t.retards, 0)
   const totalMontant = visibles.reduce((s, t) => s + t.montant, 0)
 
   return (
@@ -370,7 +370,7 @@ export function TranchesRetard({ echeances }: { echeances: EcheanceAlerte[] }) {
         <div key={t.tranche} className="retard-ligne">
           <div className="retard-haut">
             <span>
-              <strong>{t.tranche}</strong> · {t.echeances} échéance{t.echeances > 1 ? 's' : ''}
+              <strong>{t.tranche}</strong> · {t.retards} facture{t.retards > 1 ? 's' : ''}
             </span>
             <strong>{formatMontantMGA(t.montant)}</strong>
           </div>
@@ -383,7 +383,7 @@ export function TranchesRetard({ echeances }: { echeances: EcheanceAlerte[] }) {
         </div>
       ))}
       <p className="retard-total">
-        <strong>{totalEcheances} échéance{totalEcheances > 1 ? 's' : ''}</strong> en retard ·{' '}
+        <strong>{totalRetards} facture{totalRetards > 1 ? 's' : ''}</strong> non soldée{totalRetards > 1 ? 's' : ''} en retard ·{' '}
         {formatMontantMGA(totalMontant)}
       </p>
     </div>

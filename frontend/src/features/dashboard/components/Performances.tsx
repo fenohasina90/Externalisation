@@ -1,14 +1,8 @@
-import { formatMontantMGA } from '@/utils/format'
 import type { VueDashboard } from '../hooks'
 import type { PerformancesDashboard } from '../types'
 
 function formatTaux(valeur: number): string {
   return `${valeur.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`
-}
-
-function formatJours(valeur: number): string {
-  const jours = valeur.toLocaleString('fr-FR', { maximumFractionDigits: 1 })
-  return `${jours} j`
 }
 
 function libelleMois(mois: string): string {
@@ -32,13 +26,6 @@ interface PerformancesPanelProps {
 export function PerformancesPanel({ donnees, vue }: PerformancesPanelProps) {
   const cartes: CartePerformance[] = []
 
-  if (donnees.delaiMoyenTraitementJours !== null) {
-    cartes.push({
-      label: 'Délai moyen de traitement',
-      valeur: formatJours(donnees.delaiMoyenTraitementJours),
-      detail: 'Entre la demande et la clôture',
-    })
-  }
   if (donnees.demandesTerminees !== null) {
     cartes.push({
       label: 'Demandes terminées',
@@ -47,19 +34,6 @@ export function PerformancesPanel({ donnees, vue }: PerformancesPanelProps) {
         donnees.tauxDemandesTerminees === null
           ? undefined
           : `${formatTaux(donnees.tauxDemandesTerminees)} des demandes`,
-    })
-  }
-  if (donnees.montantMoyenParDemande !== null) {
-    cartes.push({
-      label: 'Montant moyen par demande',
-      valeur: formatMontantMGA(donnees.montantMoyenParDemande),
-    })
-  }
-  if (donnees.tauxPaiementATemps !== null) {
-    cartes.push({
-      label: 'Paiements à temps',
-      valeur: formatTaux(donnees.tauxPaiementATemps),
-      detail: 'Échéances réglées à la date prévue',
     })
   }
   if (donnees.servicePlusDemande !== null) {
