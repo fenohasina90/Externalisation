@@ -1030,6 +1030,18 @@ public class FactureService {
         return objetFactureValidee(fv);
     }
 
+    /**
+     * Agrégats par facture validée pour un lot de demandes (situation de règlement) :
+     * demande.id, f.id, montant, payé actif, f.valideLe, f.mois.
+     */
+    @Transactional(readOnly = true)
+    public List<Object[]> facturesAgregeesPourDemandes(List<Integer> demandeIds) {
+        if (demandeIds == null || demandeIds.isEmpty()) {
+            return List.of();
+        }
+        return factureValideeRepository.facturesAgregees(demandeIds);
+    }
+
     /** Variante interne : la facture validée est déjà chargée (contexte transactionnel). */
     public ObjetFactureValideeResponse objetFactureValidee(FactureValidee fv) {
         if (fv == null) {

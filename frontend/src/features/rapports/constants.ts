@@ -17,7 +17,6 @@ export const CATEGORIES_RAPPORT: CategorieMeta[] = [
 
 export const STATUTS_DEMANDE: { code: string; label: string }[] = [
   { code: 'EN_ATTENTE', label: 'En attente' },
-  { code: 'VALIDATION', label: 'Validation' },
   { code: 'EN_COURS', label: 'En cours' },
   { code: 'TERMINEE', label: 'Terminées' },
   { code: 'ANNULEE', label: 'Annulées' },

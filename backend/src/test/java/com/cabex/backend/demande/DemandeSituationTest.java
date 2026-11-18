@@ -12,6 +12,10 @@ import java.time.LocalDateTime;
 import com.cabex.backend.echeance.entity.ProposPaiement;
 import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import com.cabex.backend.echeance.repository.ProposPaiementRepository;
+import com.cabex.backend.demande.entity.HistoriqueDemande;
+import com.cabex.backend.demande.entity.StatutDemande;
+import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
+import com.cabex.backend.demande.repository.StatutDemandeRepository;
 import com.cabex.backend.service.entity.Service;
 import com.cabex.backend.service.repository.ServiceRepository;
 import org.junit.jupiter.api.Test;
@@ -50,11 +54,23 @@ class DemandeSituationTest {
     private ServiceRepository serviceRepository;
     @Autowired
     private FactureValideeRepository factureValideeRepository;
+    @Autowired
+    private HistoriqueDemandeRepository historiqueRepository;
+    @Autowired
+    private StatutDemandeRepository statutDemandeRepository;
 
     private static final LocalDate AUJOURDHUI = LocalDate.of(2026, 10, 20);
     private static final LocalDateTime DEADLINE_PD = AUJOURDHUI.minusDays(5).atTime(LocalTime.MAX);
     private static final LocalDateTime DEADLINE_ABO = AUJOURDHUI.minusDays(7).atTime(LocalTime.MAX);
     private int compteur;
+
+    private void marquerTerminee(DemandeService d) {
+        StatutDemande statut = statutDemandeRepository.findByStatut("TERMINEE")
+                .orElseGet(() -> statutDemandeRepository.save(
+                        StatutDemande.builder().statut("TERMINEE").build()));
+        historiqueRepository.save(HistoriqueDemande.builder()
+                .demande(d).statut(statut).build());
+    }
 
     private DemandeService demande(String reference) {
         return demandeRepository.save(DemandeService.builder()
@@ -111,7 +127,7 @@ class DemandeSituationTest {
 
     private void jeuDeDonnees() {
         // Soldee.
-        avecEcheance("DEM-2026-00001", AUJOURDHUI.plusDays(10), "1000000", "1000000");
+        marquerTerminee(avecEcheance("DEM-2026-00001", AUJOURDHUI.plusDays(10), "1000000", "1000000"));
         // Échéance dépassée, reste dû.
         avecEcheance("DEM-2026-00002", AUJOURDHUI.minusDays(5), "1000000", "200000");
         // Échéance à venir, payée partiellement.
@@ -122,7 +138,7 @@ class DemandeSituationTest {
         demande("DEM-2026-00005");
     }
 
-    private void ligneMixte(String reference, String statut) {
+    private DemandeService ligneMixte(String reference, String statut) {
         DemandeService d = demande(reference);
         String code = "SRV-" + (++compteur);
         Service service = serviceRepository.save(Service.builder()
@@ -140,6 +156,7 @@ class DemandeSituationTest {
                 .statut(statut)
                 .categorie("EXTERNALISATION")
                 .build());
+        return d;
     }
 
     private long count(String situation) {
@@ -318,7 +335,7 @@ class DemandeSituationTest {
     /** Une échéance soldée mais échue n'est pas « en retard ». */
     @Test
     void echeanceEchueEtSoldeeNestPasEnRetard() {
-        avecEcheance("DEM-2026-00007", AUJOURDHUI.minusDays(10), "500000", "500000");
+        marquerTerminee(avecEcheance("DEM-2026-00007", AUJOURDHUI.minusDays(10), "500000", "500000"));
 
         assertEquals(1, count("PAYE"));
         assertEquals(0, count("EN_RETARD"));
@@ -389,7 +406,7 @@ class DemandeSituationTest {
     }
     @Test
     void situationPayeLigneTermineeSansPlan() {
-        ligneMixte("DEM-2026-01001", "TERMINE");
+        marquerTerminee(ligneMixte("DEM-2026-01001", "TERMINE"));
         assertEquals(1, count("PAYE"));
         assertEquals(0, count("EN_ATTENTE"));
     }

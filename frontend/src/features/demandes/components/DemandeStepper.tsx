@@ -1,6 +1,5 @@
 const ETAPES: { id: string; label: string }[] = [
   { id: 'EN_ATTENTE', label: 'En attente' },
-  { id: 'VALIDATION', label: 'Validation' },
   { id: 'EN_COURS', label: 'En cours' },
   { id: 'TERMINEE', label: 'Terminée' },
 ]
@@ -15,7 +14,8 @@ export function DemandeStepper({ statut }: { statut: string }) {
     )
   }
 
-  const indexActuel = ETAPES.findIndex((e) => e.id === statut)
+  const normalise = statut === 'VALIDATION' ? 'EN_COURS' : statut
+  const indexActuel = ETAPES.findIndex((e) => e.id === normalise)
 
   return (
     <div className="card card-pad">
@@ -38,8 +38,9 @@ export function DemandeStepper({ statut }: { statut: string }) {
         ))}
       </div>
       <p className="section-note" style={{ marginTop: 10 }}>
-        En attente → Validation : automatique (1ʳᵉ échéance payée) · Validation → En cours :
-        automatique · En cours → Terminée : manuel · Annulation possible jusqu&apos;à « En cours ».
+        En attente → En cours : automatique (validation de la facture) · En cours → Terminée :
+        automatique (toutes lignes terminées ou montant facturé payé) ou manuelle · Annulation
+        possible uniquement à la création.
       </p>
     </div>
   )

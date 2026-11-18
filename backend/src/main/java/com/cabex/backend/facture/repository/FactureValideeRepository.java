@@ -70,6 +70,22 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
     List<com.cabex.backend.facture.entity.FactureValidee> findFacturesPourAlertesPaiement();
 
     /**
+     * Agrégats par facture validée pour un lot de demandes (situation de règlement).
+     * Colonnes : demande.id, f.id, COALESCE(montant, 0), paye payé actif (COALESCE 0),
+     * f.valideLe, f.mois.
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT f.demande.id, f.id, COALESCE(f.montant, 0),
+                   (SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p
+                    WHERE p.factureValidee = f AND p.actif = true),
+                   f.valideLe, f.mois
+            FROM FactureValidee f
+            WHERE f.demande.id IN :ids
+            ORDER BY f.demande.id, f.id
+            """)
+    List<Object[]> facturesAgregees(@org.springframework.data.repository.query.Param("ids") List<Integer> ids);
+
+    /**
      * Toutes les factures du mois d'abonnement (alertes de retard abonnement).
      * Charge la demande et la société pour la composition des messages.
      */

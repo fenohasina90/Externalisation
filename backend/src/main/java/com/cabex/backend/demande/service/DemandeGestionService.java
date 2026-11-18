@@ -50,6 +50,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -176,7 +177,7 @@ public class DemandeGestionService {
                 .collect(Collectors.toMap(
                         o -> ((Number) o[0]).intValue(),
                         o -> (String) o[1]));
-        Map<Integer, InfoSituation> situations = situations(demandes);
+        Map<Integer, InfoSituation> situations = situations(demandes, statuts);
 
         return page.map(d -> toResponseListe(d, lignesParDemande, paiementsParLigne,
                 paiementsParDemande, statuts, situations));
@@ -469,9 +470,6 @@ public class DemandeGestionService {
         if (!transitionAutorisee(actuel, nouveau)) {
             throw new BusinessException(ErrorMessages.TRANSITION_STATUT_INTERDITE);
         }
-        if (STATUT_VALIDATION.equals(nouveau)) {
-            verifierPassageValidation(demande);
-        }
 
         enviereHistorique(demande, nouveau, request.commentaire());
 
@@ -550,79 +548,20 @@ public class DemandeGestionService {
         }
         return switch (actuel) {
             // Annulation ordinaire uniquement depuis EN_ATTENTE (§3.2).
-            case "EN_ATTENTE" -> STATUT_VALIDATION.equals(nouveau) || STATUT_EN_COURS.equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
-            case "VALIDATION" -> STATUT_EN_COURS.equals(nouveau);
+            case "EN_ATTENTE" -> STATUT_EN_COURS.equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
+            // Transitions historiques (demandes encore marquées VALIDATION avant la suppression
+            // de cette étape) : on les laisse rejoindre EN_COURS, pour ne pas figer ces demandes.
+            case "VALIDATION" -> STATUT_EN_COURS.equals(nouveau) || STATUT_ANNULEE.equals(nouveau);
             case "EN_COURS" -> STATUT_TERMINEE.equals(nouveau);
             default -> false;
         };
     }
 
     /**
-     * Garde du passage à VALIDATION : toutes les factures validées et
-     * un plan de paiement établi pour chaque ligne EXTERNALISATION
-     * (les lignes DEBOURS sont ignorées par cette garde).
-     */
-    private void verifierPassageValidation(DemandeService demande) {
-        List<LigneService> lignes = ligneRepository.findByDemandeId(demande.getId());
-        // Seules les lignes EXTERNALISATION STANDARD (pas DEBOURS, pas PRESTATION, pas ABONNEMENT_MENSUEL)
-        // nécessitent un plan de paiement et une facture validée.
-        List<LigneService> externalisationStandard = lignes.stream()
-                .filter(l -> !LigneServiceService.estDebours(l)
-                        && !LigneServiceService.PRESTATION.equalsIgnoreCase(l.getTypePrestation())
-                        && !LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(l.getTypePrestation()))
-                .toList();
-        if (externalisationStandard.isEmpty()) {
-            throw new BusinessException("Une demande contient au moins un service");
-        }
-        if (!factureService.toutesValidees(demande.getId())) {
-            throw new BusinessException(
-                    "Toutes les factures de la demande doivent être validées avant le passage à VALIDATION");
-        }
-        for (LigneService ligne : externalisationStandard) {
-            if (!proposRepository.existsByLigneServiceId(ligne.getId())) {
-                throw new BusinessException(
-                        "Chaque service doit disposer de son plan de paiement avant le passage à VALIDATION");
-            }
-        }
-    }
-
-    /**
-     * Promotion automatique : une ligne passe EN_COURS à son premier paiement ;
-     * la demande passe EN_COURS dès qu'au moins une ligne a démarré.
-     */
-    @Transactional
-    public void promouvoirEnCoursParLigne(LigneService ligne, String commentairePaiement) {
-        if (LigneServiceService.estDebours(ligne)) {
-            return;
-        }
-        boolean ligneDemarree = ligneServiceService.avancerStatut(ligne,
-                LigneServiceService.LIGNE_EN_COURS,
-                "Service démarré : " + commentairePaiement, "AUTO");
-        if (!ligneDemarree) {
-            return;
-        }
-        DemandeService demande = ligne.getDemande();
-        String actuel = statutActuel(demande.getId());
-        if (STATUT_EN_ATTENTE.equals(actuel)) {
-            enviereHistorique(demande, STATUT_VALIDATION,
-                    "Demande validée par le premier paiement (service démarré)");
-            auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
-                    Long.valueOf(demande.getId()), STATUT_EN_ATTENTE, STATUT_VALIDATION);
-            actuel = STATUT_VALIDATION;
-        }
-        if (STATUT_VALIDATION.equals(actuel)) {
-            enviereHistorique(demande, STATUT_EN_COURS,
-                    "Service démarré après validation (premier paiement enregistré)");
-            notificationService.notifierChangementStatut(demande, STATUT_EN_COURS);
-            auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "DemandeService",
-                    Long.valueOf(demande.getId()), STATUT_VALIDATION, STATUT_EN_COURS);
-        }
-    }
-
-    /**
      * Clôture automatique : la demande passe TERMINEE quand toutes ses lignes
      * sont TERMINEES (EXTERNALISATION full paiement / abonnement terminée
-     * manuellement) ou PAYEE (DEBOURS complet).
+     * manuellement) ou PAYEE (DEBOURS complet). Un abonnement encore EN_COURS
+     * bloque la clôture (l'abonnement se termine manuellement).
      */
     @Transactional
     public boolean cloturerSiTerminee(Integer demandeId) {
@@ -669,7 +608,7 @@ public class DemandeGestionService {
         return reference;
     }
 
-    /** Statut actuel de la demande (EN_ATTENTE / VALIDATION / EN_COURS / TERMINEE / ANNULEE). */
+    /** Statut actuel de la demande (EN_ATTENTE / VALIDATION historique / EN_COURS / TERMINEE / ANNULEE). */
     @Transactional(readOnly = true)
     public String statutDemandeActuel(Integer demandeId) {
         return statutActuel(demandeId);
@@ -689,29 +628,42 @@ public class DemandeGestionService {
         BigDecimal montantTotal = ligneServiceService.montantTotalDemande(demande.getId());
         BigDecimal reste = montantTotal.subtract(montantPaye);
         String statut = statutActuel(demande.getId());
-        InfoSituation info = situation(demande.getId());
+        InfoSituation info = situation(demande.getId(), statut);
         return DemandeMapper.toResponse(demande, statut, montantPaye, reste.max(BigDecimal.ZERO),
                 ligneServiceService.listerParDemande(demande.getId()), montantTotal,
                 info.situation(), info.nombreEcheances());
     }
 
-    /** Situation de règlement et nombre d'échéances d'une demande isolée. */
-    private InfoSituation situation(Integer demandeId) {
-        List<Object[]> lignes = demandeRepository.situations(List.of(demandeId), LocalDate.now());
+    /**
+     * Situation de règlement d'une demande isolée : déduite des factures
+     * validées et des paiements actifs (source de vérité) ; à défaut, des
+     * échéances / des lignes (compatibilité pour les demandes sans facture).
+     */
+    private InfoSituation situation(Integer demandeId, String statut) {
+        LocalDate aujourdhui = LocalDate.now();
+        List<Object[]> factures = factureService
+                .facturesAgregeesPourDemandes(List.of(demandeId));
+        if (!factures.isEmpty()) {
+            int[] jours = joursRetard();
+            return new InfoSituation(SituationPaiement.classerFacture(factures,
+                    jours[0], jours[1], aujourdhui, statut), 0L);
+        }
+        List<Object[]> lignes = demandeRepository.situations(List.of(demandeId), aujourdhui);
         if (lignes.isEmpty()) {
             return InfoSituation.NON_PLANIFIE;
         }
-        return new InfoSituation(SituationPaiement.classer(lignes.get(0)),
+        return new InfoSituation(SituationPaiement.classer(lignes.get(0), statut),
                 ((Number) lignes.get(0)[2]).longValue());
     }
 
     /**
-     * Situations de toute une page, en une seule requête. La valeur renvoyée
-     * alimente la colonne « Situation » des listes : elle est calculée par la
-     * même classification que le filtre {@code situation}, pour que les deux
-     * ne puissent pas diverger.
+     * Situations de toute une page, en une seule requête d'agrégats (factures)
+     * plus, pour les demandes sans facture, un repli sur l'ancien agrégat
+     * échéances / lignes. La valeur renvoyée alimente la colonne « Situation »
+     * des listes : la demande est jugée sur l'ensemble de ses factures.
      */
-    private Map<Integer, InfoSituation> situations(List<DemandeService> demandes) {
+    private Map<Integer, InfoSituation> situations(List<DemandeService> demandes,
+                                                   Map<Integer, String> statuts) {
         List<Integer> ids = demandes.stream()
                 .map(DemandeService::getId)
                 .filter(Objects::nonNull)
@@ -719,12 +671,47 @@ public class DemandeGestionService {
         if (ids.isEmpty()) {
             return Map.of();
         }
-        return demandeRepository.situations(ids, LocalDate.now()).stream()
-                .collect(Collectors.toMap(
+        LocalDate aujourdhui = LocalDate.now();
+        Map<Integer, List<Object[]>> facturesParDemande = factureService
+                .facturesAgregeesPourDemandes(ids).stream()
+                .collect(Collectors.groupingBy(
                         ligne -> ((Number) ligne[0]).intValue(),
-                        ligne -> new InfoSituation(
-                                SituationPaiement.classer(ligne),
-                                ((Number) ligne[2]).longValue())));
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+        int[] jours = joursRetard();
+        Map<Integer, InfoSituation> resultat = new HashMap<>();
+        List<Integer> sansFacture = new ArrayList<>();
+        for (Integer id : ids) {
+            List<Object[]> factures = facturesParDemande.get(id);
+            if (factures != null && !factures.isEmpty()) {
+                resultat.put(id, new InfoSituation(
+                        SituationPaiement.classerFacture(factures,
+                                jours[0], jours[1], aujourdhui, statuts.get(id)), 0L));
+            } else {
+                sansFacture.add(id);
+            }
+        }
+        // Repli : aucune facture validée émise → échéances / lignes (legacy).
+        if (!sansFacture.isEmpty()) {
+            for (Object[] ligne : demandeRepository.situations(sansFacture, aujourdhui)) {
+                int id = ((Number) ligne[0]).intValue();
+                resultat.put(id, new InfoSituation(
+                        SituationPaiement.classer(ligne, statuts.get(id)),
+                        ((Number) ligne[2]).longValue()));
+            }
+        }
+        return resultat;
+    }
+
+    /** Jours de retard configurés (prestation/débours, abonnement), pour la situation. */
+    private int[] joursRetard() {
+        int pdJours = Math.max(0, configurationService.lireEntier(
+                ConfigurationKeys.JOURS_RETARD_PRESTATION_DEBOURS,
+                ConfigurationKeys.JOURS_RETARD_PRESTATION_DEBOURS_DEFAUT));
+        int aboJours = Math.max(0, configurationService.lireEntier(
+                ConfigurationKeys.JOURS_RETARD_ABONNEMENT,
+                ConfigurationKeys.JOURS_RETARD_ABONNEMENT_DEFAUT));
+        return new int[]{pdJours, aboJours};
     }
 
     /** Situation de règlement d'une demande et nombre total d'échéances. */

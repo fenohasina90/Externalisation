@@ -42,16 +42,20 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
      * externe pour ne pas perdre les demandes de création d'entreprise
      * (`societe_id` NULL).
      *
-     * <p>Filtre `situation` — situation de règlement déduite des échéances,
-     * dans l'ordre de précédence de {@code LigneServiceService} :
+     * <p>Filtre `situation` — situation de règlement :
      * <ul>
-     *   <li>{@code PAYE} : au moins une échéance et toutes soldées ;</li>
-     *   <li>{@code EN_RETARD} : au moins une échéance dépassée avec un reste ;</li>
-     *   <li>{@code PARTIEL} : reste dû, aucune échéance en retard, mais un
-     *       paiement déjà enregistré ;</li>
-     *   <li>{@code EN_ATTENTE} : reste dû, aucune échéance en retard, aucun
-     *       paiement ;</li>
-     *   <li>{@code NON_PLANIFIE} : aucun plan de paiement établi.</li>
+     *   <li>{@code PAYE} : tout est réglé (échéances soldées ou factures validées
+     *       soldées) ET la demande est {@code TERMINEE} ;</li>
+     *   <li>{@code EN_RETARD} : une échéance est dépassée avec un reste, ou une
+     *       facture validée non mensuelle date de plus de {@code deadlinePrestationDebours},
+     *       ou une facture mensuelle de plus de {@code deadlineAbonnement}, avec
+     *       un règlement partiel ou absent ;</li>
+     *   <li>{@code PARTIEL} : reste dû et au moins un paiement enregistré,
+     *       ou tout réglé mais demande qui n'est pas encore {@code TERMINEE} ;</li>
+     *   <li>{@code EN_ATTENTE} : aucun paiement enregistré et reste dû ou rien à
+     *       régler pour l'instant ;</li>
+     *   <li>{@code NON_PLANIFIE} : aucun plan de paiement établi, aucune facture
+     *       validée et aucun paiement.</li>
      * </ul>
      * Les prédicats sont mutuellement exclusifs par construction.
      */
@@ -99,49 +103,92 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                 WHERE l.demande = d AND l.typePrestation = :typePrestation))
           AND (:situation IS NULL
             OR (:situation = 'PAYE'
-                AND (
-                  (NOT EXISTS (SELECT 1 FROM EcheancePaiement e
-                                WHERE e.proposPaiement.demande = d
-                                  AND e.montantPaye < e.montantAttendu)
-                   AND EXISTS (SELECT 1 FROM EcheancePaiement e
-                               WHERE e.proposPaiement.demande = d))
-                  OR (NOT EXISTS (SELECT 1 FROM LigneService l
-                                   WHERE l.demande = d
-                                     AND (l.statut IS NULL
-                                          OR l.statut NOT IN ('TERMINE','PAYEE','ANNULEE')))
-                      AND EXISTS (SELECT 1 FROM LigneService l WHERE l.demande = d))))
+                AND EXISTS (SELECT 1 FROM HistoriqueDemande hT
+                            WHERE hT.demande = d
+                              AND hT.statut.statut = 'TERMINEE'
+                              AND hT.id = (SELECT MAX(h2.id) FROM HistoriqueDemande h2 WHERE h2.demande = d))
+                AND NOT EXISTS (SELECT 1 FROM FactureValidee fv
+                                WHERE fv.demande = d
+                                  AND (SELECT COALESCE(SUM(p.montantPaye), 0)
+                                       FROM Paiement p
+                                       WHERE p.factureValidee.id = fv.id AND p.actif = true) < fv.montant)
+                AND (NOT EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d)
+                     OR NOT EXISTS (SELECT 1 FROM EcheancePaiement e
+                                     WHERE e.proposPaiement.demande = d
+                                       AND e.montantPaye < e.montantAttendu)))
             OR (:situation = 'EN_RETARD'
                 AND (
                   EXISTS (SELECT 1 FROM EcheancePaiement e
                             WHERE e.proposPaiement.demande = d
                               AND e.dateEcheance < :aujourdhui
                               AND e.montantPaye < e.montantAttendu)
-                  OR EXISTS (SELECT 1 FROM FactureValidee fv LEFT JOIN fv.factureProforma fp
+                  OR EXISTS (SELECT 1 FROM FactureValidee fv
                             WHERE fv.demande = d
                               AND fv.mois IS NULL
                               AND fv.valideLe <= :deadlinePrestationDebours
                               AND (SELECT COALESCE(SUM(p.montantPaye), 0)
                                    FROM Paiement p
-                                   WHERE p.factureValidee.id = fv.id AND p.actif = true) < fv.montant
-                              AND (fp IS NULL OR fp.modeFacturation <> 'UNIQUE'))
-                  OR EXISTS (SELECT 1 FROM FactureValidee fv LEFT JOIN fv.factureProforma fp
+                                   WHERE p.factureValidee.id = fv.id AND p.actif = true) < fv.montant)
+                  OR EXISTS (SELECT 1 FROM FactureValidee fv
                             WHERE fv.demande = d
                               AND fv.mois IS NOT NULL
                               AND fv.valideLe <= :deadlineAbonnement
                               AND (SELECT COALESCE(SUM(p.montantPaye), 0)
                                    FROM Paiement p
-                                   WHERE p.factureValidee.id = fv.id AND p.actif = true) < fv.montant
-                              AND (fp IS NULL OR fp.modeFacturation <> 'UNIQUE'))
+                                   WHERE p.factureValidee.id = fv.id AND p.actif = true) < fv.montant)
                 ))
             OR (:situation = 'PARTIEL'
                 AND (
-                  (EXISTS (SELECT 1 FROM EcheancePaiement e
+                  (EXISTS (SELECT 1 FROM Paiement pA
+                            WHERE pA.demande = d AND pA.actif = true)
+                   AND EXISTS (SELECT 1 FROM FactureValidee fvP
+                                WHERE fvP.demande = d
+                                  AND (SELECT COALESCE(SUM(pp.montantPaye), 0)
+                                       FROM Paiement pp
+                                       WHERE pp.factureValidee.id = fvP.id AND pp.actif = true) < fvP.montant)
+                   AND NOT EXISTS (SELECT 1 FROM FactureValidee fvR
+                            WHERE fvR.demande = d AND fvR.mois IS NULL
+                              AND fvR.valideLe <= :deadlinePrestationDebours
+                              AND (SELECT COALESCE(SUM(p.montantPaye), 0)
+                                   FROM Paiement p
+                                   WHERE p.factureValidee.id = fvR.id AND p.actif = true) < fvR.montant)
+                   AND NOT EXISTS (SELECT 1 FROM FactureValidee fvR2
+                            WHERE fvR2.demande = d AND fvR2.mois IS NOT NULL
+                              AND fvR2.valideLe <= :deadlineAbonnement
+                              AND (SELECT COALESCE(SUM(p.montantPaye), 0)
+                                   FROM Paiement p
+                                   WHERE p.factureValidee.id = fvR2.id AND p.actif = true) < fvR2.montant))
+                  OR (NOT EXISTS (SELECT 1 FROM HistoriqueDemande hP2
+                               WHERE hP2.demande = d AND hP2.statut.statut = 'TERMINEE'
+                                 AND hP2.id = (SELECT MAX(h2.id) FROM HistoriqueDemande h2 WHERE h2.demande = d))
+                      AND NOT EXISTS (SELECT 1 FROM EcheancePaiement epE
+                               WHERE epE.proposPaiement.demande = d AND epE.montantPaye < epE.montantAttendu)
+                      AND NOT EXISTS (SELECT 1 FROM FactureValidee fvQ
+                               WHERE fvQ.demande = d
+                                 AND (SELECT COALESCE(SUM(pq.montantPaye), 0)
+                                      FROM Paiement pq
+                                      WHERE pq.factureValidee.id = fvQ.id AND pq.actif = true) < fvQ.montant)
+                      AND EXISTS (SELECT 1 FROM Paiement pQ
+                               WHERE pQ.demande = d AND pQ.actif = true))
+                  OR (EXISTS (SELECT 1 FROM EcheancePaiement e
                             WHERE e.proposPaiement.demande = d
                               AND e.montantPaye < e.montantAttendu)
                    AND NOT EXISTS (SELECT 1 FROM EcheancePaiement e
                                    WHERE e.proposPaiement.demande = d
                                      AND e.dateEcheance < :aujourdhui
                                      AND e.montantPaye < e.montantAttendu)
+                   AND NOT EXISTS (SELECT 1 FROM FactureValidee fvR3
+                            WHERE fvR3.demande = d AND fvR3.mois IS NULL
+                              AND fvR3.valideLe <= :deadlinePrestationDebours
+                              AND (SELECT COALESCE(SUM(p.montantPaye), 0)
+                                   FROM Paiement p
+                                   WHERE p.factureValidee.id = fvR3.id AND p.actif = true) < fvR3.montant)
+                   AND NOT EXISTS (SELECT 1 FROM FactureValidee fvR4
+                            WHERE fvR4.demande = d AND fvR4.mois IS NOT NULL
+                              AND fvR4.valideLe <= :deadlineAbonnement
+                              AND (SELECT COALESCE(SUM(p.montantPaye), 0)
+                                   FROM Paiement p
+                                   WHERE p.factureValidee.id = fvR4.id AND p.actif = true) < fvR4.montant)
                    AND EXISTS (SELECT 1 FROM EcheancePaiement e
                                WHERE e.proposPaiement.demande = d AND e.montantPaye > 0))
                   OR (EXISTS (SELECT 1 FROM LigneService l
@@ -151,6 +198,8 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                                          AND (l.statut IS NULL
                                               OR l.statut NOT IN ('TERMINE','PAYEE','ANNULEE','PARTIEL'))))))
             OR (:situation = 'EN_ATTENTE'
+                AND NOT EXISTS (SELECT 1 FROM Paiement p
+                                WHERE p.demande = d AND p.actif = true)
                 AND (
                   (EXISTS (SELECT 1 FROM ProposPaiement p WHERE p.demande = d)
                    AND (

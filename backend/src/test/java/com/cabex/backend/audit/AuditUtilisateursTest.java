@@ -139,38 +139,4 @@ class AuditUtilisateursTest {
                 eq(9L), isNull(), contains("TESTEUR"));
     }
 
-    @Test
-    void transitionsAutomatiquesJournalisees() {
-        DemandeService demande = DemandeService.builder()
-                .id(10).referenceDemande("REF-2026-014")
-                .dateDemande(LocalDate.of(2026, 9, 1))
-                .actif(true).build();
-        LigneService ligne = LigneService.builder()
-                .id(1).demande(demande).statut("EN_ATTENTE")
-                .tarif(new BigDecimal("1000000")).build();
-        HistoriqueDemande historique = HistoriqueDemande.builder()
-                .id(1).demande(demande)
-                .statut(StatutDemande.builder().id(1).statut("EN_ATTENTE").build()).build();
-        when(historiqueRepository.findFirstByDemandeIdOrderByIdDesc(10))
-                .thenReturn(Optional.of(historique));
-        when(statutRepository.findByStatut("VALIDATION"))
-                .thenReturn(Optional.of(StatutDemande.builder().id(2).statut("VALIDATION").build()));
-        when(statutRepository.findByStatut("EN_COURS"))
-                .thenReturn(Optional.of(StatutDemande.builder().id(3).statut("EN_COURS").build()));
-        lenient().when(ligneRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(ligneServiceService.avancerStatut(any(), eq("EN_COURS"), any(), eq("AUTO")))
-                .thenReturn(true);
-        DemandeGestionService service = new DemandeGestionService(
-                demandeRepository, societeRepository, responsableRepository, commercialRepository,
-                serviceRepository, historiqueRepository, statutRepository, paiementRepository,
-                utilisateurRepository, notificationService, auditService,
-                ligneServiceService, factureService, ligneRepository, proposRepository, configurationService);
-
-        service.promouvoirEnCoursParLigne(ligne, "paiement PAY-2026-00001 (échéance n°1)");
-
-        verify(auditService).log(eq("STATUS_CHANGE"), eq("DEMANDE"), eq("DemandeService"),
-                eq(10L), eq("EN_ATTENTE"), eq("VALIDATION"));
-        verify(auditService).log(eq("STATUS_CHANGE"), eq("DEMANDE"), eq("DemandeService"),
-                eq(10L), eq("VALIDATION"), eq("EN_COURS"));
-    }
 }

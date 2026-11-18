@@ -88,10 +88,12 @@ class DemandeStatutTest {
     }
 
     @Test
-    void annulationDepuisValidationRefusee() {
-        statutDemande(17, "VALIDATION");
+    void validationStatutSupprime() {
+        // L'étape VALIDATION a été supprimée : toute demande reste EN_ATTENTE jusqu'à
+        // la validation du proforma (qui passe la demande EN_COURS) ou est annulée.
+        statutDemande(17, "EN_ATTENTE");
         assertThrows(BusinessException.class,
-                () -> service.changeStatut(17, new ChangeStatutRequest("ANNULEE", null)));
+                () -> service.changeStatut(17, new ChangeStatutRequest("VALIDATION", null)));
     }
 
     @Test
@@ -109,52 +111,6 @@ class DemandeStatutTest {
         lenient().when(ligneServiceService.listerParDemande(17)).thenReturn(List.of());
 
         var reponse = service.changeStatut(17, new ChangeStatutRequest("ANNULEE", null));
-
-        assertNotNull(reponse);
-    }
-
-    @Test
-    void validationRefuseeSiFactureNonValidee() {
-        statutDemande(17, "EN_ATTENTE");
-        DemandeService demande = demandeRepository.findById(17).orElseThrow();
-        LigneService ligne = LigneService.builder().id(1).demande(demande)
-                .tarif(new BigDecimal("2000000")).build();
-        when(ligneRepository.findByDemandeId(17)).thenReturn(List.of(ligne));
-        when(factureService.toutesValidees(17)).thenReturn(false);
-
-        assertThrows(BusinessException.class,
-                () -> service.changeStatut(17, new ChangeStatutRequest("VALIDATION", null)));
-    }
-
-    @Test
-    void validationRefuseeSiPlanManquant() {
-        statutDemande(17, "EN_ATTENTE");
-        LigneService ligne = LigneService.builder().id(1)
-                .demande(DemandeService.builder().id(17).build())
-                .tarif(new BigDecimal("2000000")).build();
-        when(ligneRepository.findByDemandeId(17)).thenReturn(List.of(ligne));
-        when(factureService.toutesValidees(17)).thenReturn(true);
-        when(proposRepository.existsByLigneServiceId(1)).thenReturn(false);
-
-        assertThrows(BusinessException.class,
-                () -> service.changeStatut(17, new ChangeStatutRequest("VALIDATION", null)));
-    }
-
-    @Test
-    void validationOkSiFacturesValideesEtPlansEtabli() {
-        statutDemande(17, "EN_ATTENTE");
-        LigneService ligne = LigneService.builder().id(1)
-                .demande(DemandeService.builder().id(17).build())
-                .tarif(new BigDecimal("2000000")).build();
-        when(ligneRepository.findByDemandeId(17)).thenReturn(List.of(ligne));
-        when(factureService.toutesValidees(17)).thenReturn(true);
-        when(proposRepository.existsByLigneServiceId(1)).thenReturn(true);
-        lenient().when(paiementRepository.sommePayeeParDemande(17)).thenReturn(BigDecimal.ZERO);
-        lenient().when(ligneServiceService.montantTotalDemande(17))
-                .thenReturn(new BigDecimal("2000000"));
-        lenient().when(ligneServiceService.listerParDemande(17)).thenReturn(List.of());
-
-        var reponse = service.changeStatut(17, new ChangeStatutRequest("VALIDATION", null));
 
         assertNotNull(reponse);
     }

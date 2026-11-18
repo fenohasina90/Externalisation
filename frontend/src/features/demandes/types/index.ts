@@ -277,9 +277,9 @@ export interface ChangeStatutPayload {
 
 /** Transitions manuelles autorisées (l'annulation n'est possible qu'en EN_ATTENTE). */
 export const TRANSITIONS_MANUELLES: Record<string, StatutDemande[]> = {
-  EN_ATTENTE: ['VALIDATION', 'ANNULEE'],
-  VALIDATION: ['EN_COURS'],
+  EN_ATTENTE: ['EN_COURS', 'ANNULEE'],
   EN_COURS: ['TERMINEE'],
+  VALIDATION: ['EN_COURS'], // hérité des demandes encore marquées VALIDATION (compatibilité)
   TERMINEE: [],
   ANNULEE: [],
 }
