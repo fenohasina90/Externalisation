@@ -170,7 +170,7 @@ export function PaiementsPage() {
               type="text"
               value={filtres.recherche}
               onChange={(e) => setFiltre('recherche', e.target.value)}
-              placeholder="Référence, client…"
+              placeholder="Référence, client, facture…"
             />
           </label>
           <label className="field filter-field">

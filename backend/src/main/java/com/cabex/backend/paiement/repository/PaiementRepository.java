@@ -75,19 +75,23 @@ public interface PaiementRepository extends JpaRepository<Paiement, Integer> {
 
     /**
      * Filtre de l'historique des paiements : la recherche porte sur la
-     * référence du paiement, celle de la demande, le client, le mode et la
-     * référence de virement. La jointure sur la société est externe : une
-     * demande de création d'entreprise n'a pas de société (`societe_id` NULL)
-     * et ses paiements doivent rester trouvables.
+     * référence du paiement, celle de la demande et de la facture (validée ou
+     * proforma), le client, le mode et la référence de virement. La jointure sur
+     * la société est externe : une demande de création d'entreprise n'a pas de
+     * société (`societe_id` NULL) et ses paiements doivent rester trouvables.
      */
     @EntityGraph(attributePaths = {"demande", "demande.societe", "modePaiement", "createdBy"})
     @Query("""
         SELECT p FROM Paiement p
         LEFT JOIN p.demande.societe s
+        LEFT JOIN p.factureValidee fv
+        LEFT JOIN fv.factureProforma fp
         WHERE p.actif = true
           AND (:recherche IS NULL OR (
                 LOWER(p.referencePaiement) LIKE LOWER(CONCAT('%', :recherche, '%'))
              OR LOWER(p.demande.referenceDemande) LIKE LOWER(CONCAT('%', :recherche, '%'))
+             OR (fv IS NOT NULL AND LOWER(fv.referenceFactureValidee) LIKE LOWER(CONCAT('%', :recherche, '%')))
+             OR (fp IS NOT NULL AND LOWER(fp.referenceFacture) LIKE LOWER(CONCAT('%', :recherche, '%')))
              OR (s IS NOT NULL AND LOWER(s.nomSociete) LIKE LOWER(CONCAT('%', :recherche, '%')))
              OR (p.modePaiement IS NOT NULL
                  AND LOWER(p.modePaiement.libelle) LIKE LOWER(CONCAT('%', :recherche, '%')))

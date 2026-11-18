@@ -70,7 +70,7 @@ export function HistoriquePaiementsPage() {
               type="text"
               value={filtres.recherche}
               onChange={(e) => setFiltre('recherche', e.target.value)}
-              placeholder="Référence, demande…"
+              placeholder="Référence, demande, facture…"
             />
           </label>
           <label className="field filter-field">
