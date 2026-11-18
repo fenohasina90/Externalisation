@@ -1,7 +1,10 @@
 package com.cabex.backend.paiement.dto;
 
+import com.cabex.backend.facture.dto.ObjetLigne;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Détail d'un paiement reprenant les informations du reçu PDF
@@ -43,6 +46,8 @@ public record PaiementDetailResponse(
         /** Date d'émission de la facture validée liée. */
         LocalDate dateFactureValidee,
         /** Mois facturé (ABONNEMENT_MENSUEL uniquement, sinon null). */
-        LocalDate moisFacture
+        LocalDate moisFacture,
+        /** Toutes les lignes facturées (type + désignation, mois pour l'abonnement). */
+        List<ObjetLigne> objets
 ) {
 }

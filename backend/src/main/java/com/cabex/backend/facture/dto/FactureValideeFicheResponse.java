@@ -33,15 +33,6 @@ public record FactureValideeFicheResponse(
         List<ObjetLigne> objets
 ) {
 
-    /** Ligne d'objet d'une facture : type de ligne + désignation lisible (mois inclus pour l'abonnement). */
-    public record ObjetLigne(
-            /** PRESTATION | DEBOURS | ABONNEMENT_MENSUEL. */
-            String type,
-            /** Désignation lisible du service / débours (mois en fin pour l'abonnement, ex. « audit fiscal (novembre 2026) »). */
-            String libelle
-    ) {
-    }
-
     public record PaiementFicheItem(
             Integer id,
             String referencePaiement,

@@ -2,6 +2,7 @@ package com.cabex.backend.document.service;
 
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.facture.dto.FactureValideeFicheResponse;
+import com.cabex.backend.facture.dto.ObjetLigne;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -204,12 +205,12 @@ final class ExcelFacturationClient {
         org.apache.poi.xssf.usermodel.XSSFWorkbook wb = (org.apache.poi.xssf.usermodel.XSSFWorkbook)
                 row.getSheet().getWorkbook();
         XSSFRichTextString rt = new XSSFRichTextString();
-        List<FactureValideeFicheResponse.ObjetLigne> objets = f.objets();
+        List<ObjetLigne> objets = f.objets();
         if (objets == null || objets.isEmpty()) {
             rt.append(f.objet() != null && !f.objet().isBlank() ? f.objet() : "—", fontTexte(wb));
         } else {
             boolean premier = true;
-            for (FactureValideeFicheResponse.ObjetLigne o : objets) {
+            for (ObjetLigne o : objets) {
                 if (!premier) {
                     rt.append("\n", fontTexte(wb));
                 }

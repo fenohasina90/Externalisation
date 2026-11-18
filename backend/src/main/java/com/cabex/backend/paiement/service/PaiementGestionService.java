@@ -25,7 +25,9 @@ import com.cabex.backend.paiement.entity.ModePaiement;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.cabex.backend.paiement.mapper.PaiementMapper;
 import com.cabex.backend.facture.entity.FactureValidee;
+import com.cabex.backend.facture.dto.ObjetLigne;
 import com.cabex.backend.facture.repository.FactureValideeRepository;
+import com.cabex.backend.facture.service.FactureService;
 import com.cabex.backend.paiement.repository.ModePaiementRepository;
 import com.cabex.backend.paiement.repository.PaiementRepository;
 import com.cabex.backend.security.SecurityUtils;
@@ -41,8 +43,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
+import java.util.List;
 
 @org.springframework.stereotype.Service
 public class PaiementGestionService {
@@ -62,6 +64,7 @@ public class PaiementGestionService {
     private final DemandeGestionService demandeGestionService;
     private final LigneServiceRepository ligneRepository;
     private final LigneServiceService ligneServiceService;
+    private final FactureService factureService;
 
     public PaiementGestionService(PaiementRepository paiementRepository,
                                   DemandeServiceRepository demandeRepository,
@@ -74,7 +77,8 @@ public class PaiementGestionService {
                                   AuditService auditService,
                                   DemandeGestionService demandeGestionService,
                                   LigneServiceRepository ligneRepository,
-                                  LigneServiceService ligneServiceService) {
+                                  LigneServiceService ligneServiceService,
+                                  FactureService factureService) {
         this.paiementRepository = paiementRepository;
         this.demandeRepository = demandeRepository;
         this.modeRepository = modeRepository;
@@ -87,6 +91,7 @@ public class PaiementGestionService {
         this.demandeGestionService = demandeGestionService;
         this.ligneRepository = ligneRepository;
         this.ligneServiceService = ligneServiceService;
+        this.factureService = factureService;
     }
 
     @Transactional(readOnly = true)
@@ -114,7 +119,10 @@ public class PaiementGestionService {
         BigDecimal somme = paiement.getFactureValidee() != null
                 ? paiementRepository.sommePayeeParFactureValidee(paiement.getFactureValidee().getId())
                 : BigDecimal.ZERO;
-        return PaiementMapper.toDetailResponse(paiement, somme != null ? somme : BigDecimal.ZERO);
+        List<ObjetLigne> objets = paiement.getFactureValidee() != null
+                ? factureService.objetsFactureValidee(paiement.getFactureValidee())
+                : List.of();
+        return PaiementMapper.toDetailResponse(paiement, somme != null ? somme : BigDecimal.ZERO, objets);
     }
 
     @Transactional(readOnly = true)

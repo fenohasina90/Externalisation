@@ -4,6 +4,7 @@ import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.document.service.MontantEnLettres;
+import com.cabex.backend.facture.dto.ObjetLigne;
 import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.paiement.dto.ModePaiementResponse;
 import com.cabex.backend.paiement.dto.PaiementDetailResponse;
@@ -13,6 +14,7 @@ import com.cabex.backend.paiement.entity.Paiement;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public class PaiementMapper {
 
@@ -87,6 +89,15 @@ public class PaiementMapper {
      * de la facture en tient compte).
      */
     public static PaiementDetailResponse toDetailResponse(Paiement paiement, BigDecimal sommePayeeSurFacture) {
+        return toDetailResponse(paiement, sommePayeeSurFacture, List.of());
+    }
+
+    /**
+     * Variante avec les objets détaillés de la facture (toutes les lignes facturées
+     * avec leur type + désignation) — onglet consultation, reçu, détail paiement.
+     */
+    public static PaiementDetailResponse toDetailResponse(Paiement paiement, BigDecimal sommePayeeSurFacture,
+                                                          List<ObjetLigne> objets) {
         if (paiement == null) {
             return null;
         }
@@ -150,7 +161,8 @@ public class PaiementMapper {
                         ? MontantEnLettres.convertir(paiement.getMontantPaye().longValue()) : null,
                 typeFacture,
                 dateFactureValidee,
-                moisFacture
+                moisFacture,
+                objets != null ? objets : List.of()
         );
     }
 }

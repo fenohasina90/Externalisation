@@ -2,6 +2,7 @@ package com.cabex.backend.paiement;
 
 import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.paiement.dto.PaiementDetailResponse;
+import com.cabex.backend.facture.dto.ObjetLigne;
 import com.cabex.backend.paiement.service.PaiementGestionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -42,7 +44,11 @@ class PaiementControllerTest {
                 1, "Système Administrateur",
                 new BigDecimal("2000000.00"), new BigDecimal("1300000.00"),
                 new BigDecimal("700000.00"), "un million trois cent mille",
-                "GENERALE", LocalDate.of(2026, 10, 20), null);
+                "GENERALE", LocalDate.of(2026, 10, 20), null,
+                List.of(
+                        new ObjetLigne("PRESTATION", "Déclarations fiscales et sociales"),
+                        new ObjetLigne("ABONNEMENT_MENSUEL", "Tenue de la comptabilité"),
+                        new ObjetLigne("DEBOURS", "Timbres postaux")));
     }
 
     @Test
@@ -68,6 +74,9 @@ class PaiementControllerTest {
                 .andExpect(jsonPath("$.referencePaiement").value("PAY-2026-00020"))
                 .andExpect(jsonPath("$.referenceDemande").value("DEM-2026-00018"))
                 .andExpect(jsonPath("$.nomSociete").value("Beta SA"))
+                .andExpect(jsonPath("$.objets[0].type").value("PRESTATION"))
+                .andExpect(jsonPath("$.objets[0].libelle").value("Déclarations fiscales et sociales"))
+                .andExpect(jsonPath("$.objets.length()").value(3))
                 .andExpect(jsonPath("$.nomService").value("Déclarations fiscales et sociales"))
                 .andExpect(jsonPath("$.factureValideeId").value(1))
                 .andExpect(jsonPath("$.referenceFactureValidee").value("00001/EXT/TNR/2026"))

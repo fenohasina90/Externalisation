@@ -55,8 +55,18 @@ export interface Paiement {
   createdByName: string | null
 }
 
+/** Ligne de l'objet d'une facture (type + désignation, mois pour l'abonnement). */
+export interface ObjetLigneFacture {
+  /** PRESTATION | DEBOURS | ABONNEMENT_MENSUEL */
+  type: string
+  /** Désignation lisible du service / débours (mois inclus pour l'abonnement). */
+  libelle: string
+}
+
 /** Détail d'un paiement : informations du reçu PDF (facture validée, montants, montant en lettres). */
 export interface PaiementDetail extends Paiement {
+  /** Toutes les lignes facturées (type + désignation). */
+  objets?: ObjetLigneFacture[]
   numeroEcheance: number | null
   dateEcheance: string | null
   /** Type de facture validée liée (GENERALE | PRESTATION | DEBOURS | ABONNEMENT_MENSUEL). */

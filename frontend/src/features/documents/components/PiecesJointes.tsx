@@ -12,6 +12,8 @@ interface Props {
   cible: CiblePieceJointe
   id: number
   titre?: string
+  /** Masque le formulaire d'ajout et le bouton supprimer (consultation). */
+  lectureSeule?: boolean
 }
 
 const PERMISSIONS = {
@@ -28,7 +30,7 @@ const PERMISSIONS = {
 const PERMISSIONS_TELECHARGEMENT = ['DOCUMENT_DEMANDE_VIEW', 'DOCUMENT_PAIEMENT_VIEW']
 
 /** Liste, dépôt et téléchargement des pièces jointes d'une demande ou d'un paiement. */
-export function PiecesJointes({ cible, id, titre }: Props) {
+export function PiecesJointes({ cible, id, titre, lectureSeule = false }: Props) {
   const { hasPermission } = useAuth()
   const permissions = PERMISSIONS[cible]
 
@@ -106,7 +108,7 @@ export function PiecesJointes({ cible, id, titre }: Props) {
       )}
       {error && <Alert tone="danger">{error}</Alert>}
 
-      {hasPermission(permissions.deposer) && (
+      {!lectureSeule && hasPermission(permissions.deposer) && (
         <div className="form-grid form-grid--2">
           <label className="field">
             Fichier
@@ -181,16 +183,18 @@ export function PiecesJointes({ cible, id, titre }: Props) {
                           Télécharger ›
                         </button>
                       </Can>
-                      <Can permission="DOCUMENT_DEMANDE_DELETE">
-                        <button
-                          type="button"
-                          className="btn-link danger"
-                          style={{ marginLeft: 10 }}
-                          onClick={() => void supprimer(document)}
-                        >
-                          Supprimer
-                        </button>
-                      </Can>
+                      {!lectureSeule && (
+                        <Can permission="DOCUMENT_DEMANDE_DELETE">
+                          <button
+                            type="button"
+                            className="btn-link danger"
+                            style={{ marginLeft: 10 }}
+                            onClick={() => void supprimer(document)}
+                          >
+                            Supprimer
+                          </button>
+                        </Can>
+                      )}
                     </td>
                   </tr>
                 ))}

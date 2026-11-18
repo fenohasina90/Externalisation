@@ -88,6 +88,8 @@ export interface PaiementFiche {
   referenceVirement: string | null
   banque: string | null
   numeroCheque: string | null
+  /** Commentaire enregistré lors du paiement. */
+  commentaire: string | null
 }
 
 export interface PieceJointeFiche {

@@ -163,7 +163,8 @@ public class SocieteService {
                                 p.getMontantPaye(),
                                 p.getReferenceVirement(),
                                 p.getBanque(),
-                                p.getNumeroCheque()))
+                                p.getNumeroCheque(),
+                                p.getCommentaire()))
                         .toList();
 
         LocalDate today = LocalDate.now();

@@ -21,6 +21,7 @@ import com.cabex.backend.facture.dto.FactureLigneResponse;
 import com.cabex.backend.facture.dto.FactureResponse;
 import com.cabex.backend.facture.dto.FactureValideeLigneResponse;
 import com.cabex.backend.facture.dto.FactureValideeFicheResponse;
+import com.cabex.backend.facture.dto.ObjetLigne;
 import com.cabex.backend.facture.dto.ObjetFactureValideeResponse;
 import com.cabex.backend.paiement.entity.Paiement;
 import java.util.Map;
@@ -1175,10 +1176,10 @@ public class FactureService {
      * les lignes « à titre de rappel » sont exclues (elles se règlent sur leur
      * propre facture validée). Le mois facturé est ajouté pour l'abonnement.
      */
-    private List<FactureValideeFicheResponse.ObjetLigne> objetsFicheFacture(FactureValidee fv, LigneService ligne) {
+    private List<ObjetLigne> objetsFicheFacture(FactureValidee fv, LigneService ligne) {
         LocalDate mois = fv != null ? fv.getMois() : null;
         String moisLabel = mois != null ? frenchMonth(mois) : null;
-        List<FactureValideeFicheResponse.ObjetLigne> objets = new ArrayList<>();
+        List<ObjetLigne> objets = new ArrayList<>();
         for (FactureValideeLigneResponse l : construireLignesFacture(fv, ligne)) {
             if (l == null || (l.type() != null && "RAPPEL".equalsIgnoreCase(l.type()))) {
                 continue;
@@ -1188,7 +1189,7 @@ public class FactureService {
             if ("ABONNEMENT_MENSUEL".equals(type) && moisLabel != null) {
                 designation = designation + " (" + moisLabel + ")";
             }
-            objets.add(new FactureValideeFicheResponse.ObjetLigne(type, designation));
+            objets.add(new ObjetLigne(type, designation));
         }
         return objets;
     }
@@ -1224,6 +1225,17 @@ public class FactureService {
         }
         return java.time.format.DateTimeFormatter
                 .ofPattern("MMMM yyyy", java.util.Locale.FRANCE).format(mois);
+    }
+
+    /**
+     * Objets détaillés de la facture validée (onglet Facturation, reçu, détail paiement) :
+     * toutes les lignes facturées avec leur type + désignation (mois inclus pour l'abonnement).
+     */
+    public List<ObjetLigne> objetsFactureValidee(FactureValidee fv) {
+        if (fv == null) {
+            return List.of();
+        }
+        return objetsFicheFacture(fv, resolveLignePourValidee(fv));
     }
 
     private String objetFicheFacture(FactureValidee fv, LigneService ligne) {

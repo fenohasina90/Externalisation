@@ -8,6 +8,8 @@ import { telechargerBlob } from '@/utils/telechargement'
 import { ModePill } from '../components'
 import { paiementsApi } from '../services/paiements.service'
 import type { PaiementDetail } from '../types'
+import { DesignationObjets } from '@/components/shared/DesignationObjets'
+import { PiecesJointes } from '@/features/documents'
 
 const TYPE_LABEL: Record<string, string> = {
   GENERALE: 'Facture générale validée',
@@ -68,10 +70,7 @@ export function PaiementDetailPage() {
       setErreurRecu(`Téléchargement du reçu ${paiement.referencePaiement} impossible.`)
     }
   }
-
-  const estDebours = paiement.typeFacture === 'DEBOURS'
   const estAbonnement = paiement.typeFacture === 'ABONNEMENT_MENSUEL'
-  const objetLabel = estDebours ? 'Désignation du débours' : 'Nom du service'
   const typeFactureLabel = paiement.typeFacture
     ? (TYPE_LABEL[paiement.typeFacture] ?? paiement.typeFacture)
     : '—'
@@ -139,10 +138,13 @@ export function PaiementDetailPage() {
         </div>
 
         <div className="card card-pad">
-          <h3>Service et facture</h3>
-          <div className="rc">
-            <span>{objetLabel}</span>
-            <b>{paiement.nomService ?? '—'}</b>
+          <h3>Services facturés</h3>
+          <div style={{ padding: 'var(--space-3) 0' }}>
+            {(paiement.objets ?? []).length > 0 ? (
+              <DesignationObjets objets={paiement.objets ?? []} />
+            ) : (
+              <b>{paiement.nomService ?? '—'}</b>
+            )}
           </div>
           <div className="rc">
             <span>Type de facture</span>
@@ -242,6 +244,10 @@ export function PaiementDetailPage() {
           </div>
         </div>
       </section>
+
+      <Can permission="DOCUMENT_PAIEMENT_VIEW">
+        <PiecesJointes cible="paiement" id={paiement.id} titre="Pièces jointes" lectureSeule />
+      </Can>
 
       {paiement.montantEnLettres && (
         <section className="recu-lettres">

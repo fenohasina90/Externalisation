@@ -2,6 +2,7 @@ package com.cabex.backend.document.service;
 
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.facture.dto.FactureValideeFicheResponse;
+import com.cabex.backend.facture.dto.ObjetLigne;
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
 import com.lowagie.text.Font;
@@ -133,14 +134,14 @@ final class PdfFacturationClient {
     private static com.lowagie.text.Paragraph paragrapheObjets(FactureValideeFicheResponse f) {
         com.lowagie.text.Paragraph p = new Paragraph();
         p.setLeading(F_TD.getSize() * 1.35f);
-        List<FactureValideeFicheResponse.ObjetLigne> objets = f.objets();
+        List<ObjetLigne> objets = f.objets();
         if (objets == null || objets.isEmpty()) {
             p.add(new com.lowagie.text.Chunk(PdfFormats.valeur(f.objet()) != null
                     ? PdfFormats.valeur(f.objet()) : "—", F_TD));
             return p;
         }
         int cpt = 0;
-        for (FactureValideeFicheResponse.ObjetLigne o : objets) {
+        for (ObjetLigne o : objets) {
             if (cpt++ > 0) {
                 p.add(com.lowagie.text.Chunk.NEWLINE);
             }

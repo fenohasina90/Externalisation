@@ -51,6 +51,7 @@ class PaiementDeboursTest {
     @Mock private DemandeGestionService demandeGestionService;
     @Mock private LigneServiceRepository ligneRepository;
     @Mock private LigneServiceService ligneServiceService;
+    @Mock private com.cabex.backend.facture.service.FactureService factureService;
 
     private PaiementGestionService service;
 
@@ -59,7 +60,7 @@ class PaiementDeboursTest {
         service = new PaiementGestionService(paiementRepository, demandeRepository,
                 modeRepository, null, proposRepository, factureValideeRepository,
                 utilisateurRepository, notificationService, auditService,
-                demandeGestionService, ligneRepository, ligneServiceService);
+                demandeGestionService, ligneRepository, ligneServiceService, factureService);
         lenient().when(modeRepository.findById(1)).thenReturn(Optional.of(
                 ModePaiement.builder().id(1).code("ESPECES").libelle("Espèces").build()));
         lenient().when(paiementRepository.save(any())).thenAnswer(inv -> {

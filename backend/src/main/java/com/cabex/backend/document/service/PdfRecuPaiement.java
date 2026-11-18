@@ -3,11 +3,16 @@ package com.cabex.backend.document.service;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.LigneService;
+import com.cabex.backend.document.entity.PieceJointe;
+import com.cabex.backend.facture.dto.ObjetLigne;
 import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.paiement.entity.Paiement;
+
+import java.util.List;
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
 import com.lowagie.text.Paragraph;
+import com.lowagie.text.Phrase;
 import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
@@ -40,20 +45,193 @@ final class PdfRecuPaiement {
      */
     static byte[] generer(Paiement paiement, BigDecimal sommePayeeSurFacture,
                           com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu) {
+        return generer(paiement, sommePayeeSurFacture, resolu, List.of(), List.of());
+    }
+
+    static byte[] generer(Paiement paiement, BigDecimal sommePayeeSurFacture,
+                          com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu,
+                          List<ObjetLigne> objets,
+                          List<PieceJointe> piecesJointes) {
         return PdfDocument.generer(PdfDocument.MiseEnPage.RECU_PAIEMENT, "Reçu de paiement",
                 "Reçu de paiement " + PdfFormats.valeur(paiement.getReferencePaiement()),
-                doc -> ecrire(doc, paiement, sommePayeeSurFacture, resolu),
+                doc -> ecrire(doc, paiement, sommePayeeSurFacture, resolu, objets, piecesJointes),
                 "Erreur de génération du reçu de paiement");
     }
 
     private static void ecrire(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture,
                                com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu) {
+        ecrire(doc, paiement, sommePayeeSurFacture, resolu, List.of(), List.of());
+    }
+
+    private static void ecrire(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture,
+                               com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu,
+                               List<ObjetLigne> objets,
+                               List<PieceJointe> piecesJointes) {
         PdfComposants.titreDocument(doc, "Reçu de paiement",
                 "Référence paiement : " + PdfFormats.valeur(paiement.getReferencePaiement()));
         doc.add(bandeauMontant(paiement));
+        try {
+            servicesFactures(doc, objets);
+        } catch (com.lowagie.text.DocumentException e) {
+            throw new IllegalStateException("Erreur de génération des services facturés", e);
+        }
         cartes(doc, paiement, sommePayeeSurFacture, resolu);
+        try {
+            commentaire(doc, paiement);
+            piecesJointes(doc, piecesJointes);
+        } catch (com.lowagie.text.DocumentException e) {
+            throw new IllegalStateException("Erreur de génération des sections complémentaires", e);
+        }
         montantEnLettres(doc, paiement);
         signatures(doc, paiement);
+    }
+
+    // ------------------------------------------------------------------
+    // Services facturés, commentaire, pièces jointes
+    // ------------------------------------------------------------------
+
+    private static PdfPTable servicesTable(List<ObjetLigne> objets) {
+        PdfPTable table = new PdfPTable(2);
+        table.setWidthPercentage(100);
+        table.setWidths(new float[]{0.24f, 0.76f});
+        table.setSpacingBefore(2f);
+        table.setSpacingAfter(10f);
+        PdfPCell titre = new PdfPCell(new Phrase(PdfTheme.upper("Services facturés"), PdfTheme.F_CARTE_TITRE));
+        titre.setColspan(2);
+        titre.setBackgroundColor(PdfTheme.VERT_PALE);
+        titre.setBorder(Rectangle.LEFT);
+        titre.setBorderColorLeft(PdfTheme.VERT_MARQUE);
+        titre.setBorderWidthLeft(2.5f);
+        titre.setPadding(7);
+        table.addCell(titre);
+        for (ObjetLigne o : objets) {
+            PdfPCell type = new PdfPCell(new Phrase(
+                    prefixObjet(o.type()).toUpperCase(Locale.FRANCE),
+                    fontTypeObjet(o.type())));
+            type.setBorder(Rectangle.BOTTOM);
+            type.setBorderColor(PdfTheme.GRIS_BORDURE);
+            type.setBorderWidthBottom(0.5f);
+            type.setPaddingLeft(6);
+            type.setPaddingRight(6);
+            type.setPaddingTop(5);
+            type.setPaddingBottom(5);
+            type.setVerticalAlignment(Element.ALIGN_MIDDLE);
+            table.addCell(type);
+            PdfPCell lib = new PdfPCell(new Phrase(
+                    o.libelle() != null ? o.libelle() : "—", PdfTheme.F_TD_GRAS));
+            lib.setBorder(Rectangle.BOTTOM);
+            lib.setBorderColor(PdfTheme.GRIS_BORDURE);
+            lib.setBorderWidthBottom(0.5f);
+            lib.setPaddingLeft(6);
+            lib.setPaddingRight(6);
+            lib.setPaddingTop(5);
+            lib.setPaddingBottom(5);
+            lib.setVerticalAlignment(Element.ALIGN_MIDDLE);
+            table.addCell(lib);
+        }
+        return table;
+    }
+
+    private static void servicesFactures(Document doc, List<ObjetLigne> objets)
+            throws com.lowagie.text.DocumentException {
+        if (objets == null || objets.isEmpty()) {
+            return;
+        }
+        doc.add(servicesTable(objets));
+    }
+
+    private static com.lowagie.text.Font fontTypeObjet(String type) {
+        return switch (type != null ? type : "") {
+            case "PRESTATION" -> PdfTheme.font(7, com.lowagie.text.Font.BOLD, new java.awt.Color(0x1E4F8F));
+            case "DEBOURS" -> PdfTheme.font(7, com.lowagie.text.Font.BOLD, new java.awt.Color(0x8A5200));
+            case "ABONNEMENT_MENSUEL" -> PdfTheme.font(7, com.lowagie.text.Font.BOLD, new java.awt.Color(0x1F6B3F));
+            default -> PdfTheme.font(7, com.lowagie.text.Font.BOLD, PdfTheme.GRIS_TEXTE);
+        };
+    }
+
+    private static String prefixObjet(String type) {
+        return switch (type != null ? type : "") {
+            case "PRESTATION" -> "Prestation";
+            case "DEBOURS" -> "Débours";
+            case "ABONNEMENT_MENSUEL" -> "Abonnement";
+            default -> type != null ? type : "—";
+        };
+    }
+
+    private static void commentaire(Document doc, Paiement paiement)
+            throws com.lowagie.text.DocumentException {
+        if (paiement.getCommentaire() == null || paiement.getCommentaire().isBlank()) {
+            return;
+        }
+        PdfPCell c = new PdfPCell();
+        c.setBackgroundColor(PdfTheme.VERT_PALE);
+        c.setBorder(Rectangle.LEFT);
+        c.setBorderColorLeft(PdfTheme.VERT_MARQUE);
+        c.setBorderWidthLeft(2.5f);
+        c.setPadding(7);
+        c.addElement(new Paragraph(PdfTheme.upper("Commentaire"), PdfTheme.F_CARTE_TITRE));
+        Paragraph p = new Paragraph(paiement.getCommentaire().trim(), PdfTheme.F_TD);
+        p.setSpacingBefore(4);
+        c.addElement(p);
+        PdfPTable table = new PdfPTable(1);
+        table.setWidthPercentage(100);
+        table.setSpacingBefore(2f);
+        table.setSpacingAfter(10f);
+        table.addCell(c);
+        doc.add(table);
+    }
+
+    private static void piecesJointes(Document doc, List<PieceJointe> pieces)
+            throws com.lowagie.text.DocumentException {
+        if (pieces == null || pieces.isEmpty()) {
+            return;
+        }
+        PdfPTable table = new PdfPTable(3);
+        table.setWidthPercentage(100);
+        table.setWidths(new float[]{0.56f, 0.2f, 0.24f});
+        table.setSpacingBefore(2f);
+        table.setSpacingAfter(10f);
+        PdfPCell titre = new PdfPCell(new Phrase(PdfTheme.upper(
+                "Pièces jointes (" + pieces.size() + ")"), PdfTheme.F_CARTE_TITRE));
+        titre.setColspan(3);
+        titre.setBackgroundColor(PdfTheme.VERT_PALE);
+        titre.setBorder(Rectangle.LEFT);
+        titre.setBorderColorLeft(PdfTheme.VERT_MARQUE);
+        titre.setBorderWidthLeft(2.5f);
+        titre.setPadding(7);
+        table.addCell(titre);
+        String[] headers = {"Fichier", "Type", "Taille"};
+        for (String h : headers) {
+            PdfPCell th = new PdfPCell(new Phrase(PdfTheme.upper(h), PdfTheme.F_LABEL));
+            th.setBorder(Rectangle.BOTTOM);
+            th.setBorderColor(PdfTheme.VERT_MARQUE);
+            th.setPaddingLeft(5f);
+                
+            table.addCell(th);
+        }
+        for (PieceJointe pj : pieces) {
+            table.addCell(new PdfPCell(new Phrase(
+                    pj.getNomOriginal() != null ? pj.getNomOriginal() : pj.getNomFichier(),
+                    PdfTheme.F_TD)));
+            table.addCell(new PdfPCell(new Phrase(
+                    pj.getTypeFichier() != null ? pj.getTypeFichier().toUpperCase(Locale.FRANCE) : "—",
+                    PdfTheme.F_TD)));
+            table.addCell(new PdfPCell(new Phrase(tailleLisible(pj.getTailleFichier()), PdfTheme.F_TD)));
+        }
+        doc.add(table);
+    }
+
+    private static String tailleLisible(Long bytes) {
+        if (bytes == null) {
+            return "—";
+        }
+        if (bytes < 1024) {
+            return bytes + " o";
+        }
+        if (bytes < 1024 * 1024) {
+            return String.format(Locale.FRANCE, "%.1f Ko", bytes / 1024.0);
+        }
+        return String.format(Locale.FRANCE, "%.1f Mo", bytes / 1024.0 / 1024.0);
     }
 
     private static PdfPTable bandeauMontant(Paiement paiement) {

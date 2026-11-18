@@ -214,7 +214,19 @@ public class DocumentGestionService {
                 ? paiementRepository.sommePayeeParFactureValidee(paiement.getFactureValidee().getId())
                 : BigDecimal.ZERO;
         return pdfGenerator.recuPaiement(paiement, somme != null ? somme : BigDecimal.ZERO,
-                objetRecu(paiement));
+                objetRecu(paiement), objetsFacture(paiement), piecesDuPaiement(paiementId));
+    }
+
+    /** Objets détaillés de la facture validée liée au paiement (tous les services facturés). */
+    private java.util.List<com.cabex.backend.facture.dto.ObjetLigne> objetsFacture(Paiement paiement) {
+        return paiement.getFactureValidee() != null
+                ? factureService.objetsFactureValidee(paiement.getFactureValidee())
+                : java.util.List.of();
+    }
+
+    /** Pièces jointes liées au paiement, affichées dans le reçu. */
+    private java.util.List<com.cabex.backend.document.entity.PieceJointe> piecesDuPaiement(Integer paiementId) {
+        return pieceRepository.findByPaiementIdOrderByCreatedAtDesc(paiementId);
     }
 
     /** Objet précis de la facture validée liée au paiement (service / débours / facture générale). */
@@ -316,7 +328,8 @@ public class DocumentGestionService {
                 ? paiementRepository.sommePayeeParFactureValidee(paiement.getFactureValidee().getId())
                 : null;
         byte[] contenu = pdfGenerator.recuPaiement(paiement,
-                somme != null ? somme : BigDecimal.ZERO, objetRecu(paiement));
+                somme != null ? somme : BigDecimal.ZERO, objetRecu(paiement),
+                objetsFacture(paiement), piecesDuPaiement(paiement.getId()));
         DemandeService demande = paiement.getDemande();
         return enregistrerFichier(demande, paiement,
                 "recu-paiement-" + paiement.getReferencePaiement() + ".pdf",

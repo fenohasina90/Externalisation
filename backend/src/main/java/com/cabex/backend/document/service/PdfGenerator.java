@@ -108,7 +108,18 @@ public class PdfGenerator {
     /** Reçu de paiement avec objet précis de la facture validée (service / débours / Services facturés). */
     public byte[] recuPaiement(Paiement paiement, BigDecimal sommePayeeSurFacture,
                                com.cabex.backend.facture.dto.ObjetFactureValideeResponse objet) {
-        return PdfRecuPaiement.generer(paiement, sommePayeeSurFacture, objet);
+        return recuPaiement(paiement, sommePayeeSurFacture, objet, java.util.List.of(), java.util.List.of());
+    }
+
+    /**
+     * Reçu de paiement complet : objet précis de la facture validée, lignes détaillées
+     * des services facturés (type + désignation) et pièces jointes liées au paiement.
+     */
+    public byte[] recuPaiement(Paiement paiement, BigDecimal sommePayeeSurFacture,
+                               com.cabex.backend.facture.dto.ObjetFactureValideeResponse objet,
+                               java.util.List<com.cabex.backend.facture.dto.ObjetLigne> objets,
+                               java.util.List<com.cabex.backend.document.entity.PieceJointe> piecesJointes) {
+        return PdfRecuPaiement.generer(paiement, sommePayeeSurFacture, objet, objets, piecesJointes);
     }
 
     public byte[] planPaiement(ProposPaiement propos) {
