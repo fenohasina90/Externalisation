@@ -125,7 +125,8 @@ class FactureAbonnementPdfTest {
 
         String texte = extraireTexte(pdf);
         assertTrue(texte.contains("00002/EXT/TNR/2026"), "référence de la facture mensuelle");
-        assertTrue(texte.contains("00001/EXT/TNR/2026"), "référence de la facture générale");
+        // La facture générale n'est volontairement plus affichée sur la mensuelle.
+        assertTrue(!texte.contains("00001/EXT/TNR/2026"), "référence générale absente : toutes les factures sont identiques");
         assertTrue(texte.contains("PRO-01112026-00001"), "référence proforma");
         assertTrue(texte.contains("DEM-2026-00017"), "référence demande");
         assertTrue(texte.contains("Abonnement comptabilité"),
@@ -134,7 +135,7 @@ class FactureAbonnementPdfTest {
         assertTrue(!texte.contains("ZÉRO ARIARY"),
                 "le montant en lettres doit porter sur le total TTC, même si la facture est payée");
         assertTrue(texte.contains("DEM-2026-00018"), "demande de la ligne débours");
-        assertTrue(texte.toLowerCase(Locale.FRANCE).contains("janvier 2026"), "mois facturé");
+        assertTrue(texte.toLowerCase(Locale.FRANCE).replaceAll("\\s+", " ").contains("janvier 2026"), "mois facturé");
         assertTrue(texte.toLowerCase(Locale.FRANCE).contains("rappel"), "section de rappel");
     }
 

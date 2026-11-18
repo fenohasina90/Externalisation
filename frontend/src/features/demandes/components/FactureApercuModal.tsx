@@ -234,10 +234,6 @@ export function FactureApercuModal({
                   {apercu.facture.type === 'ABONNEMENT_MENSUEL' && (
                     <>
                       <div className="info-item">
-                        <span>Facture générale</span>
-                        <b>{apercu.facture.referenceFactureGenerale ?? '—'}</b>
-                      </div>
-                      <div className="info-item">
                         <span>Mois facturé</span>
                         <b>
                           {apercu.facture.mois

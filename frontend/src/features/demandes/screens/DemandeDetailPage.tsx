@@ -1983,8 +1983,7 @@ function ModifierDemandeModal({
 /**
  * Section « Factures mensuelles — Abonnement » de l'onglet Factures :
  * pour un abonnement mensuel, on crée la facture du mois avant chaque paiement.
- * La facture reprend la référence de la facture générale validée, la référence
- * de la facture proforma et la référence de la demande.
+ * La facture reprend la référence de la facture proforma et celle de la demande.
  */
 /**
  * Lignes d'abonnement dont on peut encore consulter les factures :
@@ -2092,8 +2091,7 @@ function FacturesAbonnementSection({
       )
       onMessage(
         `Facture du mois de ${moisLabel(moisActuel)} créée (${dateEmission}) : ${fv.referenceFactureValidee}`
-        + ` (facture générale ${fv.referenceFactureGenerale ?? '—'}`
-        + `${fv.referenceFactureProforma ? ` · proforma ${fv.referenceFactureProforma}` : ''})`,
+        + `${fv.referenceFactureProforma ? ` (proforma ${fv.referenceFactureProforma})` : ''}`,
       )
       setCible(null)
       setSelectionInclusions(new Set())
@@ -2169,8 +2167,8 @@ function FacturesAbonnementSection({
       </h3>
       <p className="section-note" style={{ marginBottom: 12 }}>
         Créez la facture du mois avant chaque paiement : elle reprend le mois facturé, la date
-        d&apos;émission, la référence de la facture générale validée et la référence de la facture
-        proforma. Vous pouvez y reprendre des prestations / débours impayés du même client.
+        d&apos;émission et la référence de la facture proforma. Vous pouvez y reprendre des
+        prestations / débours impayés du même client.
         Un abonnement terminé n&apos;accepte plus de nouvelle facture du mois ; ses factures
         restent consultables ici.
       </p>
@@ -2262,7 +2260,6 @@ function FacturesAbonnementSection({
                         <th>Facture</th>
                         <th>Mois facturé</th>
                         <th>Émise le</th>
-                        <th>Générale</th>
                         <th>Proforma</th>
                         <th>Montant</th>
                         <th>Payé</th>
@@ -2311,7 +2308,6 @@ function FacturesAbonnementSection({
                             <td className="text-secondary">
                               {f.valideLe ? formatDate(f.valideLe.slice(0, 10)) : '—'}
                             </td>
-                            <td className="text-secondary">{f.referenceFactureGenerale ?? '—'}</td>
                             <td className="text-secondary">{f.referenceFactureProforma ?? '—'}</td>
                             <td>{formatMontantMGA(f.montant)}</td>
                             <td>{formatMontantMGA(f.montantPaye)}</td>

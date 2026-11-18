@@ -24,7 +24,7 @@ import java.util.Locale;
  * Facture validée mensuelle d'un abonnement : enfant de la facture générale validée.
  *
  * <p>Design calqué sur le reste du modèle CabEx : en-tête (badge « FACTURE
- * VALIDÉE »), meta-bloc (référence mensuelle, générale validée, proforma,
+ * VALIDÉE »), meta-bloc (référence mensuelle, proforma,
  * date demande, mois facturé, émission), tableau à 6 colonnes ; la désignation
  * de l'abonnement se place dans la case « Abonnement mensuel : » avec le nom du
  * service. Si la facture reprend des impayés des autres demandes (lignes RAPPEL),
@@ -115,9 +115,6 @@ final class PdfFactureAbonnement {
         PdfComposants.enteteDocument(doc, st, "FACTURE", "VALIDÉE (abonnement mensuel)");
 
         FactureValidee generale = facture.getFactureGenerale();
-        String referenceGenerale = generale != null
-                ? generale.getReferenceFactureValidee()
-                : (facture.getFactureProforma() != null ? "—" : null);
         String referenceProforma = generale != null && generale.getFactureProforma() != null
                 ? generale.getFactureProforma().getReferenceFacture()
                 : (facture.getFactureProforma() != null
@@ -128,17 +125,17 @@ final class PdfFactureAbonnement {
         PdfPTable meta = new PdfPTable(3);
         meta.setWidthPercentage(100);
         meta.setSpacingAfter(st.ecart * 0.8f);
-        meta.addCell(PdfComposants.faMeta(st, "N° FACTURE VALIDÉE",
-                PdfFormats.valeur(facture.getReferenceFactureValidee()), PdfTheme.ROUGE));
-        meta.addCell(PdfComposants.faMeta(st, "N° FACTURE GÉNÉRALE VALIDÉE",
-                PdfFormats.valeur(referenceGenerale), PdfTheme.PRIMAIRE));
+        PdfPCell cValidee = PdfComposants.faMeta(st, "N° FACTURE VALIDÉE",
+                PdfFormats.valeur(facture.getReferenceFactureValidee()), PdfTheme.ROUGE);
+        cValidee.setColspan(2);
+        meta.addCell(cValidee);
         meta.addCell(PdfComposants.faMeta(st, "N° PROFORMA",
                 PdfFormats.valeur(referenceProforma), PdfTheme.PRIMAIRE));
+        meta.addCell(PdfComposants.faMeta(st, "MOIS FACTURÉ",
+                moisLabel(facture.getMois()), PdfTheme.PRIMAIRE));
         meta.addCell(PdfComposants.faMeta(st, "DATE DEMANDE",
                 PdfFormats.valeurDate(demande != null ? demande.getDateDemande() : null),
                 PdfTheme.PRIMAIRE));
-        meta.addCell(PdfComposants.faMeta(st, "MOIS FACTURÉ",
-                moisLabel(facture.getMois()), PdfTheme.PRIMAIRE));
         meta.addCell(PdfComposants.faMeta(st, "DATE D'ÉMISSION",
                 facture.getValideLe() != null
                         ? PdfFormats.valeurDate(facture.getValideLe().toLocalDate()) : null,
