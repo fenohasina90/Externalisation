@@ -70,12 +70,7 @@ final class PdfRecuPaiement {
         PdfComposants.titreDocument(doc, "Reçu de paiement",
                 "Référence paiement : " + PdfFormats.valeur(paiement.getReferencePaiement()));
         doc.add(bandeauMontant(paiement));
-        try {
-            servicesFactures(doc, objets);
-        } catch (com.lowagie.text.DocumentException e) {
-            throw new IllegalStateException("Erreur de génération des services facturés", e);
-        }
-        cartes(doc, paiement, sommePayeeSurFacture, resolu);
+        cartes(doc, paiement, sommePayeeSurFacture, resolu, objets);
         try {
             commentaire(doc, paiement);
             piecesJointes(doc, piecesJointes);
@@ -89,56 +84,6 @@ final class PdfRecuPaiement {
     // ------------------------------------------------------------------
     // Services facturés, commentaire, pièces jointes
     // ------------------------------------------------------------------
-
-    private static PdfPTable servicesTable(List<ObjetLigne> objets) {
-        PdfPTable table = new PdfPTable(2);
-        table.setWidthPercentage(100);
-        table.setWidths(new float[]{0.24f, 0.76f});
-        table.setSpacingBefore(2f);
-        table.setSpacingAfter(10f);
-        PdfPCell titre = new PdfPCell(new Phrase(PdfTheme.upper("Services facturés"), PdfTheme.F_CARTE_TITRE));
-        titre.setColspan(2);
-        titre.setBackgroundColor(PdfTheme.VERT_PALE);
-        titre.setBorder(Rectangle.LEFT);
-        titre.setBorderColorLeft(PdfTheme.VERT_MARQUE);
-        titre.setBorderWidthLeft(2.5f);
-        titre.setPadding(7);
-        table.addCell(titre);
-        for (ObjetLigne o : objets) {
-            PdfPCell type = new PdfPCell(new Phrase(
-                    prefixObjet(o.type()).toUpperCase(Locale.FRANCE),
-                    fontTypeObjet(o.type())));
-            type.setBorder(Rectangle.BOTTOM);
-            type.setBorderColor(PdfTheme.GRIS_BORDURE);
-            type.setBorderWidthBottom(0.5f);
-            type.setPaddingLeft(6);
-            type.setPaddingRight(6);
-            type.setPaddingTop(5);
-            type.setPaddingBottom(5);
-            type.setVerticalAlignment(Element.ALIGN_MIDDLE);
-            table.addCell(type);
-            PdfPCell lib = new PdfPCell(new Phrase(
-                    o.libelle() != null ? o.libelle() : "—", PdfTheme.F_TD_GRAS));
-            lib.setBorder(Rectangle.BOTTOM);
-            lib.setBorderColor(PdfTheme.GRIS_BORDURE);
-            lib.setBorderWidthBottom(0.5f);
-            lib.setPaddingLeft(6);
-            lib.setPaddingRight(6);
-            lib.setPaddingTop(5);
-            lib.setPaddingBottom(5);
-            lib.setVerticalAlignment(Element.ALIGN_MIDDLE);
-            table.addCell(lib);
-        }
-        return table;
-    }
-
-    private static void servicesFactures(Document doc, List<ObjetLigne> objets)
-            throws com.lowagie.text.DocumentException {
-        if (objets == null || objets.isEmpty()) {
-            return;
-        }
-        doc.add(servicesTable(objets));
-    }
 
     private static com.lowagie.text.Font fontTypeObjet(String type) {
         return switch (type != null ? type : "") {
@@ -156,6 +101,39 @@ final class PdfRecuPaiement {
             case "ABONNEMENT_MENSUEL" -> "Abonnement";
             default -> type != null ? type : "—";
         };
+    }
+
+    private static PdfPCell serviceEtFactureCard(List<ObjetLigne> objets,
+                                                 String objetLabel, String objetValeur,
+                                                 FactureValidee fv, boolean mensuelle) {
+        PdfPCell c = new PdfPCell();
+        c.setBackgroundColor(PdfTheme.VERT_PALE);
+        c.setBorder(Rectangle.LEFT);
+        c.setBorderColorLeft(PdfTheme.VERT_MARQUE);
+        c.setBorderWidthLeft(2.5f);
+        c.setPadding(7);
+        c.addElement(new Paragraph(PdfTheme.upper("Service et facture"), PdfTheme.F_CARTE_TITRE));
+
+        if (objets != null && !objets.isEmpty()) {
+            for (ObjetLigne o : objets) {
+                Paragraph label = new Paragraph(
+                        PdfTheme.upper(prefixObjet(o.type())), fontTypeObjet(o.type()));
+                label.setSpacingBefore(6);
+                c.addElement(label);
+                c.addElement(new Paragraph(
+                        o.libelle() != null ? o.libelle() : "—", PdfTheme.F_VALEUR_GRAS));
+            }
+        } else {
+            PdfComposants.carteLigne(c, objetLabel, PdfFormats.valeur(objetValeur));
+        }
+
+        PdfComposants.carteLigne(c, "Référence facture", PdfFormats.valeur(libelleFacture(fv)));
+        if (mensuelle) {
+            PdfComposants.carteLigne(c, "Mois facturé", "Abonnement " + moisLabel(fv.getMois()));
+            PdfComposants.carteLigne(c, "Date d'emission", PdfFormats.valeurDate(
+                    fv.getValideLe() != null ? fv.getValideLe().toLocalDate() : null));
+        }
+        return c;
     }
 
     private static void commentaire(Document doc, Paiement paiement)
@@ -262,7 +240,8 @@ final class PdfRecuPaiement {
     // ------------------------------------------------------------------
 
     private static void cartes(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture,
-                               com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu) {
+                               com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu,
+                               List<ObjetLigne> objets) {
         DemandeService demande = paiement.getDemande();
         FactureValidee fv = paiement.getFactureValidee();
         Societe societe = demande != null ? demande.getSociete() : null;
@@ -279,16 +258,7 @@ final class PdfRecuPaiement {
                 {"Date de paiement", PdfFormats.valeurDate(paiement.getDatePaiement())}
         });
         boolean mensuelle = fv != null && fv.getMois() != null;
-        java.util.List<String[]> lignesService = new java.util.ArrayList<>();
-        lignesService.add(new String[]{objetLabel, PdfFormats.valeur(objetValeur)});
-        lignesService.add(new String[]{"Référence facture", PdfFormats.valeur(libelleFacture(fv))});
-        if (mensuelle) {
-            lignesService.add(new String[]{"Mois facturé", "Abonnement " + moisLabel(fv.getMois())});
-            lignesService.add(new String[]{"Date d'emission", PdfFormats.valeurDate(
-                    fv.getValideLe() != null ? fv.getValideLe().toLocalDate() : null)});
-        }
-        PdfPCell cService = PdfComposants.carte("Service et facture",
-                lignesService.toArray(new String[0][]));
+        PdfPCell cService = serviceEtFactureCard(objets, objetLabel, objetValeur, fv, mensuelle);
         PdfComposants.rangee(doc, 0.5f, cClient, cService);
 
         // Rangée 2 : règlement / montants
