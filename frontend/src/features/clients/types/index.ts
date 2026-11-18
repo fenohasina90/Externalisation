@@ -123,6 +123,14 @@ export interface PaiementFacturation {
   createdByName: string | null
 }
 
+/** Ligne d'objet d'une facture (type + désignation lisible, mois pour l'abonnement). */
+export interface ObjetLigneFacture {
+  /** PRESTATION | DEBOURS | ABONNEMENT_MENSUEL */
+  type: string
+  /** Désignation lisible (mois en fin pour l'abonnement, ex. « Audit fiscal (novembre 2026) »). */
+  libelle: string
+}
+
 /** Facture validée du client (générale ou de paiement) — onglet Facturation. */
 export interface FactureFacturation {
   id: number
@@ -142,6 +150,8 @@ export interface FactureFacturation {
    * de sa première ligne (utile quand elle est réglée directement).
    */
   objetType: string | null
+  /** Détail des services facturés — toutes les lignes listées (type + désignation). */
+  objets?: ObjetLigneFacture[]
   /** Format AAAA-MM (ABONNEMENT_MENSUEL uniquement). */
   mois: string | null
   montant: number | null

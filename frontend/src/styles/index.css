@@ -4506,3 +4506,19 @@ body.page-responsables {
   background: #fff;
   color: var(--g);
 }
+
+/* ==================================================================
+ * Facturation client (onglet Facturation) — désignation multi-lignes
+ * ================================================================== */
+.facture-designation {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: inherit;
+  line-height: 1.35;
+}
+
+.facture-designation__ligne {
+  display: block;
+  white-space: normal;
+}

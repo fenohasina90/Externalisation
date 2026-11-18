@@ -7,13 +7,7 @@ import java.util.List;
 /**
  * Fiche de facturation d'un client (onglet « Facturation » de la fiche 360°).
  * Liste toutes les factures validées liées au client depuis son enregistrement,
- * groupées côté frontend en :
- * <ul>
- *   <li>facture « générale » (type {@link #GENERALE}) ;</li>
- *   <li>factures « de paiement » enfants ({@link #PRESTATION},
- *       {@link #DEBOURS}, {@link #ABONNEMENT_MENSUEL}) ;</li>
- *   <li>paiements rattachés à chaque facture (sous-contenu).</li>
- * </ul>
+ * chaque facture étant rendue avec les paiements qui lui sont liés.
  */
 public record FactureValideeFicheResponse(
         Integer id,
@@ -34,8 +28,19 @@ public record FactureValideeFicheResponse(
         BigDecimal montantPaye,
         BigDecimal resteAPayer,
         LocalDate dateFactureValidee,
-        List<PaiementFicheItem> paiements
+        List<PaiementFicheItem> paiements,
+        /** Détail des services facturés dans cette facture (type + désignation). */
+        List<ObjetLigne> objets
 ) {
+
+    /** Ligne d'objet d'une facture : type de ligne + désignation lisible (mois inclus pour l'abonnement). */
+    public record ObjetLigne(
+            /** PRESTATION | DEBOURS | ABONNEMENT_MENSUEL. */
+            String type,
+            /** Désignation lisible du service / débours (mois en fin pour l'abonnement, ex. « audit fiscal (novembre 2026) »). */
+            String libelle
+    ) {
+    }
 
     public record PaiementFicheItem(
             Integer id,

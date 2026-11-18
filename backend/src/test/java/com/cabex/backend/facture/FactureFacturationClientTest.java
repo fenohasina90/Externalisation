@@ -97,7 +97,7 @@ class FactureFacturationClientTest {
         Utilisateur agent = Utilisateur.builder().id(7).prenom("Système").nom("Administrateur").build();
         org.mockito.Mockito.lenient()
                 .when(ligneRepository.findByDemandeIdOrderByIdAsc(11))
-                .thenReturn(List.of(lignePrestation));
+                .thenReturn(List.of(lignePrestation, ligneAbonnement));
 
         FactureValidee generale = FactureValidee.builder().id(101)
                 .referenceFactureValidee("00001EXT/TNR/2026")
@@ -151,6 +151,12 @@ class FactureFacturationClientTest {
         assertEquals("Déclaration sociale", g.objet());
         assertEquals("PRESTATION", g.objetType());
         assertEquals(new BigDecimal("165000"), g.montant());
+        // Désignation : toutes les lignes listées, avec leur type.
+        assertEquals(2, g.objets().size());
+        assertEquals("PRESTATION", g.objets().get(0).type());
+        assertEquals("Déclaration sociale", g.objets().get(0).libelle());
+        assertEquals("ABONNEMENT_MENSUEL", g.objets().get(1).type());
+        assertEquals("Comptabilité mensuelle", g.objets().get(1).libelle());
 
         FactureValideeFicheResponse presta = fichePaiementAvecPaiement("00002EXT/TNR/2026",
                 new BigDecimal("75000"), new BigDecimal("25000"));
@@ -159,6 +165,8 @@ class FactureFacturationClientTest {
         assertEquals(101, presta.factureGeneraleId());
         assertEquals("00001EXT/TNR/2026", presta.referenceFactureGenerale());
         assertEquals("Déclaration sociale", presta.objet());
+        assertEquals(1, presta.objets().size());
+        assertEquals("PRESTATION", presta.objets().get(0).type());
         assertEquals(new BigDecimal("25000"), presta.montantPaye());
         assertEquals(new BigDecimal("50000"), presta.resteAPayer());
         assertEquals(1, presta.paiements().size());
@@ -171,6 +179,9 @@ class FactureFacturationClientTest {
         assertEquals("ABONNEMENT_MENSUEL", mois.objetType());
         assertEquals("Comptabilité mensuelle", mois.objet());
         assertEquals("2026-11", mois.mois());
+        assertEquals(1, mois.objets().size());
+        assertEquals("ABONNEMENT_MENSUEL", mois.objets().get(0).type());
+        assertEquals("Comptabilité mensuelle (novembre 2026)", mois.objets().get(0).libelle());
         assertEquals(new BigDecimal("30000"), mois.montantPaye());
         assertEquals(new BigDecimal("65000"), mois.resteAPayer());
         assertEquals("PAY-2026-00012", mois.paiements().get(0).referencePaiement());

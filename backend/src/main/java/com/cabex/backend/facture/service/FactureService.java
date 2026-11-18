@@ -892,6 +892,25 @@ public class FactureService {
                     ligne.getCategorie(),
                     ligne.getTypePrestation()));
         }
+        // Facture mensuelle d'un abonnement sans lignes persistées (données anciennes) :
+        // une ligne par abonnement lié directement à la facture.
+        if ((fv.getLignes() == null || fv.getLignes().isEmpty())
+                && ligne != null && com.cabex.backend.demande.service.LigneServiceService.ABONNEMENT_MENSUEL
+                        .equalsIgnoreCase(ligne.getTypePrestation())) {
+            String nomService = ligne.getService() != null ? ligne.getService().getNomService() : null;
+            String nomAbonnement = nomService != null && !nomService.isBlank()
+                    ? nomService.trim() : "Abonnement mensuel";
+            return List.of(new FactureValideeLigneResponse(
+                    null,
+                    ligne.getId(),
+                    ligne.getDemande() != null ? ligne.getDemande().getReferenceDemande() : null,
+                    "Abonnement mensuel — " + nomAbonnement,
+                    ligne.getTarif() != null ? ligne.getTarif() : BigDecimal.ZERO,
+                    "PRINCIPALE",
+                    nomService,
+                    ligne.getCategorie(),
+                    ligne.getTypePrestation()));
+        }
         // Lignes enfants (facture combinée du mois).
         if (fv.getLignes() != null && !fv.getLignes().isEmpty()) {
             return fv.getLignes().stream()
@@ -1150,7 +1169,63 @@ public class FactureService {
         }
     }
 
-    /** Objet précis d'une facture (onglet Facturation) : nom du service, désignation du débours ou « Facture générale ». */
+    /**
+     * Détail des services facturés dans la facture (type + désignation lisible).
+     * Chaque ligne de la facture est listée — y compris la mensuelle combinée ;
+     * les lignes « à titre de rappel » sont exclues (elles se règlent sur leur
+     * propre facture validée). Le mois facturé est ajouté pour l'abonnement.
+     */
+    private List<FactureValideeFicheResponse.ObjetLigne> objetsFicheFacture(FactureValidee fv, LigneService ligne) {
+        LocalDate mois = fv != null ? fv.getMois() : null;
+        String moisLabel = mois != null ? frenchMonth(mois) : null;
+        List<FactureValideeFicheResponse.ObjetLigne> objets = new ArrayList<>();
+        for (FactureValideeLigneResponse l : construireLignesFacture(fv, ligne)) {
+            if (l == null || (l.type() != null && "RAPPEL".equalsIgnoreCase(l.type()))) {
+                continue;
+            }
+            String type = typeObjetLigne(l.categorie(), l.typePrestation());
+            String designation = normalizeDesignationObjetFiche(l.designation());
+            if ("ABONNEMENT_MENSUEL".equals(type) && moisLabel != null) {
+                designation = designation + " (" + moisLabel + ")";
+            }
+            objets.add(new FactureValideeFicheResponse.ObjetLigne(type, designation));
+        }
+        return objets;
+    }
+
+    private static String typeObjetLigne(String categorie, String typePrestation) {
+        if (categorie != null && "DEBOURS".equalsIgnoreCase(categorie)) {
+            return "DEBOURS";
+        }
+        if (typePrestation != null && "ABONNEMENT_MENSUEL".equalsIgnoreCase(typePrestation)) {
+            return "ABONNEMENT_MENSUEL";
+        }
+        return "PRESTATION";
+    }
+
+    private static String normalizeDesignationObjetFiche(String designation) {
+        if (designation == null) {
+            return "—";
+        }
+        String trimmed = designation.trim();
+        String lower = trimmed.toLowerCase(java.util.Locale.FRANCE);
+        for (String prefix : List.of("abonnement mensuel — ", "abonnement mensuel - ",
+                "débours — ", "débours - ", "débours : ")) {
+            if (lower.startsWith(prefix)) {
+                return trimmed.substring(prefix.length()).trim();
+            }
+        }
+        return trimmed;
+    }
+
+    private static String frenchMonth(LocalDate mois) {
+        if (mois == null) {
+            return "";
+        }
+        return java.time.format.DateTimeFormatter
+                .ofPattern("MMMM yyyy", java.util.Locale.FRANCE).format(mois);
+    }
+
     private String objetFicheFacture(FactureValidee fv, LigneService ligne) {
         if (ligne != null) {
             if (LigneServiceService.estDebours(ligne)) {
@@ -1206,7 +1281,8 @@ public class FactureService {
                 paye,
                 reste,
                 fv.getValideLe() != null ? fv.getValideLe().toLocalDate() : null,
-                items);
+                items,
+                objetsFicheFacture(fv, ligne));
     }
 
     /**
