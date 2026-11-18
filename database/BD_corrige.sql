@@ -789,6 +789,11 @@ CREATE TABLE paiement (
         ON UPDATE CURRENT_TIMESTAMP,
     archived_at DATETIME NULL,
 
+    -- Snapshots figés au moment de l'encaissement : affichés dans le détail
+    -- et le reçu PDF, pas recalculés après coup.
+    reste_a_payer DECIMAL(15,2) NULL COMMENT 'Reste à payer sur la facture au moment de ce paiement (snapshot)',
+    montant_deja_paye DECIMAL(15,2) NULL COMMENT 'Somme déjà payée sur la facture à ce paiement (snapshot, inclus ce paiement)',
+
     CONSTRAINT fk_paiement_demande
         FOREIGN KEY (demande_id)
         REFERENCES demande_service(id)
