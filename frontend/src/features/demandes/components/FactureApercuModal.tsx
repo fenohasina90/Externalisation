@@ -3,7 +3,21 @@ import { createPortal } from 'react-dom'
 import { http } from '@/api/http'
 import { telechargerBlob } from '@/utils/telechargement'
 import { formatDate, formatMontantMGA } from '@/utils/format'
-import type { Facture, FactureValidee } from '../types'
+import type { Facture, FactureProformaLigne, FactureValidee, FactureValideeLigne } from '../types'
+
+/** Classification de repli pour une ligne persistée sans catégorie/typePrestation. */
+function categorieDepuisDesignation(designation: string): string {
+  const d = designation.trim().toLowerCase()
+  return d.startsWith('débours') || d.startsWith('debours') ? 'DEBOURS' : 'EXTERNALISATION'
+}
+
+function typePrestationDepuisDesignation(designation: string): string | null {
+  const d = designation.trim().toLowerCase()
+  if (d.startsWith('débours') || d.startsWith('debours')) {
+    return null
+  }
+  return d.startsWith('abonnement') ? 'ABONNEMENT_MENSUEL' : 'PRESTATION'
+}
 
 export type FactureApercu =
   | { kind: 'proforma'; facture: Facture }
@@ -72,7 +86,32 @@ export function FactureApercuModal({
   // les montants de création (avant validation ou après — c'est le document
   // PROFORMA). La facture validée (kind === 'validee') affiche le tarif
   // validé (ligne_service.tarif).
-  const lignesAffichage = apercu.facture.lignesProforma ?? []
+  const lignesProforma = apercu.facture.lignesProforma ?? []
+  // Lignes persistées de la facture validée elle-même (facture mensuelle /
+  // combinée) : désignation figée à la création — source de vérité quand
+  // la facture n'a pas de lignes de proforma (facture du mois).
+  const lignesValidee: FactureValideeLigne[] = !estProforma && 'referenceFactureGenerale' in apercu.facture
+    ? (apercu.facture.lignes ?? [])
+    : []
+  const normaliserValidee = (l: (typeof lignesValidee)[number]): FactureProformaLigne => ({
+    ordre: null,
+    ligneServiceId: l.ligneServiceId,
+    designation: l.designation,
+    categorie: l.categorie ?? categorieDepuisDesignation(l.designation),
+    typePrestation: l.typePrestation ?? typePrestationDepuisDesignation(l.designation),
+    pu: l.montant,
+    quantite: 1,
+    montantHtva: l.montant,
+    remise: 0,
+    netCommercial: l.montant,
+  })
+  const principalesValidee = lignesValidee
+    .filter((l) => (l.type ?? 'PRINCIPALE').toUpperCase() !== 'RAPPEL')
+    .map(normaliserValidee)
+  const rappels = lignesValidee
+    .filter((l) => (l.type ?? '').toUpperCase() === 'RAPPEL')
+    .map(normaliserValidee)
+  const lignesAffichage = lignesProforma.length > 0 ? lignesProforma : principalesValidee
   const aboLignes = lignesAffichage.filter((l) => l.typePrestation === 'ABONNEMENT_MENSUEL')
   const prestaLignes = lignesAffichage.filter((l) =>
     l.categorie === 'EXTERNALISATION' && l.typePrestation !== 'ABONNEMENT_MENSUEL')
@@ -81,8 +120,8 @@ export function FactureApercuModal({
   const sousTotalDe = (lignes: typeof lignesAffichage) =>
     lignes.reduce((acc, l) => acc + l.netCommercial, 0)
 
-  const rendLigneProforma = (l: (typeof lignesAffichage)[number]) => (
-    <tr key={`pl-${l.ordre ?? 0}-${l.designation}`}>
+  const rendLigneProforma = (l: (typeof lignesAffichage)[number], cle = 'pl') => (
+    <tr key={`${cle}-${l.ordre ?? 0}-${l.designation}`}>
       <td>{l.designation}</td>
       <td className="cell-number">{formatMontantMGA(l.pu)}</td>
       <td className="cell-number">{String(l.quantite).replace(/\.0+$/, '')}</td>
@@ -107,6 +146,17 @@ export function FactureApercuModal({
       <th>{formatMontantMGA(total)}</th>
       <th>-</th>
       <th>{formatMontantMGA(total)}</th>
+    </tr>
+  )
+  const rendBandeRappel = (titre: string) => (
+    <tr>
+      <td colSpan={6} style={{
+        background: '#FEF3C7',
+        borderLeft: '2.5px solid #F59E0B',
+        color: '#B45309',
+        fontWeight: 700,
+        padding: '4px 10px',
+      }}>{titre}</td>
     </tr>
   )
   const body = (
@@ -237,21 +287,21 @@ export function FactureApercuModal({
                     {aboLignes.length > 0 && (
                       <>
                         {rendBande('Abonnement mensuel :')}
-                        {aboLignes.map(rendLigneProforma)}
+                        {aboLignes.map((l) => rendLigneProforma(l))}
                         {rendSousTotal('Sous-total Abonnement mensuel', sousTotalDe(aboLignes))}
                       </>
                     )}
                     {prestaLignes.length > 0 && (
                       <>
                         {rendBande('Prestation:')}
-                        {prestaLignes.map(rendLigneProforma)}
+                        {prestaLignes.map((l) => rendLigneProforma(l))}
                         {rendSousTotal('Sous-total Prestation', sousTotalDe(prestaLignes))}
                       </>
                     )}
                     {deboursLignes.length > 0 && (
                       <>
                         {rendBande("Débours à payer à l'administration")}
-                        {deboursLignes.map(rendLigneProforma)}
+                        {deboursLignes.map((l) => rendLigneProforma(l))}
                         {rendSousTotal('Sous-total Débours', sousTotalDe(deboursLignes))}
                       </>
                     )}
@@ -265,6 +315,18 @@ export function FactureApercuModal({
                         <th>-</th>
                         <th>{formatMontantMGA(totalHt)}</th>
                       </tr>
+                    )}
+                    {rappels.length > 0 && (
+                      <>
+                        {rendBandeRappel('À titre de rappel de règlement — non inclus dans le total')}
+                        {rappels.map((l) => rendLigneProforma(l, 'rp'))}
+                        <tr>
+                          <th colSpan={3} style={{ textAlign: 'right' }}>Total des rappels (non inclus)</th>
+                          <th>{formatMontantMGA(rappels.reduce((acc, l) => acc + l.netCommercial, 0))}</th>
+                          <th>-</th>
+                          <th>{formatMontantMGA(rappels.reduce((acc, l) => acc + l.netCommercial, 0))}</th>
+                        </tr>
+                      </>
                     )}
                   </tbody>
                 </table>

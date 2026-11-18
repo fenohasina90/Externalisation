@@ -223,7 +223,7 @@ final class PdfFacturePaiement {
         PdfPTable gauche = new PdfPTable(1);
         gauche.setWidthPercentage(100);
         gauche.addCell(PdfComposants.celluleLettres("Arrêtée la présente facture à la somme de",
-                MontantEnLettres.convertir(netAPayer.longValue()).toUpperCase(Locale.FRANCE)
+                MontantEnLettres.convertir(ttc.longValue()).toUpperCase(Locale.FRANCE)
                         + " ARIARY"));
         PdfPCell espace = PdfComposants.celluleVide();
         espace.setFixedHeight(st.ecart * 0.6f);

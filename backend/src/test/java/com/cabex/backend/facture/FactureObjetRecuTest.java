@@ -152,6 +152,40 @@ class FactureObjetRecuTest {
     }
 
     @Test
+    void fvMensuelleEnfantMultiAbonnements_afficheServicesPersistes() {
+        LigneService audit = ligne(10, "EXTERNALISATION", "Audit interne", null, "ABONNEMENT_MENSUEL", null);
+        LigneService compta = ligne(11, "EXTERNALISATION", "Tenue de la comptabilité", null,
+                "ABONNEMENT_MENSUEL", null);
+        LigneService debours = ligne(12, "DEBOURS", null, "TIMBRE", null, null);
+
+        FactureValidee fv = FactureValidee.builder().id(7).referenceFactureValidee("FV-7")
+                .demande(demande).montant(new BigDecimal("350000"))
+                .mois(java.time.LocalDate.of(2026, 11, 1)).build();
+        com.cabex.backend.facture.entity.FactureValideeLigne l1 =
+                com.cabex.backend.facture.entity.FactureValideeLigne.builder()
+                        .id(101).factureValidee(fv).ligneService(audit)
+                        .designation("Abonnement mensuel — Audit interne")
+                        .montant(new BigDecimal("100000")).type("PRINCIPALE").build();
+        com.cabex.backend.facture.entity.FactureValideeLigne l2 =
+                com.cabex.backend.facture.entity.FactureValideeLigne.builder()
+                        .id(102).factureValidee(fv).ligneService(compta)
+                        .designation("Abonnement mensuel — Tenue de la comptabilité")
+                        .montant(new BigDecimal("250000")).type("PRINCIPALE").build();
+        com.cabex.backend.facture.entity.FactureValideeLigne rappel =
+                com.cabex.backend.facture.entity.FactureValideeLigne.builder()
+                        .id(103).factureValidee(fv).ligneService(debours)
+                        .designation("Débours — TIMBRE")
+                        .montant(new BigDecimal("60000")).type("RAPPEL").build();
+        fv.setLignes(new java.util.HashSet<>(java.util.Set.of(l1, l2, rappel)));
+
+        ObjetFactureValideeResponse objet = service.objetFactureValidee(fv);
+
+        assertEquals("Services facturés", objet.libelleObjet());
+        assertEquals("Abonnement mensuel — Audit interne, Abonnement mensuel — Tenue de la comptabilité",
+                objet.objet());
+    }
+
+    @Test
     void fvGeneraleSansLigne_afficheFactureGenerale() {
         when(ligneRepository.findByDemandeIdOrderByIdAsc(7)).thenReturn(List.of());
 

@@ -13,6 +13,10 @@ public record FactureValideeLigneResponse(
         /** PRINCIPALE (l'abonnement) ou RAPPEL (rappel). */
         String type,
         /** Nom du service catalogue (null pour un débours). */
-        String nomService
+        String nomService,
+        /** EXTERNALISATION ou DEBOURS (catégorie de la ligne de service, null si absente). */
+        String categorie,
+        /** PRESTATION ou ABONNEMENT_MENSUEL (null pour un débours ou une ligne sans service). */
+        String typePrestation
 ) {
 }

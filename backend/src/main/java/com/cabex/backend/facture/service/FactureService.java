@@ -888,7 +888,9 @@ public class FactureService {
                     designation,
                     fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO,
                     "PRINCIPALE",
-                    nomService));
+                    nomService,
+                    ligne.getCategorie(),
+                    ligne.getTypePrestation()));
         }
         // Lignes enfants (facture combinée du mois).
         if (fv.getLignes() != null && !fv.getLignes().isEmpty()) {
@@ -896,16 +898,21 @@ public class FactureService {
                     .sorted(Comparator.comparing(
                             com.cabex.backend.facture.entity.FactureValideeLigne::getId,
                             Comparator.nullsLast(Comparator.naturalOrder())))
-                    .map(l -> new FactureValideeLigneResponse(
-                            l.getId(),
-                            l.getLigneService() != null ? l.getLigneService().getId() : null,
-                            l.getLigneService() != null && l.getLigneService().getDemande() != null
-                                    ? l.getLigneService().getDemande().getReferenceDemande() : null,
-                            l.getDesignation(),
-                            l.getMontant(),
-                            l.getType() != null ? l.getType() : "PRINCIPALE",
-                            l.getLigneService() != null && l.getLigneService().getService() != null
-                                    ? l.getLigneService().getService().getNomService() : null))
+                    .map(l -> {
+                        LigneService ls = l.getLigneService();
+                        return new FactureValideeLigneResponse(
+                                l.getId(),
+                                ls != null ? ls.getId() : null,
+                                ls != null && ls.getDemande() != null
+                                        ? ls.getDemande().getReferenceDemande() : null,
+                                l.getDesignation(),
+                                l.getMontant(),
+                                l.getType() != null ? l.getType() : "PRINCIPALE",
+                                ls != null && ls.getService() != null
+                                        ? ls.getService().getNomService() : null,
+                                ls != null ? ls.getCategorie() : null,
+                                ls != null ? ls.getTypePrestation() : null);
+                    })
                     .toList();
         }
         // Facture générale (proforma validée) : une ligne par ligne de la proforma.
@@ -926,7 +933,9 @@ public class FactureService {
                                 nomService,
                                 l.getTarif() != null ? l.getTarif() : l.getTarifProforma(),
                                 "PRINCIPALE",
-                                l.getService() != null ? l.getService().getNomService() : null);
+                                l.getService() != null ? l.getService().getNomService() : null,
+                                l.getCategorie(),
+                                l.getTypePrestation());
                     })
                     .toList();
         }
@@ -940,7 +949,9 @@ public class FactureService {
                             ? ligne.getDesignationDebours() : "Débours"),
                     fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO,
                     "PRINCIPALE",
-                    null));
+                    null,
+                    ligne.getCategorie(),
+                    ligne.getTypePrestation()));
         }
         return List.of();
     }
@@ -966,21 +977,44 @@ public class FactureService {
     /**
      * Lignes liées à une facture validée pour l'objet du reçu : la ligne directe
      * (facture enfant / débours), sinon les lignes de la proforma validée
-     * (facture générale) ; sinon liste vide (« Facture générale »).
+     * (facture générale), sinon les lignes de la facture générale liée à une
+     * facture du mois (facture mensuelle) ; sinon liste vide (« Facture générale »).
      */
     private List<LigneService> lignesLieesValidee(FactureValidee fv) {
         if (fv.getLigneService() != null) {
             return List.of(fv.getLigneService());
         }
-        if (fv.getFactureProforma() != null
-                && fv.getFactureProforma().getDemande() != null) {
-            Integer demandeId = fv.getFactureProforma().getDemande().getId();
-            Integer proformaId = fv.getFactureProforma().getId();
-            return ligneRepository.findByDemandeIdOrderByIdAsc(demandeId).stream()
-                    .filter(l -> l.getFacture() != null && proformaId.equals(l.getFacture().getId()))
-                    .toList();
+        List<LigneService> proformaLignes = lignesDeLaProforma(fv.getFactureProforma());
+        if (!proformaLignes.isEmpty()) {
+            return proformaLignes;
+        }
+        // Facture du mois (facture mensuelle) : retomber sur la facture générale liée.
+        FactureValidee generale = fv.getFactureGenerale();
+        if (generale != null) {
+            List<LigneService> generaleLignes = lignesDeLaProforma(generale.getFactureProforma());
+            if (!generaleLignes.isEmpty()) {
+                return generaleLignes;
+            }
+            if (generale.getLigneService() != null) {
+                return List.of(generale.getLigneService());
+            }
         }
         return List.of();
+    }
+
+    /** Lignes de la proforma portée par une facture validée (ordre de la demande). */
+    private List<LigneService> lignesDeLaProforma(Facture proforma) {
+        if (proforma == null || proforma.getDemande() == null) {
+            return List.of();
+        }
+        Integer demandeId = proforma.getDemande().getId();
+        Integer proformaId = proforma.getId();
+        if (demandeId == null || proformaId == null) {
+            return List.of();
+        }
+        return ligneRepository.findByDemandeIdOrderByIdAsc(demandeId).stream()
+                .filter(l -> l.getFacture() != null && proformaId.equals(l.getFacture().getId()))
+                .toList();
     }
 
     /**
@@ -1001,12 +1035,44 @@ public class FactureService {
         if (fv == null) {
             return null;
         }
-        List<LigneService> lignes = lignesLieesValidee(fv);
-        List<String> designations = lignes.stream()
-                .map(FactureService::designationLigne)
+        // 1) Lignes persistées de la facture (factures du mois, facture combinée) :
+        //    désignation figée à la création, source de vérité.
+        List<com.cabex.backend.facture.entity.FactureValideeLigne> principales = fv.getLignes() == null
+                ? List.of()
+                : fv.getLignes().stream()
+                        .filter(l -> l.getType() == null
+                                || "PRINCIPALE".equalsIgnoreCase(l.getType()))
+                        .sorted(Comparator.comparing(
+                                com.cabex.backend.facture.entity.FactureValideeLigne::getId,
+                                Comparator.nullsLast(Comparator.naturalOrder())))
+                        .toList();
+        List<String> designationsPersistees = principales.stream()
+                .map(l -> l.getDesignation() != null ? l.getDesignation().trim() : null)
                 .filter(d -> d != null && !d.isBlank())
                 .distinct()
                 .toList();
+
+        boolean tousDebours;
+        int nbLignes;
+        List<String> designations;
+        if (!designationsPersistees.isEmpty()) {
+            designations = designationsPersistees;
+            tousDebours = principales.stream().allMatch(l -> l.getLigneService() != null
+                    && LigneServiceService.estDebours(l.getLigneService()));
+            nbLignes = principales.size();
+        } else {
+            // 2) Ligne directe (enfant / débours) ou lignes de la proforma (facture générale).
+            List<LigneService> lignes = lignesLieesValidee(fv);
+            designations = lignes.stream()
+                    .map(FactureService::designationLigne)
+                    .filter(d -> d != null && !d.isBlank())
+                    .distinct()
+                    .toList();
+            tousDebours = !lignes.isEmpty()
+                    && lignes.stream().allMatch(LigneServiceService::estDebours);
+            nbLignes = lignes.size();
+        }
+
         String libelle;
         String objet;
         if (designations.isEmpty()) {
@@ -1015,10 +1081,9 @@ public class FactureService {
             libelle = "Objet de la facture";
         } else {
             objet = String.join(", ", designations);
-            boolean tousDebours = lignes.stream().allMatch(LigneServiceService::estDebours);
             if (tousDebours) {
                 libelle = "Désignation du débours";
-            } else if (lignes.size() == 1) {
+            } else if (nbLignes == 1) {
                 libelle = "Nom du service";
             } else {
                 libelle = "Services facturés";

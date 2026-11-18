@@ -180,6 +180,10 @@ export interface FactureValideeLigne {
   type: 'PRINCIPALE' | 'RAPPEL' | string
   /** Nom du service catalogue (null pour un débours). */
   nomService: string | null
+  /** EXTERNALISATION ou DEBOURS (catégorie figée de la ligne de service liée). */
+  categorie?: string | null
+  /** PRESTATION ou ABONNEMENT_MENSUEL (null pour un débours). */
+  typePrestation?: string | null
 }
 
 /** Élément impayé pouvant être repris dans la facture du mois. */

@@ -184,18 +184,9 @@ final class PdfFactureAbonnement {
         PdfComposants.faTh(table, st, "REMISE\n(Ariary)", Element.ALIGN_RIGHT);
         PdfComposants.faTh(table, st, "NET COMMERCIAL\n(Ariary)", Element.ALIGN_RIGHT);
 
-        LigneService ligne = facture.getLigneService();
-        String designation = designationAbonnement(ligne);
-        BigDecimal pu = principales.stream().map(FactureValideeLigne::getMontant)
-                .map(m -> m != null ? m : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .max(BigDecimal.ZERO);
-        if (pu.signum() == 0) {
-            pu = montant;
-        }
-
+        String bandeTitre = "Abonnement mensuel :";
         PdfPCell bande = PdfComposants.faCellule(st,
-                new Phrase("Abonnement mensuel :", st.section), Element.ALIGN_LEFT);
+                new Phrase(bandeTitre, st.section), Element.ALIGN_LEFT);
         bande.setColspan(6);
         bande.setBackgroundColor(PdfTheme.VERT_PALE);
         bande.setBorder(Rectangle.LEFT);
@@ -203,29 +194,67 @@ final class PdfFactureAbonnement {
         bande.setBorderColorLeft(PdfTheme.VERT_MARQUE);
         table.addCell(bande);
 
-        Phrase designationPhrase = new Phrase();
-        designationPhrase.setLeading(st.td.getSize() * 1.3f);
-        designationPhrase.add(new Chunk(PdfFormats.valeur(designation), st.tdGras));
-        PdfComposants.faCorps(table, st, designationPhrase, Element.ALIGN_LEFT, false);
+        if (!principales.isEmpty()) {
+            // Lignes persistées de la facture (désignation figée à la création) :
+            // une ligne par abonnement facturé, somme = total HT.
+            for (FactureValideeLigne lignePersistee : principales) {
+                String designationLignePersistee = lignePersistee.getDesignation();
+                if (designationLignePersistee == null || designationLignePersistee.isBlank()) {
+                    designationLignePersistee = "Abonnement mensuel";
+                }
+                BigDecimal montantLigne = lignePersistee.getMontant() != null
+                        ? lignePersistee.getMontant() : BigDecimal.ZERO;
+                ecrireLigneTableau(table, st, designationLignePersistee,
+                        montantLigne, montantLigne);
+            }
+        } else {
+            // Repli (anciennes factures sans lignes persistées) : ligne unique agrégée.
+            LigneService ligne = facture.getLigneService();
+            String designation = designationAbonnement(ligne);
+            BigDecimal pu = montant.max(BigDecimal.ZERO);
+
+            Phrase designationPhrase = new Phrase();
+            designationPhrase.setLeading(st.td.getSize() * 1.3f);
+            designationPhrase.add(new Chunk(PdfFormats.valeur(designation), st.tdGras));
+            PdfComposants.faCorps(table, st, designationPhrase, Element.ALIGN_LEFT, false);
+            PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(pu), st.td),
+                    Element.ALIGN_RIGHT, false);
+            PdfComposants.faCorps(table, st, new Phrase("1", st.td), Element.ALIGN_CENTER, false);
+            PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(pu), st.td),
+                    Element.ALIGN_RIGHT, false);
+            PdfComposants.faCorps(table, st, new Phrase("-", st.td), Element.ALIGN_RIGHT, false);
+            PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(pu), st.td),
+                    Element.ALIGN_RIGHT, false);
+        }
+
+        BigDecimal sousTotal = mainMontant(principales, montant);
+        PdfComposants.faSousTotal(table, st, "Sous-total Abonnement mensuel", 3);
+        PdfComposants.faSousTotal(table, st, PdfFormats.formatMontant(sousTotal), 1);
+        PdfComposants.faSousTotal(table, st, "-", 1);
+        PdfComposants.faSousTotal(table, st, PdfFormats.formatMontant(sousTotal), 1);
+
+        PdfComposants.faSousTotal(table, st, "TOTAL HT", 3);
+        PdfComposants.faSousTotal(table, st, PdfFormats.formatMontant(sousTotal), 1);
+        PdfComposants.faSousTotal(table, st, "-", 1);
+        PdfComposants.faSousTotal(table, st, PdfFormats.formatMontant(sousTotal), 1);
+        return table;
+    }
+
+    /** Ligne du tableau principal : désignation figée, PU = montant (une unité), pas de remise. */
+    private static void ecrireLigneTableau(PdfPTable table, PdfStyleFacture st,
+                                           String designation, BigDecimal pu, BigDecimal net) {
+        Phrase phrase = new Phrase();
+        phrase.setLeading(st.td.getSize() * 1.3f);
+        phrase.add(new Chunk(PdfFormats.valeur(designation), st.tdGras));
+        PdfComposants.faCorps(table, st, phrase, Element.ALIGN_LEFT, false);
         PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(pu), st.td),
                 Element.ALIGN_RIGHT, false);
         PdfComposants.faCorps(table, st, new Phrase("1", st.td), Element.ALIGN_CENTER, false);
         PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(pu), st.td),
                 Element.ALIGN_RIGHT, false);
         PdfComposants.faCorps(table, st, new Phrase("-", st.td), Element.ALIGN_RIGHT, false);
-        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(pu), st.td),
+        PdfComposants.faCorps(table, st, new Phrase(PdfFormats.formatMontant(net), st.td),
                 Element.ALIGN_RIGHT, false);
-
-        PdfComposants.faSousTotal(table, st, "Sous-total Abonnement mensuel", 3);
-        PdfComposants.faSousTotal(table, st, PdfFormats.formatMontant(pu), 1);
-        PdfComposants.faSousTotal(table, st, "-", 1);
-        PdfComposants.faSousTotal(table, st, PdfFormats.formatMontant(pu), 1);
-
-        PdfComposants.faSousTotal(table, st, "TOTAL HT", 3);
-        PdfComposants.faSousTotal(table, st, PdfFormats.formatMontant(pu), 1);
-        PdfComposants.faSousTotal(table, st, "-", 1);
-        PdfComposants.faSousTotal(table, st, PdfFormats.formatMontant(pu), 1);
-        return table;
     }
 
     private static PdfPTable tableauRappels(FactureValidee facture,
@@ -324,7 +353,7 @@ final class PdfFactureAbonnement {
         PdfPTable gauche = new PdfPTable(1);
         gauche.setWidthPercentage(100);
         gauche.addCell(PdfComposants.celluleLettres("Arrêtée la présente facture à la somme de",
-                MontantEnLettres.convertir(netAPayer.longValue()).toUpperCase(Locale.FRANCE)
+                MontantEnLettres.convertir(ttc.longValue()).toUpperCase(Locale.FRANCE)
                         + " ARIARY"));
         PdfPCell espace = PdfComposants.celluleVide();
         espace.setFixedHeight(st.ecart * 0.6f);
