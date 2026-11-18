@@ -259,7 +259,7 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public List<ServiceRevenuResponse> services(DashboardFilter filtre) {
-        return factureValideeRepository.sommeMontantFacturesParService(
+        return factureValideeRepository.sommeServiceFacturesValidees(
                         filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
                 .stream()
                 .map(o -> new ServiceRevenuResponse(
