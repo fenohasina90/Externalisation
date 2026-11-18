@@ -126,24 +126,22 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
     java.math.BigDecimal sommeFacturesPaieablesPourDemande(@org.springframework.data.repository.query.Param("demandeId") Integer demandeId);
 
     /**
-     * Montant facturé (payable) — somme des tarifs validés des lignes EXTERNALISATION
-     * rattachées à un proforma validé. Débours exclus ; prestations et abonnements comptent.
+     * Montant total — somme des montants de toutes les factures validées de la
+     * période, tous types confondus (débours inclus). Filtrable par client et
+     * par service (les demandes contenant le service).
      */
     @org.springframework.data.jpa.repository.Query(
-            "SELECT COALESCE(SUM(COALESCE(l.tarif, 0)), 0)"
-                    + " FROM com.cabex.backend.demande.entity.LigneService l"
-                    + " JOIN l.demande d"
+            "SELECT COALESCE(SUM(fv.montant), 0)"
+                    + " FROM com.cabex.backend.facture.entity.FactureValidee fv"
+                    + " JOIN fv.demande d"
                     + " LEFT JOIN d.societe s"
-                    + " LEFT JOIN l.service svc"
                     + " WHERE d.actif = true"
-                    + "   AND l.categorie <> 'DEBOURS'"
-                    + "   AND l.tarif IS NOT NULL"
-                    + "   AND l.facture IS NOT NULL"
-                    + "   AND l.facture.statut = 'VALIDEE'"
                     + "   AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)"
                     + "   AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)"
                     + "   AND (:clientId IS NULL OR s.id = :clientId)"
-                    + "   AND (:serviceId IS NULL OR svc.id = :serviceId)")
+                    + "   AND (:serviceId IS NULL OR EXISTS ("
+                    + "           SELECT 1 FROM com.cabex.backend.demande.entity.LigneService l"
+                    + "           WHERE l.demande = d AND l.service.id = :serviceId))")
     java.math.BigDecimal sommeMontantFacturesPayables(@org.springframework.data.repository.query.Param("dateDebut") java.time.LocalDate dateDebut,
                                                       @org.springframework.data.repository.query.Param("dateFin") java.time.LocalDate dateFin,
                                                       @org.springframework.data.repository.query.Param("clientId") Integer clientId,
