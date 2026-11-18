@@ -264,14 +264,19 @@ public class PaiementGestionService {
                 .createdBy(currentUtilisateur())
                 .build();
         paiement = paiementRepository.save(paiement);
-        // Figer le montant déjà payé et le reste à payer au moment de l'encaissement (snapshots).
+        // Figer le moment des snapshots :
+        // - montant déjà payé : somme des paiements AVANT celui-ci (ce paiement exclu)
+        // - reste à payer : montant de la facture moins TOUS les paiements (celui-ci inclus)
         if (factureValidee != null) {
             BigDecimal sommeApres = paiementRepository.sommePayeeParFactureValidee(factureValidee.getId());
             if (sommeApres == null) {
                 sommeApres = BigDecimal.ZERO;
             }
+            BigDecimal sommeAvant = sommeApres.subtract(
+                    paiement.getMontantPaye() != null ? paiement.getMontantPaye() : BigDecimal.ZERO)
+                    .max(BigDecimal.ZERO);
             BigDecimal total = montantValideFactureValidee(factureValidee);
-            paiement.setMontantDejaPaye(sommeApres);
+            paiement.setMontantDejaPaye(sommeAvant);
             paiement.setResteAPayer(total.subtract(sommeApres).max(BigDecimal.ZERO));
             paiement = paiementRepository.save(paiement);
         }
@@ -374,8 +379,11 @@ public class PaiementGestionService {
             if (sommeApres == null) {
                 sommeApres = BigDecimal.ZERO;
             }
+            BigDecimal sommeAvant = sommeApres.subtract(
+                    saved.getMontantPaye() != null ? saved.getMontantPaye() : BigDecimal.ZERO)
+                    .max(BigDecimal.ZERO);
             BigDecimal total = montantValideFactureValidee(factureValidee);
-            saved.setMontantDejaPaye(sommeApres);
+            saved.setMontantDejaPaye(sommeAvant);
             saved.setResteAPayer(total.subtract(sommeApres).max(BigDecimal.ZERO));
             saved = paiementRepository.save(saved);
         }

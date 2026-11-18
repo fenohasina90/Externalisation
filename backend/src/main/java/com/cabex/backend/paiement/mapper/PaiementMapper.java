@@ -123,13 +123,17 @@ public class PaiementMapper {
         BigDecimal montantFacture = fv != null ? fv.getMontant() : null;
         BigDecimal montantPayeSurFacture = paiement.getMontantDejaPaye() != null
                 ? paiement.getMontantDejaPaye()
-                : (sommePayeeSurFacture != null ? sommePayeeSurFacture : BigDecimal.ZERO);
+                : (sommePayeeSurFacture != null
+                        ? sommePayeeSurFacture.subtract(
+                                paiement.getMontantPaye() != null ? paiement.getMontantPaye() : BigDecimal.ZERO)
+                                .max(BigDecimal.ZERO)
+                        : BigDecimal.ZERO);
         BigDecimal resteSnapshot = paiement.getResteAPayer();
         BigDecimal resteAPayerFacture = resteSnapshot != null
                 ? resteSnapshot
-                : (montantFacture != null
-                        ? montantFacture.subtract(montantPayeSurFacture).max(BigDecimal.ZERO)
-                        : null);
+                : (montantFacture != null && sommePayeeSurFacture != null
+                        ? montantFacture.subtract(sommePayeeSurFacture).max(BigDecimal.ZERO)
+                        : (montantFacture != null ? montantFacture : null));
 
         return new PaiementDetailResponse(
                 paiement.getId(),
