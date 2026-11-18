@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Alert, Spinner } from '@/components/ui'
 import { Can } from '@/components/shared/Can'
 import { useApi } from '@/hooks/useApi'
@@ -378,7 +379,21 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                       )}
                       {formatDate(facture.dateFactureValidee)}
                     </td>
-                    <td className="fw-700">{facture.referenceFactureValidee ?? '—'}</td>
+                    <td className="fw-700">
+                      {facture.referenceDemande ? (
+                        <Link
+                          to={`/demandes/${encodeURIComponent(facture.referenceDemande)}?onglet=${
+                            facture.mois ? 'factures-mensuelles' : 'factures'
+                          }`}
+                          className="btn-link"
+                          title={`Voir la demande ${facture.referenceDemande}`}
+                        >
+                          {facture.referenceFactureValidee ?? '—'}
+                        </Link>
+                      ) : (
+                        (facture.referenceFactureValidee ?? '—')
+                      )}
+                    </td>
                     <td className="text-secondary">—</td>
                     <td className="text-secondary">{nomClient}</td>
                     <td><ObjetsDesignation facture={facture} /></td>
