@@ -271,7 +271,7 @@ final class PdfRecuPaiement {
         });
         PdfPCell cMontants = PdfComposants.carte("Montants de la facture", new String[][]{
                 {"Montant facture validée", PdfFormats.formatArgent(montantFacture(fv))},
-                {"Montant déjà payé", PdfFormats.formatArgent(montantDejaPaye(fv, sommePayeeSurFacture))},
+                {"Montant déjà payé", PdfFormats.formatArgent(montantDejaPaye(paiement, fv, sommePayeeSurFacture))},
                 {"Montant reçu", PdfFormats.formatArgent(paiement.getMontantPaye())},
                 {"Reste à payer", PdfFormats.formatArgent(reste(paiement, fv, sommePayeeSurFacture))}
         });
@@ -336,7 +336,10 @@ final class PdfRecuPaiement {
         return fv != null && fv.getMontant() != null ? fv.getMontant() : null;
     }
 
-    private static BigDecimal montantDejaPaye(FactureValidee fv, BigDecimal sommePayeeSurFacture) {
+    private static BigDecimal montantDejaPaye(Paiement paiement, FactureValidee fv, BigDecimal sommePayeeSurFacture) {
+        if (paiement.getMontantDejaPaye() != null) {
+            return paiement.getMontantDejaPaye();
+        }
         if (sommePayeeSurFacture != null) {
             return sommePayeeSurFacture;
         }

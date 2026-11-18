@@ -264,13 +264,15 @@ public class PaiementGestionService {
                 .createdBy(currentUtilisateur())
                 .build();
         paiement = paiementRepository.save(paiement);
-        // Figer le reste à payer au moment de l'encaissement (snapshot).
+        // Figer le montant déjà payé et le reste à payer au moment de l'encaissement (snapshots).
         if (factureValidee != null) {
             BigDecimal sommeApres = paiementRepository.sommePayeeParFactureValidee(factureValidee.getId());
-            BigDecimal reste = montantValideFactureValidee(factureValidee)
-                    .subtract(sommeApres != null ? sommeApres : BigDecimal.ZERO)
-                    .max(BigDecimal.ZERO);
-            paiement.setResteAPayer(reste);
+            if (sommeApres == null) {
+                sommeApres = BigDecimal.ZERO;
+            }
+            BigDecimal total = montantValideFactureValidee(factureValidee);
+            paiement.setMontantDejaPaye(sommeApres);
+            paiement.setResteAPayer(total.subtract(sommeApres).max(BigDecimal.ZERO));
             paiement = paiementRepository.save(paiement);
         }
 
@@ -369,10 +371,12 @@ public class PaiementGestionService {
         Paiement saved = paiementRepository.save(paiement);
         if (factureValidee != null) {
             BigDecimal sommeApres = paiementRepository.sommePayeeParFactureValidee(factureValidee.getId());
-            BigDecimal reste = montantValideFactureValidee(factureValidee)
-                    .subtract(sommeApres != null ? sommeApres : BigDecimal.ZERO)
-                    .max(BigDecimal.ZERO);
-            saved.setResteAPayer(reste);
+            if (sommeApres == null) {
+                sommeApres = BigDecimal.ZERO;
+            }
+            BigDecimal total = montantValideFactureValidee(factureValidee);
+            saved.setMontantDejaPaye(sommeApres);
+            saved.setResteAPayer(total.subtract(sommeApres).max(BigDecimal.ZERO));
             saved = paiementRepository.save(saved);
         }
         PaiementResponse response = PaiementMapper.toResponse(saved);

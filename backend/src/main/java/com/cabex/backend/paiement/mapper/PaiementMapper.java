@@ -121,7 +121,9 @@ public class PaiementMapper {
         LocalDate moisFacture = fv != null ? fv.getMois() : null;
 
         BigDecimal montantFacture = fv != null ? fv.getMontant() : null;
-        BigDecimal montantPayeSurFacture = sommePayeeSurFacture != null ? sommePayeeSurFacture : BigDecimal.ZERO;
+        BigDecimal montantPayeSurFacture = paiement.getMontantDejaPaye() != null
+                ? paiement.getMontantDejaPaye()
+                : (sommePayeeSurFacture != null ? sommePayeeSurFacture : BigDecimal.ZERO);
         BigDecimal resteSnapshot = paiement.getResteAPayer();
         BigDecimal resteAPayerFacture = resteSnapshot != null
                 ? resteSnapshot
