@@ -80,8 +80,8 @@ function formatEntier(valeur: number): string {
 const COULEURS_STATUT: Record<string, string> = {
   EN_ATTENTE: '#aeb9b0',
   VALIDATION: '#8fd0a0',
-  EN_COURS: '#2D9A5C',
-  TERMINEE: '#1d6b3f',
+  EN_COURS: '#baf80d',
+  TERMINEE: '#2D9A5C',
   ANNULEE: '#c0392b',
 }
 
