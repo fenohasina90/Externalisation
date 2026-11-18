@@ -264,6 +264,15 @@ public class PaiementGestionService {
                 .createdBy(currentUtilisateur())
                 .build();
         paiement = paiementRepository.save(paiement);
+        // Figer le reste à payer au moment de l'encaissement (snapshot).
+        if (factureValidee != null) {
+            BigDecimal sommeApres = paiementRepository.sommePayeeParFactureValidee(factureValidee.getId());
+            BigDecimal reste = montantValideFactureValidee(factureValidee)
+                    .subtract(sommeApres != null ? sommeApres : BigDecimal.ZERO)
+                    .max(BigDecimal.ZERO);
+            paiement.setResteAPayer(reste);
+            paiement = paiementRepository.save(paiement);
+        }
 
         // Solder l'échéance réglée (le statut PARTIELLE/PAYEE est recalculé
         // par les lecteurs à partir de montant_paye).
@@ -357,7 +366,16 @@ public class PaiementGestionService {
         paiement.setNumeroCheque(trimOuNull(request.numeroCheque()));
         paiement.setCommentaire(request.commentaire());
 
-        PaiementResponse response = PaiementMapper.toResponse(paiementRepository.save(paiement));
+        Paiement saved = paiementRepository.save(paiement);
+        if (factureValidee != null) {
+            BigDecimal sommeApres = paiementRepository.sommePayeeParFactureValidee(factureValidee.getId());
+            BigDecimal reste = montantValideFactureValidee(factureValidee)
+                    .subtract(sommeApres != null ? sommeApres : BigDecimal.ZERO)
+                    .max(BigDecimal.ZERO);
+            saved.setResteAPayer(reste);
+            saved = paiementRepository.save(saved);
+        }
+        PaiementResponse response = PaiementMapper.toResponse(saved);
 
         // Mettre à jour le statut des lignes liées.
         for (LigneService ligneLiee : lignePourFacturesValidees(factureValidee, demande)) {
@@ -548,6 +566,12 @@ public class PaiementGestionService {
             seq++;
         } while (paiementRepository.existsByReferencePaiement(reference));
         return reference;
+    }
+
+    /** Montant de la facture validée (facture générale / enfant / mensuel). */
+    private static BigDecimal montantValideFactureValidee(
+            com.cabex.backend.facture.entity.FactureValidee fv) {
+        return fv != null && fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO;
     }
 
     private static String trimOuNull(String valeur) {

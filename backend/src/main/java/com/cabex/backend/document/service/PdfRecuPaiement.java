@@ -273,7 +273,7 @@ final class PdfRecuPaiement {
                 {"Montant facture validée", PdfFormats.formatArgent(montantFacture(fv))},
                 {"Montant déjà payé", PdfFormats.formatArgent(montantDejaPaye(fv, sommePayeeSurFacture))},
                 {"Montant reçu", PdfFormats.formatArgent(paiement.getMontantPaye())},
-                {"Reste à payer", PdfFormats.formatArgent(reste(fv, sommePayeeSurFacture))}
+                {"Reste à payer", PdfFormats.formatArgent(reste(paiement, fv, sommePayeeSurFacture))}
         });
         PdfComposants.rangee(doc, 0.5f, cReglement, cMontants);
     }
@@ -343,7 +343,11 @@ final class PdfRecuPaiement {
         return BigDecimal.ZERO;
     }
 
-    private static BigDecimal reste(FactureValidee fv, BigDecimal sommePayeeSurFacture) {
+    private static BigDecimal reste(Paiement paiement, FactureValidee fv, BigDecimal sommePayeeSurFacture) {
+        // Snapshot figé au moment de l'encaissement (colonne paiement.reste_a_payer).
+        if (paiement.getResteAPayer() != null) {
+            return paiement.getResteAPayer();
+        }
         BigDecimal montant = montantFacture(fv);
         if (montant == null) {
             return null;

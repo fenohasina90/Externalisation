@@ -122,9 +122,12 @@ public class PaiementMapper {
 
         BigDecimal montantFacture = fv != null ? fv.getMontant() : null;
         BigDecimal montantPayeSurFacture = sommePayeeSurFacture != null ? sommePayeeSurFacture : BigDecimal.ZERO;
-        BigDecimal resteAPayerFacture = montantFacture != null
-                ? montantFacture.subtract(montantPayeSurFacture).max(BigDecimal.ZERO)
-                : null;
+        BigDecimal resteSnapshot = paiement.getResteAPayer();
+        BigDecimal resteAPayerFacture = resteSnapshot != null
+                ? resteSnapshot
+                : (montantFacture != null
+                        ? montantFacture.subtract(montantPayeSurFacture).max(BigDecimal.ZERO)
+                        : null);
 
         return new PaiementDetailResponse(
                 paiement.getId(),

@@ -70,6 +70,14 @@ public class Paiement {
     @Column(name = "numero_cheque", length = 100)
     private String numeroCheque;
 
+    /**
+     * Reste à payer sur la facture au moment de l'encaissement (snapshot figé) :
+     * la consultation affiche toujours cette valeur, pas le solde courant.
+     */
+
+    @Column(name = "reste_a_payer", precision = 15, scale = 2)
+    private BigDecimal resteAPayer;
+
     @Column(name = "commentaire", columnDefinition = "TEXT")
     private String commentaire;
 
