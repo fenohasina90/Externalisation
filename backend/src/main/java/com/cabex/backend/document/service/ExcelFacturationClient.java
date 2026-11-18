@@ -17,6 +17,7 @@ import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFRichTextString;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
@@ -108,6 +109,28 @@ final class ExcelFacturationClient {
         return new XSSFColor(new byte[]{(byte) r, (byte) g, (byte) b}, null);
     }
 
+    /** Couleurs du préfixe de type dans la désignation (Prestation / Débours / Abonnement). */
+    private static XSSFColor couleurPrestation() {
+        return rgb(0x1E, 0x4F, 0x8F);
+    }
+
+    private static XSSFColor couleurDebours() {
+        return rgb(0x8A, 0x52, 0x00);
+    }
+
+    private static XSSFColor couleurAbonnement() {
+        return rgb(0x1F, 0x6B, 0x3F);
+    }
+
+    private static XSSFColor couleurPourTypeObjet(String type) {
+        return switch (type != null ? type : "") {
+            case "PRESTATION" -> couleurPrestation();
+            case "DEBOURS" -> couleurDebours();
+            case "ABONNEMENT_MENSUEL" -> couleurAbonnement();
+            default -> COULEUR_TEXTE_INDEX;
+        };
+    }
+
     // ==================================================================
     // Bloc de filtrage (mêmes règles que le frontend)
     // ==================================================================
@@ -165,16 +188,6 @@ final class ExcelFacturationClient {
         return d != null ? d : LocalDate.of(1900, 1, 1);
     }
 
-    private static String libelleType(String type) {
-        return switch (type != null ? type : "") {
-            case "GENERALE" -> "Générale";
-            case "PRESTATION" -> "Prestation";
-            case "DEBOURS" -> "Débours";
-            case "ABONNEMENT_MENSUEL" -> "Abonnement";
-            default -> type != null ? type : "—";
-        };
-    }
-
     private static String prefixObjet(String type) {
         return switch (type != null ? type : "") {
             case "PRESTATION" -> "Prestation";
@@ -184,27 +197,59 @@ final class ExcelFacturationClient {
         };
     }
 
-    private static String designationFacture(FactureValideeFicheResponse f) {
+    /** Cellule désignation : chaque ligne de service, préfixe coloré selon le type. */
+    private static void setCellDesigRiche(Row row, int col, FactureValideeFicheResponse f,
+                                          XSSFSheet sheet) {
+        Cell c = row.createCell(col);
+        org.apache.poi.xssf.usermodel.XSSFWorkbook wb = (org.apache.poi.xssf.usermodel.XSSFWorkbook)
+                row.getSheet().getWorkbook();
+        XSSFRichTextString rt = new XSSFRichTextString();
         List<FactureValideeFicheResponse.ObjetLigne> objets = f.objets();
-        if (objets != null && !objets.isEmpty()) {
-            StringBuilder sb = new StringBuilder();
+        if (objets == null || objets.isEmpty()) {
+            rt.append(f.objet() != null && !f.objet().isBlank() ? f.objet() : "—", fontTexte(wb));
+        } else {
+            boolean premier = true;
             for (FactureValideeFicheResponse.ObjetLigne o : objets) {
-                if (sb.length() > 0) {
-                    sb.append('\n');
+                if (!premier) {
+                    rt.append("\n", fontTexte(wb));
                 }
-                sb.append(prefixObjet(o.type())).append(" : ")
-                  .append(o.libelle() != null ? o.libelle() : "—");
+                premier = false;
+                XSSFFont fp = newFont(wb);
+                fp.setBold(true);
+                fp.setFontName("Calibri");
+                fp.setFontHeightInPoints((short) 10);
+                fp.setColor(couleurPourTypeObjet(o.type()));
+                rt.append(prefixObjet(o.type()) + " : ", fp);
+                rt.append(o.libelle() != null ? o.libelle() : "—", fontTexte(wb));
             }
-            return sb.toString();
         }
-        String objet = f.objet() != null && !f.objet().isBlank() ? f.objet() : "—";
-        if ("ABONNEMENT_MENSUEL".equals(f.type()) && f.mois() != null) {
-            int annee = Integer.parseInt(f.mois().substring(0, 4));
-            int mois = Integer.parseInt(f.mois().substring(5, 7));
-            String label = MOIS_LABEL_FMT.format(LocalDate.of(annee, mois, 1));
-            objet = objet + " (" + Character.toUpperCase(label.charAt(0)) + label.substring(1) + ")";
-        }
-        return objet;
+        c.setCellValue(rt);
+        c.setCellStyle(texteStandardMultiligne(sheet));
+    }
+
+    private static org.apache.poi.xssf.usermodel.XSSFFont fontTexte(
+            org.apache.poi.xssf.usermodel.XSSFWorkbook wb) {
+        org.apache.poi.xssf.usermodel.XSSFFont f = newFont(wb);
+        f.setFontName("Calibri");
+        f.setFontHeightInPoints((short) 10);
+        f.setColor(COULEUR_TEXTE_INDEX);
+        return f;
+    }
+
+    /** Style « Règlement » coloré (vert) pour la cellule type des paiements. */
+    private static XSSFCellStyle reglementTexteValeurColor(Sheet sheet) {
+        Workbook wb = sheet.getWorkbook();
+        org.apache.poi.xssf.usermodel.XSSFFont f = newFont(wb);
+        f.setBold(true);
+        f.setFontName("Calibri");
+        f.setFontHeightInPoints((short) 9);
+        f.setColor(couleurAbonnement());
+        XSSFCellStyle cs = (XSSFCellStyle) wb.createCellStyle();
+        cs.setFont(f);
+        cs.setVerticalAlignment(VerticalAlignment.CENTER);
+        cs.setIndention((short) 4);
+        cs.setAlignment(HorizontalAlignment.CENTER);
+        return cs;
     }
 
     private static String statutFacture(BigDecimal montant, BigDecimal paye) {
@@ -356,15 +401,14 @@ final class ExcelFacturationClient {
         BigDecimal montant = nullToZero(fiche.montant());
         BigDecimal paye = nullToZero(fiche.montantPaye());
         BigDecimal reste = nullToZero(fiche.resteAPayer());
-        String designation = designationFacture(fiche);
-        int nbLignes = Math.max(1, designation.split("\n", -1).length);
+        int nbLignes = Math.max(1, fiche.objets() != null ? fiche.objets().size() : 1);
 
         Row row = sheet.createRow(ligne);
         row.setHeightInPoints(Math.max(20f, 14f * nbLignes + 6f));
         setCell(row, 0, DATE_FMT.format(dateOrMin(fiche.dateFactureValidee())), texteStandard(sheet));
         setCell(row, 1, fiche.referenceFactureValidee(), texteStandardGras(sheet));
-        setCell(row, 2, libelleType(fiche.type()), texteStandard(sheet));
-        setCell(row, 3, designation, texteStandardMultiligne(sheet));
+        setCell(row, 2, "—", texteStandard(sheet));
+        setCellDesigRiche(row, 3, fiche, sheet);
         setChiffre(row, 4, montant, nombreStandard(sheet));
         setChiffre(row, 5, paye, nombreStandard(sheet));
         setChiffre(row, 6, reste, nombreImpayeeStandard(sheet, reste));
@@ -379,7 +423,7 @@ final class ExcelFacturationClient {
         row.setHeightInPoints(18f);
         setCell(row, 0, DATE_FMT.format(dateOrMin(p.datePaiement())), reglementIndente(sheet, 4));
         setCell(row, 1, p.referencePaiement(), reglementIndente(sheet, 4));
-        setCell(row, 2, "Règlement", reglementIndente(sheet, 4));
+        setCell(row, 2, "Règlement", reglementTexteValeurColor(sheet));
         setCell(row, 3, p.libelleMode() != null ? p.libelleMode() : "—", reglementIndente(sheet, 4));
         setChiffre(row, 4, BigDecimal.ZERO, reglementNombre(sheet));
         setChiffre(row, 5,

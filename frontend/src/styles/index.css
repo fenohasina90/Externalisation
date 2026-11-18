@@ -4522,3 +4522,28 @@ body.page-responsables {
   display: block;
   white-space: normal;
 }
+
+/* ==================================================================
+ * Facturation client — préfixes de type colorés dans la désignation,
+ * et type « Règlement » coloré pour les paiements
+ * ================================================================== */
+.objet-prefix {
+  font-weight: 800;
+}
+
+.objet-prefix--prestation {
+  color: #1e4f8f;
+}
+
+.objet-prefix--abonnement_mensuel {
+  color: #1f6b3f;
+}
+
+.objet-prefix--debours {
+  color: #8a5200;
+}
+
+.pill.reglement {
+  background: var(--success-bg);
+  color: var(--success);
+}

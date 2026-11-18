@@ -36,6 +36,10 @@ final class PdfFacturationClient {
     private static final Font F_TD = PdfTheme.font(8, Font.NORMAL, PdfTheme.TEXTE);
     private static final Font F_TD_GRAS = PdfTheme.font(8, Font.BOLD, PdfTheme.TEXTE);
     private static final Font F_TD_ITALIQUE = PdfTheme.font(7, Font.ITALIC, PdfTheme.GRIS_TEXTE);
+    private static final Font F_PREST = PdfTheme.font(8, Font.BOLD, new java.awt.Color(0x1E4F8F));
+    private static final Font F_DEB = PdfTheme.font(8, Font.BOLD, new java.awt.Color(0x8A5200));
+    private static final Font F_ABO = PdfTheme.font(8, Font.BOLD, new java.awt.Color(0x1F6B3F));
+    private static final Font F_REGL = PdfTheme.font(7, Font.BOLD, new java.awt.Color(0x1F6B3F));
 
     private PdfFacturationClient() {
     }
@@ -105,13 +109,13 @@ final class PdfFacturationClient {
         return v != null ? v : BigDecimal.ZERO;
     }
 
-    private static String libelleType(String type) {
+    /** Couleur de police du préfixe selon le type de ligne (designation colorée). */
+    private static Font fontTypeObjet(String type) {
         return switch (type != null ? type : "") {
-            case "GENERALE" -> "Générale";
-            case "PRESTATION" -> "Prestation";
-            case "DEBOURS" -> "Débours";
-            case "ABONNEMENT_MENSUEL" -> "Abonnement";
-            default -> type != null ? type : "—";
+            case "PRESTATION" -> F_PREST;
+            case "DEBOURS" -> F_DEB;
+            case "ABONNEMENT_MENSUEL" -> F_ABO;
+            default -> F_TD_GRAS;
         };
     }
 
@@ -125,35 +129,39 @@ final class PdfFacturationClient {
         };
     }
 
-    /**
-     * Désignation de la facture : toutes les lignes facturées, une par ligne,
-     * préfixées par leur type (« Prestation : … », « Abonnement : … (mois aaaa) »,
-     * « Débours : … »).
-     */
-    private static String designationFacture(FactureValideeFicheResponse f) {
+    /** Paragraphe de désignation multi-lignes : préfixe coloré selon le type. */
+    private static com.lowagie.text.Paragraph paragrapheObjets(FactureValideeFicheResponse f) {
+        com.lowagie.text.Paragraph p = new Paragraph();
+        p.setLeading(F_TD.getSize() * 1.35f);
         List<FactureValideeFicheResponse.ObjetLigne> objets = f.objets();
         if (objets == null || objets.isEmpty()) {
-            // Repli pour d'anciennes fiches : désignation simple + mois éventuel.
-            String objet = PdfFormats.valeur(f.objet());
-            if ("ABONNEMENT_MENSUEL".equals(f.type()) && f.mois() != null) {
-                int annee = Integer.parseInt(f.mois().substring(0, 4));
-                int mois = Integer.parseInt(f.mois().substring(5, 7));
-                String label = DateTimeFormatter
-                        .ofPattern("MMMM yyyy", Locale.FRANCE).format(LocalDate.of(annee, mois, 1));
-                objet = objet + " (" + Character.toUpperCase(label.charAt(0)) + label.substring(1) + ")";
-            }
-            return objet;
+            p.add(new com.lowagie.text.Chunk(PdfFormats.valeur(f.objet()) != null
+                    ? PdfFormats.valeur(f.objet()) : "—", F_TD));
+            return p;
         }
-        StringBuilder sb = new StringBuilder();
+        int cpt = 0;
         for (FactureValideeFicheResponse.ObjetLigne o : objets) {
-            if (sb.length() > 0) {
-                sb.append('\n');
+            if (cpt++ > 0) {
+                p.add(com.lowagie.text.Chunk.NEWLINE);
             }
-            sb.append(prefixObjet(o.type()))
-              .append(" : ")
-              .append(o.libelle() != null ? o.libelle() : "—");
+            p.add(new com.lowagie.text.Chunk(prefixObjet(o.type()) + " : ", fontTypeObjet(o.type())));
+            p.add(new com.lowagie.text.Chunk(o.libelle() != null ? o.libelle() : "—", F_TD));
         }
-        return sb.toString();
+        return p;
+    }
+
+    /** Cellule DESIGNATION colorée par type de ligne. */
+    private static PdfPCell cellDesig(FactureValideeFicheResponse f) {
+        PdfPCell c = new PdfPCell(paragrapheObjets(f));
+        c.setBorder(Rectangle.BOTTOM);
+        c.setBorderColor(PdfTheme.GRIS_BORDURE);
+        c.setBorderWidthBottom(0.5f);
+        c.setPaddingTop(4);
+        c.setPaddingBottom(4);
+        c.setPaddingLeft(14f);
+        c.setPaddingRight(6);
+        c.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        return c;
     }
 
     private static String codeSociete(int id) {
@@ -255,8 +263,8 @@ final class PdfFacturationClient {
         table.addCell(cellTd(date(fiche.dateFactureValidee()), F_TD, null, false, 8f));
         table.addCell(cellTd(PdfFormats.valeur(fiche.referenceFactureValidee()), F_TD_GRAS, null,
                 false, 8f));
-        table.addCell(cellTd(libelleType(fiche.type()), F_TD, null, false, 8f));
-        table.addCell(cellTd(designationFacture(fiche), F_TD, null, false, 8f));
+        table.addCell(cellTd("—", F_TD, null, false, 8f));
+        table.addCell(cellDesig(fiche));
         table.addCell(cellMontant(PdfFormats.formatMontant(montant), F_TD, null, false, false));
         table.addCell(cellMontant(PdfFormats.formatMontant(paye), F_TD, null, false, false));
         table.addCell(cellMontant(PdfFormats.formatMontant(reste),
@@ -269,7 +277,7 @@ final class PdfFacturationClient {
                                        FactureValideeFicheResponse.PaiementFicheItem p) {
         table.addCell(cellTd(date(p.datePaiement()), F_TD_ITALIQUE, null, false, 20f));
         table.addCell(cellTd(PdfFormats.valeur(p.referencePaiement()), F_TD_ITALIQUE, null, false, 20f));
-        table.addCell(cellTd("Règlement", F_TD_ITALIQUE, null, false, 20f));
+        table.addCell(cellTd("Règlement", F_REGL, PdfTheme.VERT_PALE, false, 20f));
         table.addCell(cellTd(p.libelleMode() != null ? p.libelleMode() : "—", F_TD_ITALIQUE, null,
                 false, 20f));
         table.addCell(cellMontant("—", F_TD_ITALIQUE, null, false, false));

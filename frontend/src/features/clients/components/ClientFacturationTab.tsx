@@ -12,18 +12,8 @@ import { codeSociete } from '../types'
 
 type Tri = 'desc' | 'asc'
 
-const TYPE_LABEL: Record<string, string> = {
-  GENERALE: 'Générale',
-  PRESTATION: 'Prestation',
-  DEBOURS: 'Débours',
-  ABONNEMENT_MENSUEL: 'Abonnement',
-}
-
-const TYPE_PILL: Record<string, string> = {
-  GENERALE: 'pill info',
-  PRESTATION: 'pill wt',
-  DEBOURS: 'pill warning',
-  ABONNEMENT_MENSUEL: 'pill ok',
+function strlower(v: string): string {
+  return (v ?? '').toLowerCase()
 }
 
 /** Préfixe lisible du type d'une ligne d'objet (« Prestation : … »). */
@@ -90,7 +80,10 @@ function ObjetsDesignation({ facture }: { facture: FactureFacturation }) {
     <span className="facture-designation">
       {lignes.map((o, i) => (
         <span key={`${facture.id}-${i}`} className="facture-designation__ligne">
-          {`${OBJET_PREFIX[o.type] ?? o.type} : ${o.libelle}`}
+          <span className={`objet-prefix objet-prefix--${strlower(o.type)}`}>
+            {`${OBJET_PREFIX[o.type] ?? o.type} : `}
+          </span>
+          <span>{o.libelle}</span>
         </span>
       ))}
     </span>
@@ -386,7 +379,7 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                       {formatDate(facture.dateFactureValidee)}
                     </td>
                     <td className="fw-700">{facture.referenceFactureValidee ?? '—'}</td>
-                    <td><span className={TYPE_PILL[facture.type] ?? 'pill wt'}>● {TYPE_LABEL[facture.type] ?? facture.type}</span></td>
+                    <td className="text-secondary">—</td>
                     <td className="text-secondary">{nomClient}</td>
                     <td><ObjetsDesignation facture={facture} /></td>
                     <td className="cell-number">{formatMontantMGA(montant)}</td>
@@ -466,7 +459,7 @@ function LigneReglement({ paiement, nomClient }: { paiement: PaiementFacturation
           <span className="facture-sousligne">Chèque n° {paiement.numeroCheque} — {paiement.banque ?? '—'}</span>
         )}
       </td>
-      <td><span className="pill ok">● Règlement</span></td>
+      <td><span className="pill reglement">● Règlement</span></td>
       <td className="text-secondary">{nomClient}</td>
       <td>{libelleMode}</td>
       <td className="text-secondary">—</td>
