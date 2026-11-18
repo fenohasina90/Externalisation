@@ -390,6 +390,15 @@ public class LigneServiceService {
             // Abonnement mensuel : réglé via la facture du mois ; la ligne reste EN_COURS.
             return;
         }
+        // Facturation « unique » : les lignes non abonnement sont toutes couvertes par
+        // la facture générale — une ligne passe TERMINE/PAYEE quand celle-ci est
+        // entièrement réglée (sinon, elle reste EN_COURS).
+        String modeFacturation = ligne.getFacture() != null
+                ? ligne.getFacture().getModeFacturation() : null;
+        if ("UNIQUE".equalsIgnoreCase(modeFacturation)) {
+            actualiserStatutApresPaiementFactureUnique(ligne);
+            return;
+        }
         BigDecimal paye = montantPayeParLigne(ligne.getId());
         BigDecimal attendu = montantAttendu(ligne);
         boolean estDebours = estDebours(ligne);
@@ -416,6 +425,46 @@ public class LigneServiceService {
                 "Ligne " + ligne.getId() + " : " + cible + " (payé : "
                         + paye.toPlainString() + ")");
 
+        auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "LigneService",
+                Long.valueOf(ligne.getId()), actuel, cible);
+    }
+
+    /**
+     * Règle des demandes à une seule facture (mode « UNIQUE »), sans abonnement :
+     * la ligne est {@code TERMINE} (EXTERNALISATION) ou {@code PAYEE} (DEBOURS)
+     * si le montant facturé est payé en totalité ; sinon elle reste {@code EN_COURS}
+     * (le paiement partiel ne change pas le statut de la ligne).
+     */
+    private void actualiserStatutApresPaiementFactureUnique(LigneService ligne) {
+        Integer factureProformaId = ligne.getFacture() != null ? ligne.getFacture().getId() : null;
+        com.cabex.backend.facture.entity.FactureValidee fv = factureProformaId != null
+                ? factureValideeRepository.findByFactureProformaId(factureProformaId).orElse(null)
+                : null;
+        BigDecimal paye = fv != null ? paiementRepository.sommePayeeParFactureValidee(fv.getId())
+                : BigDecimal.ZERO;
+        if (paye == null) {
+            paye = BigDecimal.ZERO;
+        }
+        BigDecimal montant = fv != null && fv.getMontant() != null ? fv.getMontant()
+                : BigDecimal.ZERO;
+        String cible;
+        if (montant.signum() > 0 && paye.compareTo(montant) >= 0) {
+            cible = estDebours(ligne) ? LIGNE_PAYEE : LIGNE_TERMINE;
+        } else {
+            cible = LIGNE_EN_COURS;
+        }
+        String actuel = ligne.getStatut();
+        if (cible.equals(actuel)) {
+            return;
+        }
+        ligne.setStatut(cible);
+        ligneRepository.save(ligne);
+
+        ajouterHistoriqueLigne(ligne, cible,
+                "Statut de ligne mis à jour après règlement complet de la facture unique (payé : "
+                        + paye.toPlainString() + " / " + montant.toPlainString() + ")", "AUTO");
+        ajouterHistoriqueDemande(ligne.getDemande(),
+                "Ligne " + ligne.getId() + " : " + cible);
         auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "LigneService",
                 Long.valueOf(ligne.getId()), actuel, cible);
     }

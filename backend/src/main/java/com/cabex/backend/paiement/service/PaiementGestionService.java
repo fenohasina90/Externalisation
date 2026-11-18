@@ -437,6 +437,18 @@ public class PaiementGestionService {
             return lignes;
         }
         LigneService unique = lignePourFactureValidee(fv, demande);
+        // Facture générale sans lignes persistées (demande non abonnée, mode UNIQUE) :
+        // toutes les lignes du proforma de cette demande sont concernées par le paiement.
+        if (fv.getFactureProforma() != null && fv.getFactureProforma().getLignes() != null
+                && demande != null) {
+            List<LigneService> lignesProforma = fv.getFactureProforma().getLignes().stream()
+                    .filter(l -> l.getDemande() != null
+                            && l.getDemande().getId().equals(demande.getId()))
+                    .toList();
+            if (!lignesProforma.isEmpty()) {
+                return lignesProforma;
+            }
+        }
         return unique != null ? List.of(unique) : List.of();
     }
 
