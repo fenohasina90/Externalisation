@@ -166,6 +166,8 @@ public class PdfGenerator {
         if (facture.getFactureProforma() == null) {
             return PdfFactureDebours.generer(facture);
         }
-        return generateurFacture.generer(facture.getFactureProforma(), "VALIDÉE");
+        // Première facture validée (générale, éventuellement marquée mensuelle) :
+        // le suivi des paiements doit être à jour comme sur les autres factures.
+        return generateurFacture.generer(facture.getFactureProforma(), "VALIDÉE", avancePourFv(facture));
     }
 }
