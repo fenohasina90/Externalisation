@@ -10,6 +10,9 @@ import type {
   StatutCount,
 } from '../types'
 
+/** Fausse ligne « Débours » — aucun service en base, serviceId 0 côté backend. */
+const ID_DEBOURS = 0
+
 /* ---------------- utilitaires ---------------- */
 
 const MOIS_COURTS = [
@@ -393,14 +396,20 @@ export function PaiementsRetard({ retards }: { retards: PaiementRetard[] }) {
 /* ---------------- Barres horizontales ---------------- */
 
 export function TopServices({ donnees }: { donnees: ServiceTop[] }) {
-  const top = [...donnees].sort((a, b) => b.nombreDemandes - a.nombreDemandes).slice(0, 5)
-  if (top.length === 0) {
+  // Débours : toujours figurées (ligne avec serviceId 0), épinglées en bas.
+  const debours = donnees.find((d) => d.serviceId === ID_DEBOURS)
+  const services = donnees
+    .filter((d) => d.serviceId !== ID_DEBOURS)
+    .sort((a, b) => b.nombreDemandes - a.nombreDemandes)
+    .slice(0, 5)
+  if (services.length === 0 && !debours) {
     return <p className="section-note">Aucune donnée service.</p>
   }
-  const max = Math.max(1, ...top.map((s) => s.nombreDemandes))
+  const affichage = debours ? [...services, debours] : services
+  const max = Math.max(1, ...affichage.map((s) => s.nombreDemandes))
   return (
     <div>
-      {top.map((s) => (
+      {affichage.map((s) => (
         <div key={s.serviceId} className="hbar-ligne">
           <div className="hbar-haut">
             <span>{s.nomService}</span>
@@ -416,14 +425,20 @@ export function TopServices({ donnees }: { donnees: ServiceTop[] }) {
 }
 
 export function MontantServices({ donnees }: { donnees: ServiceRevenu[] }) {
-  const top = [...donnees].sort((a, b) => b.revenu - a.revenu).slice(0, 5)
-  if (top.length === 0) {
+  // Débours : toujours figurées (ligne avec serviceId 0), épinglées en bas.
+  const debours = donnees.find((d) => d.serviceId === ID_DEBOURS)
+  const services = donnees
+    .filter((d) => d.serviceId !== ID_DEBOURS)
+    .sort((a, b) => b.revenu - a.revenu)
+    .slice(0, 5)
+  if (services.length === 0 && !debours) {
     return <p className="section-note">Aucune donnée service.</p>
   }
-  const max = Math.max(1, ...top.map((s) => s.revenu))
+  const affichage = debours ? [...services, debours] : services
+  const max = Math.max(1, ...affichage.map((s) => s.revenu))
   return (
     <div>
-      {top.map((s) => (
+      {affichage.map((s) => (
         <div key={s.serviceId} className="hbar-ligne">
           <div className="hbar-haut">
             <span>{s.nomService}</span>

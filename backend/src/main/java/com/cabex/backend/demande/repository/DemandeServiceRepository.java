@@ -427,6 +427,26 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
                                         @Param("societeId") Integer societeId,
                                         @Param("serviceId") Integer serviceId);
 
+    /**
+     * Nombre de demandes ayant au moins une ligne de catégorie DEBOURS.
+     * Les débours n'étant rattachés à aucun service, le filtre service est
+     * volontairement ignoré ; la ligne est toujours présente côté tableau de bord.
+     */
+    @Query("""
+        SELECT COUNT(DISTINCT d.id)
+        FROM DemandeService d
+        LEFT JOIN d.societe s
+        WHERE d.actif = true
+          AND EXISTS (SELECT 1 FROM LigneService l
+                      WHERE l.demande = d AND l.categorie = 'DEBOURS')
+          AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)
+          AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)
+          AND (:societeId IS NULL OR s.id = :societeId)
+        """)
+    long compterDemandesAvecDeboursFiltre(@Param("dateDebut") LocalDate dateDebut,
+                                          @Param("dateFin") LocalDate dateFin,
+                                          @Param("societeId") Integer societeId);
+
     @Query("""
         SELECT l.service.id, l.service.nomService, COUNT(DISTINCT l.demande.id)
         FROM LigneService l JOIN l.demande d

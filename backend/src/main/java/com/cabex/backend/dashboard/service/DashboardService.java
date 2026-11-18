@@ -44,6 +44,11 @@ import java.util.TreeMap;
 @Service
 public class DashboardService {
 
+    /** Fausse ligne « Débours » (aucun service en base) — toujours affichée. */
+    static final int ID_DEBOURS = 0;
+    static final String NOM_DEBOURS = "Débours";
+
+
     private final SocieteRepository societeRepository;
     private final DemandeServiceRepository demandeRepository;
     private final HistoriqueDemandeRepository historiqueRepository;
@@ -281,15 +286,24 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public List<ServiceRevenuResponse> services(DashboardFilter filtre) {
-        return factureValideeRepository.sommeServiceFacturesValidees(
-                        filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
-                .stream()
-                .map(o -> new ServiceRevenuResponse(
-                        (Integer) o[0],
-                        (String) o[1],
-                        toLong(o[2]),
-                        toBigDecimal(o[3])))
-                .toList();
+        List<ServiceRevenuResponse> resultat = new java.util.ArrayList<>(
+                factureValideeRepository.sommeServiceFacturesValidees(
+                                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
+                        .stream()
+                        .map(o -> new ServiceRevenuResponse(
+                                (Integer) o[0],
+                                (String) o[1],
+                                toLong(o[2]),
+                                toBigDecimal(o[3])))
+                        .toList());
+        // Débours : ligne toujours présente ; ajoutée si la requête ne l'a pas renvoyée (garde-fou).
+        boolean deboursPresent = resultat.stream().anyMatch(r -> r.serviceId() == ID_DEBOURS);
+        if (!deboursPresent) {
+            long nb = demandeRepository.compterDemandesAvecDeboursFiltre(
+                    filtre.dateDebut(), filtre.dateFin(), filtre.clientId());
+            resultat.add(new ServiceRevenuResponse(ID_DEBOURS, NOM_DEBOURS, nb, BigDecimal.ZERO));
+        }
+        return resultat;
     }
 
     @Transactional(readOnly = true)
@@ -339,11 +353,17 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public List<ServiceTopResponse> demandesParService(DashboardFilter filtre) {
-        return demandeRepository.compterParServiceFiltre(
-                        filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
-                .stream()
-                .map(o -> new ServiceTopResponse((Integer) o[0], (String) o[1], toLong(o[2])))
-                .toList();
+        List<ServiceTopResponse> resultat = new java.util.ArrayList<>(
+                demandeRepository.compterParServiceFiltre(
+                                filtre.dateDebut(), filtre.dateFin(), filtre.clientId(), filtre.serviceId())
+                        .stream()
+                        .map(o -> new ServiceTopResponse((Integer) o[0], (String) o[1], toLong(o[2])))
+                        .toList());
+        // Débours : toujours figurées, quel que soit le filtre service.
+        long nbDebours = demandeRepository.compterDemandesAvecDeboursFiltre(
+                filtre.dateDebut(), filtre.dateFin(), filtre.clientId());
+        resultat.add(new ServiceTopResponse(ID_DEBOURS, NOM_DEBOURS, nbDebours));
+        return resultat;
     }
 
     @Transactional(readOnly = true)

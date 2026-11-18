@@ -74,6 +74,9 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
      * lignes PRINCIPALE persistées à la création de la mensuelle (mensuelle 1) et
      * des mensuelles suivantes. Repli sur les lignes du proforma validé quand
      * aucune ligne n'a été persistée pour la facture validée (demandes sans abonnement).
+     * Les lignes DEBOURS ne sont rattachées à aucun service : elles sont
+     * agrégées sous la fausse ligne « Débours » (serviceId 0), toujours
+     * présente, indépendante du filtre service.
      * Colonnes : s.id, s.nom_service, nb_demandes, revenu.
      */
     @org.springframework.data.jpa.repository.Query(value =
@@ -112,6 +115,33 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
             + "     AND (:clientId IS NULL OR d.societe_id = :clientId)"
             + "     AND (:serviceId IS NULL OR l.service_id = :serviceId)"
             + "   GROUP BY s.id, s.nom_service"
+            + "   UNION ALL"
+            + "   SELECT 0 AS sid, 'Débours' AS nom, COUNT(DISTINCT fv.demande_id) AS nb_dem, COALESCE(SUM(fvl.montant), 0) AS rev"
+            + "   FROM facture_validee_ligne fvl"
+            + "   JOIN facture_validee fv ON fv.id = fvl.facture_validee_id"
+            + "   JOIN demande_service d ON d.id = fv.demande_id"
+            + "   JOIN ligne_service l ON l.id = fvl.ligne_service_id"
+            + "   WHERE d.actif = 1"
+            + "     AND l.categorie = 'DEBOURS'"
+            + "     AND fvl.type = 'PRINCIPALE'"
+            + "     AND (:dateDebut IS NULL OR d.date_demande >= :dateDebut)"
+            + "     AND (:dateFin IS NULL OR d.date_demande <= :dateFin)"
+            + "     AND (:clientId IS NULL OR d.societe_id = :clientId)"
+            + "   UNION ALL"
+            + "   SELECT 0 AS sid, 'Débours' AS nom, COUNT(DISTINCT fv.demande_id) AS nb_dem, COALESCE(SUM(fpl.montant_htva), 0) AS rev"
+            + "   FROM facture_proforma fp"
+            + "   JOIN facture_proforma_ligne fpl ON fpl.facture_proforma_id = fp.id"
+            + "   JOIN facture_validee fv ON fv.facture_proforma_id = fp.id"
+            + "   JOIN demande_service d ON d.id = fv.demande_id"
+            + "   JOIN ligne_service l ON l.id = fpl.ligne_service_id"
+            + "   WHERE d.actif = 1"
+            + "     AND fpl.categorie = 'DEBOURS'"
+            + "     AND fp.statut = 'VALIDEE'"
+            + "     AND l.tarif IS NOT NULL"
+            + "     AND NOT EXISTS (SELECT 1 FROM facture_validee_ligne x WHERE x.facture_validee_id = fv.id)"
+            + "     AND (:dateDebut IS NULL OR d.date_demande >= :dateDebut)"
+            + "     AND (:dateFin IS NULL OR d.date_demande <= :dateFin)"
+            + "     AND (:clientId IS NULL OR d.societe_id = :clientId)"
             + " ) u"
             + " GROUP BY sid, nom"
             + " ORDER BY revenu DESC",
