@@ -19,8 +19,6 @@ public record CreatePaiementRequest(
         @NotNull(message = "La facture validée est obligatoire")
         Integer factureValideeId,
 
-        /** Échéance réglée (EXTERNALISATION avec plan de paiement). NULL sinon. */
-        Integer echeanceId,
 
         @NotNull(message = "Le mode de paiement est obligatoire")
         Integer modePaiementId,

@@ -87,7 +87,6 @@ export interface CreateUtilisateurPayload {
   actif?: boolean
 }
 
-export type UpdateUtilisateurPayload = Partial<CreateUtilisateurPayload>
 
 export type StatutDemandeReinitialisation =
   | 'EN_ATTENTE'
@@ -117,4 +116,23 @@ export interface MotDePasseTemporaire {
   expiration: string
   message: string
   demande: DemandeReinitialisation
+}
+export type CibleReinitialisation =
+  | 'paiement'
+  | 'demande'
+  | 'facture'
+  | 'notification'
+  | 'service'
+  | 'domaine'
+  | 'client'
+  | 'piece_jointe'
+  | 'responsable_client'
+  | 'commerciaux'
+
+
+export interface ReinitialisationResponse {
+  /** Lignes supprimées, par table. */
+  compteurs: Record<string, number>
+  fichiersSupprimes: number
+  fichiersIntrouvables: number
 }

@@ -4,7 +4,6 @@ import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.dossier.entity.DossierCreation;
 import com.cabex.backend.dossier.entity.DossierTransactionImmobiliere;
-import com.cabex.backend.echeance.entity.ProposPaiement;
 import com.cabex.backend.facture.dto.FactureValideeFicheResponse;
 import com.cabex.backend.facture.entity.Facture;
 import com.cabex.backend.facture.entity.FactureValidee;
@@ -56,12 +55,22 @@ public class PdfGenerator {
     }
 
     /**
-     * Fiche récapitulative d'une demande d'externalisation : titre + badge, bandeau
-     * références, cartes Entreprise / Contact, profil chiffré, domaine, tableau des
-     * services souhaités, délai, observation et signatures.
+     * Fiche récapitulative sans liste de domaines (cases de domaine non cochées).
+     * Conservée pour les tests unitaires ; préférer l'autre surcharge.
      */
     public byte[] recapitulatifDemande(DemandeService demande) {
-        return PdfRecapitulatif.generer(demande);
+        return PdfRecapitulatif.generer(demande, java.util.List.of());
+    }
+
+    /**
+     * Fiche récapitulative d'une demande d'externalisation : titre + badge, bandeau
+     * références, cartes Entreprise / Contact, profil chiffré, domaines cochés
+     * (liste dynamique), tableau des services souhaités avec leur type,
+     * délai, observation et signatures.
+     */
+    public byte[] recapitulatifDemande(DemandeService demande,
+                                       java.util.List<com.cabex.backend.service.entity.DomaineService> domaines) {
+        return PdfRecapitulatif.generer(demande, domaines);
     }
 
     /**
@@ -105,9 +114,23 @@ public class PdfGenerator {
         return PdfRecuPaiement.generer(paiement, sommePayeeSurFacture);
     }
 
-    public byte[] planPaiement(ProposPaiement propos) {
-        return PdfPlanPaiement.generer(propos);
+    /** Reçu de paiement avec objet précis de la facture validée (service / débours / Services facturés). */
+    public byte[] recuPaiement(Paiement paiement, BigDecimal sommePayeeSurFacture,
+                               com.cabex.backend.facture.dto.ObjetFactureValideeResponse objet) {
+        return recuPaiement(paiement, sommePayeeSurFacture, objet, java.util.List.of(), java.util.List.of());
     }
+
+    /**
+     * Reçu de paiement complet : objet précis de la facture validée, lignes détaillées
+     * des services facturés (type + désignation) et pièces jointes liées au paiement.
+     */
+    public byte[] recuPaiement(Paiement paiement, BigDecimal sommePayeeSurFacture,
+                               com.cabex.backend.facture.dto.ObjetFactureValideeResponse objet,
+                               java.util.List<com.cabex.backend.facture.dto.ObjetLigne> objets,
+                               java.util.List<com.cabex.backend.document.entity.PieceJointe> piecesJointes) {
+        return PdfRecuPaiement.generer(paiement, sommePayeeSurFacture, objet, objets, piecesJointes);
+    }
+
 
     /**
      * Facture proforma au format du modèle CABEX, générée sur une seule page.
@@ -160,6 +183,8 @@ public class PdfGenerator {
         if (facture.getFactureProforma() == null) {
             return PdfFactureDebours.generer(facture);
         }
-        return generateurFacture.generer(facture.getFactureProforma(), "VALIDÉE");
+        // Première facture validée (générale, éventuellement marquée mensuelle) :
+        // le suivi des paiements doit être à jour comme sur les autres factures.
+        return generateurFacture.generer(facture.getFactureProforma(), "VALIDÉE", avancePourFv(facture));
     }
 }

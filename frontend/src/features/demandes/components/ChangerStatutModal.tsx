@@ -93,12 +93,6 @@ export function ChangerStatutModal({ open, statutActuel, onClose, onConfirm, enr
                 placeholder="Précisions éventuelles"
               />
             </label>
-            {statutActuel === 'EN_ATTENTE' && nouveauStatut === 'VALIDATION' && (
-              <p className="section-note">
-                La validation exige : factures validées et plan de paiement établi pour chaque
-                service (contrôlé par le backend).
-              </p>
-            )}
             <footer className="modal-footer">
               <button type="button" className="btn-ghost" onClick={onClose} disabled={enregistrement}>
                 Annuler

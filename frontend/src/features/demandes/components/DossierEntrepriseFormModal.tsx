@@ -95,8 +95,6 @@ export function DossierEntrepriseFormModal({
       set(name as keyof DossierEntreprise, (e.target as HTMLInputElement).checked as never)
     } else if (name === 'capitalSocial') {
       set('capitalSocial', value === '' ? null : Number(value))
-    } else if (name === 'nombreAssocies') {
-      set('nombreAssocies', Number(value))
     } else {
       set(name as keyof DossierEntreprise, value as never)
     }

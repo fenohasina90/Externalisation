@@ -10,8 +10,6 @@ import com.cabex.backend.document.dto.FichierDocument;
 import com.cabex.backend.document.entity.PieceJointe;
 import com.cabex.backend.document.mapper.DocumentMapper;
 import com.cabex.backend.document.repository.PieceJointeRepository;
-import com.cabex.backend.echeance.entity.ProposPaiement;
-import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
@@ -42,7 +40,6 @@ public class DocumentGestionService {
     private final PieceJointeRepository pieceRepository;
     private final DemandeServiceRepository demandeRepository;
     private final PaiementRepository paiementRepository;
-    private final ProposPaiementRepository proposRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final PdfGenerator pdfGenerator;
     private final AuditService auditService;
@@ -54,6 +51,7 @@ public class DocumentGestionService {
             dossierTransactionRepository;
     private final com.cabex.backend.client.repository.SocieteRepository societeRepository;
     private final com.cabex.backend.facture.service.FactureService factureService;
+    private final com.cabex.backend.service.repository.DomaineServiceRepository domaineServiceRepository;
 
     @Value("${app.document.storage-path}")
     private String storagePath;
@@ -64,7 +62,6 @@ public class DocumentGestionService {
     public DocumentGestionService(PieceJointeRepository pieceRepository,
                                   DemandeServiceRepository demandeRepository,
                                   PaiementRepository paiementRepository,
-                                  ProposPaiementRepository proposRepository,
                                   UtilisateurRepository utilisateurRepository,
                                   PdfGenerator pdfGenerator,
                                   AuditService auditService,
@@ -75,11 +72,11 @@ public class DocumentGestionService {
                                   com.cabex.backend.dossier.repository.DossierTransactionImmobiliereRepository
                                           dossierTransactionRepository,
                                   com.cabex.backend.client.repository.SocieteRepository societeRepository,
-                                  com.cabex.backend.facture.service.FactureService factureService) {
+                                  com.cabex.backend.facture.service.FactureService factureService,
+                                  com.cabex.backend.service.repository.DomaineServiceRepository domaineServiceRepository) {
         this.pieceRepository = pieceRepository;
         this.demandeRepository = demandeRepository;
         this.paiementRepository = paiementRepository;
-        this.proposRepository = proposRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.pdfGenerator = pdfGenerator;
         this.auditService = auditService;
@@ -90,6 +87,7 @@ public class DocumentGestionService {
         this.dossierTransactionRepository = dossierTransactionRepository;
         this.societeRepository = societeRepository;
         this.factureService = factureService;
+        this.domaineServiceRepository = domaineServiceRepository;
     }
 
     /**
@@ -202,7 +200,8 @@ public class DocumentGestionService {
                 .map(dossier -> pdfGenerator.ficheCreation(demande, dossier))
                 .or(() -> dossierTransactionRepository.findByDemandeId(demandeId)
                         .map(dossier -> pdfGenerator.ficheTransactionImmobiliere(demande, dossier)))
-                .orElseGet(() -> pdfGenerator.recapitulatifDemande(demande));
+                .orElseGet(() -> pdfGenerator.recapitulatifDemande(demande,
+                        domaineServiceRepository.findAllByOrderByNomDomaineAsc()));
     }
 
     @Transactional(readOnly = true)
@@ -213,7 +212,27 @@ public class DocumentGestionService {
         BigDecimal somme = paiement.getFactureValidee() != null
                 ? paiementRepository.sommePayeeParFactureValidee(paiement.getFactureValidee().getId())
                 : BigDecimal.ZERO;
-        return pdfGenerator.recuPaiement(paiement, somme != null ? somme : BigDecimal.ZERO);
+        return pdfGenerator.recuPaiement(paiement, somme != null ? somme : BigDecimal.ZERO,
+                objetRecu(paiement), objetsFacture(paiement), piecesDuPaiement(paiementId));
+    }
+
+    /** Objets détaillés de la facture validée liée au paiement (tous les services facturés). */
+    private java.util.List<com.cabex.backend.facture.dto.ObjetLigne> objetsFacture(Paiement paiement) {
+        return paiement.getFactureValidee() != null
+                ? factureService.objetsFactureValidee(paiement.getFactureValidee())
+                : java.util.List.of();
+    }
+
+    /** Pièces jointes liées au paiement, affichées dans le reçu. */
+    private java.util.List<com.cabex.backend.document.entity.PieceJointe> piecesDuPaiement(Integer paiementId) {
+        return pieceRepository.findByPaiementIdOrderByCreatedAtDesc(paiementId);
+    }
+
+    /** Objet précis de la facture validée liée au paiement (service / débours / facture générale). */
+    private com.cabex.backend.facture.dto.ObjetFactureValideeResponse objetRecu(Paiement paiement) {
+        return paiement.getFactureValidee() != null
+                ? factureService.objetFactureValidee(paiement.getFactureValidee())
+                : null;
     }
 
     /** Export PDF de la facturation complète du client (onglet Facturation, filtre date appliqué). */
@@ -240,14 +259,6 @@ public class DocumentGestionService {
         List<com.cabex.backend.facture.dto.FactureValideeFicheResponse> fiches =
                 factureService.listerFacturationParClient(societeId);
         return pdfGenerator.facturationClientExcel(societe, fiches, dateDebut, dateFin, ordre, recherche);
-    }
-
-    public byte[] planPaiement(Integer demandeId) {
-        ProposPaiement propos = proposRepository
-                .findFirstByDemandeIdAndStatutOrderByCreatedAtDesc(demandeId, "ACTIF")
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Aucun plan de paiement actif pour la demande " + demandeId));
-        return pdfGenerator.planPaiement(propos);
     }
 
     public byte[] factureProforma(Integer factureId) {
@@ -304,7 +315,12 @@ public class DocumentGestionService {
     @Transactional
     public DocumentResponse sauvegarderRecu(Integer paiementId) {
         Paiement paiement = verifierPaiement(paiementId);
-        byte[] contenu = pdfGenerator.recuPaiement(paiement);
+        BigDecimal somme = paiement.getFactureValidee() != null
+                ? paiementRepository.sommePayeeParFactureValidee(paiement.getFactureValidee().getId())
+                : null;
+        byte[] contenu = pdfGenerator.recuPaiement(paiement,
+                somme != null ? somme : BigDecimal.ZERO, objetRecu(paiement),
+                objetsFacture(paiement), piecesDuPaiement(paiement.getId()));
         DemandeService demande = paiement.getDemande();
         return enregistrerFichier(demande, paiement,
                 "recu-paiement-" + paiement.getReferencePaiement() + ".pdf",
@@ -312,18 +328,6 @@ public class DocumentGestionService {
     }
 
     @Transactional
-    public DocumentResponse sauvegarderPlan(Integer demandeId) {
-        DemandeService demande = verifierDemande(demandeId);
-        ProposPaiement propos = proposRepository
-                .findFirstByDemandeIdAndStatutOrderByCreatedAtDesc(demandeId, "ACTIF")
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Aucun plan de paiement actif pour la demande " + demandeId));
-        byte[] contenu = pdfGenerator.planPaiement(propos);
-        return enregistrerFichier(demande, null,
-                "plan-paiement-" + demande.getReferenceDemande() + ".pdf",
-                "Plan de paiement généré automatiquement", contenu);
-    }
-
     private DocumentResponse enregistrerFichier(DemandeService demande, Paiement paiement,
                                                 String nomFichier, String description, byte[] contenu) {
         String extension = extensionDe(nomFichier);

@@ -49,6 +49,12 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
     /** Facture du mois d'un abonnement pour un mois donné (YYYY-MM-01). */
     com.cabex.backend.facture.entity.FactureValidee findByLigneServiceIdAndMois(Integer ligneServiceId, java.time.LocalDate mois);
 
+    /** Mensualités créées pour une demande (renseigne le mois), de la plus ancienne à la plus récente. */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT f FROM FactureValidee f WHERE f.demande.id = :demandeId AND f.mois IS NOT NULL ORDER BY f.valideLe ASC")
+    List<com.cabex.backend.facture.entity.FactureValidee> findByDemandeIdAndMoisIsNotNull(
+            @org.springframework.data.repository.query.Param("demandeId") Integer demandeId);
+
     /**
      * Toutes les factures concernées par l'alerte « retard de paiement »
      * (prestation et débours) : factures enfants en mode unique + factures
@@ -60,10 +66,112 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
                     + " JOIN FETCH f.demande d LEFT JOIN FETCH d.societe s"
                     + " LEFT JOIN FETCH f.ligneService l LEFT JOIN FETCH l.service svc"
                     + " LEFT JOIN f.factureProforma fp"
-                    + " WHERE (f.factureGenerale IS NOT NULL AND f.mois IS NULL)"
-                    + "    OR fp.modeFacturation = 'PAR_SERVICE'"
-                    + "    OR f.factureProforma IS NULL")
+                    + " WHERE f.mois IS NULL")
     List<com.cabex.backend.facture.entity.FactureValidee> findFacturesPourAlertesPaiement();
+
+    /**
+     * Revenu par service selon les factures validées :
+     * lignes PRINCIPALE persistées à la création de la mensuelle (mensuelle 1) et
+     * des mensuelles suivantes. Repli sur les lignes du proforma validé quand
+     * aucune ligne n'a été persistée pour la facture validée (demandes sans abonnement).
+     * Les lignes DEBOURS ne sont rattachées à aucun service : elles sont
+     * agrégées sous la fausse ligne « Débours » (serviceId 0), toujours
+     * présente, indépendante du filtre service. Montant des débours = somme,
+     * sur toutes les factures validées, de la part débours : lignes PRINCIPALE
+     * liées à des lignes DEBOURS (mensuelles), facture rattachée directement
+     * à une ligne DEBOURS, ou part DEBOURS de la proforma validée quand la
+     * facture n'a ni lignes persistées ni rattachement direct.
+     * Colonnes : s.id, s.nom_service, nb_demandes, revenu.
+     */
+    @org.springframework.data.jpa.repository.Query(value =
+            "SELECT sid, nom, SUM(nb_dem) AS nb_demandes, SUM(rev) AS revenu"
+            + " FROM ("
+            + "   SELECT s.id AS sid, s.nom_service AS nom, COUNT(DISTINCT fv.demande_id) AS nb_dem, COALESCE(SUM(fvl.montant), 0) AS rev"
+            + "   FROM facture_validee_ligne fvl"
+            + "   JOIN facture_validee fv ON fv.id = fvl.facture_validee_id"
+            + "   JOIN demande_service d ON d.id = fv.demande_id"
+            + "   JOIN ligne_service l ON l.id = fvl.ligne_service_id"
+            + "   JOIN services s ON s.id = l.service_id"
+            + "   WHERE d.actif = 1"
+            + "     AND l.categorie = 'EXTERNALISATION'"
+            + "     AND fvl.type = 'PRINCIPALE'"
+            + "     AND (:dateDebut IS NULL OR d.date_demande >= :dateDebut)"
+            + "     AND (:dateFin IS NULL OR d.date_demande <= :dateFin)"
+            + "     AND (:clientId IS NULL OR d.societe_id = :clientId)"
+            + "     AND (:serviceId IS NULL OR l.service_id = :serviceId)"
+            + "   GROUP BY s.id, s.nom_service"
+            + "   UNION ALL"
+            + "   SELECT s.id AS sid, s.nom_service AS nom, COUNT(DISTINCT fv.demande_id) AS nb_dem, COALESCE(SUM(fpl.montant_htva), 0) AS rev"
+            + "   FROM facture_proforma fp"
+            + "   JOIN facture_proforma_ligne fpl ON fpl.facture_proforma_id = fp.id"
+            + "   JOIN facture_validee fv ON fv.facture_proforma_id = fp.id"
+            + "   JOIN demande_service d ON d.id = fv.demande_id"
+            + "   JOIN ligne_service l ON l.id = fpl.ligne_service_id"
+            + "   JOIN services s ON s.id = l.service_id"
+            + "   WHERE d.actif = 1"
+            + "     AND fpl.categorie = 'EXTERNALISATION'"
+            + "     AND fpl.type_prestation <> 'ABONNEMENT_MENSUEL'"
+            + "     AND fp.statut = 'VALIDEE'"
+            + "     AND l.tarif IS NOT NULL"
+            + "     AND NOT EXISTS (SELECT 1 FROM facture_validee_ligne x WHERE x.facture_validee_id = fv.id)"
+            + "     AND (:dateDebut IS NULL OR d.date_demande >= :dateDebut)"
+            + "     AND (:dateFin IS NULL OR d.date_demande <= :dateFin)"
+            + "     AND (:clientId IS NULL OR d.societe_id = :clientId)"
+            + "     AND (:serviceId IS NULL OR l.service_id = :serviceId)"
+            + "   GROUP BY s.id, s.nom_service"
+            + "   UNION ALL"
+            + "   SELECT 0 AS sid, 'Débours' AS nom, COUNT(DISTINCT demande_id) AS nb_dem, COALESCE(SUM(montant_debours), 0) AS rev"
+            + "   FROM ("
+            + "     SELECT fv.demande_id AS demande_id, fvl.montant AS montant_debours"
+            + "     FROM facture_validee_ligne fvl"
+            + "     JOIN facture_validee fv ON fv.id = fvl.facture_validee_id"
+            + "     JOIN ligne_service l ON l.id = fvl.ligne_service_id"
+            + "     WHERE l.categorie = 'DEBOURS' AND fvl.type = 'PRINCIPALE'"
+            + "     UNION ALL"
+            + "     SELECT fv.demande_id, fv.montant"
+            + "     FROM facture_validee fv"
+            + "     JOIN ligne_service l ON l.id = fv.ligne_service_id"
+            + "     WHERE l.categorie = 'DEBOURS'"
+            + "       AND NOT EXISTS (SELECT 1 FROM facture_validee_ligne x WHERE x.facture_validee_id = fv.id)"
+            + "     UNION ALL"
+            + "     SELECT fv.demande_id, fpl.montant_htva"
+            + "     FROM facture_proforma fp"
+            + "     JOIN facture_proforma_ligne fpl ON fpl.facture_proforma_id = fp.id"
+            + "     JOIN ligne_service l ON l.id = fpl.ligne_service_id"
+            + "     JOIN facture_validee fv ON fv.facture_proforma_id = fp.id"
+            + "     WHERE l.categorie = 'DEBOURS' AND fp.statut = 'VALIDEE'"
+            + "       AND fv.ligne_service_id IS NULL"
+            + "       AND NOT EXISTS (SELECT 1 FROM facture_validee_ligne x WHERE x.facture_validee_id = fv.id)"
+            + "   ) t"
+            + "   JOIN demande_service d ON d.id = t.demande_id"
+            + "   WHERE d.actif = 1"
+            + "     AND (:dateDebut IS NULL OR d.date_demande >= :dateDebut)"
+            + "     AND (:dateFin IS NULL OR d.date_demande <= :dateFin)"
+            + "     AND (:clientId IS NULL OR d.societe_id = :clientId)"
+            + " ) u"
+            + " GROUP BY sid, nom"
+            + " ORDER BY revenu DESC",
+            nativeQuery = true)
+    List<Object[]> sommeServiceFacturesValidees(@org.springframework.data.repository.query.Param("dateDebut") java.time.LocalDate dateDebut,
+                                                 @org.springframework.data.repository.query.Param("dateFin") java.time.LocalDate dateFin,
+                                                 @org.springframework.data.repository.query.Param("clientId") Integer clientId,
+                                                 @org.springframework.data.repository.query.Param("serviceId") Integer serviceId);
+
+    /**
+     * Agrégats par facture validée pour un lot de demandes (situation de règlement).
+     * Colonnes : demande.id, f.id, COALESCE(montant, 0), paye payé actif (COALESCE 0),
+     * f.valideLe, f.mois.
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT f.demande.id, f.id, COALESCE(f.montant, 0),
+                   (SELECT COALESCE(SUM(p.montantPaye), 0) FROM Paiement p
+                    WHERE p.factureValidee = f AND p.actif = true),
+                   f.valideLe, f.mois
+            FROM FactureValidee f
+            WHERE f.demande.id IN :ids
+            ORDER BY f.demande.id, f.id
+            """)
+    List<Object[]> facturesAgregees(@org.springframework.data.repository.query.Param("ids") List<Integer> ids);
 
     /**
      * Toutes les factures du mois d'abonnement (alertes de retard abonnement).
@@ -75,6 +183,35 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
                     + " LEFT JOIN FETCH f.ligneService l LEFT JOIN FETCH l.service svc"
                     + " WHERE f.mois IS NOT NULL")
     List<com.cabex.backend.facture.entity.FactureValidee> findFacturesMensuellesPourAlerte();
+
+    /**
+     * Statistiques des paiements en retard : factures validées non soldées,
+     * émises avant le délai d'alerte applicable au type de facture
+     * (prestation/débours pour classiques, abonnement pour les mensuelles).
+     * Colonnes : nb, somme_reste.
+     */
+    @org.springframework.data.jpa.repository.Query(value =
+            "SELECT COUNT(*) AS nb,"
+            + " COALESCE(SUM(f.montant - COALESCE(p.paye, 0)), 0) AS somme_reste"
+            + " FROM facture_validee f"
+            + " JOIN demande_service d ON d.id = f.demande_id AND d.actif = 1"
+            + " LEFT JOIN (SELECT facture_validee_id, SUM(montant_paye) AS paye"
+            + "            FROM paiement WHERE actif = 1 GROUP BY facture_validee_id) p"
+            + "        ON p.facture_validee_id = f.id"
+            + " WHERE f.valide_le IS NOT NULL"
+            + "   AND ((f.mois IS NULL AND DATE(f.valide_le) <= :prestationDeboursLimite)"
+            + "       OR (f.mois IS NOT NULL AND DATE(f.valide_le) <= :abonnementLimite))"
+            + "   AND (:clientId IS NULL OR d.societe_id = :clientId)"
+            + "   AND (:serviceId IS NULL OR EXISTS ("
+            + "         SELECT 1 FROM ligne_service l"
+            + "          WHERE l.demande_id = d.id AND l.service_id = :serviceId))"
+            + "   AND f.montant - COALESCE(p.paye, 0) > 0",
+            nativeQuery = true)
+    java.util.List<Object[]> paiementRetardAggregat(
+            @org.springframework.data.repository.query.Param("prestationDeboursLimite") java.time.LocalDate prestationDeboursLimite,
+            @org.springframework.data.repository.query.Param("abonnementLimite") java.time.LocalDate abonnementLimite,
+            @org.springframework.data.repository.query.Param("clientId") Integer clientId,
+            @org.springframework.data.repository.query.Param("serviceId") Integer serviceId);
 
     /**
      * Factures validées du mois liées à une ligne d'abonnement :
@@ -91,77 +228,37 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
             @org.springframework.data.repository.query.Param("ligneId") Integer ligneId);
 
     /**
-     * Total des factures validées <b>payables</b> (prestation + abonnement), pour une demande unique.
-     * Exclut débours et facture générale UNIQUE.
+     * Montant facturé d'une demande = somme des tarifs validés de ses lignes
+     * EXTERNALISATION (prestation, abonnement, création, transaction).
+     * Toute facture validée est payable (mensuelles incluses).
      */
     @org.springframework.data.jpa.repository.Query(
-            "SELECT COALESCE(SUM(f.montant), 0)"
-                    + " FROM com.cabex.backend.facture.entity.FactureValidee f"
-                    + " LEFT JOIN f.factureProforma fp"
-                    + " WHERE f.demande.id = :demandeId"
-                    + "   AND NOT (f.factureGenerale IS NULL"
-                    + "             AND fp IS NOT NULL"
-                    + "             AND fp.modeFacturation = 'UNIQUE')"
-                    + "   AND NOT (f.ligneService IS NULL AND fp IS NOT NULL"
-                    + "             AND EXISTS ("
-                    + "                 SELECT 1 FROM com.cabex.backend.demande.entity.LigneService l3"
-                    + "                 WHERE l3.facture = fp"
-                    + "                   AND l3.typePrestation = 'ABONNEMENT_MENSUEL')"
-                    + "             AND NOT EXISTS ("
-                    + "                 SELECT 1 FROM com.cabex.backend.demande.entity.LigneService l4"
-                    + "                 WHERE l4.facture = fp"
-                    + "                   AND (l4.typePrestation IS NULL OR l4.typePrestation <> 'ABONNEMENT_MENSUEL')))"
-                    + "   AND ((f.ligneService IS NOT NULL AND f.ligneService.categorie <> 'DEBOURS')"
-                    + "        OR (f.ligneService IS NULL AND NOT EXISTS ("
-                    + "                SELECT 1 FROM com.cabex.backend.facture.entity.FactureValideeLigne fl"
-                    + "                WHERE fl.factureValidee = f"
-                    + "                  AND fl.ligneService.categorie = 'DEBOURS'))"
-                    + "        OR (f.ligneService IS NULL AND EXISTS ("
-                    + "                SELECT 1 FROM com.cabex.backend.facture.entity.FactureValideeLigne fl"
-                    + "                WHERE fl.factureValidee = f"
-                    + "                  AND fl.ligneService.categorie <> 'DEBOURS')))")
+            "SELECT COALESCE(SUM(COALESCE(l.tarif, 0)), 0)"
+                    + " FROM com.cabex.backend.demande.entity.LigneService l"
+                    + " WHERE l.demande.id = :demandeId"
+                    + "   AND l.categorie <> 'DEBOURS'"
+                    + "   AND l.tarif IS NOT NULL"
+                    + "   AND l.facture IS NOT NULL"
+                    + "   AND l.facture.statut = 'VALIDEE'")
     java.math.BigDecimal sommeFacturesPaieablesPourDemande(@org.springframework.data.repository.query.Param("demandeId") Integer demandeId);
 
     /**
-     * Total des factures validées <b>payables</b> (liées à paiement : enfant du mode UNIQUE,
-     * facture PAR_SERVICE, mensualité d'abonnement), <b>hors débours</b> — seules
-     * les prestation et abonnement comptent (les débours sont gérés par leur propre facture, hors CA).
-     * La facture générale UNIQUE (aucune cible de paiement directe) est également exclue.
+     * Montant total — somme des montants de toutes les factures validées de la
+     * période, tous types confondus (débours inclus). Filtrable par client et
+     * par service (les demandes contenant le service).
      */
     @org.springframework.data.jpa.repository.Query(
-            "SELECT COALESCE(SUM(f.montant), 0)"
-                    + " FROM com.cabex.backend.facture.entity.FactureValidee f"
-                    + " LEFT JOIN f.factureProforma fp"
-                    + " JOIN f.demande d"
+            "SELECT COALESCE(SUM(fv.montant), 0)"
+                    + " FROM com.cabex.backend.facture.entity.FactureValidee fv"
+                    + " JOIN fv.demande d"
                     + " LEFT JOIN d.societe s"
-                    + " LEFT JOIN f.ligneService l"
-                    + " LEFT JOIN l.service svc"
                     + " WHERE d.actif = true"
-                    + "   AND NOT (f.factureGenerale IS NULL"
-                    + "             AND fp IS NOT NULL"
-                    + "             AND fp.modeFacturation = 'UNIQUE')"
-                    + "   AND NOT (l IS NULL AND fp IS NOT NULL"
-                    + "             AND EXISTS ("
-                    + "                 SELECT 1 FROM com.cabex.backend.demande.entity.LigneService l3"
-                    + "                 WHERE l3.facture = fp"
-                    + "                   AND l3.typePrestation = 'ABONNEMENT_MENSUEL')"
-                    + "             AND NOT EXISTS ("
-                    + "                 SELECT 1 FROM com.cabex.backend.demande.entity.LigneService l4"
-                    + "                 WHERE l4.facture = fp"
-                    + "                   AND (l4.typePrestation IS NULL OR l4.typePrestation <> 'ABONNEMENT_MENSUEL')))"
-                    + "   AND ((l IS NOT NULL AND l.categorie <> 'DEBOURS')"
-                    + "        OR (l IS NULL AND NOT EXISTS ("
-                    + "                SELECT 1 FROM com.cabex.backend.facture.entity.FactureValideeLigne fl"
-                    + "                WHERE fl.factureValidee = f"
-                    + "                  AND fl.ligneService.categorie = 'DEBOURS'))"
-                    + "        OR (l IS NULL AND EXISTS ("
-                    + "                SELECT 1 FROM com.cabex.backend.facture.entity.FactureValideeLigne fl"
-                    + "                WHERE fl.factureValidee = f"
-                    + "                  AND fl.ligneService.categorie <> 'DEBOURS')))"
                     + "   AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)"
                     + "   AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)"
                     + "   AND (:clientId IS NULL OR s.id = :clientId)"
-                    + "   AND (:serviceId IS NULL OR svc.id = :serviceId)")
+                    + "   AND (:serviceId IS NULL OR EXISTS ("
+                    + "           SELECT 1 FROM com.cabex.backend.demande.entity.LigneService l"
+                    + "           WHERE l.demande = d AND l.service.id = :serviceId))")
     java.math.BigDecimal sommeMontantFacturesPayables(@org.springframework.data.repository.query.Param("dateDebut") java.time.LocalDate dateDebut,
                                                       @org.springframework.data.repository.query.Param("dateFin") java.time.LocalDate dateFin,
                                                       @org.springframework.data.repository.query.Param("clientId") Integer clientId,
@@ -172,41 +269,22 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
      * Colonnes : id, nom société, nombre de demandes actives, montant total.
      */
     @org.springframework.data.jpa.repository.Query(
-            "SELECT s.id, s.nomSociete, COUNT(DISTINCT d.id), COALESCE(SUM(f.montant), 0)"
+            "SELECT s.id, s.nomSociete, COUNT(DISTINCT d.id), COALESCE(SUM(COALESCE(l.tarif, 0)), 0)"
                     + " FROM DemandeService d"
                     + " LEFT JOIN d.societe s"
-                    + " JOIN com.cabex.backend.facture.entity.FactureValidee f ON f.demande = d"
-                    + " LEFT JOIN f.factureProforma fp"
-                    + " LEFT JOIN f.ligneService l"
+                    + " JOIN com.cabex.backend.demande.entity.LigneService l ON l.demande = d"
                     + " LEFT JOIN l.service svc"
                     + " WHERE d.actif = true"
-                    + "   AND NOT (f.factureGenerale IS NULL"
-                    + "             AND fp IS NOT NULL"
-                    + "             AND fp.modeFacturation = 'UNIQUE')"
-                    + "   AND NOT (l IS NULL AND fp IS NOT NULL"
-                    + "             AND EXISTS ("
-                    + "                 SELECT 1 FROM com.cabex.backend.demande.entity.LigneService l3"
-                    + "                 WHERE l3.facture = fp"
-                    + "                   AND l3.typePrestation = 'ABONNEMENT_MENSUEL')"
-                    + "             AND NOT EXISTS ("
-                    + "                 SELECT 1 FROM com.cabex.backend.demande.entity.LigneService l4"
-                    + "                 WHERE l4.facture = fp"
-                    + "                   AND (l4.typePrestation IS NULL OR l4.typePrestation <> 'ABONNEMENT_MENSUEL')))"
+                    + "   AND l.categorie <> 'DEBOURS'"
+                    + "   AND l.tarif IS NOT NULL"
+                    + "   AND l.facture IS NOT NULL"
+                    + "   AND l.facture.statut = 'VALIDEE'"
                     + "   AND (:dateDebut IS NULL OR d.dateDemande >= :dateDebut)"
                     + "   AND (:dateFin IS NULL OR d.dateDemande <= :dateFin)"
                     + "   AND (:clientId IS NULL OR s.id = :clientId)"
                     + "   AND (:serviceId IS NULL OR EXISTS ("
                     + "           SELECT 1 FROM com.cabex.backend.demande.entity.LigneService l2"
                     + "           WHERE l2.demande = d AND l2.service.id = :serviceId))"
-                    + "   AND ((l IS NOT NULL AND l.categorie <> 'DEBOURS')"
-                    + "        OR (l IS NULL AND NOT EXISTS ("
-                    + "                SELECT 1 FROM com.cabex.backend.facture.entity.FactureValideeLigne fl"
-                    + "                WHERE fl.factureValidee = f"
-                    + "                  AND fl.ligneService.categorie = 'DEBOURS'))"
-                    + "        OR (l IS NULL AND EXISTS ("
-                    + "                SELECT 1 FROM com.cabex.backend.facture.entity.FactureValideeLigne fl"
-                    + "                WHERE fl.factureValidee = f"
-                    + "                  AND fl.ligneService.categorie <> 'DEBOURS')))"
                     + " GROUP BY s.id, s.nomSociete"
                     + " ORDER BY COUNT(DISTINCT d.id) DESC")
     List<Object[]> sommeMontantFacturesParClient(@org.springframework.data.repository.query.Param("dateDebut") java.time.LocalDate dateDebut,
@@ -215,49 +293,28 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
                                                  @org.springframework.data.repository.query.Param("serviceId") Integer serviceId);
 
     /**
-     * Montant validé (payable) par service.
+     * Montant facturé par service.
      * Colonnes : id, nom service, nombre de demandes actives, montant total.
-     * Les factures générales PAR_SERVICE mono-proforma (prestation) n'ont pas
-     * de ligne directe : elles sont attribuées à la ligne de leur proforma.
-     * Les factures générales d'abonnement (couverture 100 % abonnement) restent
-     * exclues — l'abonnement se règle sur la facture du mois.
+     * Attribution par ligne EXTERNALISATION d'un proforma validé (tarifs validés) :
+     * prestation, abonnement, création et transaction sont comptés, débours exclus.
      */
     @org.springframework.data.jpa.repository.Query(
             nativeQuery = true,
-            value = "SELECT attr.sid, attr.nom, COUNT(DISTINCT attr.demande_id) AS nb_demandes,"
-                    + "       COALESCE(SUM(attr.montant), 0) AS revenu"
-                    + " FROM ("
-                    + "         SELECT d.id AS demande_id, d.societe_id AS societe_id, d.date_demande AS date_demande,"
-                    + "                s.id AS sid, s.nom_service AS nom, f.montant AS montant"
-                    + "         FROM facture_validee f"
-                    + "         JOIN demande_service d ON d.id = f.demande_id"
-                    + "         JOIN ligne_service l ON l.id = f.ligne_service_id"
-                    + "         JOIN services s ON s.id = l.service_id"
-                    + "         LEFT JOIN facture_proforma fp ON fp.id = f.facture_proforma_id"
-                    + "         WHERE d.actif = 1"
-                    + "           AND NOT (f.facture_generale_id IS NULL AND fp.mode_facturation = 'UNIQUE')"
-                    + "           AND l.categorie <> 'DEBOURS'"
-                    + "         UNION ALL"
-                    + "         SELECT d.id AS demande_id, d.societe_id AS societe_id, d.date_demande AS date_demande,"
-                    + "                s.id AS sid, s.nom_service AS nom, f.montant AS montant"
-                    + "         FROM facture_validee f"
-                    + "         JOIN demande_service d ON d.id = f.demande_id"
-                    + "         JOIN facture_proforma fp ON fp.id = f.facture_proforma_id"
-                    + "         JOIN ligne_service lp ON lp.facture_id = fp.id"
-                    + "         JOIN services s ON s.id = lp.service_id"
-                    + "         WHERE d.actif = 1"
-                    + "           AND fp.mode_facturation = 'PAR_SERVICE'"
-                    + "           AND f.ligne_service_id IS NULL"
-                    + "           AND lp.categorie <> 'DEBOURS'"
-                    + "           AND (lp.type_prestation IS NULL OR lp.type_prestation <> 'ABONNEMENT_MENSUEL')"
-                    + "           AND NOT EXISTS (SELECT 1 FROM facture_validee_ligne fl"
-                    + "                           WHERE fl.facture_validee_id = f.id)"
-                    + "       ) attr"
-                    + " WHERE (:dateDebut IS NULL OR attr.date_demande >= :dateDebut)"
-                    + "   AND (:dateFin IS NULL OR attr.date_demande <= :dateFin)"
-                    + "   AND (:clientId IS NULL OR attr.societe_id = :clientId)"
-                    + "   AND (:serviceId IS NULL OR attr.sid = :serviceId)"
-                    + " GROUP BY attr.sid, attr.nom"
+            value = "SELECT s.id AS sid, s.nom_service AS nom,"
+                    + "       COUNT(DISTINCT d.id) AS nb_demandes,"
+                    + "       COALESCE(SUM(COALESCE(l.tarif, 0)), 0) AS revenu"
+                    + " FROM demande_service d"
+                    + " JOIN ligne_service l ON l.demande_id = d.id"
+                    + " JOIN facture_proforma fp ON fp.id = l.facture_id AND fp.statut = 'VALIDEE'"
+                    + " JOIN services s ON s.id = l.service_id"
+                    + " WHERE d.actif = 1"
+                    + "   AND l.categorie <> 'DEBOURS'"
+                    + "   AND l.tarif IS NOT NULL"
+                    + "   AND (:dateDebut IS NULL OR d.date_demande >= :dateDebut)"
+                    + "   AND (:dateFin IS NULL OR d.date_demande <= :dateFin)"
+                    + "   AND (:clientId IS NULL OR d.societe_id = :clientId)"
+                    + "   AND (:serviceId IS NULL OR s.id = :serviceId)"
+                    + " GROUP BY s.id, s.nom_service"
                     + " ORDER BY revenu DESC")
     List<Object[]> sommeMontantFacturesParService(@org.springframework.data.repository.query.Param("dateDebut") java.time.LocalDate dateDebut,
                                                   @org.springframework.data.repository.query.Param("dateFin") java.time.LocalDate dateFin,

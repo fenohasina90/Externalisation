@@ -213,7 +213,6 @@ export function DemandesPage() {
                 <select value={filtres.statut} onChange={(e) => setFiltre('statut', e.target.value)}>
                   <option value="tous">Tous</option>
                   <option value="EN_ATTENTE">En attente</option>
-                  <option value="VALIDATION">Validation</option>
                   <option value="EN_COURS">En cours</option>
                   <option value="TERMINEE">Terminée</option>
                   <option value="ANNULEE">Annulée</option>

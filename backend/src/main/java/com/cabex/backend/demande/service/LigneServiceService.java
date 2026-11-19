@@ -18,9 +18,6 @@ import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.demande.repository.HistoriqueLigneServiceRepository;
 import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.repository.StatutDemandeRepository;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
-import com.cabex.backend.echeance.entity.ProposPaiement;
-import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
@@ -82,7 +79,6 @@ public class LigneServiceService {
     private final HistoriqueDemandeRepository historiqueDemandeRepository;
     private final StatutDemandeRepository statutDemandeRepository;
     private final ServiceRepository serviceRepository;
-    private final ProposPaiementRepository proposRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final AuditService auditService;
     private final FactureService factureService;
@@ -96,7 +92,6 @@ public class LigneServiceService {
                                HistoriqueDemandeRepository historiqueDemandeRepository,
                                StatutDemandeRepository statutDemandeRepository,
                                ServiceRepository serviceRepository,
-                               ProposPaiementRepository proposRepository,
                                UtilisateurRepository utilisateurRepository,
                                AuditService auditService,
                                FactureService factureService,
@@ -109,7 +104,6 @@ public class LigneServiceService {
         this.historiqueDemandeRepository = historiqueDemandeRepository;
         this.statutDemandeRepository = statutDemandeRepository;
         this.serviceRepository = serviceRepository;
-        this.proposRepository = proposRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.auditService = auditService;
         this.factureService = factureService;
@@ -165,23 +159,9 @@ public class LigneServiceService {
         if (request.tarif().signum() < 0) {
             throw new BusinessException(ErrorMessages.TARIF_POSITIF);
         }
-        // Validation des dates selon le type de prestation :
-        // - PRESTATION : début et fin optionnels (tous deux peuvent être null)
-        // - ABONNEMENT_MENSUEL : début obligatoire, fin optionnel
-        // - Autre : début et fin requis
-        if (LigneServiceService.PRESTATION.equalsIgnoreCase(request.typePrestation())) {
-            // Pas de contrainte de dates pour PRESTATION.
-        } else if (LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(
-                request.typePrestation())) {
-            if (request.debutService() == null) {
-                throw new BusinessException(ErrorMessages.DEBUT_SERVICE_OBLIGATOIRE_ABONNEMENT);
-            }
-            // La date fin est optionnelle pour un abonnement mensuel.
-        } else {
-            if (request.debutService() == null || request.finService() == null) {
-                throw new BusinessException(ErrorMessages.DONNEES_OBLIGATOIRES);
-            }
-        }
+        // Validation des dates : PRESTATION et ABONNEMENT_MENSUEL (uniques choix possibles
+        // depuis la normalisation) n'ont pas de contrainte — début et fin optionnels.
+        // (L'ordre des dates est toujours vérifié par verifierDates quand les deux sont renseignées.)
         String typePrestation = normaliserTypePrestation(
                 CATEGORIE_EXTERNALISATION, service, request.typePrestation());
 
@@ -404,6 +384,15 @@ public class LigneServiceService {
             // Abonnement mensuel : réglé via la facture du mois ; la ligne reste EN_COURS.
             return;
         }
+        // Facturation « unique » : les lignes non abonnement sont toutes couvertes par
+        // la facture générale — une ligne passe TERMINE/PAYEE quand celle-ci est
+        // entièrement réglée (sinon, elle reste EN_COURS).
+        String modeFacturation = ligne.getFacture() != null
+                ? ligne.getFacture().getModeFacturation() : null;
+        if ("UNIQUE".equalsIgnoreCase(modeFacturation)) {
+            actualiserStatutApresPaiementFactureUnique(ligne);
+            return;
+        }
         BigDecimal paye = montantPayeParLigne(ligne.getId());
         BigDecimal attendu = montantAttendu(ligne);
         boolean estDebours = estDebours(ligne);
@@ -430,6 +419,46 @@ public class LigneServiceService {
                 "Ligne " + ligne.getId() + " : " + cible + " (payé : "
                         + paye.toPlainString() + ")");
 
+        auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "LigneService",
+                Long.valueOf(ligne.getId()), actuel, cible);
+    }
+
+    /**
+     * Règle des demandes à une seule facture (mode « UNIQUE »), sans abonnement :
+     * la ligne est {@code TERMINE} (EXTERNALISATION) ou {@code PAYEE} (DEBOURS)
+     * si le montant facturé est payé en totalité ; sinon elle reste {@code EN_COURS}
+     * (le paiement partiel ne change pas le statut de la ligne).
+     */
+    private void actualiserStatutApresPaiementFactureUnique(LigneService ligne) {
+        Integer factureProformaId = ligne.getFacture() != null ? ligne.getFacture().getId() : null;
+        com.cabex.backend.facture.entity.FactureValidee fv = factureProformaId != null
+                ? factureValideeRepository.findByFactureProformaId(factureProformaId).orElse(null)
+                : null;
+        BigDecimal paye = fv != null ? paiementRepository.sommePayeeParFactureValidee(fv.getId())
+                : BigDecimal.ZERO;
+        if (paye == null) {
+            paye = BigDecimal.ZERO;
+        }
+        BigDecimal montant = fv != null && fv.getMontant() != null ? fv.getMontant()
+                : BigDecimal.ZERO;
+        String cible;
+        if (montant.signum() > 0 && paye.compareTo(montant) >= 0) {
+            cible = estDebours(ligne) ? LIGNE_PAYEE : LIGNE_TERMINE;
+        } else {
+            cible = LIGNE_EN_COURS;
+        }
+        String actuel = ligne.getStatut();
+        if (cible.equals(actuel)) {
+            return;
+        }
+        ligne.setStatut(cible);
+        ligneRepository.save(ligne);
+
+        ajouterHistoriqueLigne(ligne, cible,
+                "Statut de ligne mis à jour après règlement complet de la facture unique (payé : "
+                        + paye.toPlainString() + " / " + montant.toPlainString() + ")", "AUTO");
+        ajouterHistoriqueDemande(ligne.getDemande(),
+                "Ligne " + ligne.getId() + " : " + cible);
         auditService.log(AuditActions.STATUS_CHANGE, "DEMANDE", "LigneService",
                 Long.valueOf(ligne.getId()), actuel, cible);
     }
@@ -466,11 +495,7 @@ public class LigneServiceService {
                     CATEGORIE_EXTERNALISATION, svc, request.typePrestation());
             details.append("type=").append(ligne.getTypePrestation()).append("→").append(type);
             ligne.setTypePrestation(type);
-            // Pour ABONNEMENT_MENSUEL, la date début est obligatoire.
-            if (ABONNEMENT_MENSUEL.equalsIgnoreCase(type)
-                    && (ligne.getDebutService() == null)) {
-                throw new BusinessException(ErrorMessages.DEBUT_SERVICE_OBLIGATOIRE_ABONNEMENT);
-            }
+            // Pour ABONNEMENT_MENSUEL, les dates début et fin sont optionnelles.
         }
         if (request.tarif() != null) {
             if (request.tarif().signum() < 0) {
@@ -759,26 +784,15 @@ public class LigneServiceService {
         return normalisee;
     }
 
-    public static boolean estStandard(Service service) {
-        return service != null && service.getTypeService() != null
-                && "STANDARD".equalsIgnoreCase(service.getTypeService().trim());
-    }
-
     /**
      * Valide/normalise le sous-type d'une ligne EXTERNALISATION.
-     * STANDARD → PRESTATION (défaut) ou ABONNEMENT_MENSUEL.
-     * CREATION / TRANSACTION → null obligatoire.
-     * doit être appelé après chargement du service.
+     * Tous les services (STANDARD, CREATION, TRANSACTION_IMMOBILIERE) acceptent
+     * PRESTATION (défaut) ou ABONNEMENT_MENSUEL, comme pour un service catalogue.
+     * DEBOURS : null obligatoire.
      */
     public static String normaliserTypePrestation(String categorie, Service service,
                                                   String typePrestation) {
         if (CATEGORIE_DEBOURS.equalsIgnoreCase(categorie)) {
-            if (typePrestation != null && !typePrestation.isBlank()) {
-                throw new BusinessException(ErrorMessages.TYPE_PRESTATION_INTERDIT);
-            }
-            return null;
-        }
-        if (!estStandard(service)) {
             if (typePrestation != null && !typePrestation.isBlank()) {
                 throw new BusinessException(ErrorMessages.TYPE_PRESTATION_INTERDIT);
             }

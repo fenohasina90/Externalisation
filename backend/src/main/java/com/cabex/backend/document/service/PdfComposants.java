@@ -90,6 +90,14 @@ final class PdfComposants {
     // ------------------------------------------------------------------
 
     /** Carte d'information : titre + paires libellé (petit) / valeur. */
+    /** Ajoute une ligne label + valeur (en gras) dans la carte cible. */
+    static void carteLigne(PdfPCell carte, String label, String valeur) {
+        Paragraph pLabel = new Paragraph(PdfTheme.upper(label), PdfTheme.F_LABEL);
+        pLabel.setSpacingBefore(6);
+        carte.addElement(pLabel);
+        carte.addElement(new Paragraph(valeur, PdfTheme.F_VALEUR_GRAS));
+    }
+
     static PdfPCell carte(String titre, String[][] lignes) {
         PdfPCell c = new PdfPCell();
         c.setBackgroundColor(PdfTheme.VERT_PALE);

@@ -3,7 +3,21 @@ import { createPortal } from 'react-dom'
 import { http } from '@/api/http'
 import { telechargerBlob } from '@/utils/telechargement'
 import { formatDate, formatMontantMGA } from '@/utils/format'
-import type { Facture, FactureValidee } from '../types'
+import type { Facture, FactureProformaLigne, FactureValidee, FactureValideeLigne } from '../types'
+
+/** Classification de repli pour une ligne persistée sans catégorie/typePrestation. */
+function categorieDepuisDesignation(designation: string): string {
+  const d = designation.trim().toLowerCase()
+  return d.startsWith('débours') || d.startsWith('debours') ? 'DEBOURS' : 'EXTERNALISATION'
+}
+
+function typePrestationDepuisDesignation(designation: string): string | null {
+  const d = designation.trim().toLowerCase()
+  if (d.startsWith('débours') || d.startsWith('debours')) {
+    return null
+  }
+  return d.startsWith('abonnement') ? 'ABONNEMENT_MENSUEL' : 'PRESTATION'
+}
 
 export type FactureApercu =
   | { kind: 'proforma'; facture: Facture }
@@ -37,12 +51,6 @@ export function FactureApercuModal({
 
   const estProforma = apercu.kind === 'proforma'
   /** Facture générale validée en mode « unique » : aucun paiement ne lui est lié. */
-  /** Facture générale validée en mode « unique » : aucun paiement ne lui est lié. */
-  const estGeneraleUnique = !estProforma
-    && apercu.facture.type === 'GENERALE'
-    && apercu.facture.modeFacturation === 'UNIQUE'
-
-
   const referenceTitre = estProforma ? apercu.facture.referenceFacture : apercu.facture.referenceFactureValidee
   const telechargerPdf = async () => {
     const url = estProforma
@@ -78,7 +86,32 @@ export function FactureApercuModal({
   // les montants de création (avant validation ou après — c'est le document
   // PROFORMA). La facture validée (kind === 'validee') affiche le tarif
   // validé (ligne_service.tarif).
-  const lignesAffichage = (estProforma || estGeneraleUnique ? apercu.facture.lignesProforma : undefined) ?? []
+  const lignesProforma = apercu.facture.lignesProforma ?? []
+  // Lignes persistées de la facture validée elle-même (facture mensuelle /
+  // combinée) : désignation figée à la création — source de vérité quand
+  // la facture n'a pas de lignes de proforma (facture du mois).
+  const lignesValidee: FactureValideeLigne[] = !estProforma && 'referenceFactureGenerale' in apercu.facture
+    ? (apercu.facture.lignes ?? [])
+    : []
+  const normaliserValidee = (l: (typeof lignesValidee)[number]): FactureProformaLigne => ({
+    ordre: null,
+    ligneServiceId: l.ligneServiceId,
+    designation: l.designation,
+    categorie: l.categorie ?? categorieDepuisDesignation(l.designation),
+    typePrestation: l.typePrestation ?? typePrestationDepuisDesignation(l.designation),
+    pu: l.montant,
+    quantite: 1,
+    montantHtva: l.montant,
+    remise: 0,
+    netCommercial: l.montant,
+  })
+  const principalesValidee = lignesValidee
+    .filter((l) => (l.type ?? 'PRINCIPALE').toUpperCase() !== 'RAPPEL')
+    .map(normaliserValidee)
+  const rappels = lignesValidee
+    .filter((l) => (l.type ?? '').toUpperCase() === 'RAPPEL')
+    .map(normaliserValidee)
+  const lignesAffichage = lignesProforma.length > 0 ? lignesProforma : principalesValidee
   const aboLignes = lignesAffichage.filter((l) => l.typePrestation === 'ABONNEMENT_MENSUEL')
   const prestaLignes = lignesAffichage.filter((l) =>
     l.categorie === 'EXTERNALISATION' && l.typePrestation !== 'ABONNEMENT_MENSUEL')
@@ -87,8 +120,8 @@ export function FactureApercuModal({
   const sousTotalDe = (lignes: typeof lignesAffichage) =>
     lignes.reduce((acc, l) => acc + l.netCommercial, 0)
 
-  const rendLigneProforma = (l: (typeof lignesAffichage)[number]) => (
-    <tr key={`pl-${l.ordre ?? 0}-${l.designation}`}>
+  const rendLigneProforma = (l: (typeof lignesAffichage)[number], cle = 'pl') => (
+    <tr key={`${cle}-${l.ordre ?? 0}-${l.designation}`}>
       <td>{l.designation}</td>
       <td className="cell-number">{formatMontantMGA(l.pu)}</td>
       <td className="cell-number">{String(l.quantite).replace(/\.0+$/, '')}</td>
@@ -113,6 +146,17 @@ export function FactureApercuModal({
       <th>{formatMontantMGA(total)}</th>
       <th>-</th>
       <th>{formatMontantMGA(total)}</th>
+    </tr>
+  )
+  const rendBandeRappel = (titre: string) => (
+    <tr>
+      <td colSpan={6} style={{
+        background: '#FEF3C7',
+        borderLeft: '2.5px solid #F59E0B',
+        color: '#B45309',
+        fontWeight: 700,
+        padding: '4px 10px',
+      }}>{titre}</td>
     </tr>
   )
   const body = (
@@ -190,10 +234,6 @@ export function FactureApercuModal({
                   {apercu.facture.type === 'ABONNEMENT_MENSUEL' && (
                     <>
                       <div className="info-item">
-                        <span>Facture générale</span>
-                        <b>{apercu.facture.referenceFactureGenerale ?? '—'}</b>
-                      </div>
-                      <div className="info-item">
                         <span>Mois facturé</span>
                         <b>
                           {apercu.facture.mois
@@ -222,7 +262,7 @@ export function FactureApercuModal({
           </section>
 
           {/* Section A — objet de la présente facture */}
-          {(estProforma || estGeneraleUnique) ? (
+          {
             <section>
               <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
                 Cette facture — lignes persistées
@@ -243,21 +283,21 @@ export function FactureApercuModal({
                     {aboLignes.length > 0 && (
                       <>
                         {rendBande('Abonnement mensuel :')}
-                        {aboLignes.map(rendLigneProforma)}
+                        {aboLignes.map((l) => rendLigneProforma(l))}
                         {rendSousTotal('Sous-total Abonnement mensuel', sousTotalDe(aboLignes))}
                       </>
                     )}
                     {prestaLignes.length > 0 && (
                       <>
                         {rendBande('Prestation:')}
-                        {prestaLignes.map(rendLigneProforma)}
+                        {prestaLignes.map((l) => rendLigneProforma(l))}
                         {rendSousTotal('Sous-total Prestation', sousTotalDe(prestaLignes))}
                       </>
                     )}
                     {deboursLignes.length > 0 && (
                       <>
                         {rendBande("Débours à payer à l'administration")}
-                        {deboursLignes.map(rendLigneProforma)}
+                        {deboursLignes.map((l) => rendLigneProforma(l))}
                         {rendSousTotal('Sous-total Débours', sousTotalDe(deboursLignes))}
                       </>
                     )}
@@ -272,28 +312,27 @@ export function FactureApercuModal({
                         <th>{formatMontantMGA(totalHt)}</th>
                       </tr>
                     )}
+                    {rappels.length > 0 && (
+                      <>
+                        {rendBandeRappel('À titre de rappel de règlement — non inclus dans le total')}
+                        {rappels.map((l) => rendLigneProforma(l, 'rp'))}
+                        <tr>
+                          <th colSpan={3} style={{ textAlign: 'right' }}>Total des rappels (non inclus)</th>
+                          <th>{formatMontantMGA(rappels.reduce((acc, l) => acc + l.netCommercial, 0))}</th>
+                          <th>-</th>
+                          <th>{formatMontantMGA(rappels.reduce((acc, l) => acc + l.netCommercial, 0))}</th>
+                        </tr>
+                      </>
+                    )}
                   </tbody>
                 </table>
               </div>
             </section>
-          ) : null}
+          }
 
 
-          {/* Suivi des paiements (validée uniquement) — pas en mode unique */}
-          {!estProforma && estGeneraleUnique && (
-            <section>
-              <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
-                Suivi des paiements
-              </h4>
-              <p className="section-note" style={{ margin: '0 0 4px' }}>
-                Cette facture générale couvre plusieurs services : <strong>aucun paiement ne lui est lié.</strong>
-              </p>
-              <p className="section-note" style={{ margin: 0 }}>
-                Chaque service se règle sur sa propre facture validée (factures de service ci-dessous).
-              </p>
-            </section>
-          )}
-          {!estProforma && !estGeneraleUnique && (
+          {/* Suivi des paiements — règle générale : chaque facture est liée au paiement */}
+          {!estProforma && (
             <section>
               <h4 style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--texte-secondaire, #6b7280)', textTransform: 'uppercase' }}>
                 Suivi des paiements

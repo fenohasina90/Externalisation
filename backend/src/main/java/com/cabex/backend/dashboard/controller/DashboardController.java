@@ -5,7 +5,7 @@ import com.cabex.backend.dashboard.dto.DashboardFilter;
 import com.cabex.backend.dashboard.dto.DashboardFiltresResponse;
 import com.cabex.backend.dashboard.dto.DashboardSummaryResponse;
 import com.cabex.backend.dashboard.dto.DemandeMoisResponse;
-import com.cabex.backend.dashboard.dto.EcheanceDashboardResponse;
+import com.cabex.backend.dashboard.dto.PaiementRetardResponse;
 import com.cabex.backend.dashboard.dto.PaiementDashboardResponse;
 import com.cabex.backend.dashboard.dto.PerformanceIndicateursResponse;
 import com.cabex.backend.dashboard.dto.ServiceRevenuResponse;
@@ -105,15 +105,15 @@ public class DashboardController {
         return ResponseEntity.ok(dashboardService.paiements(filtre(dateDebut, dateFin, clientId, serviceId)));
     }
 
-    @GetMapping("/echeances")
+    @GetMapping("/paiements/en-retard")
     @PreAuthorize("hasAuthority('DASHBOARD_PAIEMENT_VIEW')")
-    @Operation(summary = "Échéances en retard et à venir — SUPER_ADMIN + ECONOMAT")
-    public ResponseEntity<EcheanceDashboardResponse> echeances(
+    @Operation(summary = "Paiements en retard (factures validées non soldées) — SUPER_ADMIN + ECONOMAT")
+    public ResponseEntity<List<PaiementRetardResponse>> paiementsEnRetard(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
             @RequestParam(required = false) Integer clientId,
             @RequestParam(required = false) Integer serviceId) {
-        return ResponseEntity.ok(dashboardService.echeances(filtre(dateDebut, dateFin, clientId, serviceId)));
+        return ResponseEntity.ok(dashboardService.paiementsEnRetard(filtre(dateDebut, dateFin, clientId, serviceId)));
     }
 
     @GetMapping("/services")

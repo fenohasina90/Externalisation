@@ -66,13 +66,43 @@ class PaiementMapperTest {
         assertEquals("Déclarations fiscales et sociales", detail.nomService());
         assertEquals("00001/EXT/TNR/2026", detail.referenceFactureValidee());
         assertEquals(new BigDecimal("2000000.00"), detail.montantFactureValidee());
-        assertEquals(new BigDecimal("1300000.00"), detail.montantPayeSurFacture());
+        // montantDejaPaye : somme AVANT ce paiement ; ce paiement n'est PAS inclus.
+        assertEquals(new BigDecimal("0.00"), detail.montantPayeSurFacture());
         assertEquals(new BigDecimal("700000.00"), detail.resteAPayerFacture());
         assertEquals("un million trois cent mille", detail.montantEnLettres());
         assertEquals("Système Administrateur", detail.createdByName());
         assertEquals("GENERALE", detail.typeFacture());
         assertNull(detail.dateFactureValidee());
         assertNull(detail.moisFacture());
+    }
+
+    @Test
+    void montantDejaPayeEtResteAPayerIssusDuSnapshotQuandPresents() {
+        DemandeService demande = DemandeService.builder().id(18)
+                .referenceDemande("DEM-2026-00018").build();
+        FactureValidee fv = FactureValidee.builder().id(9)
+                .referenceFactureValidee("00001/EXT/TNR/2026")
+                .demande(demande)
+                .montant(new BigDecimal("2000000.00"))
+                .build();
+        Paiement paiement = Paiement.builder().id(20).referencePaiement("PAY-2026-00020")
+                .demande(demande)
+                .factureValidee(fv)
+                .modePaiement(ModePaiement.builder().id(1).code("ESPECES")
+                        .libelle("Espèces").actif(true).build())
+                .datePaiement(LocalDate.of(2026, 10, 22))
+                .montantPaye(new BigDecimal("1300000.00"))
+                .montantDejaPaye(new BigDecimal("300000.00"))
+                .resteAPayer(new BigDecimal("400000.00"))
+                .build();
+
+        PaiementDetailResponse detail = PaiementMapper.toDetailResponse(paiement,
+                new BigDecimal("1600000.00"));
+
+        assertEquals(new BigDecimal("300000.00"), detail.montantPayeSurFacture(),
+                "la valeur du snapshot est affichée, pas le calcul live");
+        assertEquals(new BigDecimal("400000.00"), detail.resteAPayerFacture(),
+                "la valeur du snapshot est affichée");
     }
 
     @Test

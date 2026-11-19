@@ -136,8 +136,6 @@ public final class ErrorMessages {
             "Le type doit être PRESTATION ou ABONNEMENT_MENSUEL";
     public static final String TYPE_PRESTATION_INTERDIT =
             "Le type de prestation ne s'applique qu'aux lignes EXTERNALISATION de service STANDARD";
-    public static final String DEBUT_SERVICE_OBLIGATOIRE_ABONNEMENT =
-            "La date début est obligatoire pour un abonnement mensuel";
 
     // Général
     public static final String ERREUR_INTERNE = "Une erreur interne est survenue. Veuillez réessayer.";

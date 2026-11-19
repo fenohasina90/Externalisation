@@ -47,6 +47,6 @@ public record DossierTransactionImmobiliereResponse(
         String observations,
         Integer nombreCommerciauxTerrain,
         BigDecimal commissionCn,
-        Boolean prestationAbonnementMensuel
+        String typePrestationDossier
 ) {
 }

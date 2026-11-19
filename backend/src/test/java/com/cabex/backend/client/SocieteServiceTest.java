@@ -6,13 +6,10 @@ import com.cabex.backend.client.entity.ClientResponsable;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.client.repository.ClientResponsableRepository;
 import com.cabex.backend.client.repository.SocieteRepository;
-import com.cabex.backend.client.service.RisqueService;
 import com.cabex.backend.client.service.SocieteService;
-import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.document.repository.PieceJointeRepository;
-import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import com.cabex.backend.exception.DuplicateResourceException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
@@ -46,11 +43,8 @@ class SocieteServiceTest {
     @Mock private HistoriqueDemandeRepository historiqueRepository;
     @Mock private PaiementRepository paiementRepository;
     @Mock private FactureValideeRepository factureValideeRepository;
-    @Mock private EcheancePaiementRepository echeanceRepository;
     @Mock private PieceJointeRepository pieceJointeRepository;
-    @Mock private RisqueService risqueService;
     @Mock private AuditService auditService;
-    @Mock private ConfigurationService configurationService;
 
     private SocieteService societeService;
 
@@ -58,9 +52,9 @@ class SocieteServiceTest {
     void setUp() {
         societeService = new SocieteService(
                 societeRepository, responsableRepository, demandeRepository,
-                historiqueRepository, paiementRepository, echeanceRepository,
-                pieceJointeRepository, risqueService, auditService,
-                configurationService, factureValideeRepository);
+                historiqueRepository, paiementRepository,
+                pieceJointeRepository, auditService,
+                factureValideeRepository);
     }
 
     private Societe societe(Integer id, String nom, boolean actif, boolean archivee) {

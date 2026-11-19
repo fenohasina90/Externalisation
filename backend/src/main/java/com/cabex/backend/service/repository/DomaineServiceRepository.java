@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface DomaineServiceRepository extends JpaRepository<DomaineService, Integer> {
@@ -18,6 +19,9 @@ public interface DomaineServiceRepository extends JpaRepository<DomaineService, 
     boolean existsByCodeDomaineAndIdNot(String codeDomaine, Integer id);
 
     long countByActifTrue();
+
+    /** Tous les domaines (actifs ou non), triés par nom — affichage de la fiche récapitulative. */
+    List<DomaineService> findAllByOrderByNomDomaineAsc();
 
     @Query("""
         SELECT d FROM DomaineService d

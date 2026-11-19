@@ -74,7 +74,7 @@ export interface DossierTransactionImmobiliere {
   observations: string | null
   nombreCommerciauxTerrain: number | null
   commissionCn: number | null
-  prestationAbonnementMensuel: boolean
+  typePrestationDossier: 'PRESTATION' | 'ABONNEMENT_MENSUEL'
 }
 
 export interface DossierTransactionPayload {
@@ -110,7 +110,7 @@ export interface DossierTransactionPayload {
   observations?: string | null
   nombreCommerciauxTerrain?: number | null
   commissionCn?: number | null
-  prestationAbonnementMensuel: boolean
+  typePrestationDossier: 'PRESTATION' | 'ABONNEMENT_MENSUEL'
 }
 
 /** Modèle du formulaire : nombres nullables et OUI/NON laissés vides si inconnus. */
@@ -147,7 +147,7 @@ export interface DossierTransactionForm {
   observations: string
   nombreCommerciauxTerrain: number | null
   commissionCn: number | null
-  prestationAbonnementMensuel: boolean
+  typePrestationDossier: 'PRESTATION' | 'ABONNEMENT_MENSUEL'
 }
 
 export const DOSSIER_TRANSACTION_VIDE: DossierTransactionForm = {
@@ -183,7 +183,7 @@ export const DOSSIER_TRANSACTION_VIDE: DossierTransactionForm = {
   observations: '',
   nombreCommerciauxTerrain: null,
   commissionCn: null,
-  prestationAbonnementMensuel: false,
+  typePrestationDossier: 'PRESTATION',
 }
 
 const texte = (v: string | null | undefined): string => v ?? ''
@@ -228,7 +228,7 @@ export function dossierTransactionVersFormulaire(
     observations: texte(d.observations),
     nombreCommerciauxTerrain: d.nombreCommerciauxTerrain,
     commissionCn: d.commissionCn,
-    prestationAbonnementMensuel: d.prestationAbonnementMensuel,
+    typePrestationDossier: d.typePrestationDossier,
   }
 }
 
@@ -270,6 +270,6 @@ export function dossierTransactionVersPayload(
     observations: vide(f.observations),
     nombreCommerciauxTerrain: f.nombreCommerciauxTerrain,
     commissionCn: f.commissionCn,
-    prestationAbonnementMensuel: f.prestationAbonnementMensuel,
+    typePrestationDossier: f.typePrestationDossier,
   }
 }

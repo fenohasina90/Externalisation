@@ -1,6 +1,5 @@
 export type TypeNotification =
   | 'PAIEMENT_RETARD'
-  | 'ECHEANCE_PROCHE'
   | 'NOUVELLE_DEMANDE'
   | 'PAIEMENT_ENREGISTRE'
   | 'CHANGEMENT_STATUT'

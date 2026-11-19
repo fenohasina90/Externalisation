@@ -92,7 +92,7 @@ export function dossierVersPayload(d: DossierEntreprise): DossierPayload {
     denomination: d.denomination.trim(),
     siegeSocialActuel: vide(d.siegeSocialActuel),
     capitalSocial: societe ? d.capitalSocial : null,
-    nombreAssociesDeclare: societe ? d.nombreAssocies : null,
+    nombreAssociesDeclare: societe ? compterAssocies(d.associes) : null,
     nomGerant: vide(d.nomGerant),
     fonctionGerant: vide(d.fonctionGerant),
     locationGerance: d.locationGerance,
@@ -131,6 +131,10 @@ export function dossierVersPayload(d: DossierEntreprise): DossierPayload {
 
 const texte = (v: string | null | undefined): string => v ?? ''
 
+/** Nombre d'associés : dérivé des lignes renseignées (jamais du champ saisi). */
+const compterAssocies = (associes: { nom: string }[] | undefined): number =>
+  (associes ?? []).filter((a) => a.nom.trim() !== '').length
+
 /** API → formulaire (édition pré-remplie). */
 export function dossierVersFormulaire(d: Dossier, referenceDemande: string): DossierEntreprise {
   return {
@@ -140,7 +144,7 @@ export function dossierVersFormulaire(d: Dossier, referenceDemande: string): Dos
     denomination: texte(d.denomination),
     siegeSocialActuel: texte(d.siegeSocialActuel),
     capitalSocial: d.capitalSocial,
-    nombreAssocies: d.nombreAssociesDeclare ?? 0,
+    nombreAssocies: compterAssocies(d.associes) || d.nombreAssociesDeclare || 0,
     nomGerant: texte(d.nomGerant),
     fonctionGerant: texte(d.fonctionGerant),
     locationGerance: d.locationGerance ?? false,

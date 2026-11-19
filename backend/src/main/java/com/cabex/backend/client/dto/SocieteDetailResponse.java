@@ -9,7 +9,6 @@ public record SocieteDetailResponse(
         List<DemandeFicheResponse> demandes,
         List<ServiceUtiliseResponse> servicesUtilises,
         List<PaiementFicheResponse> paiements,
-        List<EcheanceFicheResponse> echeances,
         List<PieceJointeFicheResponse> piecesJointes,
         SyntheseClientFiche synthese
 ) {

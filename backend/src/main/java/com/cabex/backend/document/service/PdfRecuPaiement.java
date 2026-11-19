@@ -3,11 +3,16 @@ package com.cabex.backend.document.service;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.LigneService;
+import com.cabex.backend.document.entity.PieceJointe;
+import com.cabex.backend.facture.dto.ObjetLigne;
 import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.paiement.entity.Paiement;
+
+import java.util.List;
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
 import com.lowagie.text.Paragraph;
+import com.lowagie.text.Phrase;
 import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
@@ -21,8 +26,9 @@ import java.util.Locale;
  * <p>Même charte graphique que le cabEx : titre en tête, bandeau vert, cartes
  * « Client et demande », « Service et facture », « Règlement » et
  * « Montants de la facture », montant en lettres, signatures.</p>
- * <p>Le reçu affiche uniquement la référence de la facture validée liée
- * directement à ce paiement.</p>
+ * <p>Le reçu affiche l'objet précis de la facture validée liée à ce paiement
+ * (service / débours résolu côté service, avec repli « Facture générale »),
+ * ainsi que la référence de la facture.</p>
  */
 final class PdfRecuPaiement {
 
@@ -30,19 +36,180 @@ final class PdfRecuPaiement {
     }
 
     static byte[] generer(Paiement paiement, BigDecimal sommePayeeSurFacture) {
+        return generer(paiement, sommePayeeSurFacture, null);
+    }
+
+    /**
+     * @param resolu objet précis de la facture validée (service / débours / services facturés)
+     *               résolu côté service ; null → déduction depuis l'entité, avec repli « Facture générale ».
+     */
+    static byte[] generer(Paiement paiement, BigDecimal sommePayeeSurFacture,
+                          com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu) {
+        return generer(paiement, sommePayeeSurFacture, resolu, List.of(), List.of());
+    }
+
+    static byte[] generer(Paiement paiement, BigDecimal sommePayeeSurFacture,
+                          com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu,
+                          List<ObjetLigne> objets,
+                          List<PieceJointe> piecesJointes) {
         return PdfDocument.generer(PdfDocument.MiseEnPage.RECU_PAIEMENT, "Reçu de paiement",
                 "Reçu de paiement " + PdfFormats.valeur(paiement.getReferencePaiement()),
-                doc -> ecrire(doc, paiement, sommePayeeSurFacture),
+                doc -> ecrire(doc, paiement, sommePayeeSurFacture, resolu, objets, piecesJointes),
                 "Erreur de génération du reçu de paiement");
     }
 
-    private static void ecrire(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture) {
+    private static void ecrire(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture,
+                               com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu) {
+        ecrire(doc, paiement, sommePayeeSurFacture, resolu, List.of(), List.of());
+    }
+
+    private static void ecrire(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture,
+                               com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu,
+                               List<ObjetLigne> objets,
+                               List<PieceJointe> piecesJointes) {
         PdfComposants.titreDocument(doc, "Reçu de paiement",
                 "Référence paiement : " + PdfFormats.valeur(paiement.getReferencePaiement()));
         doc.add(bandeauMontant(paiement));
-        cartes(doc, paiement, sommePayeeSurFacture);
+        cartes(doc, paiement, sommePayeeSurFacture, resolu, objets);
+        try {
+            commentaire(doc, paiement);
+            piecesJointes(doc, piecesJointes);
+        } catch (com.lowagie.text.DocumentException e) {
+            throw new IllegalStateException("Erreur de génération des sections complémentaires", e);
+        }
         montantEnLettres(doc, paiement);
         signatures(doc, paiement);
+    }
+
+    // ------------------------------------------------------------------
+    // Services facturés, commentaire, pièces jointes
+    // ------------------------------------------------------------------
+
+    private static com.lowagie.text.Font fontTypeObjet(String type) {
+        return switch (type != null ? type : "") {
+            case "PRESTATION" -> PdfTheme.font(7, com.lowagie.text.Font.BOLD, new java.awt.Color(0x1E4F8F));
+            case "DEBOURS" -> PdfTheme.font(7, com.lowagie.text.Font.BOLD, new java.awt.Color(0x8A5200));
+            case "ABONNEMENT_MENSUEL" -> PdfTheme.font(7, com.lowagie.text.Font.BOLD, new java.awt.Color(0x1F6B3F));
+            default -> PdfTheme.font(7, com.lowagie.text.Font.BOLD, PdfTheme.GRIS_TEXTE);
+        };
+    }
+
+    private static String prefixObjet(String type) {
+        return switch (type != null ? type : "") {
+            case "PRESTATION" -> "Prestation";
+            case "DEBOURS" -> "Débours";
+            case "ABONNEMENT_MENSUEL" -> "Abonnement";
+            default -> type != null ? type : "—";
+        };
+    }
+
+    private static PdfPCell serviceEtFactureCard(List<ObjetLigne> objets,
+                                                 String objetLabel, String objetValeur,
+                                                 FactureValidee fv, boolean mensuelle) {
+        PdfPCell c = new PdfPCell();
+        c.setBackgroundColor(PdfTheme.VERT_PALE);
+        c.setBorder(Rectangle.LEFT);
+        c.setBorderColorLeft(PdfTheme.VERT_MARQUE);
+        c.setBorderWidthLeft(2.5f);
+        c.setPadding(7);
+        c.addElement(new Paragraph(PdfTheme.upper("Service et facture"), PdfTheme.F_CARTE_TITRE));
+
+        if (objets != null && !objets.isEmpty()) {
+            for (ObjetLigne o : objets) {
+                Paragraph label = new Paragraph(
+                        PdfTheme.upper(prefixObjet(o.type())), fontTypeObjet(o.type()));
+                label.setSpacingBefore(6);
+                c.addElement(label);
+                c.addElement(new Paragraph(
+                        o.libelle() != null ? o.libelle() : "—", PdfTheme.F_VALEUR_GRAS));
+            }
+        } else {
+            PdfComposants.carteLigne(c, objetLabel, PdfFormats.valeur(objetValeur));
+        }
+
+        PdfComposants.carteLigne(c, "Référence facture", PdfFormats.valeur(libelleFacture(fv)));
+        if (mensuelle) {
+            PdfComposants.carteLigne(c, "Mois facturé", "Abonnement " + moisLabel(fv.getMois()));
+            PdfComposants.carteLigne(c, "Date d'emission", PdfFormats.valeurDate(
+                    fv.getValideLe() != null ? fv.getValideLe().toLocalDate() : null));
+        }
+        return c;
+    }
+
+    private static void commentaire(Document doc, Paiement paiement)
+            throws com.lowagie.text.DocumentException {
+        if (paiement.getCommentaire() == null || paiement.getCommentaire().isBlank()) {
+            return;
+        }
+        PdfPCell c = new PdfPCell();
+        c.setBackgroundColor(PdfTheme.VERT_PALE);
+        c.setBorder(Rectangle.LEFT);
+        c.setBorderColorLeft(PdfTheme.VERT_MARQUE);
+        c.setBorderWidthLeft(2.5f);
+        c.setPadding(7);
+        c.addElement(new Paragraph(PdfTheme.upper("Commentaire"), PdfTheme.F_CARTE_TITRE));
+        Paragraph p = new Paragraph(paiement.getCommentaire().trim(), PdfTheme.F_TD);
+        p.setSpacingBefore(4);
+        c.addElement(p);
+        PdfPTable table = new PdfPTable(1);
+        table.setWidthPercentage(100);
+        table.setSpacingBefore(2f);
+        table.setSpacingAfter(10f);
+        table.addCell(c);
+        doc.add(table);
+    }
+
+    private static void piecesJointes(Document doc, List<PieceJointe> pieces)
+            throws com.lowagie.text.DocumentException {
+        if (pieces == null || pieces.isEmpty()) {
+            return;
+        }
+        PdfPTable table = new PdfPTable(3);
+        table.setWidthPercentage(100);
+        table.setWidths(new float[]{0.56f, 0.2f, 0.24f});
+        table.setSpacingBefore(2f);
+        table.setSpacingAfter(10f);
+        PdfPCell titre = new PdfPCell(new Phrase(PdfTheme.upper(
+                "Pièces jointes (" + pieces.size() + ")"), PdfTheme.F_CARTE_TITRE));
+        titre.setColspan(3);
+        titre.setBackgroundColor(PdfTheme.VERT_PALE);
+        titre.setBorder(Rectangle.LEFT);
+        titre.setBorderColorLeft(PdfTheme.VERT_MARQUE);
+        titre.setBorderWidthLeft(2.5f);
+        titre.setPadding(7);
+        table.addCell(titre);
+        String[] headers = {"Fichier", "Type", "Taille"};
+        for (String h : headers) {
+            PdfPCell th = new PdfPCell(new Phrase(PdfTheme.upper(h), PdfTheme.F_LABEL));
+            th.setBorder(Rectangle.BOTTOM);
+            th.setBorderColor(PdfTheme.VERT_MARQUE);
+            th.setPaddingLeft(5f);
+                
+            table.addCell(th);
+        }
+        for (PieceJointe pj : pieces) {
+            table.addCell(new PdfPCell(new Phrase(
+                    pj.getNomOriginal() != null ? pj.getNomOriginal() : pj.getNomFichier(),
+                    PdfTheme.F_TD)));
+            table.addCell(new PdfPCell(new Phrase(
+                    pj.getTypeFichier() != null ? pj.getTypeFichier().toUpperCase(Locale.FRANCE) : "—",
+                    PdfTheme.F_TD)));
+            table.addCell(new PdfPCell(new Phrase(tailleLisible(pj.getTailleFichier()), PdfTheme.F_TD)));
+        }
+        doc.add(table);
+    }
+
+    private static String tailleLisible(Long bytes) {
+        if (bytes == null) {
+            return "—";
+        }
+        if (bytes < 1024) {
+            return bytes + " o";
+        }
+        if (bytes < 1024 * 1024) {
+            return String.format(Locale.FRANCE, "%.1f Ko", bytes / 1024.0);
+        }
+        return String.format(Locale.FRANCE, "%.1f Mo", bytes / 1024.0 / 1024.0);
     }
 
     private static PdfPTable bandeauMontant(Paiement paiement) {
@@ -72,14 +239,16 @@ final class PdfRecuPaiement {
     // Cartes
     // ------------------------------------------------------------------
 
-    private static void cartes(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture) {
+    private static void cartes(Document doc, Paiement paiement, BigDecimal sommePayeeSurFacture,
+                               com.cabex.backend.facture.dto.ObjetFactureValideeResponse resolu,
+                               List<ObjetLigne> objets) {
         DemandeService demande = paiement.getDemande();
         FactureValidee fv = paiement.getFactureValidee();
         Societe societe = demande != null ? demande.getSociete() : null;
 
         String type = typeFactureValidee(fv);
-        String objetLabel = objetLabelFor(type);
-        String objetValeur = objetValeurFor(type, fv);
+        String objetLabel = resolu != null ? resolu.libelleObjet() : objetLabelFor(type);
+        String objetValeur = resolu != null ? resolu.objet() : objetValeurFor(type, fv);
 
         // Rangée 1 : client / service
         PdfPCell cClient = PdfComposants.carte("Client et demande", new String[][]{
@@ -89,16 +258,7 @@ final class PdfRecuPaiement {
                 {"Date de paiement", PdfFormats.valeurDate(paiement.getDatePaiement())}
         });
         boolean mensuelle = fv != null && fv.getMois() != null;
-        java.util.List<String[]> lignesService = new java.util.ArrayList<>();
-        lignesService.add(new String[]{objetLabel, PdfFormats.valeur(objetValeur)});
-        lignesService.add(new String[]{"Référence facture", PdfFormats.valeur(libelleFacture(fv))});
-        if (mensuelle) {
-            lignesService.add(new String[]{"Mois facturé", "Abonnement " + moisLabel(fv.getMois())});
-            lignesService.add(new String[]{"Date d'emission", PdfFormats.valeurDate(
-                    fv.getValideLe() != null ? fv.getValideLe().toLocalDate() : null)});
-        }
-        PdfPCell cService = PdfComposants.carte("Service et facture",
-                lignesService.toArray(new String[0][]));
+        PdfPCell cService = serviceEtFactureCard(objets, objetLabel, objetValeur, fv, mensuelle);
         PdfComposants.rangee(doc, 0.5f, cClient, cService);
 
         // Rangée 2 : règlement / montants
@@ -111,9 +271,9 @@ final class PdfRecuPaiement {
         });
         PdfPCell cMontants = PdfComposants.carte("Montants de la facture", new String[][]{
                 {"Montant facture validée", PdfFormats.formatArgent(montantFacture(fv))},
-                {"Montant déjà payé", PdfFormats.formatArgent(montantDejaPaye(fv, sommePayeeSurFacture))},
+                {"Montant déjà payé", PdfFormats.formatArgent(montantDejaPaye(paiement, fv, sommePayeeSurFacture))},
                 {"Montant reçu", PdfFormats.formatArgent(paiement.getMontantPaye())},
-                {"Reste à payer", PdfFormats.formatArgent(reste(fv, sommePayeeSurFacture))}
+                {"Reste à payer", PdfFormats.formatArgent(reste(paiement, fv, sommePayeeSurFacture))}
         });
         PdfComposants.rangee(doc, 0.5f, cReglement, cMontants);
     }
@@ -176,14 +336,21 @@ final class PdfRecuPaiement {
         return fv != null && fv.getMontant() != null ? fv.getMontant() : null;
     }
 
-    private static BigDecimal montantDejaPaye(FactureValidee fv, BigDecimal sommePayeeSurFacture) {
+    private static BigDecimal montantDejaPaye(Paiement paiement, FactureValidee fv, BigDecimal sommePayeeSurFacture) {
+        if (paiement.getMontantDejaPaye() != null) {
+            return paiement.getMontantDejaPaye();
+        }
         if (sommePayeeSurFacture != null) {
             return sommePayeeSurFacture;
         }
         return BigDecimal.ZERO;
     }
 
-    private static BigDecimal reste(FactureValidee fv, BigDecimal sommePayeeSurFacture) {
+    private static BigDecimal reste(Paiement paiement, FactureValidee fv, BigDecimal sommePayeeSurFacture) {
+        // Snapshot figé au moment de l'encaissement (colonne paiement.reste_a_payer).
+        if (paiement.getResteAPayer() != null) {
+            return paiement.getResteAPayer();
+        }
         BigDecimal montant = montantFacture(fv);
         if (montant == null) {
             return null;

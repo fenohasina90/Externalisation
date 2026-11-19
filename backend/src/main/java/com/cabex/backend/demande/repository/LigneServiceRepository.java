@@ -16,6 +16,8 @@ public interface LigneServiceRepository extends JpaRepository<LigneService, Inte
 
     boolean existsByDemandeId(Integer demandeId);
 
+    boolean existsByDemandeIdAndServiceId(Integer demandeId, Integer serviceId);
+
     long countByDemandeId(Integer demandeId);
 
     /**

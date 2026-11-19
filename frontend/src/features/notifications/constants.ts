@@ -7,7 +7,6 @@ export interface TypeNotificationMeta {
 
 export const TYPE_META: Record<TypeNotification, TypeNotificationMeta> = {
   PAIEMENT_RETARD: { label: 'Paiement en retard', tone: 'red' },
-  ECHEANCE_PROCHE: { label: 'Échéance proche', tone: 'orange' },
   NOUVELLE_DEMANDE: { label: 'Nouvelle demande', tone: 'blue' },
   PAIEMENT_ENREGISTRE: { label: 'Paiement enregistré', tone: 'green' },
   CHANGEMENT_STATUT: { label: 'Changement de statut', tone: 'blue' },
@@ -21,7 +20,6 @@ export const TYPES_NOTIFICATION = Object.keys(TYPE_META) as TypeNotification[]
 const TYPES_DEMANDE: TypeNotification[] = ['NOUVELLE_DEMANDE', 'CHANGEMENT_STATUT']
 const TYPES_PAIEMENT: TypeNotification[] = [
   'PAIEMENT_RETARD',
-  'ECHEANCE_PROCHE',
   'PAIEMENT_ENREGISTRE',
   'FACTURE_MENSUELLE_RAPPEL',
 ]

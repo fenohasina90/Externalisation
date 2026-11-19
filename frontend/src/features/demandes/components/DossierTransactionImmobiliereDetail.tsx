@@ -233,8 +233,12 @@ export function DossierTransactionImmobiliereDetail({
               <b>{montant(dossier.commissionCn)}</b>
             </div>
             <div className="info-item info-item--full">
-              <span>Prestation abonnement mensuel</span>
-              <b>{ouiNon(dossier.prestationAbonnementMensuel)}</b>
+              <span>Type de prestation</span>
+              <b>
+                {dossier.typePrestationDossier === 'ABONNEMENT_MENSUEL'
+                  ? 'Abonnement mensuel'
+                  : 'Prestation'}
+              </b>
             </div>
           </div>
         </section>

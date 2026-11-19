@@ -29,7 +29,7 @@ export function PaiementsPage() {
   const montantTotal = synthese?.montantTotal ?? null
   const montantPaye = synthese?.montantPaye ?? null
   const reste = synthese?.resteAPayer ?? null
-  const enRetard = synthese?.echeancesEnRetard ?? null
+  const enRetard = synthese?.paiementsEnRetard ?? null
 
   const pct = (part: number | null): string | undefined => {
     if (part === null || montantTotal === null || montantTotal <= 0) return undefined
@@ -144,7 +144,7 @@ export function PaiementsPage() {
           loading={syntheseLoading}
           nombre={enRetard}
           tag="À suivre"
-          libelle="Échéances en retard"
+          libelle="Paiement en retard"
           icone={
             <svg className="sv" viewBox="0 0 24 24">
               <path d="M12 3l10 18H2L12 3zM12 10v5M12 18h.01" />
@@ -170,7 +170,7 @@ export function PaiementsPage() {
               type="text"
               value={filtres.recherche}
               onChange={(e) => setFiltre('recherche', e.target.value)}
-              placeholder="Référence, client…"
+              placeholder="Référence, client, facture…"
             />
           </label>
           <label className="field filter-field">
@@ -192,7 +192,6 @@ export function PaiementsPage() {
             <select value={filtres.statut} onChange={(e) => setFiltre('statut', e.target.value)}>
               <option value="tous">Tous</option>
               <option value="EN_ATTENTE">En attente</option>
-              <option value="VALIDATION">Validation</option>
               <option value="EN_COURS">En cours</option>
               <option value="TERMINEE">Terminée</option>
               <option value="ANNULEE">Annulée</option>

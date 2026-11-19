@@ -37,8 +37,6 @@ interface LigneSaisie {
   serviceId: number | ''
   domaineId: string
   tarif: string
-  debutService: string
-  finService: string
   designationDebours: string
   /** Montant du débours saisi à la création (optionnel). */
   montantDebours: string
@@ -51,8 +49,6 @@ const LIGNE_VIDE: LigneSaisie = {
   serviceId: '',
   domaineId: '',
   tarif: '',
-  debutService: '',
-  finService: '',
   designationDebours: '',
   montantDebours: '',
   typePrestation: 'PRESTATION',
@@ -61,7 +57,7 @@ const LIGNE_VIDE: LigneSaisie = {
 /**
  * Nouvelle demande multi-services branchée sur l'API :
  * étape 1 (client, responsable, commercial, date, mode de facturation),
- * étape 2 (une ou plusieurs lignes service + tarif + période).
+ * étape 2 (une ou plusieurs lignes service + tarif).
  */
 export function NouvelleDemandePage() {
   const navigate = useNavigate()
@@ -282,14 +278,6 @@ export function NouvelleDemandePage() {
       if (!l.tarif || Number(l.tarif) < 0 || Number.isNaN(Number(l.tarif))) {
         return `Ligne ${i + 1} : tarif positif ou nul obligatoire`
       }
-      // if (!l.debutService || !l.finService) return `Ligne ${i + 1} : période obligatoire`
-      // if (l.debutService < aujourdhui) {
-      //   return `Ligne ${i + 1} : le début doit être postérieur ou égal à aujourd'hui`
-      // }
-      if (l.typePrestation !== 'PRESTATION' && l.debutService !== '' && l.finService !== ''
-          && l.finService <= l.debutService) {
-        return `Ligne ${i + 1} : la fin doit être strictement postérieure au début`
-      }
       if (estTypeServiceSolo(typesServices.get(l.serviceId))) typeSolo = true
     }
     if (typeSolo && lignes.length > 1) {
@@ -309,8 +297,6 @@ export function NouvelleDemandePage() {
             ? {
                 serviceId: null,
                 tarif: null,
-                debutService: null,
-                finService: null,
                 categorie: 'DEBOURS' as const,
                 designationDebours: l.designationDebours.trim(),
                 montantDebours: l.montantDebours.trim() !== '' ? Number(l.montantDebours) : null,
@@ -318,15 +304,10 @@ export function NouvelleDemandePage() {
             : {
                 serviceId: l.serviceId as number,
                 tarif: Number(l.tarif),
-                debutService: l.debutService,
-                finService: l.finService,
                 categorie: 'EXTERNALISATION' as const,
                 designationDebours: null,
-                // Une valeur est envoyée même hors STANDARD : le backend
-                // la refuse si elle ne correspond pas (garde explicite).
-                typePrestation: typesServices.get(l.serviceId as number) === 'STANDARD'
-                  ? (l.typePrestation || 'PRESTATION')
-                  : null,
+                // Tous les services acceptent PRESTATION / ABONNEMENT_MENSUEL
+                typePrestation: l.typePrestation || 'PRESTATION',
               },
         )
         const creee = await demandesApi.create({
@@ -412,15 +393,9 @@ export function NouvelleDemandePage() {
             ligne.tarif !== '' && !Number.isNaN(Number(ligne.tarif))
               ? formatMontantMGA(Number(ligne.tarif))
               : ''
-          const periode =
-            ligne.debutService !== '' || ligne.finService !== ''
-              ? `${ligne.debutService ? formatDate(ligne.debutService) : '…'} → ${
-                  ligne.finService ? formatDate(ligne.finService) : '…'
-                }`
-              : ''
           return {
             label: nom ?? `Service ${index + 1}`,
-            valeur: [tarif, periode].filter(Boolean).join(' · '),
+            valeur: tarif,
           }
         }),
         { label: 'Montant total (hors débours non validés)', valeur: formatMontantMGA(total) },
@@ -443,7 +418,7 @@ export function NouvelleDemandePage() {
           <FormEtapes
             etapes={[
               { titre: 'Demande', description: 'Client, responsable, commercial et facturation.' },
-              { titre: 'Services', description: 'Un ou plusieurs services, chacun avec tarif et période.' },
+              { titre: 'Services', description: 'Un ou plusieurs services, chacun avec tarif.' },
             ]}
             validerEtape={validerEtape}
             onTerminer={() => void handleTerminer()}
@@ -607,7 +582,7 @@ export function NouvelleDemandePage() {
                           <span className="form-help">
                             {l.categorie === 'DEBOURS'
                               ? 'Statut initial « En attente », puis « Non payé » à la validation du montant.'
-                              : 'Service du catalogue avec tarif et période.'}
+                              : 'Service du catalogue avec tarif.'}
                           </span>
                         </label>
                         {l.categorie === 'DEBOURS' ? (
@@ -695,18 +670,17 @@ export function NouvelleDemandePage() {
 
                         
 
-                        {typesServices.get(l.serviceId as number) === 'STANDARD' && (
-                          <label className="field">
-                            Type de prestation <span className="required">*</span>
-                            <select
-                              value={l.typePrestation}
-                              onChange={(e) => setLigne(i, { typePrestation: e.target.value })}
-                            >
-                              <option value="PRESTATION">Prestation</option>
-                              <option value="ABONNEMENT_MENSUEL">Abonnement mensuel</option>
-                            </select>
-                          </label>
-                        )}
+                        {/* Tous les services (STANDARD, CREATION, TRANSACTION) acceptent les deux valeurs */}
+                        <label className="field">
+                          Type de prestation <span className="required">*</span>
+                          <select
+                            value={l.typePrestation}
+                            onChange={(e) => setLigne(i, { typePrestation: e.target.value })}
+                          >
+                            <option value="PRESTATION">Prestation</option>
+                            <option value="ABONNEMENT_MENSUEL">Abonnement mensuel</option>
+                          </select>
+                        </label>
                         <label className="field">
                           Tarif (MGA) <span className="required">*</span>
                           <input
@@ -717,36 +691,7 @@ export function NouvelleDemandePage() {
                             placeholder="Ex. 2000000"
                           />
                         </label>
-                        {/* <span className="field" /> */}
-                        <label className="field">
-                          Début{
-                            l.typePrestation !== 'PRESTATION' ? (
-                              <span className="required">*</span>
-                            ) : null
-                          }
-                          <input
-                            type="date"
-                            // min={aujourdhui}
-                            value={l.debutService}
-                            onChange={(e) => setLigne(i, { debutService: e.target.value })}
-                            placeholder="Ex. 2026-01-01"
-                            disabled={l.typePrestation === 'PRESTATION' ? false : false}
-                          />
-                        </label>
-                        <label className="field">
-                          Fin{
-                            l.typePrestation !== 'PRESTATION' ? (
-                              <span className="required">*</span>
-                            ) : null
-                          }
-                          <input
-                            type="date"
-                            min={l.debutService}
-                            value={l.finService}
-                            onChange={(e) => setLigne(i, { finService: e.target.value })}
-                            placeholder="Ex. 2026-12-31"
-                          />
-                        </label>
+
                         </>
                         )}
                       </div>

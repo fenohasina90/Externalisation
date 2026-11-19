@@ -5,11 +5,9 @@ import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.client.dto.CommercialFicheResponse;
 import com.cabex.backend.client.dto.CreateSocieteRequest;
 import com.cabex.backend.client.dto.DemandeFicheResponse;
-import com.cabex.backend.client.dto.EcheanceFicheResponse;
 import com.cabex.backend.client.dto.PaiementFicheResponse;
 import com.cabex.backend.client.dto.PieceJointeFicheResponse;
 import com.cabex.backend.client.dto.ResponsableResponse;
-import com.cabex.backend.client.dto.RisqueClientResponse;
 import com.cabex.backend.client.dto.ServiceUtiliseResponse;
 import com.cabex.backend.client.dto.SocieteDetailResponse;
 import com.cabex.backend.client.dto.SocieteResponse;
@@ -22,17 +20,12 @@ import com.cabex.backend.client.mapper.SocieteMapper;
 import com.cabex.backend.client.repository.ClientResponsableRepository;
 import com.cabex.backend.client.repository.SocieteRepository;
 import com.cabex.backend.commercial.entity.Commercial;
-import com.cabex.backend.configuration.service.ConfigurationKeys;
-import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.HistoriqueDemande;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.document.entity.PieceJointe;
 import com.cabex.backend.document.repository.PieceJointeRepository;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
-import com.cabex.backend.echeance.mapper.EcheanceMapper;
-import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
 import com.cabex.backend.exception.DuplicateResourceException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
@@ -62,22 +55,16 @@ public class SocieteService {
     private final HistoriqueDemandeRepository historiqueRepository;
     private final PaiementRepository paiementRepository;
     private final FactureValideeRepository factureValideeRepository;
-    private final EcheancePaiementRepository echeanceRepository;
     private final PieceJointeRepository pieceJointeRepository;
-    private final RisqueService risqueService;
     private final AuditService auditService;
-    private final ConfigurationService configurationService;
 
     public SocieteService(SocieteRepository societeRepository,
                           ClientResponsableRepository responsableRepository,
                           DemandeServiceRepository demandeRepository,
                           HistoriqueDemandeRepository historiqueRepository,
                           PaiementRepository paiementRepository,
-                          EcheancePaiementRepository echeanceRepository,
                           PieceJointeRepository pieceJointeRepository,
-                          RisqueService risqueService,
                           AuditService auditService,
-                          ConfigurationService configurationService,
                           FactureValideeRepository factureValideeRepository) {
         this.societeRepository = societeRepository;
         this.responsableRepository = responsableRepository;
@@ -85,17 +72,8 @@ public class SocieteService {
         this.historiqueRepository = historiqueRepository;
         this.paiementRepository = paiementRepository;
         this.factureValideeRepository = factureValideeRepository;
-        this.echeanceRepository = echeanceRepository;
         this.pieceJointeRepository = pieceJointeRepository;
-        this.risqueService = risqueService;
         this.auditService = auditService;
-        this.configurationService = configurationService;
-    }
-
-    private int joursAlerte() {
-        return Math.max(configurationService.lireEntier(
-                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE,
-                ConfigurationKeys.JOURS_AVANCE_ALERTE_ECHEANCE_DEFAUT), 1);
     }
 
     @Transactional(readOnly = true)
@@ -163,24 +141,8 @@ public class SocieteService {
                                 p.getMontantPaye(),
                                 p.getReferenceVirement(),
                                 p.getBanque(),
-                                p.getNumeroCheque()))
-                        .toList();
-
-        LocalDate today = LocalDate.now();
-        List<EcheanceFicheResponse> echeances = accueil ? List.of()
-                : echeanceRepository.findBySocieteId(id).stream()
-                        .map(e -> new EcheanceFicheResponse(
-                                e.getId(),
-                                e.getProposPaiement() != null && e.getProposPaiement().getDemande() != null
-                                        ? e.getProposPaiement().getDemande().getReferenceDemande() : null,
-                                e.getProposPaiement() != null && e.getProposPaiement().getDemande() != null
-                                        ? e.getProposPaiement().getDemande().getId() : null,
-                                e.getNumeroEcheance(),
-                                e.getDateEcheance(),
-                                e.getMontantAttendu(),
-                                e.getMontantPaye(),
-                                e.getMontantAttendu().subtract(e.getMontantPaye()),
-                                EcheanceMapper.calculerStatutEcheance(e, today, joursAlerte())))
+                                p.getNumeroCheque(),
+                                p.getCommentaire()))
                         .toList();
 
         List<CommercialFicheResponse> commerciaux = commerciauxDuClient(demandes);
@@ -191,7 +153,7 @@ public class SocieteService {
                 .toList();
 
         SyntheseClientFiche synthese = accueil ? null
-                : syntheseDuClient(demandes, paiements, echeances, id);
+                : syntheseDuClient(societe.getId());
 
         return new SocieteDetailResponse(
                 SocieteMapper.toResponse(societe, demandes.size()),
@@ -200,7 +162,6 @@ public class SocieteService {
                 demandesFiche,
                 services,
                 paiements,
-                echeances,
                 piecesJointes,
                 synthese);
     }
@@ -230,52 +191,20 @@ public class SocieteService {
                 p.getCreatedAt());
     }
 
-    private SyntheseClientFiche syntheseDuClient(List<DemandeService> demandes,
-                                                 List<PaiementFicheResponse> paiements,
-                                                 List<EcheanceFicheResponse> echeances,
-                                                 Integer societeId) {
-        // Montants basés sur les factures validées liées à un paiement (onglet
-        // « Facturation » de la fiche client) : factures de paiement (enfants liées
-        // à la facture générale) + générales réglées directement (sans sous-facture).
-        // La générale adossée à des enfants n'est pas comptée deux fois.
+    private SyntheseClientFiche syntheseDuClient(Integer societeId) {
+        // Montant total : somme des montants de toutes les factures validées du client
+        // (tous les types confondus, chacune comptée une seule fois).
         List<FactureValidee> factures = factureValideeRepository.findBySocieteId(societeId);
-        Map<Integer, BigDecimal> payeParFv = paiementRepository.findBySocieteIdForFacturation(societeId)
-                .stream()
-                .collect(java.util.stream.Collectors.groupingBy(
-                        p -> p.getFactureValidee().getId(),
-                        java.util.stream.Collectors.reducing(BigDecimal.ZERO,
-                                Paiement::getMontantPaye, BigDecimal::add)));
-        Map<Integer, Boolean> fvAvecEnfants = new LinkedHashMap<>();
-        for (FactureValidee fv : factures) {
-            if (fv.getFactureGenerale() != null) {
-                fvAvecEnfants.put(fv.getFactureGenerale().getId(), Boolean.TRUE);
-            }
-        }
-        BigDecimal montantTotal = BigDecimal.ZERO;
-        BigDecimal montantPaye = BigDecimal.ZERO;
-        for (FactureValidee fv : factures) {
-            if (fv.getFactureGenerale() != null) {
-                BigDecimal montant = fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO;
-                montantTotal = montantTotal.add(montant);
-                montantPaye = montantPaye.add(payeParFv.getOrDefault(fv.getId(), BigDecimal.ZERO));
-            }
-        }
-        for (FactureValidee fv : factures) {
-            if (fv.getFactureGenerale() == null && !fvAvecEnfants.getOrDefault(fv.getId(), Boolean.FALSE)) {
-                BigDecimal montant = fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO;
-                montantTotal = montantTotal.add(montant);
-                montantPaye = montantPaye.add(payeParFv.getOrDefault(fv.getId(), BigDecimal.ZERO));
-            }
-        }
+        BigDecimal montantTotal = factures.stream()
+                .map(fv -> fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Montant payé : somme de tous les paiements actifs effectués par ce client,
+        // toutes factures validées confondues.
+        BigDecimal montantPaye = paiementRepository.findBySocieteIdForFacturation(societeId).stream()
+                .map(p -> p.getMontantPaye() != null ? p.getMontantPaye() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal resteAPayer = montantTotal.subtract(montantPaye).max(BigDecimal.ZERO);
-
-        long enRetard = echeances.stream()
-                .filter(e -> "EN_RETARD".equals(e.statut()))
-                .count();
-
-        RisqueClientResponse risque = risqueService.calculer(societeId);
-        return new SyntheseClientFiche(
-                montantTotal, montantPaye, resteAPayer, enRetard, risque.tauxPaiementATemps(), risque.risque());
+        return new SyntheseClientFiche(montantTotal, montantPaye, resteAPayer);
     }
 
     @Transactional

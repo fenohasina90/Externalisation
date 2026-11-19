@@ -6,11 +6,9 @@ export interface DashboardSummary {
   montantTotal: number | null
   montantPaye: number | null
   resteAPayer: number | null
-  echeancesEnRetard: number | null
-  echeancesProches: number | null
+  paiementsEnRetard: number | null
   demandesEnAttente: number | null
   demandesEnCours: number | null
-  joursAlerteEcheance: number | null
 }
 
 export interface StatutCount {
@@ -46,22 +44,17 @@ export interface ServiceRevenu extends ServiceTop {
   revenu: number
 }
 
-export interface EcheanceAlerte {
-  echeanceId: number
-  clientId: number | null
+export interface PaiementRetard {
+  factureValideeId: number
+  societeId: number | null
   nomSociete: string | null
   demandeId: number | null
   referenceDemande: string | null
-  dateEcheance: string
-  montantAttendu: number
+  dateEmission: string
+  montantTotal: number
   montantPaye: number
   reste: number
   statut: string
-}
-
-export interface EcheanceDashboard {
-  enRetard: EcheanceAlerte[]
-  aVenir: EcheanceAlerte[]
 }
 
 export interface PaiementDashboard {
@@ -95,11 +88,8 @@ export const FILTRES_DASHBOARD_VIDES: DashboardFiltres = {
 }
 
 export interface PerformancesDashboard {
-  delaiMoyenTraitementJours: number | null
   demandesTerminees: number | null
   tauxDemandesTerminees: number | null
-  montantMoyenParDemande: number | null
-  tauxPaiementATemps: number | null
   servicePlusDemande: ServiceTop | null
   commercialTop: { commercialId: number; nomCommercial: string; nombreDemandes: number } | null
   demandesTermineesParMois: DemandeMois[]
@@ -130,7 +120,7 @@ export interface DashboardData {
   demandesMois: DemandeMois[]
   servicesTop: ServiceTop[]
   paiements: PaiementDashboard | null
-  echeances: EcheanceDashboard | null
+  paiementsEnRetard: PaiementRetard[]
   servicesRevenu: ServiceRevenu[]
   performances: PerformancesDashboard
 }

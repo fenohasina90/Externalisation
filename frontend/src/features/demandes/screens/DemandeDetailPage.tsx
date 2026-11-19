@@ -1,9 +1,8 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Can } from '@/components/shared/Can'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { FormEtapes } from '@/components/shared/FormEtapes'
-import { Spinner } from '@/components/ui'
+import { MonthPicker, Spinner } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
 import { http } from '@/api/http'
 import { messageErreur } from '@/constants/messages'
@@ -13,10 +12,6 @@ import type { Commercial } from '@/features/commerciaux/types'
 import { estTypeServiceSolo, type Service } from '@/features/services/types'
 import { commerciauxApi } from '@/features/commerciaux/services/commerciaux.service'
 import { servicesApi } from '@/features/services/services/services.service'
-import type { PlanPaiement } from '@/features/plan-paiement/types'
-import { planPaiementApi } from '@/features/plan-paiement/services/plan-paiement.service'
-import type { Echeance } from '@/features/echeances/types'
-import { echeancesApi } from '@/features/echeances/services/echeances.service'
 import { ServiceFormModal } from '@/features/services/components/ServiceFormModal'
 import { PiecesJointes } from '@/features/documents'
 import { getLibelleTypePrestation } from '../constants/labels'
@@ -77,23 +72,6 @@ function LignePill({ statut }: { statut: string | null }) {
     : statut === 'PARTIEL' || statut === 'NON_PAYEE' ? 'pill warning'
     : 'pill wt'
   return <span className={classe}>● {LIBELLES_LIGNE[statut] ?? statut}</span>
-}
-
-function EcheancePill({ statut }: { statut: string }) {
-  const classe =
-    statut === 'PAYEE' ? 'pill ok'
-    : statut === 'PARTIELLE' ? 'pill warning'
-    : statut === 'EN_RETARD' ? 'pill danger'
-    : statut === 'PROCHE' ? 'pill warning'
-    : 'pill wt'
-  const libelles: Record<string, string> = {
-    PAYEE: 'Payée',
-    PARTIELLE: 'Partielle',
-    EN_RETARD: 'En retard',
-    PROCHE: 'Proche',
-    A_VENIR: 'À venir',
-  }
-  return <span className={classe}>● {libelles[statut] ?? statut}</span>
 }
 
 /** Détail d'une demande multi-services branché sur l'API (route /demandes/:reference). */
@@ -478,8 +456,9 @@ function FacturesTab({
     reloadValidees()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [factures])
-  // Les factures du mois d'abonnement restent dans l'onglet « Factures mensuelles ».
-  const validees = (facturesValidees ?? []).filter((f) => f.type !== 'ABONNEMENT_MENSUEL')
+  // La facture validée est affichée ici (la mensuelle 1 — la facture validée
+  // elle-même — et mensuelle 2 enfant son visibles également).
+  const validees = facturesValidees ?? []
   const nbSoldees = validees.filter((f) => f.resteAPayer <= 0).length
   const proformas = factures.filter((f) => f.statut === 'PROFORMA')
   const toutesLignes = factures.flatMap((f) =>
@@ -541,7 +520,6 @@ function FacturesTab({
                 <thead>
                   <tr>
                     <th>Service</th>
-                    <th>Période</th>
                     <th>Tarif</th>
                     <th>Facture</th>
                   </tr>
@@ -554,9 +532,6 @@ function FacturesTab({
                         {l.nomService && l.libelleLigne && l.libelleLigne !== l.nomService && (
                           <span className="text-secondary" style={{ fontSize: 12 }}>{l.libelleLigne}</span>
                         )}
-                      </td>
-                      <td className="text-secondary">
-                        {formatDate(l.debutService)} → {formatDate(l.finService)}
                       </td>
                       <td>{formatMontantMGA(montantLigneFacture(l))}</td>
                       <td>
@@ -651,7 +626,6 @@ function FacturesTab({
                   const montantPaye = f.montantPaye ?? 0
                   const reste = f.resteAPayer ?? Math.max(f.montant - montantPaye, 0)
                   const taux = f.montant > 0 ? Math.min(100, Math.round((montantPaye / f.montant) * 100)) : 0
-                  const estGeneraleUnique = f.type === 'GENERALE' && f.modeFacturation === 'UNIQUE'
                   return (
                     <tr key={f.id}>
                       <td className="fw-600">
@@ -691,34 +665,26 @@ function FacturesTab({
                       </td>
                       <td>{formatMontantMGA(f.montant)}</td>
                       <td>
-                        {estGeneraleUnique ? (
-                          <span className="text-secondary" style={{ fontSize: 12 }}>
-                            Règlement par service (chaque facture de service porte sa référence)
-                          </span>
-                        ) : (
-                          <div className="progression">
-                            <div className="progression__label">
-                              <span>{formatMontantMGA(montantPaye)} payé</span>
-                              <strong style={{ color: reste > 0 ? 'var(--danger)' : 'var(--success)' }}>
-                                {reste > 0 ? `${formatMontantMGA(reste)} restants` : 'Soldée'}
-                              </strong>
-                            </div>
-                            <div
-                              className="trk"
-                              role="progressbar"
-                              aria-valuenow={taux}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            >
-                              <i style={{ width: `${taux}%` }} />
-                            </div>
+                        <div className="progression">
+                          <div className="progression__label">
+                            <span>{formatMontantMGA(montantPaye)} payé</span>
+                            <strong style={{ color: reste > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                              {reste > 0 ? `${formatMontantMGA(reste)} restants` : 'Soldée'}
+                            </strong>
                           </div>
-                        )}
+                          <div
+                            className="trk"
+                            role="progressbar"
+                            aria-valuenow={taux}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                          >
+                            <i style={{ width: `${taux}%` }} />
+                          </div>
+                        </div>
                       </td>
                       <td>
-                        {estGeneraleUnique ? (
-                          <span className="text-secondary">—</span>
-                        ) : reste > 0 ? (
+                        {reste > 0 ? (
                           <button
                             type="button"
                             className="btn-primary"
@@ -928,7 +894,6 @@ function ServicesTab({
     estTypeServiceSolo(l.typeService),
   )
   const [retrait, setRetrait] = useState<LigneService | null>(null)
-  const [planPour, setPlanPour] = useState<LigneService | null>(null)
   const [traitement, setTraitement] = useState(false)
 
   const handleValiderDebours = async (montant: number) => {
@@ -1013,10 +978,8 @@ function ServicesTab({
           demandeId={demande.id}
           ligne={ligne}
           modifiable={ligne.categorie === 'DEBOURS' ? ligne.statut === 'EN_ATTENTE' : modifiable && !fige(ligne)}
-          planEtablissable={ligne.categorie !== 'DEBOURS' && statutFacture.get(ligne.factureId ?? -1) === 'VALIDEE'}
           onEdit={() => setEdition(ligne)}
           onRemove={() => setRetrait(ligne)}
-          onPlan={() => setPlanPour(ligne)}
           onValiderDebours={() => setValidationDebours(ligne)}
           onAnnulerDebours={() => setAnnulationDebours(ligne)}
           onTerminerAbonnement={() => setTerminaisonAbo(ligne)}
@@ -1155,17 +1118,7 @@ function ServicesTab({
         onConfirmer={() => void handleAnnulerDebours()}
       />
 
-      <PlanModal
-        ligne={planPour}
-        onClose={() => setPlanPour(null)}
-        onSaved={() => {
-          setPlanPour(null)
-          onMessage('Plan de paiement établi.')
-          onChange()
-        }}
-        onErreur={onErreur}
-      />
-      {traitement && <Spinner label="Traitement…" />}
+            {traitement && <Spinner label="Traitement…" />}
     </div>
   )
 }
@@ -1174,10 +1127,8 @@ function LigneCard({
   demandeId,
   ligne,
   modifiable,
-  planEtablissable,
   onEdit,
   onRemove,
-  onPlan,
   onValiderDebours,
   onAnnulerDebours,
   onTerminerAbonnement,
@@ -1185,34 +1136,13 @@ function LigneCard({
   demandeId: number
   ligne: LigneService
   modifiable: boolean
-  /** Bouton « Établir le plan » visible uniquement si la facture est validée. */
-  planEtablissable: boolean
   onEdit: () => void
   onRemove: () => void
-  onPlan: () => void
   onValiderDebours: () => void
   onAnnulerDebours: () => void
   onTerminerAbonnement: () => void
 }) {
-  const { data: plan } = useApi<PlanPaiement | null>(
-    () => planPaiementApi.getByLigne(ligne.id).catch(() => null),
-    [ligne.id],
-  )
-  const { data: echeances } = useApi<Echeance[]>(
-    () => (plan ? echeancesApi.listByPlan(plan.id) : Promise.resolve([])),
-    [plan?.id],
-  )
-  const echeancesTriees = useMemo(
-    () =>
-      [...(echeances ?? [])].sort(
-        (a, b) =>
-          a.dateEcheance.localeCompare(b.dateEcheance) ||
-          a.numeroEcheance - b.numeroEcheance,
-      ),
-    [echeances],
-  )
   const navigate = useNavigate()
-  const [voirEcheances, setVoirEcheances] = useState(true)
   const [voirHistorique, setVoirHistorique] = useState(false)
   const estDebours = ligne.categorie === 'DEBOURS'
   const estPrestationOuAbonnement = !estDebours
@@ -1228,7 +1158,7 @@ function LigneCard({
         </strong>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span className={`pill ${estDebours ? 'pill warning' : 'pill wt'}`}>● {estDebours ? 'Débours' : 'Externalisation'}</span>
-          {!estDebours && ligne.typeService === 'STANDARD' && ligne.typePrestation && (
+          {!estDebours && ligne.typePrestation && (
             <span className="pill info">● {getLibelleTypePrestation(ligne.typePrestation)}</span>
           )}
           <LignePill statut={ligne.statut} />
@@ -1255,12 +1185,6 @@ function LigneCard({
         ) : (
           <>
         <div className="info-item">
-          <span>Période</span>
-          <b>
-            {formatDate(ligne.debutService)} → {formatDate(ligne.finService)}
-          </b>
-        </div>
-        <div className="info-item">
           <span>Payé / Reste</span>
           <b>
             {formatMontantMGA(ligne.montantPaye)} / {formatMontantMGA(ligne.resteAPayer)}
@@ -1275,11 +1199,6 @@ function LigneCard({
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-        {!estDebours && (
-          <button type="button" className="btn-ghost" onClick={() => setVoirEcheances((v) => !v)}>
-            Échéances {voirEcheances ? '▴' : '▾'}
-          </button>
-        )}
         <button type="button" className="btn-ghost" onClick={() => setVoirHistorique((v) => !v)}>
           Historique {voirHistorique ? '▴' : '▾'}
         </button>
@@ -1315,42 +1234,13 @@ function LigneCard({
         )}
       </div>
 
-      {!estDebours && !estPrestationOuAbonnement && plan && voirEcheances && (
-        <div className="table-scroll-container no-global-scroll" style={{ marginTop: 8 }}>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>N°</th>
-                  <th>Date</th>
-                  <th>Attendu</th>
-                  <th>Payé</th>
-                  <th>Reste</th>
-                  <th>Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {echeancesTriees.map((e) => (
-                  <tr key={e.id}>
-                    <td>{e.numeroEcheance}</td>
-                    <td className="text-secondary">{formatDate(e.dateEcheance)}</td>
-                    <td>{formatMontantMGA(e.montantAttendu)}</td>
-                    <td>{formatMontantMGA(e.montantPaye)}</td>
-                    <td>{formatMontantMGA(e.reste)}</td>
-                    <td>
-                      <EcheancePill statut={e.statut} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {!estDebours && !estPrestationOuAbonnement && (
+        <p className="section-note">
+          Échéance/plan de paiement : sans objet — les encaissements sont liés à la facture
+          validée.
+        </p>
       )}
-      {!estDebours && !estPrestationOuAbonnement && !plan && voirEcheances && (
-        <p className="section-note">Aucun plan de paiement pour ce service.</p>
-      )}
-      {estPrestationOuAbonnement && voirEcheances && (
+      {estPrestationOuAbonnement && (
         <p className="section-note">
           {ligne.typePrestation === 'PRESTATION'
             ? 'Prestation : paiement direct après validation de la facture, sans échéance ni plan de paiement.'
@@ -1371,18 +1261,6 @@ function LigneCard({
             </button>
           </div>
         </Can>
-      )}
-      {!estDebours && !estPrestationOuAbonnement && !plan && planEtablissable && (
-        <Can permission="DEMANDE_UPDATE">
-          <div style={{ marginTop: 8 }}>
-            <button type="button" className="btn-primary" onClick={onPlan}>
-              Établir le plan
-            </button>
-          </div>
-        </Can>
-      )}
-      {!estDebours && !estPrestationOuAbonnement && !plan && !planEtablissable && (
-        <p className="section-note">Le plan sera établissable après validation de la facture.</p>
       )}
     </section>
   )
@@ -1452,23 +1330,16 @@ function LigneFormModal({
   const [serviceId, setServiceId] = useState<number | ''>('')
   const [typePrestation, setTypePrestation] = useState<'PRESTATION' | 'ABONNEMENT_MENSUEL'>('PRESTATION')
   const [tarif, setTarif] = useState('')
-  const [debut, setDebut] = useState('')
-  const [fin, setFin] = useState('')
   const [categorie, setCategorie] = useState<'EXTERNALISATION' | 'DEBOURS'>('EXTERNALISATION')
   const [designation, setDesignation] = useState('')
   const [montantDebours, setMontantDebours] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
   const [enregistrement, setEnregistrement] = useState(false)
   const [serviceModalOpen, setServiceModalOpen] = useState(false)
-  const typeCourant = typePrestation
   const { data: pageServices, reload: reloadServices } = useApi(
     () => servicesApi.list({ page: 0, size: 100, recherche: null }, { actif: true }),
     [open],
   )
-
-  const estServiceStandard = ligne
-    ? ligne.typeService === 'STANDARD'
-    : (pageServices?.content ?? []).find((s) => s.id === serviceId)?.typeService === 'STANDARD'
 
   // Pré-remplissage à l'ouverture (montée de version sans effet de bord).
   const cle = open ? `ligne-${ligne?.id ?? 'nouvelle'}` : 'fermee'
@@ -1479,8 +1350,6 @@ function LigneFormModal({
       setServiceId(ligne?.serviceId ?? '')
       setTypePrestation((ligne?.typePrestation as 'PRESTATION' | 'ABONNEMENT_MENSUEL') ?? 'PRESTATION')
       setTarif(ligne?.tarif != null ? String(ligne.tarif) : '')
-      setDebut(ligne?.debutService ?? '')
-      setFin(ligne?.finService ?? '')
       setCategorie((ligne?.categorie as 'EXTERNALISATION' | 'DEBOURS') ?? 'EXTERNALISATION')
       setDesignation(ligne?.designationDebours ?? '')
       setMontantDebours(ligne?.montantDebours != null ? String(ligne.montantDebours) : '')
@@ -1560,40 +1429,25 @@ function LigneFormModal({
       setErreur('Le tarif doit être positif ou nul')
       return
     }
-    // Sous-type de la ligne (défaut PRESTATION — même règle que le backend).
-    const estPrestation = typeCourant === 'PRESTATION'
-    const estAbonnement = typeCourant === 'ABONNEMENT_MENSUEL'
-    if (estAbonnement && !debut) {
-      setErreur('La date de début est obligatoire pour un abonnement mensuel')
-      return
-    }
-    if (!estPrestation && !estAbonnement && (!debut || !fin)) {
-      setErreur('La période est obligatoire')
-      return
-    }
-    if (debut && fin && fin <= debut) {
-      setErreur('La fin doit être strictement postérieure au début')
-      return
-    }
     setEnregistrement(true)
     setErreur(null)
     try {
       if (ligne) {
         await lignesApi.update(demandeId, ligne.id, {
           tarif: Number(tarif),
-          debutService: debut || null,
-          finService: fin || null,
-          typePrestation: estServiceStandard ? typePrestation : null,
+          debutService: null,
+          finService: null,
+          typePrestation,
         })
       } else {
         await lignesApi.create(demandeId, {
           serviceId: serviceId as number,
           tarif: Number(tarif),
-          debutService: debut || null,
-          finService: fin || null,
+          debutService: null,
+          finService: null,
           categorie: 'EXTERNALISATION',
           designationDebours: null,
-          typePrestation: estServiceStandard ? typePrestation : null,
+          typePrestation,
         })
       }
       onSaved()
@@ -1687,7 +1541,8 @@ function LigneFormModal({
                 </select>
               </label>
             )}
-            {estServiceStandard && categorie === 'EXTERNALISATION' && (
+            {/* Tous les services (STANDARD, CREATION, TRANSACTION) acceptent les deux valeurs */}
+            {categorie === 'EXTERNALISATION' && (
               <label className="field form-grid__full">
                 Type de prestation <span className="required">*</span>
                 <select
@@ -1711,14 +1566,7 @@ function LigneFormModal({
               />
             </label>
             <span className="field" />
-            <label className="field">
-              Début {typeCourant === 'ABONNEMENT_MENSUEL' && <span className="required">*</span>}
-              <input type="date" value={debut} onChange={(e) => setDebut(e.target.value)} />
-            </label>
-            <label className="field">
-              Fin {typeCourant !== 'PRESTATION' && typeCourant !== 'ABONNEMENT_MENSUEL' && <span className="required">*</span>}
-              <input type="date" value={fin} min={debut || undefined} onChange={(e) => setFin(e.target.value)} />
-            </label>
+
             </>
             )}
           </div>
@@ -1804,218 +1652,6 @@ function ValiderMontantDeboursModal({
   )
 }
 
-function PlanModal({
-  ligne,
-  onClose,
-  onSaved,
-  onErreur,
-}: {
-  ligne: LigneService | null
-  onClose: () => void
-  onSaved: () => void
-  onErreur: (message: string | null) => void
-}) {
-  const [nombre, setNombre] = useState('1')
-  const [tranches, setTranches] = useState<{ date: string; montant: string }[]>([{ date: '', montant: '' }])
-  const [erreur, setErreur] = useState<string | null>(null)
-  const [enregistrement, setEnregistrement] = useState(false)
-
-  // Période et montant repris du service : affichés verrouillés, non modifiables.
-  const cle = ligne ? `plan-${ligne.id}` : 'ferme'
-  const [cleVue, setCleVue] = useState<string | null>(null)
-  if (cleVue !== cle) {
-    setCleVue(cle)
-    if (ligne) {
-      setNombre('1')
-      setTranches([{ date: '', montant: '' }])
-      setErreur(null)
-    }
-  }
-
-  if (!ligne) return null
-
-  const montantTotal = ligne.tarif ?? 0
-  const debutService = ligne.debutService ?? ''
-  const finService = ligne.finService ?? ''
-  const nomLigne = libelleLigne(ligne)
-  const sommeSaisie = tranches.reduce((s, t) => s + (Number(t.montant) || 0), 0)
-  const resteASaisir = Math.round((montantTotal - sommeSaisie) * 100) / 100
-
-  const setNombreTranches = (valeur: string) => {
-    setNombre(valeur)
-    const n = Math.max(1, Math.min(24, Number(valeur) || 1))
-    setTranches((anciennes) => {
-      const suivantes = Array.from({ length: n }, (_, i) => anciennes[i] ?? { date: '', montant: '' })
-      // Pré-remplit les montants à parts égales (modifiable ensuite).
-      const part = Math.floor((montantTotal / n) * 100) / 100
-      return suivantes.map((t, i) =>
-        t.montant === '' && i < n
-          ? { ...t, montant: String(i === n - 1 ? +(montantTotal - part * (n - 1)).toFixed(2) : part) }
-          : t,
-      )
-    })
-  }
-
-  const setTranche = (index: number, patch: Partial<{ date: string; montant: string }>) => {
-    setTranches((anciennes) => anciennes.map((t, i) => (i === index ? { ...t, ...patch } : t)))
-  }
-
-  const validerEtape = (index: number): string | null => {
-    if (index === 0) {
-      if (!nombre || Number(nombre) < 1 || !Number.isInteger(Number(nombre))) {
-        return "Le nombre d'échéances doit être un entier ≥ 1"
-      }
-      if (Number(nombre) > 24) return "Le nombre d'échéances est limité à 24"
-      return null
-    }
-    for (const [i, t] of tranches.entries()) {
-      if (!t.date) return `Échéance ${i + 1} : date obligatoire`
-      if (t.date < debutService || t.date > finService) {
-        return `Échéance ${i + 1} : doit rester dans la période du service (${debutService} → ${finService})`
-      }
-      if (!t.montant || Number(t.montant) <= 0 || Number.isNaN(Number(t.montant))) {
-        return `Échéance ${i + 1} : montant strictement positif obligatoire`
-      }
-    }
-    const somme = tranches.reduce((s, t) => s + Number(t.montant), 0)
-    if (Math.round(somme * 100) !== Math.round(montantTotal * 100)) {
-      return `La somme des échéances (${somme.toLocaleString('fr-FR')} MGA) doit égaler le montant total (${montantTotal.toLocaleString('fr-FR')} MGA)`
-    }
-    return null
-  }
-
-  const handleTerminer = async () => {
-    setEnregistrement(true)
-    setErreur(null)
-    try {
-      await planPaiementApi.createForLigne(ligne.id, {
-        dateDebut: debutService,
-        dateFin: finService,
-        montantTotal,
-        nombreEcheances: tranches.length,
-        commentaire: null,
-        echeances: tranches.map((t) => ({ dateEcheance: t.date, montantAttendu: Number(t.montant) })),
-      })
-      onSaved()
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Échec de la création du plan'
-      setErreur(message)
-      onErreur(message)
-    } finally {
-      setEnregistrement(false)
-    }
-  }
-
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div
-        className="modal-card"
-        style={{ maxWidth: 560 }}
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Établir le plan de paiement"
-      >
-        <header className="modal-header">
-          <h3 className="modal-title">Plan de paiement — {nomLigne}</h3>
-          <button type="button" className="btn-ghost" onClick={onClose} aria-label="Fermer">
-            ✕
-          </button>
-        </header>
-        <div className="modal-body">
-          <FormEtapes
-            key={cle}
-            etapes={[
-              { titre: 'Nombre', description: 'Période et montant repris du service (non modifiables).' },
-              { titre: 'Échéances', description: 'Date et montant de chaque échéance.' },
-            ]}
-            validerEtape={validerEtape}
-            onTerminer={() => void handleTerminer()}
-            onAnnuler={onClose}
-            enregistrement={enregistrement}
-            erreur={erreur}
-            libelleTerminer="Créer le plan"
-          >
-            {(etape) =>
-              etape === 0 ? (
-                <div className="form-grid form-grid--2">
-                  <label className="field">
-                    Début du service
-                    <input type="date" value={debutService} disabled />
-                  </label>
-                  <label className="field">
-                    Fin du service
-                    <input type="date" value={finService} disabled />
-                  </label>
-                  <label className="field">
-                    Montant total (MGA)
-                    <input type="number" value={montantTotal} disabled />
-                  </label>
-                  <label className="field">
-                    Nombre d&apos;échéances 
-                    {/* <span className="required">*</span> */}
-                    <input
-                      type="number"
-                      min={1}
-                      max={24}
-                      step={1}
-                      value={nombre}
-                      onChange={(e) => setNombreTranches(e.target.value)}
-                    />
-                  </label>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div className="card card-pad" style={{ background: 'var(--c-bg)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                      <strong>
-                        Total saisi : {sommeSaisie.toLocaleString('fr-FR')} /{' '}
-                        {montantTotal.toLocaleString('fr-FR')} MGA
-                      </strong>
-                      <span className={resteASaisir === 0 ? 'pill ok' : 'pill warning'}>
-                        ● {resteASaisir === 0
-                          ? 'Équilibré'
-                          : `Reste ${resteASaisir.toLocaleString('fr-FR')} MGA`}
-                      </span>
-                    </div>
-                    <p className="section-note" style={{ margin: '4px 0 0' }}>
-                      Les dates doivent rester dans la période du service (
-                      {formatDate(debutService)} → {formatDate(finService)}).
-                    </p>
-                  </div>
-                  {tranches.map((t, i) => (
-                    <div key={i} className="form-grid form-grid--2">
-                      <label className="field">
-                        Échéance {i + 1} — date <span className="required">*</span>
-                        <input
-                          type="date"
-                          min={debutService}
-                          max={finService}
-                          value={t.date}
-                          onChange={(e) => setTranche(i, { date: e.target.value })}
-                        />
-                      </label>
-                      <label className="field">
-                        Échéance {i + 1} — montant (MGA) <span className="required">*</span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={t.montant}
-                          onChange={(e) => setTranche(i, { montant: e.target.value })}
-                        />
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              )
-            }
-          </FormEtapes>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/** Onglet Dossier : consultation du dossier de création (demandes CREATION). */
 function DossierTab({ demande }: { demande: Demande }) {
   const { data: dossier, loading } = useApi<Dossier | null>(
     () => dossierApi.get(demande.id).catch(() => null),
@@ -2280,8 +1916,7 @@ function ModifierDemandeModal({
 /**
  * Section « Factures mensuelles — Abonnement » de l'onglet Factures :
  * pour un abonnement mensuel, on crée la facture du mois avant chaque paiement.
- * La facture reprend la référence de la facture générale validée, la référence
- * de la facture proforma et la référence de la demande.
+ * La facture reprend la référence de la facture proforma et celle de la demande.
  */
 /**
  * Lignes d'abonnement dont on peut encore consulter les factures :
@@ -2389,8 +2024,7 @@ function FacturesAbonnementSection({
       )
       onMessage(
         `Facture du mois de ${moisLabel(moisActuel)} créée (${dateEmission}) : ${fv.referenceFactureValidee}`
-        + ` (facture générale ${fv.referenceFactureGenerale ?? '—'}`
-        + `${fv.referenceFactureProforma ? ` · proforma ${fv.referenceFactureProforma}` : ''})`,
+        + `${fv.referenceFactureProforma ? ` (proforma ${fv.referenceFactureProforma})` : ''}`,
       )
       setCible(null)
       setSelectionInclusions(new Set())
@@ -2466,8 +2100,8 @@ function FacturesAbonnementSection({
       </h3>
       <p className="section-note" style={{ marginBottom: 12 }}>
         Créez la facture du mois avant chaque paiement : elle reprend le mois facturé, la date
-        d&apos;émission, la référence de la facture générale validée et la référence de la facture
-        proforma. Vous pouvez y reprendre des prestations / débours impayés du même client.
+        d&apos;émission et la référence de la facture proforma. Vous pouvez y reprendre des
+        prestations / débours impayés du même client.
         Un abonnement terminé n&apos;accepte plus de nouvelle facture du mois ; ses factures
         restent consultables ici.
       </p>
@@ -2496,8 +2130,13 @@ function FacturesAbonnementSection({
 
       {/* Création — des abonnements actifs ; la terminée reste consultable */}
       {abonnementLignes.map((ligne) => {
-        const enfants = (facturesValidees ?? []).filter(
-          (f) => f.ligneServiceId === ligne.id && f.type === 'ABONNEMENT_MENSUEL',
+        // La mensuelle 1 (la facture validée elle-même) porte son abo dans ses
+        // lignes PRINCIPALE : elle est liée à ce service ici (ligne_service_id=null).
+        const enfants = (facturesValidees ?? []).filter((f) =>
+          f.type === 'ABONNEMENT_MENSUEL'
+          && (f.ligneServiceId === ligne.id
+            || (f.ligneServiceId == null
+              && (f.lignes ?? []).some((l) => l.ligneServiceId === ligne.id))),
         )
         const restant = enfants.filter((f) => f.resteAPayer > 0)
         const actif = ligne.statut === 'EN_COURS' || ligne.statut === 'PARTIEL'
@@ -2554,7 +2193,6 @@ function FacturesAbonnementSection({
                         <th>Facture</th>
                         <th>Mois facturé</th>
                         <th>Émise le</th>
-                        <th>Générale</th>
                         <th>Proforma</th>
                         <th>Montant</th>
                         <th>Payé</th>
@@ -2569,23 +2207,25 @@ function FacturesAbonnementSection({
                         <Fragment key={f.id}>
                           <tr>
                             <td className="fw-600">
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 {(f.lignes ?? []).length > 0 && (
                                   <button
                                     type="button"
-                                    className="btn-ghost"
-                                    style={{
-                                      minWidth: 30,
-                                      width: 30,
-                                      padding: 0,
-                                      lineHeight: 1.4,
-                                    }}
+                                    className={`btn-expand${detailOuvert ? ' btn-expand--ouvert' : ''}`}
                                     onClick={() => toggleLignesOuvertes(f.id)}
                                     aria-expanded={detailOuvert}
-                                    aria-label={detailOuvert ? 'Cacher les lignes de la facture' : 'Afficher les lignes de la facture'}
-                                    title={detailOuvert ? 'Cacher les lignes' : 'Afficher les lignes'}
+                                    aria-controls={`lignes-facture-${f.id}`}
+                                    aria-label={`${detailOuvert ? 'Replier' : 'Déplier'} les lignes de la facture (${(f.lignes ?? []).length})`}
+                                    title={`${detailOuvert ? 'Replier' : 'Déplier'} les lignes de la facture`}
                                   >
-                                    {detailOuvert ? '▾' : '▸'}
+                                    <svg className="btn-expand__icone" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.8"
+                                        strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                    <span className="btn-expand__libelle">
+                                      {detailOuvert ? 'Replier' : 'Lignes'}
+                                    </span>
+                                    <span className="btn-expand__count">{(f.lignes ?? []).length}</span>
                                   </button>
                                 )}
                                 <button
@@ -2601,7 +2241,6 @@ function FacturesAbonnementSection({
                             <td className="text-secondary">
                               {f.valideLe ? formatDate(f.valideLe.slice(0, 10)) : '—'}
                             </td>
-                            <td className="text-secondary">{f.referenceFactureGenerale ?? '—'}</td>
                             <td className="text-secondary">{f.referenceFactureProforma ?? '—'}</td>
                             <td>{formatMontantMGA(f.montant)}</td>
                             <td>{formatMontantMGA(f.montantPaye)}</td>
@@ -2619,7 +2258,7 @@ function FacturesAbonnementSection({
                                     Encaisser
                                   </button>
                                 )}
-                                {f.montantPaye === 0 && demande.statutActuel !== 'TERMINEE' && demande.statutActuel !== 'ANNULEE' && (
+                                {f.factureGeneraleId != null && f.montantPaye === 0 && demande.statutActuel !== 'TERMINEE' && demande.statutActuel !== 'ANNULEE' && (
                                   <button
                                     type="button"
                                     className="btn-ghost"
@@ -2642,7 +2281,7 @@ function FacturesAbonnementSection({
                             </td>
                           </tr>
                           {detailOuvert && (f.lignes ?? []).length > 0 && (
-                            <tr>
+                            <tr id={`lignes-facture-${f.id}`}>
                               <td colSpan={9}>
                                 <div style={{
                                   display: 'flex',
@@ -2741,16 +2380,12 @@ function FacturesAbonnementSection({
                 autoFocus
               />
             </label>
-            <label className="field">
-              Mois facturé <span className="required">*</span>
-              <input
-                type="month"
-                lang="fr-FR"
-                value={moisActuel}
-                onChange={(e) => setMoisActuel(e.target.value)}
-                required
-              />
-            </label>
+            <div className="field">
+              <span className="field-label">
+                Mois facturé <span className="required">*</span>
+              </span>
+              <MonthPicker value={moisActuel} onChange={setMoisActuel} />
+            </div>
             {(inclusionsDisponibles ?? []).length > 0 && (
               <fieldset
                 style={{

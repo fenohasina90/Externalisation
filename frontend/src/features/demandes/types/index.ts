@@ -33,7 +33,6 @@ export interface Demande {
   /** Situation de règlement calculée par le backend (toutes lignes confondues). */
   situationPaiement: SituationPaiement | string | null
   /** Nombre total d'échéances, tous plans de paiement confondus. */
-  nombreEcheances: number | null
 }
 
 export type SituationPaiement =
@@ -180,6 +179,10 @@ export interface FactureValideeLigne {
   type: 'PRINCIPALE' | 'RAPPEL' | string
   /** Nom du service catalogue (null pour un débours). */
   nomService: string | null
+  /** EXTERNALISATION ou DEBOURS (catégorie figée de la ligne de service liée). */
+  categorie?: string | null
+  /** PRESTATION ou ABONNEMENT_MENSUEL (null pour un débours). */
+  typePrestation?: string | null
 }
 
 /** Élément impayé pouvant être repris dans la facture du mois. */
@@ -273,9 +276,9 @@ export interface ChangeStatutPayload {
 
 /** Transitions manuelles autorisées (l'annulation n'est possible qu'en EN_ATTENTE). */
 export const TRANSITIONS_MANUELLES: Record<string, StatutDemande[]> = {
-  EN_ATTENTE: ['VALIDATION', 'ANNULEE'],
-  VALIDATION: ['EN_COURS'],
+  EN_ATTENTE: ['EN_COURS', 'ANNULEE'],
   EN_COURS: ['TERMINEE'],
+  VALIDATION: ['EN_COURS'], // hérité des demandes encore marquées VALIDATION (compatibilité)
   TERMINEE: [],
   ANNULEE: [],
 }

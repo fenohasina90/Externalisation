@@ -3,18 +3,22 @@ package com.cabex.backend.document.service;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.LigneService;
+import com.cabex.backend.service.entity.DomaineService;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
 import com.lowagie.text.Font;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
-import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 
 import java.awt.Color;
-import java.util.Locale;
 
 /**
  * Fiche récapitulative d'une demande d'externalisation.
@@ -24,53 +28,50 @@ final class PdfRecapitulatif {
     private PdfRecapitulatif() {
     }
 
-    static byte[] generer(DemandeService demande) {
-        return PdfDocument.generer(PdfDocument.MiseEnPage.DOCUMENT, "Fiche récapitulative",
+    static byte[] generer(DemandeService demande, List<DomaineService> domaines) {
+        List<DomaineService> domainesTries = domaines != null ? domaines : List.of();
+        return PdfDocument.generer(PdfDocument.MiseEnPage.FICHE, "Fiche récapitulative",
                 "Récapitulatif de demande " + PdfFormats.valeur(demande.getReferenceDemande()),
-                doc -> ecrire(doc, demande),
+                doc -> ecrire(doc, demande, domainesTries),
                 "Erreur de génération du récapitulatif de demande");
     }
 
-    private static void ecrire(Document doc, DemandeService demande) {
+    private static void ecrire(Document doc, DemandeService demande, List<DomaineService> domaines) {
         PdfStyleFacture st = new PdfStyleFacture(1f);
-        entete(doc);
+        PdfComposants.enteteDocument(doc, st, "FICHE", "RÉCAPITULATIVE D'EXTERNALISATION");
         bandeauReferences(doc, demande, st);
         cartesSociete(doc, demande, st);
         profilChiffre(doc, demande.getSociete(), st);
-        domaine(doc, demande);
+        domaine(doc, demande, domaines, st);
         services(doc, demande, st);
         delai(doc, st);
         observation(doc, demande, st);
         signatures(doc, st);
     }
 
-    private static void entete(Document doc) {
-        PdfPTable titre = new PdfPTable(2);
-        titre.setWidthPercentage(100);
-        titre.setWidths(new float[]{3.2f, 2f});
-
-        PdfPCell gauche = new PdfPCell();
-        gauche.setBorder(Rectangle.NO_BORDER);
-        gauche.setPadding(0);
-        gauche.addElement(new Paragraph("FICHE RÉCAPITULATIVE", PdfTheme.F_TITRE));
-        Paragraph sous = new Paragraph("Demande d'externalisation de services", PdfTheme.F_SOUS_TITRE);
-        sous.setSpacingBefore(2);
-        gauche.addElement(sous);
-        titre.addCell(gauche);
-
-        PdfPCell badge = new PdfPCell(new Phrase("EXTERNALISATION",
-                PdfTheme.font(13, Font.BOLD, Color.WHITE)));
-        badge.setBackgroundColor(PdfTheme.PRIMAIRE);
-        badge.setBorder(Rectangle.BOTTOM);
-        badge.setBorderColor(PdfTheme.ROUGE);
-        badge.setBorderWidth(3f);
-        badge.setHorizontalAlignment(Element.ALIGN_CENTER);
-        badge.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        badge.setPadding(10);
-        titre.addCell(badge);
-        titre.setSpacingAfter(10);
-        doc.add(titre);
+    /** Lignes dans l'ordre d'insertion (id croissant). */
+    private static List<LigneService> lignesTriees(DemandeService demande) {
+        if (demande.getLignes() == null) {
+            return List.of();
+        }
+        List<LigneService> lignes = new ArrayList<>(demande.getLignes());
+        lignes.sort(java.util.Comparator.comparing(LigneService::getId,
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        return lignes;
     }
+
+    /** Identifiants des domaines des services demandés (cocher plusieurs cases si besoin). */
+    private static Set<Integer> domainesDemandes(DemandeService demande) {
+        Set<Integer> ids = new HashSet<>();
+        for (LigneService ligne : lignesTriees(demande)) {
+            if (ligne.getService() != null && ligne.getService().getDomaine() != null
+                    && ligne.getService().getDomaine().getId() != null) {
+                ids.add(ligne.getService().getDomaine().getId());
+            }
+        }
+        return ids;
+    }
+
 
     private static void bandeauReferences(Document doc, DemandeService demande, PdfStyleFacture st) {
         PdfPTable meta = new PdfPTable(new float[]{1.4f, 1.2f, 2.6f});
@@ -135,64 +136,102 @@ final class PdfRecapitulatif {
         doc.add(profil);
     }
 
-    private static void domaine(Document doc, DemandeService demande) {
+    private static final Font F_CASE_COCHEE_VERTE =
+            new Font(Font.ZAPFDINGBATS, 10f, Font.NORMAL, PdfTheme.VERT_TEXTE);
+    private static final Font F_CASE_VIDE_GRISE =
+            new Font(Font.ZAPFDINGBATS, 10f, Font.NORMAL, new Color(190, 205, 185));
+    private static final Font F_DOMAINE =
+            new Font(Font.HELVETICA, 9f, Font.NORMAL, PdfTheme.TEXTE);
+    private static final Font F_DOMAINE_COCHE =
+            new Font(Font.HELVETICA, 9f, Font.BOLD, PdfTheme.TEXTE);
+    private static final Font F_DOMAINE_GRIS =
+            new Font(Font.HELVETICA, 9f, Font.NORMAL, PdfTheme.GRIS_TEXTE);
+
+    /**
+     * Cases de domaine sur une ligne horizontale façon « chips typographiques » :
+     * ✔ vert si cochée, ❑ gris clair sinon, libellé juxtaposé ; retour à la ligne
+     * naturel si trop de domaines. Liste dynamique (tous les domaines en base) ;
+     * plusieurs domaines peuvent être cochés quand plusieurs services de domaines
+     * différents sont demandés.
+     */
+    private static void domaine(Document doc, DemandeService demande,
+                                List<DomaineService> domaines, PdfStyleFacture st) {
         PdfComposants.section(doc, "Domaine");
-        String domaine = "";
-        if (demande.getLignes() != null) {
-            for (LigneService ligne : demande.getLignes()) {
-                if (ligne.getService() != null && ligne.getService().getDomaine() != null) {
-                    domaine = ligne.getService().getDomaine().getNomDomaine();
-                    break;
-                }
-            }
+        Set<Integer> demandes = domainesDemandes(demande);
+        if (domaines.isEmpty()) {
+            Paragraph p = new Paragraph(new Chunk("-", st.td));
+            p.setSpacingBefore(3);
+            doc.add(p);
+            return;
         }
-        doc.add(casesDomaine(domaine, "Comptabilité", "Fiscale", "Audit interne"));
+        Paragraph p = new Paragraph();
+        p.setSpacingBefore(4);
+        p.setSpacingAfter(6);
+        p.setLeading(20f);
+        for (DomaineService domaine : domaines) {
+            boolean coche = demandes.contains(domaine.getId());
+            p.add(new Chunk(coche ? "4" : "q",
+                    coche ? F_CASE_COCHEE_VERTE : F_CASE_VIDE_GRISE));
+            p.add(new Chunk("  " + PdfFormats.valeur(domaine.getNomDomaine()) + "      ",
+                    coche ? F_DOMAINE_COCHE : F_DOMAINE_GRIS));
+        }
+        doc.add(p);
     }
 
-    /** Cases [X]/[ ] cochées si le domaine contient le libellé (insensible à la casse). */
-    private static Paragraph casesDomaine(String domaine, String... libelles) {
-        String norme = domaine != null ? domaine.toLowerCase(Locale.FRANCE) : "";
-        Paragraph p = new Paragraph();
-        p.setSpacingBefore(3);
-        p.setLeading(PdfTheme.F_VALEUR.getSize() * 1.6f);
-        for (int i = 0; i < libelles.length; i++) {
-            if (i > 0) {
-                p.add(new Chunk("      ", PdfTheme.F_VALEUR));
-            }
-            boolean coche = !norme.isEmpty()
-                    && norme.contains(libelles[i].toLowerCase(Locale.FRANCE));
-            p.add(new Chunk((coche ? "[X]  " : "[ ]  ") + libelles[i], PdfTheme.F_VALEUR));
+    /** Type de la ligne : PRESTATION / ABONNEMENT / DEBOURS. */
+    private static String typeService(LigneService ligne) {
+        if (ligne.getCategorie() != null && "DEBOURS".equalsIgnoreCase(ligne.getCategorie().trim())) {
+            return "Débours";
         }
-        return p;
+        String typePrestation = ligne.getTypePrestation();
+        if (typePrestation == null || typePrestation.isBlank()) {
+            return "Prestation";
+        }
+        if ("ABONNEMENT_MENSUEL".equalsIgnoreCase(typePrestation.trim())) {
+            return "Abonnement";
+        }
+        if ("PRESTATION".equalsIgnoreCase(typePrestation.trim())) {
+            return "Prestation";
+        }
+        return typePrestation;
+    }
+
+    /** Libellé de la prestation : service catalogue, ou désignation du débours. */
+    private static String libelleLigne(LigneService ligne) {
+        if (ligne.getService() != null && ligne.getService().getNomService() != null
+                && !ligne.getService().getNomService().isBlank()) {
+            return ligne.getService().getNomService();
+        }
+        if (ligne.getDesignationDebours() != null
+                && !ligne.getDesignationDebours().isBlank()) {
+            return ligne.getDesignationDebours();
+        }
+        return "-";
     }
 
     private static void services(Document doc, DemandeService demande, PdfStyleFacture st) {
         PdfComposants.section(doc, "Services souhaités");
-        PdfPTable services = new PdfPTable(3);
+        PdfPTable services = new PdfPTable(2);
         services.setWidthPercentage(100);
-        services.setWidths(new float[]{5f, 1.6f, 1.6f});
+        services.setWidths(new float[]{5f, 2.4f});
         services.setHeaderRows(1);
         PdfComposants.faTh(services, st, "SERVICE", Element.ALIGN_LEFT);
-        PdfComposants.faTh(services, st, "DÉBUT", Element.ALIGN_CENTER);
-        PdfComposants.faTh(services, st, "FIN", Element.ALIGN_CENTER);
+        PdfComposants.faTh(services, st, "TYPE DE SERVICE", Element.ALIGN_CENTER);
 
-        if (demande.getLignes() == null || demande.getLignes().isEmpty()) {
+        List<LigneService> lignes = lignesTriees(demande);
+        if (lignes.isEmpty()) {
             PdfPCell aucun = PdfComposants.faCellule(st,
                     new Phrase("Aucun service sélectionné", st.td), Element.ALIGN_LEFT);
-            aucun.setColspan(3);
+            aucun.setColspan(2);
             services.addCell(aucun);
         } else {
             int index = 0;
-            for (LigneService ligne : demande.getLignes()) {
+            for (LigneService ligne : lignes) {
                 boolean zebra = index++ % 2 == 1;
-                PdfComposants.faCorps(services, st, new Phrase(PdfFormats.valeur(
-                        ligne.getService() != null ? ligne.getService().getNomService() : null),
-                        st.tdGras), Element.ALIGN_LEFT, zebra);
-                PdfComposants.faCorps(services, st,
-                        new Phrase(PdfFormats.valeurDate(ligne.getDebutService()), st.td),
-                        Element.ALIGN_CENTER, zebra);
-                PdfComposants.faCorps(services, st,
-                        new Phrase(PdfFormats.valeurDate(ligne.getFinService()), st.td),
+                PdfComposants.faCorps(services, st, new Phrase(
+                        PdfFormats.valeur(libelleLigne(ligne)), st.tdGras),
+                        Element.ALIGN_LEFT, zebra);
+                PdfComposants.faCorps(services, st, new Phrase(typeService(ligne), st.td),
                         Element.ALIGN_CENTER, zebra);
             }
         }
@@ -222,7 +261,7 @@ final class PdfRecapitulatif {
     }
 
     private static void signatures(Document doc, PdfStyleFacture st) {
-        PdfPTable signatures = PdfComposants.signaturesStyle(st, 56f,
+        PdfPTable signatures = PdfComposants.signaturesStyle(st, st.hSignature,
                 new String[]{"Le Client"},
                 new String[]{"Le Commercial"},
                 new String[]{"Le Responsable du dossier"},

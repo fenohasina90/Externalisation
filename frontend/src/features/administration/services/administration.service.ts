@@ -4,6 +4,7 @@ import type { Role, Utilisateur } from '@/features/auth/types'
 import type {
   ApplicationConfiguration,
   AuditEntry,
+  CibleReinitialisation,
   CreateModePaiementPayload,
   CreateRolePayload,
   CreateStatutPayload,
@@ -12,6 +13,7 @@ import type {
   ModePaiementAdmin,
   MotDePasseTemporaire,
   Permission,
+  ReinitialisationResponse,
   RoleDetail,
   StatutDemandeConfig,
   StatutDemandeReinitialisation,
@@ -241,6 +243,18 @@ export const reinitialisationsApi = {
   async reinitialiser(id: number): Promise<MotDePasseTemporaire> {
     const { data } = await http.post<MotDePasseTemporaire>(
       `/password-resets/${id}/reinitialiser`,
+    )
+    return data
+  },
+}
+/** Suppression définitive de données métier sélectionnées (permission REINITIALISER_DONNEES). */
+export const reinitialisationDonneesApi = {
+  async executer(
+    cibles: CibleReinitialisation[],
+  ): Promise<ReinitialisationResponse> {
+    const { data } = await http.post<ReinitialisationResponse>(
+      '/admin/reinitialisation',
+      { cibles, confirmation: 'SUPPRIMER' },
     )
     return data
   },

@@ -9,10 +9,9 @@ public record DashboardSummaryResponse(
         BigDecimal montantTotal,
         BigDecimal montantPaye,
         BigDecimal resteAPayer,
-        Long echeancesEnRetard,
-        Long echeancesProches,
+        /** Nombre de factures validées non soldées au-delà des délais d'alerte. */
+        Long paiementsEnRetard,
         Long demandesEnAttente,
-        Long demandesEnCours,
-        Integer joursAlerteEcheance
+        Long demandesEnCours
 ) {
 }

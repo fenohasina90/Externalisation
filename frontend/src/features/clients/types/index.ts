@@ -88,6 +88,8 @@ export interface PaiementFiche {
   referenceVirement: string | null
   banque: string | null
   numeroCheque: string | null
+  /** Commentaire enregistré lors du paiement. */
+  commentaire: string | null
 }
 
 export interface PieceJointeFiche {
@@ -105,7 +107,6 @@ export interface SyntheseFiche {
   montantTotal: number | null
   montantPaye: number | null
   resteAPayer: number | null
-  nombreEcheancesEnRetard: number | null
 }
 
 export interface PaiementFacturation {
@@ -121,6 +122,14 @@ export interface PaiementFacturation {
   numeroCheque: string | null
   commentaire: string | null
   createdByName: string | null
+}
+
+/** Ligne d'objet d'une facture (type + désignation lisible, mois pour l'abonnement). */
+export interface ObjetLigneFacture {
+  /** PRESTATION | DEBOURS | ABONNEMENT_MENSUEL */
+  type: string
+  /** Désignation lisible (mois en fin pour l'abonnement, ex. « Audit fiscal (novembre 2026) »). */
+  libelle: string
 }
 
 /** Facture validée du client (générale ou de paiement) — onglet Facturation. */
@@ -142,6 +151,8 @@ export interface FactureFacturation {
    * de sa première ligne (utile quand elle est réglée directement).
    */
   objetType: string | null
+  /** Détail des services facturés — toutes les lignes listées (type + désignation). */
+  objets?: ObjetLigneFacture[]
   /** Format AAAA-MM (ABONNEMENT_MENSUEL uniquement). */
   mois: string | null
   montant: number | null

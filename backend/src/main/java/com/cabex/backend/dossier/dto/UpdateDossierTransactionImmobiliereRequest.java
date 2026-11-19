@@ -76,7 +76,7 @@ public record UpdateDossierTransactionImmobiliereRequest(
         @PositiveOrZero(message = "La commission CN doit être positive")
         BigDecimal commissionCn,
 
-        Boolean prestationAbonnementMensuel
+        String typePrestationDossier
 ) {
     public CreateDossierTransactionImmobiliereRequest versCreation() {
         return new CreateDossierTransactionImmobiliereRequest(
@@ -93,6 +93,6 @@ public record UpdateDossierTransactionImmobiliereRequest(
                 documentActeVentePriveeCommunale(), documentSituationJuridique(),
                 documentActeNotoriete(),
                 observations(), nombreCommerciauxTerrain(), commissionCn(),
-                prestationAbonnementMensuel());
+                typePrestationDossier());
     }
 }

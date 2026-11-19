@@ -18,7 +18,6 @@ import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.repository.StatutDemandeRepository;
 import com.cabex.backend.demande.service.DemandeGestionService;
 import com.cabex.backend.demande.service.LigneServiceService;
-import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.facture.entity.FactureValidee;
@@ -66,7 +65,6 @@ class DemandeDeboursTest {
     @Mock private LigneServiceService ligneServiceService;
     @Mock private FactureService factureService;
     @Mock private LigneServiceRepository ligneRepository;
-    @Mock private ProposPaiementRepository proposRepository;
     @Mock private ConfigurationService configurationService;
 
     private DemandeGestionService demandeService;
@@ -77,7 +75,6 @@ class DemandeDeboursTest {
     @Mock private com.cabex.backend.demande.repository.HistoriqueDemandeRepository historiqueDemandeRepo2;
     @Mock private StatutDemandeRepository statutRepo2;
     @Mock private ServiceRepository serviceRepo2;
-    @Mock private ProposPaiementRepository proposRepo2;
     @Mock private FactureService factureService2;
     @Mock private PaiementRepository paiementRepo2;
     @Mock private FactureValideeRepository factureValideeRepo2;
@@ -91,11 +88,11 @@ class DemandeDeboursTest {
                 responsableRepository, commercialRepository, serviceRepository,
                 historiqueRepository, statutRepository, paiementRepository,
                 utilisateurRepository, notificationService, auditService,
-                ligneServiceService, factureService, ligneRepository, proposRepository, configurationService);
+                ligneServiceService, factureService, ligneRepository, configurationService);
 
         ligneService = new LigneServiceService(ligneRepoLigne, historiqueLigneRepo,
                 demandeRepository, historiqueDemandeRepo2, statutRepo2, serviceRepo2,
-                proposRepo2, utilisateurRepository, auditService, factureService2,
+                utilisateurRepository, auditService, factureService2,
                 paiementRepo2, factureValideeRepo2, factureValideeLigneRepo2);
 
         lenient().when(statutRepository.findByStatut(anyString()))

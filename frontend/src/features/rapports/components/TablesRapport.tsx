@@ -48,8 +48,8 @@ export function TableRapportGeneral({ rapport }: { rapport: RapportGeneral }) {
           <td className="cell-number">{formatMontantMGA(rapport.montantEnRetard)}</td>
         </tr>
         <tr>
-          <td className="fw-700">Échéances en retard</td>
-          <td className="cell-number">{rapport.echeancesEnRetard}</td>
+          <td className="fw-700">Paiements en retard</td>
+          <td className="cell-number">{rapport.paiementsEnRetard}</td>
         </tr>
       </tbody>
     </table>

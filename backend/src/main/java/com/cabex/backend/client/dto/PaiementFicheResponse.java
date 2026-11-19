@@ -13,6 +13,7 @@ public record PaiementFicheResponse(
         BigDecimal montantPaye,
         String referenceVirement,
         String banque,
-        String numeroCheque
+        String numeroCheque,
+        String commentaire
 ) {
 }

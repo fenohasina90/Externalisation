@@ -4,8 +4,7 @@ import { Alert, Spinner } from '@/components/ui'
 import { messageErreur } from '@/constants/messages'
 import { useTaillePagination } from '@/hooks/useTaillePagination'
 import { useAuth } from '@/features/auth/hooks/useAuth'
-import { demandesApi } from '@/features/demandes/services/demandes.service'
-import { echeancesApi } from '@/features/echeances/services/echeances.service'
+import { demandesApi, facturesValideesApi } from '@/features/demandes/services/demandes.service'
 import { paiementsApi } from '@/features/paiements/services/paiements.service'
 import { NotificationsList } from '../components'
 import { TYPE_META, typesVisibles } from '../constants'
@@ -111,12 +110,6 @@ export function NotificationsPage() {
       return [
         nonLuesCarte,
         {
-          tag: 'À venir',
-          label: 'Échéances proches',
-          valeur: parType.ECHEANCE_PROCHE ?? 0,
-          icone: 'clock',
-        },
-        {
           tag: 'À suivre',
           label: 'Paiements en retard',
           valeur: parType.PAIEMENT_RETARD ?? 0,
@@ -132,12 +125,6 @@ export function NotificationsPage() {
     }
     return [
       nonLuesCarte,
-      {
-        tag: 'À venir',
-        label: 'Échéances proches',
-        valeur: parType.ECHEANCE_PROCHE ?? 0,
-        icone: 'clock',
-      },
       {
         tag: 'À suivre',
         label: 'Paiements en retard',
@@ -194,11 +181,15 @@ export function NotificationsPage() {
           }
           break
         case 'ECHEANCE':
+          // Notifications legacy « échéance/paiement en retard » rattachées à la facture validée.
+          navigate('/paiements')
+          break
+        case 'FACTURE_VALIDEE':
           if (notification.referenceId) {
-            const echeance = await echeancesApi.get(notification.referenceId)
-            navigate(`/paiements/echeanciers/${encodeURIComponent(echeance.referenceDemande)}`)
+            const facture = await facturesValideesApi.get(notification.referenceId)
+            navigate(`/demandes/${encodeURIComponent(facture.referenceDemande)}`)
           } else {
-            navigate('/paiements/echeanciers')
+            navigate('/demandes')
           }
           break
         case 'PAIEMENT':

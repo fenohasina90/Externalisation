@@ -449,6 +449,8 @@ export function ClientDetailPage() {
                     <th>Réf. virement</th>
                     <th>Banque</th>
                     <th>N° chèque</th>
+                    <th>Commentaire</th>
+                    <th>Détail</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -466,11 +468,23 @@ export function ClientDetailPage() {
                       <td className="text-secondary">{p.referenceVirement ?? '—'}</td>
                       <td className="text-secondary">{p.banque ?? '—'}</td>
                       <td className="text-secondary">{p.numeroCheque ?? '—'}</td>
+                      <td className="text-secondary" title={p.commentaire ?? undefined}>
+                        {p.commentaire?.trim()
+                          ? (p.commentaire.length > 80
+                            ? `${p.commentaire.slice(0, 80)}…`
+                            : p.commentaire)
+                          : '—'}
+                      </td>
+                      <td>
+                        <Link to={`/paiements/historique/${encodeURIComponent(p.referencePaiement ?? '')}`} className="btn-link">
+                          Détail ›
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                   {paiements.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="text-muted">
+                      <td colSpan={10} className="text-muted">
                         Aucun paiement pour ce client.
                       </td>
                     </tr>

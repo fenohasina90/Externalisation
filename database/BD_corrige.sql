@@ -16,8 +16,6 @@ DROP TABLE IF EXISTS notification;
 DROP TABLE IF EXISTS audit_log;
 DROP TABLE IF EXISTS piece_jointe;
 DROP TABLE IF EXISTS paiement;
-DROP TABLE IF EXISTS echeance_paiement;
-DROP TABLE IF EXISTS propos_paiement;
 DROP TABLE IF EXISTS historique_ligne_service;
 DROP TABLE IF EXISTS ligne_service;
 DROP TABLE IF EXISTS facture_validee_ligne;
@@ -531,7 +529,8 @@ CREATE TABLE dossier_transaction_immobiliere (
     observations TEXT NULL,
     nombre_commerciaux_terrain INT NULL,
     commission_cn DECIMAL(15,2) NULL,
-    prestation_abonnement_mensuel BOOLEAN NOT NULL DEFAULT FALSE,
+    type_prestation_dossier VARCHAR(30) NOT NULL DEFAULT 'PRESTATION'
+        COMMENT 'PRESTATION (payable après facture validée) ou ABONNEMENT_MENSUEL (facture du mois)',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         ON UPDATE CURRENT_TIMESTAMP,
@@ -562,7 +561,10 @@ CREATE TABLE dossier_transaction_immobiliere (
             AND (commission_cn IS NULL OR commission_cn >= 0)),
 
     CONSTRAINT chk_dti_commerciaux
-        CHECK (nombre_commerciaux_terrain IS NULL OR nombre_commerciaux_terrain >= 0)
+        CHECK (nombre_commerciaux_terrain IS NULL OR nombre_commerciaux_terrain >= 0),
+
+    CONSTRAINT chk_dti_type_prestation_dossier
+        CHECK (type_prestation_dossier IN ('PRESTATION', 'ABONNEMENT_MENSUEL'))
 ) ENGINE=InnoDB;
 
 -- =========================================================
@@ -605,128 +607,6 @@ CREATE INDEX idx_historique_demande_date
 ON historique_demande(created_at);
 
 -- =========================================================
--- 15. PROPOSITION / PLAN DE PAIEMENT
--- Rattaché à la demande ET à la ligne de service : chaque service
--- d'une demande possède son propre plan (voir ligne_service, §33).
--- =========================================================
-
-CREATE TABLE propos_paiement (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-
-    demande_id INT NOT NULL,
-
-    ligne_service_id INT NOT NULL,
-
-    date_debut DATE NOT NULL,
-
-    date_fin DATE NOT NULL,
-
-    montant_total DECIMAL(15,2) NOT NULL,
-
-    reste_payer DECIMAL(15,2) NOT NULL,
-
-    nombre_echeances INT NOT NULL DEFAULT 1,
-
-    commentaire TEXT,
-
-    statut VARCHAR(50) NOT NULL DEFAULT 'ACTIF',
-
-    created_by INT NULL,
-
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        ON UPDATE CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_propos_demande
-        FOREIGN KEY (demande_id)
-        REFERENCES demande_service(id)
-        ON DELETE RESTRICT,
-
-    CONSTRAINT fk_propos_ligne
-        FOREIGN KEY (ligne_service_id)
-        REFERENCES ligne_service(id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_propos_created_by
-        FOREIGN KEY (created_by)
-        REFERENCES utilisateur(id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT chk_propos_dates
-        CHECK (date_fin >= date_debut),
-
-    CONSTRAINT chk_propos_montant
-        CHECK (montant_total >= 0),
-
-    CONSTRAINT chk_propos_reste
-        CHECK (
-            reste_payer >= 0
-            AND reste_payer <= montant_total
-        ),
-
-    CONSTRAINT chk_propos_echeances
-        CHECK (nombre_echeances > 0)
-) ENGINE=InnoDB;
-
-CREATE INDEX idx_propos_demande
-ON propos_paiement(demande_id);
-
-CREATE INDEX idx_propos_ligne
-ON propos_paiement(ligne_service_id);
-
--- =========================================================
--- 16. ECHEANCES DE PAIEMENT
--- =========================================================
-
-CREATE TABLE echeance_paiement (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-
-    propos_paiement_id INT NOT NULL,
-
-    numero_echeance INT NOT NULL,
-
-    date_echeance DATE NOT NULL,
-
-    montant_attendu DECIMAL(15,2) NOT NULL,
-
-    montant_paye DECIMAL(15,2) NOT NULL DEFAULT 0,
-
-    commentaire TEXT,
-
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        ON UPDATE CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_echeance_propos
-        FOREIGN KEY (propos_paiement_id)
-        REFERENCES propos_paiement(id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT uq_echeance_numero
-        UNIQUE (propos_paiement_id, numero_echeance),
-
-    CONSTRAINT chk_echeance_numero
-        CHECK (numero_echeance > 0),
-
-    CONSTRAINT chk_echeance_montant
-        CHECK (montant_attendu > 0),
-
-    CONSTRAINT chk_echeance_paye
-        CHECK (
-            montant_paye >= 0
-            AND montant_paye <= montant_attendu
-        )
-) ENGINE=InnoDB;
-
-CREATE INDEX idx_echeance_date
-ON echeance_paiement(date_echeance);
-
-CREATE INDEX idx_echeance_propos
-ON echeance_paiement(propos_paiement_id);
-
--- =========================================================
 -- 17. MODE DE PAIEMENT
 -- =========================================================
 
@@ -756,8 +636,6 @@ CREATE TABLE paiement (
 
     -- Échéance réglée (EXTERNALISATION avec plan de paiement).
     -- NULL pour DEBOURS / PRESTATION / ABONNEMENT_MENSUEL.
-    echeance_id INT NULL,
-
     mode_paiement_id INT NOT NULL,
 
     date_paiement DATE NOT NULL,
@@ -785,6 +663,11 @@ CREATE TABLE paiement (
         ON UPDATE CURRENT_TIMESTAMP,
     archived_at DATETIME NULL,
 
+    -- Snapshots figés au moment de l'encaissement : affichés dans le détail
+    -- et le reçu PDF, pas recalculés après coup.
+    reste_a_payer DECIMAL(15,2) NULL COMMENT 'Reste à payer sur la facture au moment de ce paiement (snapshot)',
+    montant_deja_paye DECIMAL(15,2) NULL COMMENT 'Somme déjà payée sur la facture à ce paiement (snapshot, inclus ce paiement)',
+
     CONSTRAINT fk_paiement_demande
         FOREIGN KEY (demande_id)
         REFERENCES demande_service(id)
@@ -794,11 +677,6 @@ CREATE TABLE paiement (
         FOREIGN KEY (facture_validee_id)
         REFERENCES facture_validee(id)
         ON DELETE RESTRICT,
-
-    CONSTRAINT fk_paiement_echeance
-        FOREIGN KEY (echeance_id)
-        REFERENCES echeance_paiement(id)
-        ON DELETE SET NULL,
 
     CONSTRAINT fk_paiement_mode
         FOREIGN KEY (mode_paiement_id)
@@ -819,9 +697,6 @@ ON paiement(demande_id);
 
 CREATE INDEX idx_paiement_facture_validee
 ON paiement(facture_validee_id);
-
-CREATE INDEX idx_paiement_echeance
-ON paiement(echeance_id);
 
 CREATE INDEX idx_paiement_date
 ON paiement(date_paiement);
@@ -1319,7 +1194,11 @@ VALUES
  'SAUVEGARDE', 'Supprimer une archive de sauvegarde'),
 
 ('BACKUP_RESTORE', 'Restaurer une sauvegarde',
- 'SAUVEGARDE', 'Restaurer la base depuis un fichier de sauvegarde');
+ 'SAUVEGARDE', 'Restaurer la base depuis un fichier de sauvegarde'),
+
+-- Réinitialisation de données
+('REINITIALISER_DONNEES', 'Réinitialiser les données',
+ 'REINITIALISATION', 'Supprimer définitivement les données métier sélectionnées (irréversible)');
 
 -- =========================================================
 -- 28. ATTRIBUTION DES PERMISSIONS AU SUPER ADMIN ET A L'ADMIN
@@ -1445,12 +1324,6 @@ VALUES
     'Devise utilisée dans l’application'
 ),
 
-(
-    'JOURS_AVANCE_ALERTE_ECHEANCE',
-    '3',
-    'INTEGER',
-    'Nombre de jours avant échéance pour déclencher une alerte'
-),
 
 (
     'TAUX_TVA',

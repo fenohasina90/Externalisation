@@ -7,11 +7,16 @@ import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.service.SituationPaiement;
 import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.facture.repository.FactureValideeRepository;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
+import com.cabex.backend.paiement.entity.ModePaiement;
+import com.cabex.backend.paiement.entity.Paiement;
+import com.cabex.backend.paiement.repository.ModePaiementRepository;
+import com.cabex.backend.paiement.repository.PaiementRepository;
 import java.time.LocalDateTime;
-import com.cabex.backend.echeance.entity.ProposPaiement;
-import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
-import com.cabex.backend.echeance.repository.ProposPaiementRepository;
+import java.time.LocalTime;
+import com.cabex.backend.demande.entity.HistoriqueDemande;
+import com.cabex.backend.demande.entity.StatutDemande;
+import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
+import com.cabex.backend.demande.repository.StatutDemandeRepository;
 import com.cabex.backend.service.entity.Service;
 import com.cabex.backend.service.repository.ServiceRepository;
 import org.junit.jupiter.api.Test;
@@ -43,18 +48,30 @@ class DemandeSituationTest {
     @Autowired
     private LigneServiceRepository ligneRepository;
     @Autowired
-    private ProposPaiementRepository proposRepository;
+    private PaiementRepository paiementRepository;
     @Autowired
-    private EcheancePaiementRepository echeanceRepository;
+    private ModePaiementRepository modeRepository;
     @Autowired
     private ServiceRepository serviceRepository;
     @Autowired
     private FactureValideeRepository factureValideeRepository;
+    @Autowired
+    private HistoriqueDemandeRepository historiqueRepository;
+    @Autowired
+    private StatutDemandeRepository statutDemandeRepository;
 
     private static final LocalDate AUJOURDHUI = LocalDate.of(2026, 10, 20);
     private static final LocalDateTime DEADLINE_PD = AUJOURDHUI.minusDays(5).atTime(LocalTime.MAX);
     private static final LocalDateTime DEADLINE_ABO = AUJOURDHUI.minusDays(7).atTime(LocalTime.MAX);
     private int compteur;
+
+    private void marquerTerminee(DemandeService d) {
+        StatutDemande statut = statutDemandeRepository.findByStatut("TERMINEE")
+                .orElseGet(() -> statutDemandeRepository.save(
+                        StatutDemande.builder().statut("TERMINEE").build()));
+        historiqueRepository.save(HistoriqueDemande.builder()
+                .demande(d).statut(statut).build());
+    }
 
     private DemandeService demande(String reference) {
         return demandeRepository.save(DemandeService.builder()
@@ -66,14 +83,14 @@ class DemandeSituationTest {
     }
 
     /**
-     * Crée une demande avec un plan et une échéance.
+     * Crée une demande avec une facture validée (et paiement selon le montant versé).
      *
-     * @param dateEcheance   date de l'échéance
-     * @param attendu        montant attendu
-     * @param paye           montant déjà payé
+     * @param valideLe       date de validation/émission de la facture
+     * @param montant        montant de la facture
+     * @param paye           montant déjà payé (0 si aucune pièce)
      */
-    private DemandeService avecEcheance(String reference, LocalDate dateEcheance,
-                                        String attendu, String paye) {
+    private DemandeService avecFactureValidee(String reference, LocalDate valideLe,
+                                              String montant, String paye) {
         DemandeService d = demande(reference);
         String code = "SRV-" + (++compteur);
         Service service = serviceRepository.save(Service.builder()
@@ -85,44 +102,50 @@ class DemandeSituationTest {
         LigneService ligne = ligneRepository.save(LigneService.builder()
                 .demande(d)
                 .service(service)
-                .tarif(new BigDecimal(attendu))
+                .tarif(new BigDecimal(montant))
                 .debutService(AUJOURDHUI.minusDays(30))
                 .finService(AUJOURDHUI.plusDays(60))
+                .statut("EN_COURS")
+                .categorie("EXTERNALISATION")
                 .build());
-        ProposPaiement plan = proposRepository.save(ProposPaiement.builder()
+        FactureValidee fv = factureValideeRepository.save(FactureValidee.builder()
+                .referenceFactureValidee("0000" + reference.substring(10) + "EXT/TNR/2026")
                 .demande(d)
-                .ligneService(ligne)
-                .dateDebut(AUJOURDHUI.minusDays(30))
-                .dateFin(AUJOURDHUI.plusDays(60))
-                .montantTotal(new BigDecimal(attendu))
-                .restePayer(new BigDecimal(attendu))
-                .nombreEcheances(1)
-                .statut("ACTIF")
+                .montant(new BigDecimal(montant))
+                .valideLe(valideLe.atTime(LocalTime.of(0, 0)))
                 .build());
-        echeanceRepository.save(EcheancePaiement.builder()
-                .proposPaiement(plan)
-                .numeroEcheance(1)
-                .dateEcheance(dateEcheance)
-                .montantAttendu(new BigDecimal(attendu))
-                .montantPaye(new BigDecimal(paye))
-                .build());
+        BigDecimal payeBig = new BigDecimal(paye);
+        if (payeBig.signum() > 0) {
+            ModePaiement virement = modeRepository.findByCode("VIREMENT")
+                    .orElseGet(() -> modeRepository.save(ModePaiement.builder()
+                            .code("VIREMENT").libelle("Virement").actif(true).build()));
+            paiementRepository.save(Paiement.builder()
+                    .referencePaiement("PAY-" + reference)
+                    .demande(d)
+                    .factureValidee(fv)
+                    .modePaiement(virement)
+                    .datePaiement(AUJOURDHUI)
+                    .montantPaye(payeBig)
+                    .actif(true)
+                    .build());
+        }
         return d;
     }
 
     private void jeuDeDonnees() {
-        // Soldee.
-        avecEcheance("DEM-2026-00001", AUJOURDHUI.plusDays(10), "1000000", "1000000");
-        // Échéance dépassée, reste dû.
-        avecEcheance("DEM-2026-00002", AUJOURDHUI.minusDays(5), "1000000", "200000");
-        // Échéance à venir, payée partiellement.
-        avecEcheance("DEM-2026-00003", AUJOURDHUI.plusDays(10), "1000000", "400000");
-        // Échéance à venir, rien payé.
-        avecEcheance("DEM-2026-00004", AUJOURDHUI.plusDays(10), "1000000", "0");
-        // Aucun plan de paiement.
+        // Soldée.
+        marquerTerminee(avecFactureValidee("DEM-2026-00001", AUJOURDHUI.minusDays(1), "1000000", "1000000"));
+        // Émission ancienne, reste dû → EN_RETARD.
+        avecFactureValidee("DEM-2026-00002", AUJOURDHUI.minusDays(8), "1000000", "200000");
+        // Émission récente, payée partiellement → PARTIEL.
+        avecFactureValidee("DEM-2026-00003", AUJOURDHUI, "1000000", "400000");
+        // Émission récente, rien payé → EN_ATTENTE.
+        avecFactureValidee("DEM-2026-00004", AUJOURDHUI, "1000000", "0");
+        // Aucune facture validée → NON_PLANIFIE.
         demande("DEM-2026-00005");
     }
 
-    private void ligneMixte(String reference, String statut) {
+    private DemandeService ligneMixte(String reference, String statut) {
         DemandeService d = demande(reference);
         String code = "SRV-" + (++compteur);
         Service service = serviceRepository.save(Service.builder()
@@ -140,6 +163,7 @@ class DemandeSituationTest {
                 .statut(statut)
                 .categorie("EXTERNALISATION")
                 .build());
+        return d;
     }
 
     private long count(String situation) {
@@ -317,8 +341,8 @@ class DemandeSituationTest {
 
     /** Une échéance soldée mais échue n'est pas « en retard ». */
     @Test
-    void echeanceEchueEtSoldeeNestPasEnRetard() {
-        avecEcheance("DEM-2026-00007", AUJOURDHUI.minusDays(10), "500000", "500000");
+    void factureEchueEtSoldeeNestPasEnRetard() {
+        marquerTerminee(avecFactureValidee("DEM-2026-00007", AUJOURDHUI, "500000", "500000"));
 
         assertEquals(1, count("PAYE"));
         assertEquals(0, count("EN_RETARD"));
@@ -329,19 +353,22 @@ class DemandeSituationTest {
      * être la même : une demande multi-services est jugée sur toutes ses lignes,
      * pas sur son seul premier plan de paiement.
      */
+    /** Agrégat factures validées pour une demande (même requête que FactureService). */
+    private List<Object[]> facturesAgregeesPourDemandes(Integer demandeId) {
+        return factureValideeRepository.facturesAgregees(List.of(demandeId));
+    }
+
     @Test
     void situationAfficheeEgaleSituationFiltre() {
         jeuDeDonnees();
         // Deux lignes : la seconde est échue et non soldée.
-        DemandeService multi = avecEcheance("DEM-2026-00030", AUJOURDHUI.plusDays(10),
+        DemandeService multi = avecFactureValidee("DEM-2026-00030", AUJOURDHUI,
                 "1000000", "1000000");
-        ligneSupplementaire(multi, AUJOURDHUI.minusDays(3), "1000000", "0");
+        ligneSupplementaire(multi, AUJOURDHUI.minusDays(8), "1000000", "0");
 
-        List<Object[]> lignes = demandeRepository.situations(
-                List.of(multi.getId()), AUJOURDHUI);
-
-        assertEquals(1, lignes.size());
-        String affichee = SituationPaiement.classer(lignes.get(0));
+        String affichee = SituationPaiement.classerFacture(
+                facturesAgregeesPourDemandes(multi.getId()),
+                5, 7, AUJOURDHUI, "EN_ATTENTE");
         assertEquals(SituationPaiement.EN_RETARD, affichee);
 
         var filtrees = demandeRepository.rechercher(null, null, null, null, null, null,
@@ -352,9 +379,9 @@ class DemandeSituationTest {
                 "la demande multi-services doit ressortir dans le filtre de sa situation affichée");
     }
 
-    /** Plan + échéance supplémentaire sur une demande déjà existante. */
-    private void ligneSupplementaire(DemandeService demande, LocalDate dateEcheance,
-                                     String attendu, String paye) {
+    /** Facture supplémentaire non soldée sur une demande déjà créditée. */
+    private void ligneSupplementaire(DemandeService demande, LocalDate valideLe,
+                                     String montant, String paye) {
         String code = "SRV-X" + (++compteur);
         Service service = serviceRepository.save(Service.builder()
                 .nomService("Service " + code)
@@ -365,31 +392,37 @@ class DemandeSituationTest {
         LigneService ligne = ligneRepository.save(LigneService.builder()
                 .demande(demande)
                 .service(service)
-                .tarif(new BigDecimal(attendu))
+                .tarif(new BigDecimal(montant))
                 .debutService(AUJOURDHUI.minusDays(30))
                 .finService(AUJOURDHUI.plusDays(60))
+                .statut("EN_COURS")
+                .categorie("EXTERNALISATION")
                 .build());
-        ProposPaiement plan = proposRepository.save(ProposPaiement.builder()
+        FactureValidee fv = factureValideeRepository.save(FactureValidee.builder()
+                .referenceFactureValidee("EXTRA-" + code)
                 .demande(demande)
-                .ligneService(ligne)
-                .dateDebut(AUJOURDHUI.minusDays(30))
-                .dateFin(AUJOURDHUI.plusDays(60))
-                .montantTotal(new BigDecimal(attendu))
-                .restePayer(new BigDecimal(attendu))
-                .nombreEcheances(1)
-                .statut("ACTIF")
+                .montant(new BigDecimal(montant))
+                .valideLe(valideLe.atTime(LocalTime.of(0, 0)))
                 .build());
-        echeanceRepository.save(EcheancePaiement.builder()
-                .proposPaiement(plan)
-                .numeroEcheance(1)
-                .dateEcheance(dateEcheance)
-                .montantAttendu(new BigDecimal(attendu))
-                .montantPaye(new BigDecimal(paye))
-                .build());
+        BigDecimal payeBig = new BigDecimal(paye);
+        if (payeBig.signum() > 0) {
+            ModePaiement virement = modeRepository.findByCode("VIREMENT")
+                    .orElseGet(() -> modeRepository.save(ModePaiement.builder()
+                            .code("VIREMENT").libelle("Virement").actif(true).build()));
+            paiementRepository.save(Paiement.builder()
+                    .referencePaiement("PAY-" + code)
+                    .demande(demande)
+                    .factureValidee(fv)
+                    .modePaiement(virement)
+                    .datePaiement(AUJOURDHUI)
+                    .montantPaye(payeBig)
+                    .actif(true)
+                    .build());
+        }
     }
     @Test
     void situationPayeLigneTermineeSansPlan() {
-        ligneMixte("DEM-2026-01001", "TERMINE");
+        marquerTerminee(ligneMixte("DEM-2026-01001", "TERMINE"));
         assertEquals(1, count("PAYE"));
         assertEquals(0, count("EN_ATTENTE"));
     }
@@ -439,6 +472,10 @@ class DemandeSituationTest {
         assertEquals(0, count("PARTIEL"));
     }
 
+    private List<Object[]> situationsLignes(Integer demandeId) {
+        return demandeRepository.situationsLignes(List.of(demandeId));
+    }
+
     @Test
     void situationAfficheeEgaleSituationFiltreMixte() {
         DemandeService d = demande("DEM-2026-05001");
@@ -458,11 +495,12 @@ class DemandeSituationTest {
                 .categorie("EXTERNALISATION")
                 .build());
 
-        List<Object[]> lignes = demandeRepository.situations(
-                List.of(d.getId()), AUJOURDHUI);
-
-        assertEquals(1, lignes.size());
-        String affichee = SituationPaiement.classer(lignes.get(0));
+        List<Object[]> lignes = situationsLignes(d.getId());
+        String affichee = SituationPaiement.classerLignes(
+                ((Number) lignes.get(0)[1]).longValue(),
+                ((Number) lignes.get(0)[2]).longValue(),
+                ((Number) lignes.get(0)[3]).longValue(),
+                "EN_ATTENTE");
 
         var filtrees = demandeRepository.rechercher(null, null, null, null, null, null,
                 null, null, affichee, null, null, AUJOURDHUI, DEADLINE_PD, DEADLINE_ABO,

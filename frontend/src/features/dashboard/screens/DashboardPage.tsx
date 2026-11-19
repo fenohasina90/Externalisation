@@ -10,7 +10,7 @@ import {
   DonutStatuts,
   MontantServices,
   TopServices,
-  TranchesRetard,
+  PaiementsRetard,
 } from '../components/charts'
 import { PerformancesPanel } from '../components/Performances'
 import { useDashboardData, useDashboardFiltres, type VueDashboard } from '../hooks'
@@ -84,28 +84,15 @@ function KpiDemandes({
 
 function construireAlertes(vue: VueDashboard, summary: DashboardSummary, montantEnRetard: number) {
   const alertes: AlerteDashboard[] = []
-  const enRetard = summary.echeancesEnRetard ?? 0
-  const proches = summary.echeancesProches ?? 0
+  const enRetard = summary.paiementsEnRetard ?? 0
   const enAttente = summary.demandesEnAttente ?? 0
-  const joursAlerte = summary.joursAlerteEcheance ?? 3
 
   if (vue !== 'ACCUEIL') {
-    if (proches > 0) {
-      alertes.push({
-        ton: 'orange',
-        etiquette: 'Échéances proches',
-        titre: `${proches} échéance${proches > 1 ? 's' : ''} sous ${joursAlerte} jour${
-          joursAlerte > 1 ? 's' : ''
-        }`,
-        detail: 'Relancez les clients concernés',
-        lien: '/paiements/echeanciers',
-      })
-    }
     if (enRetard > 0) {
       alertes.push({
         ton: 'rouge',
-        etiquette: 'Paiements en retard',
-        titre: `${enRetard} échéance${enRetard > 1 ? 's' : ''} dépassée${enRetard > 1 ? 's' : ''}`,
+        etiquette: 'Paiement en retard',
+        titre: `${enRetard} paiement${enRetard > 1 ? 's' : ''} en retard`,
         detail: montantEnRetard > 0 ? `${formatMontantMGA(montantEnRetard)} concernés` : 'À relancer',
         lien: '/paiements',
       })
@@ -146,7 +133,7 @@ export function DashboardPage() {
     vue === 'ACCUEIL'
       ? 'Suivi des clients, des demandes et des services.'
       : vue === 'ECONOMAT'
-        ? 'Suivi des paiements, des échéances et des montants à encaisser.'
+        ? 'Suivi des paiements et des montants à encaisser.'
         : 'Vue d’ensemble de vos clients, demandes et paiements d’externalisation.'
 
   const [filtres, setFiltres] = useState<DashboardFiltres>(FILTRES_DASHBOARD_VIDES)
@@ -176,7 +163,7 @@ export function DashboardPage() {
     }))
   }
   const montantEnRetard =
-    data?.echeances?.enRetard.reduce((total, e) => total + e.reste, 0) ?? 0
+    data?.paiementsEnRetard.reduce((total, p) => total + p.reste, 0) ?? 0
   const pourcentagePaye =
     summary && (summary.montantTotal ?? 0) > 0
       ? Math.min(100, Math.round(((summary.montantPaye ?? 0) / (summary.montantTotal ?? 1)) * 100))
@@ -449,12 +436,12 @@ export function DashboardPage() {
             {vue !== 'ACCUEIL' && (
               <section className="card card-pad">
                 <div className="dash-card-head">
-                  <h3>Échéances en retard</h3>
+                  <h3>Paiement en retard</h3>
                   <Link to="/paiements" className="lk">
                     Voir les retards ›
                   </Link>
                 </div>
-                <TranchesRetard echeances={data.echeances?.enRetard ?? []} />
+                <PaiementsRetard retards={data.paiementsEnRetard} />
               </section>
             )}
             {vue !== 'ECONOMAT' && (

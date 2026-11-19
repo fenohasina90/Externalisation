@@ -4,6 +4,7 @@ import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.document.service.MontantEnLettres;
+import com.cabex.backend.facture.dto.ObjetLigne;
 import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.paiement.dto.ModePaiementResponse;
 import com.cabex.backend.paiement.dto.PaiementDetailResponse;
@@ -13,6 +14,7 @@ import com.cabex.backend.paiement.entity.Paiement;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public class PaiementMapper {
 
@@ -47,7 +49,6 @@ public class PaiementMapper {
                         ? paiement.getDemande().getSociete().getNomSociete() : null,
                 fv != null ? fv.getId() : null,
                 fv != null ? fv.getReferenceFactureValidee() : null,
-                paiement.getEcheance() != null ? paiement.getEcheance().getId() : null,
                 paiement.getModePaiement() != null ? paiement.getModePaiement().getId() : null,
                 paiement.getModePaiement() != null ? paiement.getModePaiement().getLibelle() : null,
                 paiement.getDatePaiement(),
@@ -87,6 +88,15 @@ public class PaiementMapper {
      * de la facture en tient compte).
      */
     public static PaiementDetailResponse toDetailResponse(Paiement paiement, BigDecimal sommePayeeSurFacture) {
+        return toDetailResponse(paiement, sommePayeeSurFacture, List.of());
+    }
+
+    /**
+     * Variante avec les objets détaillés de la facture (toutes les lignes facturées
+     * avec leur type + désignation) — onglet consultation, reçu, détail paiement.
+     */
+    public static PaiementDetailResponse toDetailResponse(Paiement paiement, BigDecimal sommePayeeSurFacture,
+                                                          List<ObjetLigne> objets) {
         if (paiement == null) {
             return null;
         }
@@ -110,10 +120,19 @@ public class PaiementMapper {
         LocalDate moisFacture = fv != null ? fv.getMois() : null;
 
         BigDecimal montantFacture = fv != null ? fv.getMontant() : null;
-        BigDecimal montantPayeSurFacture = sommePayeeSurFacture != null ? sommePayeeSurFacture : BigDecimal.ZERO;
-        BigDecimal resteAPayerFacture = montantFacture != null
-                ? montantFacture.subtract(montantPayeSurFacture).max(BigDecimal.ZERO)
-                : null;
+        BigDecimal montantPayeSurFacture = paiement.getMontantDejaPaye() != null
+                ? paiement.getMontantDejaPaye()
+                : (sommePayeeSurFacture != null
+                        ? sommePayeeSurFacture.subtract(
+                                paiement.getMontantPaye() != null ? paiement.getMontantPaye() : BigDecimal.ZERO)
+                                .max(BigDecimal.ZERO)
+                        : BigDecimal.ZERO);
+        BigDecimal resteSnapshot = paiement.getResteAPayer();
+        BigDecimal resteAPayerFacture = resteSnapshot != null
+                ? resteSnapshot
+                : (montantFacture != null && sommePayeeSurFacture != null
+                        ? montantFacture.subtract(sommePayeeSurFacture).max(BigDecimal.ZERO)
+                        : (montantFacture != null ? montantFacture : null));
 
         return new PaiementDetailResponse(
                 paiement.getId(),
@@ -127,9 +146,6 @@ public class PaiementMapper {
                 fv != null ? fv.getId() : null,
                 fv != null ? fv.getReferenceFactureValidee() : null,
                 objetDetailPaiement(ligne),
-                paiement.getEcheance() != null ? paiement.getEcheance().getId() : null,
-                paiement.getEcheance() != null ? paiement.getEcheance().getNumeroEcheance() : null,
-                paiement.getEcheance() != null ? paiement.getEcheance().getDateEcheance() : null,
                 paiement.getModePaiement() != null ? paiement.getModePaiement().getId() : null,
                 paiement.getModePaiement() != null ? paiement.getModePaiement().getLibelle() : null,
                 paiement.getDatePaiement(),
@@ -150,7 +166,8 @@ public class PaiementMapper {
                         ? MontantEnLettres.convertir(paiement.getMontantPaye().longValue()) : null,
                 typeFacture,
                 dateFactureValidee,
-                moisFacture
+                moisFacture,
+                objets != null ? objets : List.of()
         );
     }
 }

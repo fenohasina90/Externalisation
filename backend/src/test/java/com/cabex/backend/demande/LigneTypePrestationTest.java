@@ -37,10 +37,29 @@ class LigneTypePrestationTest {
     }
 
     @Test
-    void creationInterditType() {
-        var ex = assertThrows(BusinessException.class, () ->
-                LigneServiceService.normaliserTypePrestation("EXTERNALISATION", service("CREATION"), "PRESTATION"));
-        assertEquals(ErrorMessages.TYPE_PRESTATION_INTERDIT, ex.getMessage());
+    void creationCommeStandardDefautPrestation() {
+        assertEquals("PRESTATION",
+                LigneServiceService.normaliserTypePrestation("EXTERNALISATION", service("CREATION"), null));
+    }
+
+    @Test
+    void creationCommeStandardAbonnementOk() {
+        assertEquals("ABONNEMENT_MENSUEL",
+                LigneServiceService.normaliserTypePrestation("EXTERNALISATION", service("CREATION"), "Abonnement_MENSUEL"));
+    }
+
+    @Test
+    void transactionCommeStandardDefautPrestation() {
+        assertEquals("PRESTATION",
+                LigneServiceService.normaliserTypePrestation("EXTERNALISATION",
+                        service("TRANSACTION_IMMOBILIERE"), null));
+    }
+
+    @Test
+    void transactionCommeStandardAbonnementOk() {
+        assertEquals("ABONNEMENT_MENSUEL",
+                LigneServiceService.normaliserTypePrestation("EXTERNALISATION",
+                        service("TRANSACTION_IMMOBILIERE"), "ABONNEMENT_MENSUEL"));
     }
 
     @Test

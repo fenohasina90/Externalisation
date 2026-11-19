@@ -13,7 +13,6 @@ import com.cabex.backend.demande.repository.HistoriqueLigneServiceRepository;
 import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.repository.StatutDemandeRepository;
 import com.cabex.backend.demande.service.LigneServiceService;
-import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.facture.entity.FactureValidee;
@@ -50,7 +49,6 @@ class LigneServiceTest {
     @Mock private HistoriqueDemandeRepository historiqueDemandeRepository;
     @Mock private StatutDemandeRepository statutDemandeRepository;
     @Mock private ServiceRepository serviceRepository;
-    @Mock private ProposPaiementRepository proposRepository;
     @Mock private UtilisateurRepository utilisateurRepository;
     @Mock private AuditService auditService;
     @Mock private FactureService factureService;
@@ -64,7 +62,7 @@ class LigneServiceTest {
     void setUp() {
         service = new LigneServiceService(ligneRepository, historiqueLigneRepository,
                 demandeRepository, historiqueDemandeRepository, statutDemandeRepository,
-                serviceRepository, proposRepository, utilisateurRepository,
+                serviceRepository, utilisateurRepository,
                 auditService, factureService, paiementRepository, factureValideeRepository,
                 factureValideeLigneRepository);
         lenient().when(paiementRepository.sommePayeeParFactureValidee(anyInt())).thenReturn(BigDecimal.ZERO);

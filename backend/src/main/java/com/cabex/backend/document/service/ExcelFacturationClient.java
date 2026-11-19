@@ -2,6 +2,7 @@ package com.cabex.backend.document.service;
 
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.facture.dto.FactureValideeFicheResponse;
+import com.cabex.backend.facture.dto.ObjetLigne;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -17,6 +18,7 @@ import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFRichTextString;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
@@ -67,7 +69,7 @@ final class ExcelFacturationClient {
         try (XSSFWorkbook wb = new XSSFWorkbook();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             boolean asc = "ASC".equalsIgnoreCase(ordre);
-            List<Groupe> groupes = construireGroupes(fiches, debut, fin, asc, recherche);
+            List<FactureValideeFicheResponse> liste = filtrer(fiches, debut, fin, asc, recherche);
             String client = societe != null && societe.getNomSociete() != null
                     ? societe.getNomSociete() : "—";
             int idClient = societe != null && societe.getId() != null ? societe.getId() : 0;
@@ -83,10 +85,13 @@ final class ExcelFacturationClient {
             int ligne = ecrireEntete(sheet, 0, client, idClient);
             int ligneHeader = ecrireHeader(sheet, ligne + 1);
             int courant = ligneHeader + 1;
-            for (Groupe groupe : groupes) {
-                courant = ecrireGroupe(sheet, courant, groupe);
+            for (FactureValideeFicheResponse fiche : liste) {
+                courant = ecrireFacture(sheet, courant, fiche);
+                for (FactureValideeFicheResponse.PaiementFicheItem p : fiche.paiements()) {
+                    courant = ecrireReglement(sheet, courant, p);
+                }
             }
-            courant = ecrireTotaux(sheet, courant, groupes);
+            courant = ecrireTotaux(sheet, courant, liste);
             ecrireSignatures(sheet, courant + 2);
             ecrireNoteCabinet(sheet, courant + 8);
 
@@ -105,69 +110,31 @@ final class ExcelFacturationClient {
         return new XSSFColor(new byte[]{(byte) r, (byte) g, (byte) b}, null);
     }
 
+    /** Couleurs du préfixe de type dans la désignation (Prestation / Débours / Abonnement). */
+    private static XSSFColor couleurPrestation() {
+        return rgb(0x1E, 0x4F, 0x8F);
+    }
+
+    private static XSSFColor couleurDebours() {
+        return rgb(0x8A, 0x52, 0x00);
+    }
+
+    private static XSSFColor couleurAbonnement() {
+        return rgb(0x1F, 0x6B, 0x3F);
+    }
+
+    private static XSSFColor couleurPourTypeObjet(String type) {
+        return switch (type != null ? type : "") {
+            case "PRESTATION" -> couleurPrestation();
+            case "DEBOURS" -> couleurDebours();
+            case "ABONNEMENT_MENSUEL" -> couleurAbonnement();
+            default -> COULEUR_TEXTE_INDEX;
+        };
+    }
+
     // ==================================================================
-    // Groupes (mêmes règles que le frontend)
+    // Bloc de filtrage (mêmes règles que le frontend)
     // ==================================================================
-
-    private record Groupe(FactureValideeFicheResponse general,
-                          List<FactureValideeFicheResponse> enfants) {
-        LocalDate date() {
-            if (general != null) {
-                return general.dateFactureValidee();
-            }
-            return enfants.isEmpty() ? null : enfants.get(0).dateFactureValidee();
-        }
-
-        BigDecimal montant() {
-            if (enfants.isEmpty()) {
-                return nullToZero(general != null ? general.montant() : null);
-            }
-            return enfants.stream()
-                    .map(e -> nullToZero(e.montant()))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-        }
-
-        BigDecimal encaisse() {
-            BigDecimal direct = general != null ? sommePaiements(general.paiements()) : BigDecimal.ZERO;
-            return enfants.stream()
-                    .map(e -> nullToZero(e.montantPaye()))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    .add(direct);
-        }
-
-        BigDecimal reste() {
-            return montant().subtract(encaisse()).max(BigDecimal.ZERO);
-        }
-    }
-
-    private static List<FactureValideeFicheResponse> enfantsEffectifs(Groupe groupe) {
-        if (!groupe.enfants().isEmpty()) {
-            return groupe.enfants();
-        }
-        if (groupe.general() == null) {
-            return List.of();
-        }
-        FactureValideeFicheResponse g = groupe.general();
-        String type = g.objetType() != null && !g.objetType().isBlank() ? g.objetType() : "PRESTATION";
-        return List.of(new FactureValideeFicheResponse(
-                g.id(), g.referenceFactureValidee(), type,
-                g.factureGeneraleId(), g.referenceFactureGenerale(),
-                g.demandeId(), g.referenceDemande(), g.objet(), g.objetType(),
-                g.mois(), g.montant(), g.montantPaye(), g.resteAPayer(),
-                g.dateFactureValidee(), g.paiements()));
-    }
-
-    private static BigDecimal nullToZero(BigDecimal v) {
-        return v != null ? v : BigDecimal.ZERO;
-    }
-
-    private static BigDecimal sommePaiements(
-            List<FactureValideeFicheResponse.PaiementFicheItem> paiements) {
-        return paiements.stream()
-                .map(FactureValideeFicheResponse.PaiementFicheItem::montantPaye)
-                .filter(m -> m != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
 
     private static boolean inRange(LocalDate date, LocalDate debut, LocalDate fin) {
         if (debut == null && fin == null) {
@@ -182,38 +149,20 @@ final class ExcelFacturationClient {
         return fin == null || !date.isAfter(fin);
     }
 
-    private static List<Groupe> construireGroupes(List<FactureValideeFicheResponse> fiches,
-                                                  LocalDate debut, LocalDate fin, boolean asc,
-                                                  String recherche) {
+    private static BigDecimal nullToZero(BigDecimal v) {
+        return v != null ? v : BigDecimal.ZERO;
+    }
+
+    /**
+     * Toutes les factures validées du client, triées par date (filtre sur chaque
+     * facture, recherche sur réf. facture / demande / paiement / désignation).
+     */
+    private static List<FactureValideeFicheResponse> filtrer(List<FactureValideeFicheResponse> fiches,
+                                                             LocalDate debut, LocalDate fin, boolean asc,
+                                                             String recherche) {
         Comparator<LocalDate> cmp = asc
                 ? Comparator.nullsLast(Comparator.naturalOrder())
                 : Comparator.nullsLast(Comparator.reverseOrder());
-
-        Map<Integer, FactureValideeFicheResponse> parId = fiches.stream()
-                .collect(Collectors.toMap(FactureValideeFicheResponse::id, f -> f,
-                        (a, b) -> a, java.util.LinkedHashMap::new));
-
-        List<FactureValideeFicheResponse> generales = parId.values().stream()
-                .filter(f -> "GENERALE".equals(f.type()))
-                .sorted(Comparator.comparing(FactureValideeFicheResponse::dateFactureValidee, cmp))
-                .toList();
-        List<FactureValideeFicheResponse> enfants = parId.values().stream()
-                .filter(f -> !"GENERALE".equals(f.type()))
-                .sorted(Comparator.comparing(FactureValideeFicheResponse::dateFactureValidee, cmp))
-                .toList();
-
-        Map<Integer, List<FactureValideeFicheResponse>> enfantsParGeneral = new java.util.LinkedHashMap<>();
-        List<FactureValideeFicheResponse> orphelins = new ArrayList<>();
-        for (FactureValideeFicheResponse e : enfants) {
-            FactureValideeFicheResponse parent =
-                    e.factureGeneraleId() != null ? parId.get(e.factureGeneraleId()) : null;
-            if (parent != null && "GENERALE".equals(parent.type())) {
-                enfantsParGeneral.computeIfAbsent(parent.id(), k -> new ArrayList<>()).add(e);
-            } else {
-                orphelins.add(e);
-            }
-        }
-
         String terme = recherche != null ? recherche.trim().toLowerCase() : "";
         java.util.function.Predicate<FactureValideeFicheResponse> matchRecherche = f -> {
             if (terme.isEmpty()) {
@@ -222,37 +171,26 @@ final class ExcelFacturationClient {
             StringBuilder hay = new StringBuilder();
             hay.append(f.referenceFactureValidee() != null ? f.referenceFactureValidee() : "").append(' ');
             hay.append(f.referenceDemande() != null ? f.referenceDemande() : "").append(' ');
+            f.objets().forEach(o -> hay.append(o.libelle() != null ? o.libelle() : "").append(' '));
             f.paiements().forEach(p ->
                     hay.append(p.referencePaiement() != null ? p.referencePaiement() : "").append(' '));
             return hay.toString().toLowerCase().contains(terme);
         };
-
-        List<Groupe> groupes = new ArrayList<>();
-        for (FactureValideeFicheResponse g : generales) {
-            if (!inRange(g.dateFactureValidee(), debut, fin)) continue;
-            List<FactureValideeFicheResponse> enfantsG = enfantsParGeneral.getOrDefault(g.id(), List.of());
-            if (!terme.isEmpty() && !matchRecherche.test(g)
-                    && enfantsG.stream().noneMatch(matchRecherche)) {
-                continue;
-            }
-            groupes.add(new Groupe(g, enfantsG));
-        }
-        for (FactureValideeFicheResponse e : orphelins) {
-            if (!inRange(e.dateFactureValidee(), debut, fin)) continue;
-            if (!terme.isEmpty() && !matchRecherche.test(e)) continue;
-            groupes.add(new Groupe(null, List.of(e)));
-        }
-        groupes.sort(Comparator.comparing(Groupe::date, cmp));
-        return groupes;
+        return fiches.stream()
+                .filter(f -> inRange(f.dateFactureValidee(), debut, fin))
+                .filter(matchRecherche)
+                .sorted(Comparator.comparing(FactureValideeFicheResponse::dateFactureValidee, cmp)
+                        .thenComparing(FactureValideeFicheResponse::id,
+                                Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
     }
 
     private static LocalDate dateOrMin(LocalDate d) {
         return d != null ? d : LocalDate.of(1900, 1, 1);
     }
 
-    private static String libelleType(String type) {
+    private static String prefixObjet(String type) {
         return switch (type != null ? type : "") {
-            case "GENERALE" -> "Générale";
             case "PRESTATION" -> "Prestation";
             case "DEBOURS" -> "Débours";
             case "ABONNEMENT_MENSUEL" -> "Abonnement";
@@ -260,18 +198,59 @@ final class ExcelFacturationClient {
         };
     }
 
-    private static String designationFacture(FactureValideeFicheResponse f) {
-        if ("GENERALE".equals(f.type())) {
-            return "Facture-" + (f.referenceDemande() != null ? f.referenceDemande() : "—");
+    /** Cellule désignation : chaque ligne de service, préfixe coloré selon le type. */
+    private static void setCellDesigRiche(Row row, int col, FactureValideeFicheResponse f,
+                                          XSSFSheet sheet) {
+        Cell c = row.createCell(col);
+        org.apache.poi.xssf.usermodel.XSSFWorkbook wb = (org.apache.poi.xssf.usermodel.XSSFWorkbook)
+                row.getSheet().getWorkbook();
+        XSSFRichTextString rt = new XSSFRichTextString();
+        List<ObjetLigne> objets = f.objets();
+        if (objets == null || objets.isEmpty()) {
+            rt.append(f.objet() != null && !f.objet().isBlank() ? f.objet() : "—", fontTexte(wb));
+        } else {
+            boolean premier = true;
+            for (ObjetLigne o : objets) {
+                if (!premier) {
+                    rt.append("\n", fontTexte(wb));
+                }
+                premier = false;
+                XSSFFont fp = newFont(wb);
+                fp.setBold(true);
+                fp.setFontName("Calibri");
+                fp.setFontHeightInPoints((short) 10);
+                fp.setColor(couleurPourTypeObjet(o.type()));
+                rt.append(prefixObjet(o.type()) + " : ", fp);
+                rt.append(o.libelle() != null ? o.libelle() : "—", fontTexte(wb));
+            }
         }
-        String objet = f.objet() != null && !f.objet().isBlank() ? f.objet() : "—";
-        if ("ABONNEMENT_MENSUEL".equals(f.type()) && f.mois() != null) {
-            int annee = Integer.parseInt(f.mois().substring(0, 4));
-            int mois = Integer.parseInt(f.mois().substring(5, 7));
-            String label = MOIS_LABEL_FMT.format(LocalDate.of(annee, mois, 1));
-            objet = objet + " (" + Character.toUpperCase(label.charAt(0)) + label.substring(1) + ")";
-        }
-        return objet;
+        c.setCellValue(rt);
+        c.setCellStyle(texteStandardMultiligne(sheet));
+    }
+
+    private static org.apache.poi.xssf.usermodel.XSSFFont fontTexte(
+            org.apache.poi.xssf.usermodel.XSSFWorkbook wb) {
+        org.apache.poi.xssf.usermodel.XSSFFont f = newFont(wb);
+        f.setFontName("Calibri");
+        f.setFontHeightInPoints((short) 10);
+        f.setColor(COULEUR_TEXTE_INDEX);
+        return f;
+    }
+
+    /** Style « Règlement » coloré (vert) pour la cellule type des paiements. */
+    private static XSSFCellStyle reglementTexteValeurColor(Sheet sheet) {
+        Workbook wb = sheet.getWorkbook();
+        org.apache.poi.xssf.usermodel.XSSFFont f = newFont(wb);
+        f.setBold(true);
+        f.setFontName("Calibri");
+        f.setFontHeightInPoints((short) 9);
+        f.setColor(couleurAbonnement());
+        XSSFCellStyle cs = (XSSFCellStyle) wb.createCellStyle();
+        cs.setFont(f);
+        cs.setVerticalAlignment(VerticalAlignment.CENTER);
+        cs.setIndention((short) 4);
+        cs.setAlignment(HorizontalAlignment.CENTER);
+        return cs;
     }
 
     private static String statutFacture(BigDecimal montant, BigDecimal paye) {
@@ -419,51 +398,20 @@ final class ExcelFacturationClient {
     // Lignes du tableau
     // ==================================================================
 
-    private static int ecrireGroupe(XSSFSheet sheet, int ligne, Groupe groupe) {
-        FactureValideeFicheResponse g = groupe.general();
-        if (g == null) {
-            ligne = ecrireEnfant(sheet, ligne, groupe.enfants().get(0));
-        } else {
-            BigDecimal montant = groupe.montant();
-            BigDecimal encaisse = groupe.encaisse();
-            BigDecimal reste = groupe.reste();
-
-            Row row = sheet.createRow(ligne);
-            row.setHeightInPoints(24f);
-            setCell(row, 0, DATE_FMT.format(dateOrMin(g.dateFactureValidee())), styleGeneral(sheet, 0));
-            setCell(row, 1, g.referenceFactureValidee(), styleGeneral(sheet, 0));
-            setCell(row, 2, libelleType(g.type()), styleGeneral(sheet, 0));
-            setCell(row, 3, designationFacture(g), styleGeneral(sheet, 0));
-            setChiffre(row, 4, montant, nombreGeneral(sheet));
-            setChiffre(row, 5, encaisse, nombreGeneral(sheet));
-            setChiffre(row, 6, reste, nombreGeneralRouge(sheet));
-            setCell(row, 7, statutFacture(montant, encaisse), etatGeneral(sheet, montant, encaisse));
-            setCell(row, 8, "—", styleGeneral(sheet, 0));
-            ligne++;
-        }
-        for (FactureValideeFicheResponse enfant : enfantsEffectifs(groupe)) {
-            ligne = ecrireEnfant(sheet, ligne, enfant);
-            for (FactureValideeFicheResponse.PaiementFicheItem p : enfant.paiements()) {
-                ligne = ecrireReglement(sheet, ligne, p);
-            }
-        }
-        return ligne;
-    }
-
-    private static int ecrireEnfant(XSSFSheet sheet, int ligne, FactureValideeFicheResponse enfant) {
-        BigDecimal montant = nullToZero(enfant.montant());
-        BigDecimal paye = nullToZero(enfant.montantPaye());
-        BigDecimal reste = nullToZero(enfant.resteAPayer());
+    private static int ecrireFacture(XSSFSheet sheet, int ligne, FactureValideeFicheResponse fiche) {
+        BigDecimal montant = nullToZero(fiche.montant());
+        BigDecimal paye = nullToZero(fiche.montantPaye());
+        BigDecimal reste = nullToZero(fiche.resteAPayer());
+        int nbLignes = Math.max(1, fiche.objets() != null ? fiche.objets().size() : 1);
 
         Row row = sheet.createRow(ligne);
-        row.setHeightInPoints(20f);
-        setCell(row, 0, DATE_FMT.format(dateOrMin(enfant.dateFactureValidee())),
-                texteStandardIndente(sheet, 2));
-        setCell(row, 1, enfant.referenceFactureValidee(), texteStandardIndente(sheet, 2));
-        setCell(row, 2, libelleType(enfant.type()), texteStandardIndente(sheet, 2));
-        setCell(row, 3, designationFacture(enfant), texteStandardIndente(sheet, 2));
-        setChiffre(row, 4, montant, nombreStandardIndente(sheet));
-        setChiffre(row, 5, paye, nombreStandardIndente(sheet));
+        row.setHeightInPoints(Math.max(20f, 14f * nbLignes + 6f));
+        setCell(row, 0, DATE_FMT.format(dateOrMin(fiche.dateFactureValidee())), texteStandard(sheet));
+        setCell(row, 1, fiche.referenceFactureValidee(), texteStandardGras(sheet));
+        setCell(row, 2, "—", texteStandard(sheet));
+        setCellDesigRiche(row, 3, fiche, sheet);
+        setChiffre(row, 4, montant, nombreStandard(sheet));
+        setChiffre(row, 5, paye, nombreStandard(sheet));
         setChiffre(row, 6, reste, nombreImpayeeStandard(sheet, reste));
         setCell(row, 7, statutFacture(montant, paye), etatStandard(sheet, montant, paye));
         setCell(row, 8, "—", texteStandard(sheet));
@@ -476,7 +424,7 @@ final class ExcelFacturationClient {
         row.setHeightInPoints(18f);
         setCell(row, 0, DATE_FMT.format(dateOrMin(p.datePaiement())), reglementIndente(sheet, 4));
         setCell(row, 1, p.referencePaiement(), reglementIndente(sheet, 4));
-        setCell(row, 2, "Règlement", reglementIndente(sheet, 4));
+        setCell(row, 2, "Règlement", reglementTexteValeurColor(sheet));
         setCell(row, 3, p.libelleMode() != null ? p.libelleMode() : "—", reglementIndente(sheet, 4));
         setChiffre(row, 4, BigDecimal.ZERO, reglementNombre(sheet));
         setChiffre(row, 5,
@@ -494,13 +442,13 @@ final class ExcelFacturationClient {
     // Totaux + signatures + note CABEX
     // ==================================================================
 
-    private static int ecrireTotaux(XSSFSheet sheet, int ligne, List<Groupe> groupes) {
+    private static int ecrireTotaux(XSSFSheet sheet, int ligne, List<FactureValideeFicheResponse> liste) {
         org.apache.poi.xssf.usermodel.XSSFWorkbook wb = sheet.getWorkbook();
         BigDecimal totalFacture = BigDecimal.ZERO;
         BigDecimal totalPaye = BigDecimal.ZERO;
-        for (Groupe groupe : groupes) {
-            totalFacture = totalFacture.add(groupe.montant());
-            totalPaye = totalPaye.add(groupe.encaisse());
+        for (FactureValideeFicheResponse f : liste) {
+            totalFacture = totalFacture.add(nullToZero(f.montant()));
+            totalPaye = totalPaye.add(nullToZero(f.montantPaye()));
         }
         BigDecimal reste = totalFacture.subtract(totalPaye).max(BigDecimal.ZERO);
 
@@ -712,6 +660,38 @@ final class ExcelFacturationClient {
         XSSFCellStyle cs = (XSSFCellStyle) wb.createCellStyle();
         cs.setFont(f);
         cs.setVerticalAlignment(VerticalAlignment.CENTER);
+        cs.setIndention((short) 2);
+        return cs;
+    }
+
+    private static XSSFCellStyle texteStandardGras(Sheet sheet) {
+        Workbook wb = sheet.getWorkbook();
+        XSSFFont f = (XSSFFont) font(wb, "Calibri", (short) 10, true, null);
+        XSSFCellStyle cs = (XSSFCellStyle) wb.createCellStyle();
+        cs.setFont(f);
+        cs.setVerticalAlignment(VerticalAlignment.CENTER);
+        cs.setIndention((short) 2);
+        return cs;
+    }
+
+    private static XSSFCellStyle texteStandardMultiligne(Sheet sheet) {
+        Workbook wb = sheet.getWorkbook();
+        XSSFFont f = (XSSFFont) font(wb, "Calibri", (short) 10, false, null);
+        XSSFCellStyle cs = (XSSFCellStyle) wb.createCellStyle();
+        cs.setFont(f);
+        cs.setVerticalAlignment(VerticalAlignment.CENTER);
+        cs.setIndention((short) 2);
+        cs.setWrapText(true);
+        return cs;
+    }
+
+    private static XSSFCellStyle nombreStandard(Sheet sheet) {
+        Workbook wb = sheet.getWorkbook();
+        XSSFFont f = (XSSFFont) font(wb, "Calibri", (short) 10, false, null);
+        XSSFCellStyle cs = (XSSFCellStyle) wb.createCellStyle();
+        cs.setFont(f);
+        cs.setVerticalAlignment(VerticalAlignment.CENTER);
+        cs.setAlignment(HorizontalAlignment.RIGHT);
         cs.setIndention((short) 2);
         return cs;
     }

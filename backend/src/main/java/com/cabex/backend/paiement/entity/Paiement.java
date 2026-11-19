@@ -41,14 +41,6 @@ public class Paiement {
     @JoinColumn(name = "facture_validee_id", nullable = false)
     private FactureValidee factureValidee;
 
-    /**
-     * Échéance réglée (EXTERNALISATION avec plan de paiement).
-     * NULL pour DEBOURS / PRESTATION / ABONNEMENT_MENSUEL.
-     */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "echeance_id")
-    private com.cabex.backend.echeance.entity.EcheancePaiement echeance;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "mode_paiement_id", nullable = false)
     private ModePaiement modePaiement;
@@ -69,6 +61,20 @@ public class Paiement {
     /** Numéro de chèque (mode CHÈQUE uniquement). */
     @Column(name = "numero_cheque", length = 100)
     private String numeroCheque;
+
+    /**
+     * Reste à payer sur la facture au moment de l'encaissement (snapshot figé) :
+     * la consultation affiche toujours cette valeur, pas le solde courant.
+     */
+    @Column(name = "reste_a_payer", precision = 15, scale = 2)
+    private BigDecimal resteAPayer;
+
+    /**
+     * Montant déjà payé sur la facture au moment de ce paiement (snapshot figé,
+     * incluant ce paiement) — la consultation affiche toujours cette valeur.
+     */
+    @Column(name = "montant_deja_paye", precision = 15, scale = 2)
+    private BigDecimal montantDejaPaye;
 
     @Column(name = "commentaire", columnDefinition = "TEXT")
     private String commentaire;

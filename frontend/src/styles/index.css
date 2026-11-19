@@ -4275,3 +4275,275 @@ body.page-responsables {
   overflow: auto;
   max-height: none;
 }
+
+/* =========================================================
+   Sélecteur de mois « Mois facturé » (MonthPicker)
+   ========================================================= */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.month-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-soft);
+  border: 1px solid #d5ddd7;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.month-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.month-picker-nav {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #d5ddd7;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-primary);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.month-picker-nav:hover {
+  background: var(--success-bg);
+  border-color: var(--g);
+}
+.month-picker-nav:focus-visible {
+  outline: 2px solid var(--g);
+  outline-offset: 2px;
+}
+
+.month-picker-head-center {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.month-picker-selected {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.month-picker-subrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.month-picker-annee {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.month-picker-annee-select {
+  height: 30px;
+  border: 1px solid #d5ddd7;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.month-picker-annee-select:focus {
+  outline: 2px solid var(--g);
+  outline-offset: 1px;
+}
+
+.month-picker-today {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--success-bg);
+  color: var(--g);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 120ms ease, border-color 120ms ease;
+}
+.month-picker-today:hover {
+  filter: brightness(0.97);
+  border-color: var(--g);
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.month-cell {
+  height: 38px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.month-cell:hover {
+  border-color: var(--g);
+  background: var(--success-bg);
+}
+.month-cell:focus-visible {
+  outline: 2px solid var(--g);
+  outline-offset: 2px;
+}
+.month-cell--actif,
+.month-cell--actif:hover {
+  background: var(--g);
+  border-color: var(--g);
+  color: #fff;
+}
+
+.month-picker-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.month-picker-note b {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* =========================================================
+   Bouton plier / déplier les lignes d'une facture (mensuelle)
+   ========================================================= */
+.btn-expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 9px 0 8px;
+  border: 1px solid var(--c-border, #e5e7eb);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.btn-expand:hover {
+  border-color: var(--g);
+  color: var(--g);
+  background: var(--success-bg);
+}
+
+.btn-expand:focus-visible {
+  outline: 2px solid var(--g);
+  outline-offset: 2px;
+}
+
+.btn-expand__icone {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  transition: transform 180ms ease;
+}
+
+.btn-expand--ouvert {
+  border-color: var(--g);
+  background: var(--success-bg);
+  color: var(--g);
+}
+
+.btn-expand--ouvert .btn-expand__icone {
+  transform: rotate(180deg);
+}
+
+.btn-expand__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.btn-expand--ouvert .btn-expand__count {
+  background: #fff;
+  color: var(--g);
+}
+
+/* ==================================================================
+ * Facturation client (onglet Facturation) — désignation multi-lignes
+ * ================================================================== */
+.facture-designation {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: inherit;
+  line-height: 1.35;
+}
+
+.facture-designation__ligne {
+  display: block;
+  white-space: normal;
+}
+
+/* ==================================================================
+ * Facturation client — préfixes de type colorés dans la désignation,
+ * et type « Règlement » coloré pour les paiements
+ * ================================================================== */
+.objet-prefix {
+  font-weight: 800;
+}
+
+.objet-prefix--prestation {
+  color: #1e4f8f;
+}
+
+.objet-prefix--abonnement_mensuel {
+  color: #1f6b3f;
+}
+
+.objet-prefix--debours {
+  color: #8a5200;
+}
+
+.pill.reglement {
+  background: var(--success-bg);
+  color: var(--success);
+}

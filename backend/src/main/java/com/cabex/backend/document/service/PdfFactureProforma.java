@@ -4,8 +4,6 @@ import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.LigneService;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
-import com.cabex.backend.echeance.entity.ProposPaiement;
 import com.cabex.backend.facture.entity.Facture;
 import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
@@ -36,12 +34,19 @@ final class PdfFactureProforma {
      * Génère le PDF avec l'en-tête demandé :
      * « FACTURE PROFORMA » pour le document proforma (avant ou après validation),
      * « FACTURE VALIDÉE » pour le document issu de la validation.
+     * <p>Si {@code avanceForcee} est renseignée, elle prime sur le calcul hérité
+     * (échéances des plans de paiement) : pour la facture validée liée au paiement,
+     * c'est la somme des paiements réellement encaissés sur elle qui doit s'afficher.</p>
      */
     byte[] generer(Facture facture, String contexte) {
+        return generer(facture, contexte, null);
+    }
+
+    byte[] generer(Facture facture, String contexte, BigDecimal avanceForcee) {
         byte[] pdf = null;
         String titre = "VALIDÉE".equals(contexte) ? "VALIDÉE" : "PROFORMA";
         for (float echelle : PdfStyleFacture.ECHELLES) {
-            pdf = construire(facture, new PdfStyleFacture(echelle), contexte);
+            pdf = construire(facture, new PdfStyleFacture(echelle), contexte, avanceForcee);
             if (PdfDocument.nombrePages(pdf) <= 1) {
                 break;
             }
@@ -49,16 +54,18 @@ final class PdfFactureProforma {
         return pdf;
     }
 
-    private byte[] construire(Facture facture, PdfStyleFacture st, String contexte) {
+    private byte[] construire(Facture facture, PdfStyleFacture st, String contexte,
+                              BigDecimal avanceForcee) {
         String titreBadge = "VALIDÉE".equals(contexte) ? "VALIDÉE" : "PROFORMA";
         String titreMeta = "Facture " + titreBadge.toLowerCase(java.util.Locale.FRANCE) + " "
                 + PdfFormats.valeur(facture.getReferenceFacture());
         return PdfDocument.generer(PdfDocument.MiseEnPage.FACTURE, "Facture " + titreBadge.toLowerCase(java.util.Locale.FRANCE),
-                titreMeta, doc -> ecrire(doc, facture, st, contexte),
+                titreMeta, doc -> ecrire(doc, facture, st, contexte, avanceForcee),
                 "Erreur de génération de la facture proforma");
     }
 
-    private void ecrire(Document doc, Facture facture, PdfStyleFacture st, String contexte) {
+    private void ecrire(Document doc, Facture facture, PdfStyleFacture st, String contexte,
+                        BigDecimal avanceForcee) {
         DemandeService demande = facture.getDemande();
         Societe societe = demande != null ? demande.getSociete() : null;
         List<LigneAffiche> lignesAffiches = construireLignesAffiches(facture, demande, contexte);
@@ -75,7 +82,7 @@ final class PdfFactureProforma {
         BigDecimal tva = totalHt.multiply(tauxTva)
                 .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
         BigDecimal ttc = totalHt.add(tva);
-        BigDecimal avance = avanceRecue(facture);
+        BigDecimal avance = avanceForcee != null ? avanceForcee : BigDecimal.ZERO;
         BigDecimal netAPayer = ttc.subtract(avance).max(BigDecimal.ZERO);
 
         doc.add(blocBas(demande, st, totalHt, tauxTva, tva, ttc, avance, netAPayer));
@@ -362,7 +369,7 @@ final class PdfFactureProforma {
         PdfPTable gauche = new PdfPTable(1);
         gauche.setWidthPercentage(100);
         gauche.addCell(PdfComposants.celluleLettres("Arrêtée la présente facture à la somme de",
-                MontantEnLettres.convertir(netAPayer.longValue()).toUpperCase(Locale.FRANCE)
+                MontantEnLettres.convertir(ttc.longValue()).toUpperCase(Locale.FRANCE)
                         + " ARIARY"));
         PdfPCell espace = PdfComposants.celluleVide();
         espace.setFixedHeight(st.ecart * 0.6f);
@@ -443,25 +450,5 @@ final class PdfFactureProforma {
         }
     }
 
-    /** Avance déjà reçue : somme payée sur les échéances des lignes facturées. */
-    private static BigDecimal avanceRecue(Facture facture) {
-        BigDecimal avance = BigDecimal.ZERO;
-        if (facture.getLignes() == null) {
-            return avance;
-        }
-        for (LigneService ligne : facture.getLignes()) {
-            if (ligne.getPlansPaiement() == null) {
-                continue;
-            }
-            for (ProposPaiement plan : ligne.getPlansPaiement()) {
-                if (plan.getEcheances() == null) {
-                    continue;
-                }
-                for (EcheancePaiement echeance : plan.getEcheances()) {
-                    avance = avance.add(PdfFormats.montantOuZero(echeance.getMontantPaye()));
-                }
-            }
-        }
-        return avance;
-    }
+
 }

@@ -28,7 +28,7 @@ export interface RapportGeneral {
   montantEncaisse: number
   resteAPayer: number
   montantEnRetard: number
-  echeancesEnRetard: number
+  paiementsEnRetard: number
 }
 
 export interface RapportFinancierMode {

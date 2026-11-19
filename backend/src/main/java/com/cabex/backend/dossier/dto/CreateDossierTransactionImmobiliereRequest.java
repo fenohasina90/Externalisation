@@ -76,6 +76,6 @@ public record CreateDossierTransactionImmobiliereRequest(
         @PositiveOrZero(message = "La commission CN doit être positive")
         BigDecimal commissionCn,
 
-        Boolean prestationAbonnementMensuel
+        String typePrestationDossier
 ) {
 }

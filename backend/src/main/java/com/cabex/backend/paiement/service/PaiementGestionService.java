@@ -8,10 +8,6 @@ import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.service.DemandeGestionService;
 import com.cabex.backend.demande.service.LigneServiceService;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
-import com.cabex.backend.echeance.entity.ProposPaiement;
-import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
-import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
@@ -25,7 +21,9 @@ import com.cabex.backend.paiement.entity.ModePaiement;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.cabex.backend.paiement.mapper.PaiementMapper;
 import com.cabex.backend.facture.entity.FactureValidee;
+import com.cabex.backend.facture.dto.ObjetLigne;
 import com.cabex.backend.facture.repository.FactureValideeRepository;
+import com.cabex.backend.facture.service.FactureService;
 import com.cabex.backend.paiement.repository.ModePaiementRepository;
 import com.cabex.backend.paiement.repository.PaiementRepository;
 import com.cabex.backend.security.SecurityUtils;
@@ -41,8 +39,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
+import java.util.List;
 
 @org.springframework.stereotype.Service
 public class PaiementGestionService {
@@ -53,8 +51,6 @@ public class PaiementGestionService {
     private final PaiementRepository paiementRepository;
     private final DemandeServiceRepository demandeRepository;
     private final ModePaiementRepository modeRepository;
-    private final EcheancePaiementRepository echeanceRepository;
-    private final ProposPaiementRepository proposRepository;
     private final FactureValideeRepository factureValideeRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final NotificationService notificationService;
@@ -62,24 +58,22 @@ public class PaiementGestionService {
     private final DemandeGestionService demandeGestionService;
     private final LigneServiceRepository ligneRepository;
     private final LigneServiceService ligneServiceService;
+    private final FactureService factureService;
 
     public PaiementGestionService(PaiementRepository paiementRepository,
                                   DemandeServiceRepository demandeRepository,
                                   ModePaiementRepository modeRepository,
-                                  EcheancePaiementRepository echeanceRepository,
-                                  ProposPaiementRepository proposRepository,
                                   FactureValideeRepository factureValideeRepository,
                                   UtilisateurRepository utilisateurRepository,
                                   NotificationService notificationService,
                                   AuditService auditService,
                                   DemandeGestionService demandeGestionService,
                                   LigneServiceRepository ligneRepository,
-                                  LigneServiceService ligneServiceService) {
+                                  LigneServiceService ligneServiceService,
+                                  FactureService factureService) {
         this.paiementRepository = paiementRepository;
         this.demandeRepository = demandeRepository;
         this.modeRepository = modeRepository;
-        this.echeanceRepository = echeanceRepository;
-        this.proposRepository = proposRepository;
         this.factureValideeRepository = factureValideeRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.notificationService = notificationService;
@@ -87,6 +81,7 @@ public class PaiementGestionService {
         this.demandeGestionService = demandeGestionService;
         this.ligneRepository = ligneRepository;
         this.ligneServiceService = ligneServiceService;
+        this.factureService = factureService;
     }
 
     @Transactional(readOnly = true)
@@ -114,7 +109,10 @@ public class PaiementGestionService {
         BigDecimal somme = paiement.getFactureValidee() != null
                 ? paiementRepository.sommePayeeParFactureValidee(paiement.getFactureValidee().getId())
                 : BigDecimal.ZERO;
-        return PaiementMapper.toDetailResponse(paiement, somme != null ? somme : BigDecimal.ZERO);
+        List<ObjetLigne> objets = paiement.getFactureValidee() != null
+                ? factureService.objetsFactureValidee(paiement.getFactureValidee())
+                : List.of();
+        return PaiementMapper.toDetailResponse(paiement, somme != null ? somme : BigDecimal.ZERO, objets);
     }
 
     @Transactional(readOnly = true)
@@ -137,6 +135,11 @@ public class PaiementGestionService {
             throw new BusinessException(
                     "La demande est " + statutDemande + " : aucun paiement n'est possible");
         }
+        // Aucun paiement en pièce avant création de la facture (demande EN_ATTENTE).
+        if ("EN_ATTENTE".equals(statutDemande)) {
+            throw new BusinessException(
+                    "La demande est EN_ATTENTE : validez la facture avant d'enregistrer un paiement");
+        }
 
         ModePaiement mode = modeRepository.findById(request.modePaiementId())
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -148,14 +151,22 @@ public class PaiementGestionService {
                         .orElseThrow(() -> new ResourceNotFoundException(
                                 ErrorMessages.introuvable("Facture validée", request.factureValideeId())));
 
-        // En mode « facture générale unique », la facture générale couvre
-        // plusieurs services : elle n'est pas un objet de règlement —
-        // chaque service possède sa propre facture pour le paiement.
-        if (factureValidee.getFactureProforma() != null
-                && "UNIQUE".equals(factureValidee.getFactureProforma().getModeFacturation())) {
+        // Mensuelle 1 : la facture validée devient la facture du 1er mois dès
+        // la création de la facture du mois (mois choisi). Avant ça,Aucun paiement.
+        boolean demandeAvecAbonnement = false;
+        for (LigneService ligneDemande : ligneRepository.findByDemandeId(demande.getId())) {
+            if (LigneServiceService.CATEGORIE_EXTERNALISATION.equalsIgnoreCase(ligneDemande.getCategorie())
+                    && LigneServiceService.ABONNEMENT_MENSUEL.equalsIgnoreCase(ligneDemande.getTypePrestation())) {
+                demandeAvecAbonnement = true;
+                break;
+            }
+        }
+        boolean mensuelleCreee = factureValideeRepository.findByDemandeIdAndMoisIsNotNull(demande.getId())
+                .stream().findAny().isPresent();
+        if (demandeAvecAbonnement && !mensuelleCreee) {
             throw new BusinessException(
-                    "La facture générale couvre plusieurs services : chaque service se règle "
-                            + "sur sa propre facture validée");
+                    "La facture du mois n'est pas encore créée pour cette demande : "
+                            + "créez la facture du mois (onglet Factures mensuelles) avant d'enregistrer un paiement");
         }
 
         if (factureValidee.getDemande() == null
@@ -187,40 +198,6 @@ public class PaiementGestionService {
             }
         }
 
-        // Échéance réglée (EXTERNALISATION avec plan de paiement) : elle doit
-        // appartenir à la demande et correspondre à la facture validée payée.
-        EcheancePaiement echeance = null;
-        if (request.echeanceId() != null) {
-            echeance = echeanceRepository.findById(request.echeanceId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            ErrorMessages.introuvable("Échéance", request.echeanceId())));
-            ProposPaiement propos = echeance.getProposPaiement();
-            if (propos == null || propos.getDemande() == null
-                    || !propos.getDemande().getId().equals(demande.getId())) {
-                throw new BusinessException("L'échéance n'appartient pas à cette demande");
-            }
-            LigneService ligneEcheance = propos.getLigneService();
-            boolean factureCorrespond = false;
-            if (ligneEcheance != null && ligneEcheance.getFacture() != null) {
-                var fvLigne = factureValideeRepository
-                        .findByFactureProformaId(ligneEcheance.getFacture().getId())
-                        .orElse(null);
-                factureCorrespond = fvLigne != null && fvLigne.getId().equals(factureValidee.getId());
-            }
-            if (!factureCorrespond) {
-                throw new BusinessException(
-                        "L'échéance ne correspond pas à la facture validée sélectionnée");
-            }
-            BigDecimal dejaSurEcheance = echeance.getMontantPaye() != null
-                    ? echeance.getMontantPaye() : BigDecimal.ZERO;
-            BigDecimal resteEcheance = echeance.getMontantAttendu().subtract(dejaSurEcheance);
-            if (request.montantPaye() != null
-                    && request.montantPaye().compareTo(resteEcheance) > 0) {
-                throw new BusinessException(
-                        "Le montant dépasse le reste de l'échéance (" + resteEcheance + ")");
-            }
-        }
-
         // Le montant payé ne peut pas dépasser le montant de la facture validée
         // (moins ce déjà payé sur cette facture).
         validerReferencesMode(mode, request.referenceVirement(),
@@ -231,7 +208,6 @@ public class PaiementGestionService {
                 .referencePaiement(genererReference(LocalDate.now().getYear()))
                 .demande(demande)
                 .factureValidee(factureValidee)
-                .echeance(echeance)
                 .modePaiement(mode)
                 .datePaiement(request.datePaiement())
                 .montantPaye(request.montantPaye())
@@ -243,20 +219,21 @@ public class PaiementGestionService {
                 .createdBy(currentUtilisateur())
                 .build();
         paiement = paiementRepository.save(paiement);
-
-        // Solder l'échéance réglée (le statut PARTIELLE/PAYEE est recalculé
-        // par les lecteurs à partir de montant_paye).
-        if (echeance != null) {
-            BigDecimal dejaSurEcheance = echeance.getMontantPaye() != null
-                    ? echeance.getMontantPaye() : BigDecimal.ZERO;
-            echeance.setMontantPaye(dejaSurEcheance.add(request.montantPaye()));
-            echeanceRepository.save(echeance);
-            ProposPaiement propos = echeance.getProposPaiement();
-            if (propos != null && propos.getRestePayer() != null) {
-                propos.setRestePayer(propos.getRestePayer().subtract(request.montantPaye())
-                        .max(BigDecimal.ZERO));
-                proposRepository.save(propos);
+        // Figer le moment des snapshots :
+        // - montant déjà payé : somme des paiements AVANT celui-ci (ce paiement exclu)
+        // - reste à payer : montant de la facture moins TOUS les paiements (celui-ci inclus)
+        if (factureValidee != null) {
+            BigDecimal sommeApres = paiementRepository.sommePayeeParFactureValidee(factureValidee.getId());
+            if (sommeApres == null) {
+                sommeApres = BigDecimal.ZERO;
             }
+            BigDecimal sommeAvant = sommeApres.subtract(
+                    paiement.getMontantPaye() != null ? paiement.getMontantPaye() : BigDecimal.ZERO)
+                    .max(BigDecimal.ZERO);
+            BigDecimal total = montantValideFactureValidee(factureValidee);
+            paiement.setMontantDejaPaye(sommeAvant);
+            paiement.setResteAPayer(total.subtract(sommeApres).max(BigDecimal.ZERO));
+            paiement = paiementRepository.save(paiement);
         }
 
         // Mettre à jour le statut des lignes liées (la facture peut couvrir
@@ -298,37 +275,6 @@ public class PaiementGestionService {
                 request.banque(), request.numeroCheque());
         validerMontantFactureValidee(factureValidee, request.montantPaye(), paiement.getMontantPaye());
 
-        // Échéance réglée : ajuster le montant payé de l'échéance selon le delta.
-        EcheancePaiement echeance = paiement.getEcheance();
-        if (echeance != null) {
-            BigDecimal ancien = paiement.getMontantPaye() != null ? paiement.getMontantPaye() : BigDecimal.ZERO;
-            BigDecimal nouveau = request.montantPaye() != null ? request.montantPaye() : BigDecimal.ZERO;
-            BigDecimal delta = nouveau.subtract(ancien);
-            if (delta.compareTo(BigDecimal.ZERO) != 0) {
-                BigDecimal dejaSurEcheance = echeance.getMontantPaye() != null
-                        ? echeance.getMontantPaye() : BigDecimal.ZERO;
-                BigDecimal nouveauEcheance = dejaSurEcheance.add(delta);
-                if (nouveauEcheance.compareTo(BigDecimal.ZERO) < 0) {
-                    throw new BusinessException(
-                            "Le montant réduit ne peut pas rendre le payé de l'échéance négatif");
-                }
-                if (delta.compareTo(BigDecimal.ZERO) > 0) {
-                    BigDecimal resteEcheance = echeance.getMontantAttendu().subtract(dejaSurEcheance);
-                    if (delta.compareTo(resteEcheance) > 0) {
-                        throw new BusinessException(
-                                "Le montant dépasse le reste de l'échéance (" + resteEcheance + ")");
-                    }
-                }
-                echeance.setMontantPaye(nouveauEcheance);
-                echeanceRepository.save(echeance);
-                ProposPaiement propos = echeance.getProposPaiement();
-                if (propos != null && propos.getRestePayer() != null) {
-                    propos.setRestePayer(propos.getRestePayer().subtract(delta).max(BigDecimal.ZERO));
-                    proposRepository.save(propos);
-                }
-            }
-        }
-
         paiement.setDatePaiement(request.datePaiement());
         paiement.setMontantPaye(request.montantPaye());
         paiement.setReferenceVirement(request.referenceVirement());
@@ -336,7 +282,21 @@ public class PaiementGestionService {
         paiement.setNumeroCheque(trimOuNull(request.numeroCheque()));
         paiement.setCommentaire(request.commentaire());
 
-        PaiementResponse response = PaiementMapper.toResponse(paiementRepository.save(paiement));
+        Paiement saved = paiementRepository.save(paiement);
+        if (factureValidee != null) {
+            BigDecimal sommeApres = paiementRepository.sommePayeeParFactureValidee(factureValidee.getId());
+            if (sommeApres == null) {
+                sommeApres = BigDecimal.ZERO;
+            }
+            BigDecimal sommeAvant = sommeApres.subtract(
+                    saved.getMontantPaye() != null ? saved.getMontantPaye() : BigDecimal.ZERO)
+                    .max(BigDecimal.ZERO);
+            BigDecimal total = montantValideFactureValidee(factureValidee);
+            saved.setMontantDejaPaye(sommeAvant);
+            saved.setResteAPayer(total.subtract(sommeApres).max(BigDecimal.ZERO));
+            saved = paiementRepository.save(saved);
+        }
+        PaiementResponse response = PaiementMapper.toResponse(saved);
 
         // Mettre à jour le statut des lignes liées.
         for (LigneService ligneLiee : lignePourFacturesValidees(factureValidee, demande)) {
@@ -361,24 +321,6 @@ public class PaiementGestionService {
         paiement.setArchivedAt(LocalDateTime.now());
         paiementRepository.save(paiement);
 
-        // Rendre la part d'échéance payée par ce paiement (le paiement est archivé).
-        EcheancePaiement echeance = paiement.getEcheance();
-        if (echeance != null) {
-            BigDecimal montant = paiement.getMontantPaye() != null
-                    ? paiement.getMontantPaye() : BigDecimal.ZERO;
-            BigDecimal dejaSurEcheance = echeance.getMontantPaye() != null
-                    ? echeance.getMontantPaye() : BigDecimal.ZERO;
-            echeance.setMontantPaye(dejaSurEcheance.subtract(montant).max(BigDecimal.ZERO));
-            echeanceRepository.save(echeance);
-            ProposPaiement propos = echeance.getProposPaiement();
-            if (propos != null && propos.getRestePayer() != null) {
-                BigDecimal nouveauReste = propos.getRestePayer().add(montant);
-                propos.setRestePayer(propos.getMontantTotal() != null
-                        ? nouveauReste.min(propos.getMontantTotal()) : nouveauReste);
-                proposRepository.save(propos);
-            }
-        }
-
         // Mettre à jour le statut des lignes liées.
         for (LigneService ligneLiee : lignePourFacturesValidees(paiement.getFactureValidee(),
                 paiement.getDemande())) {
@@ -401,9 +343,17 @@ public class PaiementGestionService {
         if (fv == null) {
             return List.of();
         }
-        // Facture du mois : seul le règlement de l'abonnement est imputé sur la ligne
-        // d'abonnement. Les lignes RAPPEL ne décrivent que des règlements séparés.
+        // Facture combinée du mois (mensuelle 1 et factures suivantes) : seul le
+        // règlement des lignes PRINCIPALE est imputé aux lignes — les lignes
+        // RAPPEL ne servent que d'information.
         if (fv.getFactureGenerale() != null) {
+            if (fv.getLignes() != null && !fv.getLignes().isEmpty()) {
+                return fv.getLignes().stream()
+                        .filter(l -> !"RAPPEL".equalsIgnoreCase(l.getType()))
+                        .map(com.cabex.backend.facture.entity.FactureValideeLigne::getLigneService)
+                        .filter(java.util.Objects::nonNull)
+                        .toList();
+            }
             return fv.getLigneService() != null ? List.of(fv.getLigneService()) : List.of();
         }
         List<LigneService> lignes = new ArrayList<>();
@@ -416,6 +366,18 @@ public class PaiementGestionService {
             return lignes;
         }
         LigneService unique = lignePourFactureValidee(fv, demande);
+        // Facture générale sans lignes persistées (demande non abonnée, mode UNIQUE) :
+        // toutes les lignes du proforma de cette demande sont concernées par le paiement.
+        if (fv.getFactureProforma() != null && fv.getFactureProforma().getLignes() != null
+                && demande != null) {
+            List<LigneService> lignesProforma = fv.getFactureProforma().getLignes().stream()
+                    .filter(l -> l.getDemande() != null
+                            && l.getDemande().getId().equals(demande.getId()))
+                    .toList();
+            if (!lignesProforma.isEmpty()) {
+                return lignesProforma;
+            }
+        }
         return unique != null ? List.of(unique) : List.of();
     }
 
@@ -507,6 +469,12 @@ public class PaiementGestionService {
             seq++;
         } while (paiementRepository.existsByReferencePaiement(reference));
         return reference;
+    }
+
+    /** Montant de la facture validée (facture générale / enfant / mensuel). */
+    private static BigDecimal montantValideFactureValidee(
+            com.cabex.backend.facture.entity.FactureValidee fv) {
+        return fv != null && fv.getMontant() != null ? fv.getMontant() : BigDecimal.ZERO;
     }
 
     private static String trimOuNull(String valeur) {

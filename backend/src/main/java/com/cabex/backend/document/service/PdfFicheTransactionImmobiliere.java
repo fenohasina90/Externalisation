@@ -6,16 +6,21 @@ import com.cabex.backend.dossier.entity.DossierTransactionImmobiliere;
 import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
+import com.lowagie.text.Font;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
 import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 
+import java.awt.Color;
+
 /**
  * Fiche de transaction immobilière, reprise de la fiche papier du cabinet
  * (actions, objet, achat/vente, régularisation, suivi et signatures) dans la
- * charte graphique du logo.
+ * charte graphique du logo. Les options cochées sont présentées sous forme de
+ * puces typographiques horizontales (« ✔ » vert / « ❑ » gris), comme les
+ * autres fiches du générateur.
  */
 final class PdfFicheTransactionImmobiliere {
 
@@ -26,6 +31,11 @@ final class PdfFicheTransactionImmobiliere {
             "Situation juridique",
             "Acte de notoriété"
     };
+
+    private static final Font F_CASE_COCHE =
+            new Font(Font.ZAPFDINGBATS, 10f, Font.NORMAL, PdfTheme.VERT_TEXTE);
+    private static final Font F_CASE_VIDE =
+            new Font(Font.ZAPFDINGBATS, 10f, Font.NORMAL, new Color(190, 205, 185));
 
     private PdfFicheTransactionImmobiliere() {
     }
@@ -132,22 +142,55 @@ final class PdfFicheTransactionImmobiliere {
     }
 
     // ------------------------------------------------------------------
-    // Action et objet
+    // Action et objet — puces horizontales
     // ------------------------------------------------------------------
+
+    private static Chunk caseChunk(boolean coche) {
+        return new Chunk(coche ? "4" : "q", coche ? F_CASE_COCHE : F_CASE_VIDE);
+    }
+
+    /** Liste de puces sur une ou plusieurs lignes, disposition horizontale. */
+    private static Paragraph puces(PdfStyleFacture st, boolean[] coches, String... libelles) {
+        Paragraph p = new Paragraph();
+        p.setLeading(st.td.getSize() * 1.8f);
+        p.setSpacingBefore(4);
+        p.setSpacingAfter(2);
+        boolean premier = true;
+        for (int i = 0; i < coches.length; i++) {
+            if (!premier) {
+                p.add(new Chunk("        ", st.td));
+            }
+            premier = false;
+            p.add(caseChunk(coches[i]));
+            p.add(new Chunk("  " + libelles[i], st.td));
+        }
+        return p;
+    }
+
+    /** Sous-en-tête gras discret pour les sous-sections. */
+    private static Paragraph libelleChoix(PdfStyleFacture st, String texte) {
+        Paragraph p = new Paragraph(texte, st.petitGras);
+        p.setSpacingBefore(6);
+        p.setSpacingAfter(1);
+        return p;
+    }
 
     private static void actions(Document doc, DossierTransactionImmobiliere dossier,
                                 PdfStyleFacture st) {
         PdfPCell b = ficheBoite(st);
         b.addElement(ficheTitre(st, "1. Action"));
-        b.addElement(choix(st, 3, new String[]{
-                coche(dossier.getActionAchat()) + "  Achat",
-                coche(dossier.getActionVente()) + "  Vente",
-                coche(dossier.getActionLocation()) + "  Location",
-                coche(dossier.getActionRegularisationPapiers()) + "  Régularisation des papiers",
-                coche(dossier.getActionGestionImmobiliere()) + "  Gestion immobilière",
-                coche(dossier.getActionAutre()) + "  Autre : "
-                        + PdfFormats.valeurTexte(dossier.getActionAutrePrecision())
-        }));
+        b.addElement(puces(st,
+                new boolean[]{
+                        Boolean.TRUE.equals(dossier.getActionAchat()),
+                        Boolean.TRUE.equals(dossier.getActionVente()),
+                        Boolean.TRUE.equals(dossier.getActionLocation()),
+                        Boolean.TRUE.equals(dossier.getActionRegularisationPapiers()),
+                        Boolean.TRUE.equals(dossier.getActionGestionImmobiliere()),
+                        Boolean.TRUE.equals(dossier.getActionAutre())
+                },
+                "Achat", "Vente", "Location", "Régularisation des papiers",
+                "Gestion immobilière",
+                "Autre : " + PdfFormats.valeurTexte(dossier.getActionAutrePrecision())));
         doc.add(PdfComposants.boiteFiche(b));
     }
 
@@ -156,12 +199,14 @@ final class PdfFicheTransactionImmobiliere {
         String objet = PdfFormats.code(dossier.getObjet());
         PdfPCell b = ficheBoite(st);
         b.addElement(ficheTitre(st, "2. Objet"));
-        b.addElement(choix(st, 3, new String[]{
-                coche("TERRAIN".equals(objet)) + "  Terrain",
-                coche("MAISON".equals(objet)) + "  Maison",
-                coche("AUTRE".equals(objet)) + "  Autre : "
-                        + PdfFormats.valeurTexte(dossier.getObjetAutrePrecision())
-        }));
+        b.addElement(puces(st,
+                new boolean[]{
+                        "TERRAIN".equals(objet),
+                        "MAISON".equals(objet),
+                        "AUTRE".equals(objet)
+                },
+                "Terrain", "Maison",
+                "Autre : " + PdfFormats.valeurTexte(dossier.getObjetAutrePrecision())));
         doc.add(PdfComposants.boiteFiche(b));
     }
 
@@ -243,8 +288,11 @@ final class PdfFicheTransactionImmobiliere {
         Paragraph p = new Paragraph();
         p.setLeading(st.td.getSize() * 1.45f);
         p.setSpacingBefore(2f);
-        p.add(new Chunk(libelle + " : ", st.petitGras));
-        p.add(new Chunk(coche(oui) + "  OUI      " + coche(non) + "  NON", st.td));
+        p.add(new Chunk(libelle + " :  ", st.petitGras));
+        p.add(caseChunk(oui));
+        p.add(new Chunk("  OUI    ", st.td));
+        p.add(caseChunk(non));
+        p.add(new Chunk("  NON", st.td));
         return p;
     }
 
@@ -264,24 +312,30 @@ final class PdfFicheTransactionImmobiliere {
         PdfPCell b = ficheBoite(st);
         b.addElement(ficheTitre(st, "Régularisation de papier"));
         b.addElement(libelleChoix(st, "3/ Type de terrain :"));
-        b.addElement(choix(st, 3, new String[]{
-                coche("COMMUNAL_DOMAINE".equals(type)) + "  Communal / Domanial",
-                coche("PRIVE".equals(type)) + "  Privé",
-                coche("HERITAGE_DON".equals(type)) + "  Héritage ou Don"
-        }));
+        b.addElement(puces(st,
+                new boolean[]{
+                        "COMMUNAL_DOMAINE".equals(type),
+                        "PRIVE".equals(type),
+                        "HERITAGE_DON".equals(type)
+                },
+                "Communal / Domanial", "Privé", "Héritage ou Don"));
         b.addElement(libelleChoix(st, "4/ Situation du terrain :"));
-        b.addElement(choix(st, 2, new String[]{
-                coche("TITRE_BORNE".equals(situation)) + "  Titré borné",
-                coche("RECONNAISSANCE".equals(situation)) + "  Reconnaissance"
-        }));
+        b.addElement(puces(st,
+                new boolean[]{
+                        "TITRE_BORNE".equals(situation),
+                        "RECONNAISSANCE".equals(situation)
+                },
+                "Titré borné", "Reconnaissance"));
         b.addElement(libelleChoix(st, "5/ Liste des documents existants :"));
-        b.addElement(choix(st, 3, new String[]{
-                coche(Boolean.TRUE.equals(dossier.getDocumentPvReconnaissance())) + "  " + DOCUMENTS[0],
-                coche(Boolean.TRUE.equals(dossier.getDocumentNumeroDemandeAcquisition())) + "  " + DOCUMENTS[1],
-                coche(Boolean.TRUE.equals(dossier.getDocumentActeVentePriveeCommunale())) + "  " + DOCUMENTS[2],
-                coche(Boolean.TRUE.equals(dossier.getDocumentSituationJuridique())) + "  " + DOCUMENTS[3],
-                coche(Boolean.TRUE.equals(dossier.getDocumentActeNotoriete())) + "  " + DOCUMENTS[4]
-        }));
+        b.addElement(puces(st,
+                new boolean[]{
+                        Boolean.TRUE.equals(dossier.getDocumentPvReconnaissance()),
+                        Boolean.TRUE.equals(dossier.getDocumentNumeroDemandeAcquisition()),
+                        Boolean.TRUE.equals(dossier.getDocumentActeVentePriveeCommunale()),
+                        Boolean.TRUE.equals(dossier.getDocumentSituationJuridique()),
+                        Boolean.TRUE.equals(dossier.getDocumentActeNotoriete())
+                },
+                DOCUMENTS[0], DOCUMENTS[1], DOCUMENTS[2], DOCUMENTS[3], DOCUMENTS[4]));
         doc.add(PdfComposants.boiteFiche(b));
     }
 
@@ -301,7 +355,7 @@ final class PdfFicheTransactionImmobiliere {
                               PdfStyleFacture st) {
         PdfPTable t = new PdfPTable(2);
         t.setWidthPercentage(100);
-        t.setWidths(new float[]{1.35f, 1f});
+        t.setWidths(new float[]{1.5f, 1f});
         t.setSpacingBefore(8);
         t.setKeepTogether(true);
 
@@ -315,14 +369,25 @@ final class PdfFicheTransactionImmobiliere {
 
         PdfPCell droite = celluleBloc(st);
         droite.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        Paragraph abonnement = new Paragraph();
-        abonnement.setLeading(st.td.getSize() * 1.45f);
-        abonnement.add(new Chunk(coche(Boolean.TRUE.equals(dossier.getPrestationAbonnementMensuel())),
-                st.td));
-        abonnement.add(new Chunk("  Prestation abonnement mensuel", st.td));
-        droite.addElement(abonnement);
+        boolean estPresta = "PRESTATION".equalsIgnoreCase(dossier.getTypePrestationDossier());
+        Paragraph titreSuivi = new Paragraph("Type de prestation", st.petitGras);
+        titreSuivi.setLeading(st.td.getSize() * 1.6f);
+        titreSuivi.setSpacingAfter(4);
+        droite.addElement(titreSuivi);
+        droite.addElement(optionPuce(st, estPresta, "Prestation"));
+        droite.addElement(optionPuce(st, !estPresta, "Abonnement mensuel"));
         t.addCell(droite);
         doc.add(t);
+    }
+
+    private static Paragraph optionPuce(PdfStyleFacture st, boolean coche, String libelle) {
+        Paragraph p = new Paragraph();
+        p.setLeading(st.td.getSize() * 1.6f);
+        p.setSpacingBefore(2);
+        p.setSpacingAfter(2);
+        p.add(caseChunk(coche));
+        p.add(new Chunk("  " + libelle, coche ? st.tdGras : st.td));
+        return p;
     }
 
     private static void signatures(Document doc, PdfStyleFacture st) {
@@ -363,40 +428,5 @@ final class PdfFicheTransactionImmobiliere {
         p.add(new Chunk(libelle + " : ", st.petitGras));
         p.add(new Chunk(valeur == null || valeur.isEmpty() ? "—" : valeur, st.td));
         return p;
-    }
-
-    private static Paragraph libelleChoix(PdfStyleFacture st, String texte) {
-        Paragraph p = new Paragraph(texte, st.petitGras);
-        p.setSpacingBefore(4);
-        p.setSpacingAfter(1);
-        return p;
-    }
-
-    private static PdfPTable choix(PdfStyleFacture st, int colonnes, String[] cellules) {
-        PdfPTable table = new PdfPTable(colonnes);
-        table.setWidthPercentage(100);
-        table.setSpacingBefore(3);
-        for (String texte : cellules) {
-            PdfPCell c = new PdfPCell(new Phrase(texte, st.td));
-            c.setBorder(Rectangle.NO_BORDER);
-            c.setPaddingTop(1);
-            c.setPaddingBottom(2);
-            c.setPaddingLeft(0);
-            c.setPaddingRight(4);
-            table.addCell(c);
-        }
-        int reste = cellules.length % colonnes;
-        if (reste > 0) {
-            for (int i = reste; i < colonnes; i++) {
-                PdfPCell vide = new PdfPCell(new Phrase(" ", st.td));
-                vide.setBorder(Rectangle.NO_BORDER);
-                table.addCell(vide);
-            }
-        }
-        return table;
-    }
-
-    private static String coche(boolean coche) {
-        return coche ? "[X]" : "[ ]";
     }
 }

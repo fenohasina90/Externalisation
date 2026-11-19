@@ -68,6 +68,13 @@ public class FactureController {
         return ResponseEntity.ok(factureService.listerFacturesValidees(demandeId));
     }
 
+    @GetMapping("/factures-validees/{id}")
+    @PreAuthorize("hasAuthority('FACTURE_VIEW')")
+    @Operation(summary = "Consulter une facture validée par son identifiant")
+    public ResponseEntity<FactureValideeResponse> getFactureValideeById(@PathVariable Integer id) {
+        return ResponseEntity.ok(factureService.getFactureValideeById(id));
+    }
+
     @GetMapping("/clients/{id}/factures")
     @PreAuthorize("hasAuthority('FACTURE_VIEW')")
     @Operation(summary = "Facturation d'un client depuis son enregistrement",

@@ -5,8 +5,8 @@ import type {
   DashboardFiltreOptions,
   DashboardSummary,
   DemandeMois,
-  EcheanceDashboard,
   PaiementDashboard,
+  PaiementRetard,
   PerformancesDashboard,
   ServiceRevenu,
   ServiceTop,
@@ -60,8 +60,8 @@ export const dashboardApi = {
     return data
   },
 
-  async getEcheances(filtres?: DashboardFiltres): Promise<EcheanceDashboard> {
-    const { data } = await http.get<EcheanceDashboard>('/dashboard/echeances', {
+  async getPaiementsEnRetard(filtres?: DashboardFiltres): Promise<PaiementRetard[]> {
+    const { data } = await http.get<PaiementRetard[]>('/dashboard/paiements/en-retard', {
       params: parametres(filtres),
     })
     return data

@@ -46,10 +46,6 @@ export function formatDateHeure(date: string | null | undefined): string {
   return parsed.toLocaleString('fr-FR')
 }
 
-export function dateISO(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
 export function initiales(nom: string, prenom?: string | null): string {
   return `${nom.charAt(0) ?? ''}${prenom?.charAt(0) ?? ''}`.toUpperCase() || '—'
 }
