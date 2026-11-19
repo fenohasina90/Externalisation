@@ -14,7 +14,6 @@ export interface Paiement {
   nomSociete: string | null
   factureValideeId: number | null
   referenceFactureValidee: string | null
-  echeanceId: number | null
   modePaiementId: number
   libelleMode: string
   datePaiement: string
@@ -42,8 +41,6 @@ export interface ObjetLigneFacture {
 export interface PaiementDetail extends Paiement {
   /** Toutes les lignes facturées (type + désignation). */
   objets?: ObjetLigneFacture[]
-  numeroEcheance: number | null
-  dateEcheance: string | null
   /** Type de facture validée liée (GENERALE | PRESTATION | DEBOURS | ABONNEMENT_MENSUEL). */
   typeFacture: string | null
   nomService: string | null
@@ -65,7 +62,6 @@ export interface CreatePaiementPayload {
   /** Facture validée liée au paiement (toujours requise). */
   factureValideeId: number
   /** Échéance réglée (EXTERNALISATION avec plan de paiement). NULL sinon. */
-  echeanceId?: number | null
   modePaiementId: number
   datePaiement: string
   montantPaye: number

@@ -107,7 +107,6 @@ export interface SyntheseFiche {
   montantTotal: number | null
   montantPaye: number | null
   resteAPayer: number | null
-  nombreEcheancesEnRetard: number | null
 }
 
 export interface PaiementFacturation {

@@ -74,10 +74,6 @@ export function PaiementDetailPage() {
   const typeFactureLabel = paiement.typeFacture
     ? (TYPE_LABEL[paiement.typeFacture] ?? paiement.typeFacture)
     : '—'
-  const estPlan = paiement.numeroEcheance !== null && paiement.dateEcheance !== null
-  const libelleEcheance = estPlan
-    ? `N° ${paiement.numeroEcheance} — échéance du ${formatDate(paiement.dateEcheance)}`
-    : null
   const resteAPayer = paiement.resteAPayerFacture ?? 0
 
   return (
@@ -170,12 +166,6 @@ export function PaiementDetailPage() {
             <div className="rc">
               <span>Date d&apos;émission</span>
               <b>{formatDate(paiement.dateFactureValidee)}</b>
-            </div>
-          )}
-          {libelleEcheance && (
-            <div className="rc">
-              <span>Échéance réglée</span>
-              <b>{libelleEcheance}</b>
             </div>
           )}
         </div>

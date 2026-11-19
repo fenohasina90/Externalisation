@@ -59,7 +59,7 @@ export function NouveauPaiementPage() {
   const [demandeId, setDemandeId] = useState<number | null>(null)
   const [demandeTexte, setDemandeTexte] = useState('')
 
-  const { data: reglatable, loading: loadingEcheances } = useApi<Demande | null>(
+  const { data: reglatable, loading: loadingReglable } = useApi<Demande | null>(
     () => (demandeId ? demandesApi.get(demandeId).catch(() => null) : Promise.resolve(null)),
     [demandeId],
   )
@@ -232,7 +232,6 @@ export function NouveauPaiementPage() {
         const cree = await paiementsApi.create({
           demandeId,
           factureValideeId: cible.id,
-          echeanceId: null,
           modePaiementId: modeChoisi.id,
           datePaiement,
           montantPaye: montant,
@@ -263,7 +262,7 @@ export function NouveauPaiementPage() {
     }
   }
 
-  const chargement = loadingDemandes || loadingEcheances || loadingFactures
+  const chargement = loadingDemandes || loadingReglable || loadingFactures
 
   return (
     <div className="app-page responsables-page">

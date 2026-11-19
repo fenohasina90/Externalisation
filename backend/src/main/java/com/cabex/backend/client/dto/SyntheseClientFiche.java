@@ -5,9 +5,6 @@ import java.math.BigDecimal;
 public record SyntheseClientFiche(
         BigDecimal montantTotal,
         BigDecimal montantPaye,
-        BigDecimal resteAPayer,
-        long nombreEcheancesEnRetard,
-        BigDecimal tauxPaiementATemps,
-        String risque
+        BigDecimal resteAPayer
 ) {
 }
