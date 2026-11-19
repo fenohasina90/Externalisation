@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Alert, Card, CardTitle, PageHeader } from '@/components/ui'
 import { messageErreur } from '@/constants/messages'
@@ -145,6 +145,7 @@ export function ReinitialisationDonneesPage() {
   const [ouvert, setOuvert] = useState(false)
   const [confirmation, setConfirmation] = useState('')
   const [enCours, setEnCours] = useState(false)
+  const [progression, setProgression] = useState(0)
   const [erreur, setErreur] = useState<string | null>(null)
   const [resultat, setResultat] = useState<ReinitialisationResponse | null>(null)
 
@@ -186,16 +187,34 @@ export function ReinitialisationDonneesPage() {
     setErreur(null)
     try {
       const res = await reinitialisationDonneesApi.executer([...selection])
+      setProgression(100)
+      // Laisse la barre atteindre 100 % avant de fermer la fenêtre.
+      await new Promise((resolve) => setTimeout(resolve, 350))
       setResultat(res)
       setSelection(new Set())
       setOuvert(false)
       setConfirmation('')
+      setProgression(0)
     } catch (err) {
+      setProgression(0)
       setErreur(messageErreur(err))
     } finally {
       setEnCours(false)
     }
   }
+
+  /**
+   * Barre de progression d'attente : la requête unique étant traitée côté
+   * serveur, la barre repart de 0 et tend doucement vers ~92 % ; elle est
+   * clôturée à 100 % à la réception de la réponse.
+   */
+  useEffect(() => {
+    if (!enCours) return undefined
+    const intervalle = setInterval(() => {
+      setProgression((p) => Math.min(92, Math.max(3, p + Math.max(0.25, (92 - p) * 0.03))))
+    }, 150)
+    return () => clearInterval(intervalle)
+  }, [enCours])
 
   const confirme = confirmation === 'SUPPRIMER'
   const ciblesSelectionnees = CIBLES.filter((c) => selection.has(c.code))
@@ -289,7 +308,10 @@ export function ReinitialisationDonneesPage() {
               borderColor: selection.size > 0 ? 'var(--danger)' : undefined,
             }}
             disabled={selection.size === 0 || enCours}
-            onClick={() => setOuvert(true)}
+            onClick={() => {
+              setProgression(0)
+              setOuvert(true)
+            }}
           >
             Supprimer les données sélectionnées ({selection.size})
           </button>
@@ -345,6 +367,34 @@ export function ReinitialisationDonneesPage() {
                     disabled={enCours}
                   />
                 </label>
+                {(enCours || progression > 0) && (
+                  <div aria-live="polite">
+                    <div
+                      className="section-note"
+                      style={{ display: 'flex', justifyContent: 'space-between' }}
+                    >
+                      <span>Suppression en cours…</span>
+                      <strong>{Math.floor(progression)} %</strong>
+                    </div>
+                    <div
+                      className="trk"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.floor(progression)}
+                      aria-label="Progression de la suppression"
+                      style={{ marginTop: 6 }}
+                    >
+                      <i
+                        style={{
+                          width: `${progression}%`,
+                          background: 'var(--danger)',
+                          transition: 'width 0.2s ease',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
               <footer className="modal-footer">
                 <button type="button" className="btn-ghost" onClick={fermer} disabled={enCours}>
