@@ -1328,7 +1328,11 @@ VALUES
  'SAUVEGARDE', 'Supprimer une archive de sauvegarde'),
 
 ('BACKUP_RESTORE', 'Restaurer une sauvegarde',
- 'SAUVEGARDE', 'Restaurer la base depuis un fichier de sauvegarde');
+ 'SAUVEGARDE', 'Restaurer la base depuis un fichier de sauvegarde'),
+
+-- Réinitialisation de données
+('REINITIALISER_DONNEES', 'Réinitialiser les données',
+ 'REINITIALISATION', 'Supprimer définitivement les données métier sélectionnées (irréversible)');
 
 -- =========================================================
 -- 28. ATTRIBUTION DES PERMISSIONS AU SUPER ADMIN ET A L'ADMIN

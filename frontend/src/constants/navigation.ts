@@ -45,6 +45,7 @@ const ADMIN_MENU_PERMISSIONS = [
   'CONFIG_VIEW',
   'PASSWORD_RESET_MANAGE',
   'BACKUP_VIEW',
+  'REINITIALISER_DONNEES',
 ] as const
 
 const dashboard: NavItem = {
@@ -154,6 +155,11 @@ const administration: NavItem = {
       permission: 'MODE_PAIEMENT_VIEW',
     },
     { label: 'Sauvegardes', to: '/administration/sauvegardes', permission: 'BACKUP_VIEW' },
+    {
+      label: 'Réinitialisation de données',
+      to: '/administration/reinitialisation-donnees',
+      permission: 'REINITIALISER_DONNEES',
+    },
   ],
 }
 

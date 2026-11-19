@@ -20,6 +20,7 @@ public final class AuditActions {
     public static final String BACKUP_DOWNLOAD = "BACKUP_DOWNLOAD";
     public static final String BACKUP_DELETE = "BACKUP_DELETE";
     public static final String BACKUP_RESTORE = "BACKUP_RESTORE";
+    public static final String RESET_DATA = "RESET_DATA";
 
     private AuditActions() {
     }

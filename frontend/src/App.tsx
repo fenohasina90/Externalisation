@@ -13,6 +13,7 @@ import {
   RolesPermissionsPage,
   StatutsPage,
   UtilisateursPage,
+  ReinitialisationDonneesPage,
 } from '@/features/administration'
 import { SauvegardesPage } from '@/features/backup'
 import { ClientDetailPage, ClientsPage } from '@/features/clients'
@@ -305,6 +306,14 @@ function App() {
             element={
               <RequirePermission permission="BACKUP_VIEW">
                 <SauvegardesPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/administration/reinitialisation-donnees"
+            element={
+              <RequirePermission permission="REINITIALISER_DONNEES">
+                <ReinitialisationDonneesPage />
               </RequirePermission>
             }
           />
