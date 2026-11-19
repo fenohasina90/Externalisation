@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { RequirePermission } from '@/components/layout/RequirePermission'
@@ -27,25 +27,30 @@ import {
   NouvelleDemandePage,
 } from '@/features/demandes'
 import { DocumentsPage } from '@/features/documents'
-import { EcheancesPage } from '@/features/echeances'
 import { NotificationsPage } from '@/features/notifications'
 import {
-  EcheancierDetailPage,
-  EcheanciersPage,
   HistoriquePaiementsPage,
   NouveauPaiementPage,
   PaiementDetailPage,
   PaiementsPage,
+  SuiviDemandePage,
 } from '@/features/paiements'
-import { PlansPaiementPage } from '@/features/plan-paiement'
 import { RapportsPage } from '@/features/rapports'
 import { RecherchePage } from '@/features/recherche'
 import { ResponsablesPage } from '@/features/responsables'
 import { DomainesPage, ServicesPage } from '@/features/services'
 
+/** Redirection des anciennes URLs « échéancier » vers le suivi des paiements. */
+function RedirectEcheanciers() {
+  const { reference } = useParams<{ reference: string }>()
+  if (!reference) {
+    return <Navigate to="/paiements" replace />
+  }
+  return <Navigate to={`/paiements/suivi/${reference}`} replace />
+}
+
 const ADMIN: string[] = ['USER_VIEW', 'AUDIT_VIEW', 'CONFIG_VIEW', 'PASSWORD_RESET_MANAGE']
 const DOCUMENTS: string[] = ['DOCUMENT_DEMANDE_VIEW', 'DOCUMENT_PAIEMENT_VIEW']
-const ECHEANCES: string[] = ['DEMANDE_VIEW', 'PAIEMENT_VIEW']
 const RAPPORTS: string[] = ['RAPPORT_DEMANDE_VIEW', 'RAPPORT_PAIEMENT_VIEW']
 
 function App() {
@@ -155,22 +160,8 @@ function App() {
               </RequirePermission>
             }
           />
-          <Route
-            path="/plans-paiement"
-            element={
-              <RequirePermission permission={ECHEANCES}>
-                <PlansPaiementPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/echeances"
-            element={
-              <RequirePermission permission={ECHEANCES}>
-                <EcheancesPage />
-              </RequirePermission>
-            }
-          />
+          <Route path="/plans-paiement" element={<Navigate to="/paiements" replace />} />
+          <Route path="/echeances" element={<Navigate to="/paiements" replace />} />
           <Route
             path="/paiements"
             element={
@@ -189,17 +180,17 @@ function App() {
           />
           <Route
             path="/paiements/echeanciers"
-            element={
-              <RequirePermission permission="PAIEMENT_VIEW">
-                <EcheanciersPage />
-              </RequirePermission>
-            }
+            element={<RedirectEcheanciers />}
           />
           <Route
             path="/paiements/echeanciers/:reference"
+            element={<RedirectEcheanciers />}
+          />
+          <Route
+            path="/paiements/suivi/:reference"
             element={
               <RequirePermission permission="PAIEMENT_VIEW">
-                <EcheancierDetailPage />
+                <SuiviDemandePage />
               </RequirePermission>
             }
           />

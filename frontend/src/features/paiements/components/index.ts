@@ -1,7 +1,5 @@
 export {
-  EcheancePill,
   ModePill,
-  SituationPlanPill,
   StatutDemandePill,
   SuiviTable,
 } from './PaiementsTable'

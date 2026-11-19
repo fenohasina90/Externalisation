@@ -1,26 +1,12 @@
 import { Link } from 'react-router-dom'
 import { formatMontantMGA } from '@/utils/format'
-import { classeEtatEcheance, getLibelleEtatEcheance } from '@/features/echeances/constants/labels'
 import { SituationPaiementPill, StatutDemandePill } from '@/features/demandes/components'
 import type { Demande } from '@/features/demandes/types'
 import { classeMode } from '../constants/labels'
-import type { SituationPlan } from '../types'
-
 export { StatutDemandePill, SituationPaiementPill }
-
-/** La situation de règlement est calculée par le backend. */
-export function SituationPlanPill({ situation }: { situation: SituationPlan }) {
-  return <SituationPaiementPill situation={situation} />
-}
 
 export function ModePill({ code }: { code: string | null | undefined }) {
   return <span className={classeMode(code)}>● {code ?? '—'}</span>
-}
-
-export function EcheancePill({ statut }: { statut: string }) {
-  return (
-    <span className={classeEtatEcheance(statut)}>● {getLibelleEtatEcheance(statut)}</span>
-  )
 }
 
 interface Props {
@@ -73,10 +59,10 @@ export function SuiviTable({ items }: Props) {
               </td>
               <td>
                 <Link
-                  to={`/paiements/echeanciers/${d.referenceDemande}`}
+                  to={`/paiements/suivi/${d.referenceDemande}`}
                   className="btn-link success"
                 >
-                  Échéancier ›
+                  Suivi ›
                 </Link>
               </td>
             </tr>

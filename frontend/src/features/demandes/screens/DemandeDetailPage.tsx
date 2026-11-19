@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Can } from '@/components/shared/Can'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -12,10 +12,6 @@ import type { Commercial } from '@/features/commerciaux/types'
 import { estTypeServiceSolo, type Service } from '@/features/services/types'
 import { commerciauxApi } from '@/features/commerciaux/services/commerciaux.service'
 import { servicesApi } from '@/features/services/services/services.service'
-import type { PlanPaiement } from '@/features/plan-paiement/types'
-import { planPaiementApi } from '@/features/plan-paiement/services/plan-paiement.service'
-import type { Echeance } from '@/features/echeances/types'
-import { echeancesApi } from '@/features/echeances/services/echeances.service'
 import { ServiceFormModal } from '@/features/services/components/ServiceFormModal'
 import { PiecesJointes } from '@/features/documents'
 import { getLibelleTypePrestation } from '../constants/labels'
@@ -76,23 +72,6 @@ function LignePill({ statut }: { statut: string | null }) {
     : statut === 'PARTIEL' || statut === 'NON_PAYEE' ? 'pill warning'
     : 'pill wt'
   return <span className={classe}>● {LIBELLES_LIGNE[statut] ?? statut}</span>
-}
-
-function EcheancePill({ statut }: { statut: string }) {
-  const classe =
-    statut === 'PAYEE' ? 'pill ok'
-    : statut === 'PARTIELLE' ? 'pill warning'
-    : statut === 'EN_RETARD' ? 'pill danger'
-    : statut === 'PROCHE' ? 'pill warning'
-    : 'pill wt'
-  const libelles: Record<string, string> = {
-    PAYEE: 'Payée',
-    PARTIELLE: 'Partielle',
-    EN_RETARD: 'En retard',
-    PROCHE: 'Proche',
-    A_VENIR: 'À venir',
-  }
-  return <span className={classe}>● {libelles[statut] ?? statut}</span>
 }
 
 /** Détail d'une demande multi-services branché sur l'API (route /demandes/:reference). */
@@ -1163,23 +1142,6 @@ function LigneCard({
   onAnnulerDebours: () => void
   onTerminerAbonnement: () => void
 }) {
-  const { data: plan } = useApi<PlanPaiement | null>(
-    () => planPaiementApi.getByLigne(ligne.id).catch(() => null),
-    [ligne.id],
-  )
-  const { data: echeances } = useApi<Echeance[]>(
-    () => (plan ? echeancesApi.listByPlan(plan.id) : Promise.resolve([])),
-    [plan?.id],
-  )
-  const echeancesTriees = useMemo(
-    () =>
-      [...(echeances ?? [])].sort(
-        (a, b) =>
-          a.dateEcheance.localeCompare(b.dateEcheance) ||
-          a.numeroEcheance - b.numeroEcheance,
-      ),
-    [echeances],
-  )
   const navigate = useNavigate()
   const [voirHistorique, setVoirHistorique] = useState(false)
   const estDebours = ligne.categorie === 'DEBOURS'
@@ -1272,40 +1234,11 @@ function LigneCard({
         )}
       </div>
 
-      {!estDebours && !estPrestationOuAbonnement && plan && (
-        <div className="table-scroll-container no-global-scroll" style={{ marginTop: 8 }}>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>N°</th>
-                  <th>Date</th>
-                  <th>Attendu</th>
-                  <th>Payé</th>
-                  <th>Reste</th>
-                  <th>Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {echeancesTriees.map((e) => (
-                  <tr key={e.id}>
-                    <td>{e.numeroEcheance}</td>
-                    <td className="text-secondary">{formatDate(e.dateEcheance)}</td>
-                    <td>{formatMontantMGA(e.montantAttendu)}</td>
-                    <td>{formatMontantMGA(e.montantPaye)}</td>
-                    <td>{formatMontantMGA(e.reste)}</td>
-                    <td>
-                      <EcheancePill statut={e.statut} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-      {!estDebours && !estPrestationOuAbonnement && !plan && (
-        <p className="section-note">Aucun plan de paiement pour ce service.</p>
+      {!estDebours && !estPrestationOuAbonnement && (
+        <p className="section-note">
+          Échéance/plan de paiement : sans objet — les encaissements sont liés à la facture
+          validée.
+        </p>
       )}
       {estPrestationOuAbonnement && (
         <p className="section-note">

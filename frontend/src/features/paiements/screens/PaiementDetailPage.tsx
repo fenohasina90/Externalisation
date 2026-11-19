@@ -262,10 +262,10 @@ export function PaiementDetailPage() {
           <b>{paiement.createdByName ?? '—'}</b>
         </div>
         <Link
-          to={`/paiements/echeanciers/${encodeURIComponent(paiement.referenceDemande)}`}
+          to={`/paiements/suivi/${encodeURIComponent(paiement.referenceDemande)}`}
           className="btn-ghost"
         >
-          Voir l&apos;échéancier
+          Voir le suivi des paiements
         </Link>
       </section>
     </div>

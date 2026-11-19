@@ -15,7 +15,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   demandes: 'Demandes',
   nouveau: 'Nouvelle demande',
   paiements: 'Paiements',
-  echeanciers: 'Échéanciers',
+  suivi: 'Suivi des paiements',
   historique: 'Historique',
   notifications: 'Notifications',
   rapports: 'Rapports',

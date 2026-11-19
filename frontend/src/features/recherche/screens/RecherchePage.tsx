@@ -225,7 +225,7 @@ export function RecherchePage() {
                   }
                   to={
                     paiement.referenceDemande
-                      ? `/paiements/echeanciers/${paiement.referenceDemande}`
+                      ? `/paiements/suivi/${paiement.referenceDemande}`
                       : '/paiements/historique'
                   }
                 />

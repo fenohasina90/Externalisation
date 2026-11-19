@@ -113,7 +113,6 @@ const paiements: NavItem = {
   permission: 'PAIEMENT_VIEW',
   children: [
     { label: 'Paiements', to: '/paiements', end: true, permission: 'PAIEMENT_VIEW' },
-    { label: 'Échéanciers', to: '/paiements/echeanciers', permission: 'PAIEMENT_VIEW' },
     { label: 'Historique', to: '/paiements/historique', permission: 'PAIEMENT_VIEW' },
   ],
 }

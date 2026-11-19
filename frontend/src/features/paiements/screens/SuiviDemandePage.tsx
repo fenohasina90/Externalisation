@@ -6,15 +6,14 @@ import { PiecesJointes } from '@/features/documents'
 import type { Paiement } from '../types'
 import { formatDate, formatMontantMGA } from '@/utils/format'
 import { telechargerBlob } from '@/utils/telechargement'
-import { EcheancePill, ModePill, SituationPlanPill, StatutDemandePill } from '../components'
-import { useEcheancierDemande } from '../hooks'
+import { ModePill, StatutDemandePill } from '../components'
+import { useSuiviDemande } from '../hooks'
 import { paiementsApi } from '../services/paiements.service'
-import { situationPlan, trierEcheances } from '../utils/situation'
 
-/** Échéancier d'une demande : résumé, échéances par service et paiements enregistrés. */
-export function EcheancierDetailPage() {
+/** Suivi des paiements d'une demande : résumé, lignes de service et paiements enregistrés. */
+export function SuiviDemandePage() {
   const { reference } = useParams<{ reference: string }>()
-  const { data, loading, error } = useEcheancierDemande(reference)
+  const { data, loading, error } = useSuiviDemande(reference)
   const [erreurRecu, setErreurRecu] = useState<string | null>(null)
   const [paiementDocuments, setPaiementDocuments] = useState<Paiement | null>(null)
 
@@ -38,7 +37,7 @@ export function EcheancierDetailPage() {
   if (loading && !data) {
     return (
       <div className="app-page responsables-page">
-        <Spinner label="Chargement de l'échéancier…" />
+        <Spinner label="Chargement du suivi des paiements…" />
       </div>
     )
   }
@@ -46,15 +45,15 @@ export function EcheancierDetailPage() {
   if (error || !data) {
     return (
       <div className="app-page responsables-page">
-        <div className="alert alert-danger">{error ?? 'Échéancier introuvable.'}</div>
-        <Link to="/paiements/echeanciers" className="btn-ghost" style={{ alignSelf: 'flex-start' }}>
+        <div className="alert alert-danger">{error ?? 'Demande introuvable.'}</div>
+        <Link to="/paiements" className="btn-ghost" style={{ alignSelf: 'flex-start' }}>
           Retour à la liste
         </Link>
       </div>
     )
   }
 
-  const { demande, plansParLigne, paiements } = data
+  const { demande, lignes, paiements } = data
   const reste = demande.resteAPayer ?? 0
   const montantTotal = demande.montantTotal ?? 0
   const progression = montantTotal === 0 ? 0 : Math.round(((demande.montantPaye / montantTotal) * 100) * 100) / 100
@@ -63,11 +62,11 @@ export function EcheancierDetailPage() {
     <div className="app-page responsables-page">
       <header className="page-header page-header-sticky">
         <div>
-          <h1>Échéancier · {demande.referenceDemande}</h1>
-          <p>{demande.nomSociete ?? 'Sans société'} — suivi des échéances de la demande.</p>
+          <h1>Suivi des paiements · {demande.referenceDemande}</h1>
+          <p>{demande.nomSociete ?? 'Sans société'} — encaissement et factures validées de la demande.</p>
         </div>
         <div className="actions">
-          <Link to="/paiements/echeanciers" className="btn-ghost">
+          <Link to="/paiements" className="btn-ghost">
             Retour à la liste
           </Link>
           <Can permission="PAIEMENT_CREATE">
@@ -132,100 +131,51 @@ export function EcheancierDetailPage() {
         </div>
       </section>
 
-      {plansParLigne.map((ligne) => (
-        <section className="card" key={ligne.ligneId}>
-          <div
-            className="card-pad"
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-          >
-            <h3 style={{ margin: 0 }}>{ligne.ligneLabel}</h3>
-            {ligne.plan ? (
-              <span className="text-secondary">
-                Plan du {formatDate(ligne.plan.dateDebut)} au {formatDate(ligne.plan.dateFin)}
-              </span>
-            ) : (
-              <span className="text-muted">Aucun plan de paiement</span>
-            )}
-          </div>
-          {ligne.plan ? (
-            <div className="table-scroll-container no-global-scroll">
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>N°</th>
-                      <th>Date d&apos;échéance</th>
-                      <th>Montant attendu</th>
-                      <th>Montant payé</th>
-                      <th>Reste</th>
-                      <th>Statut</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trierEcheances(ligne.plan.echeances ?? []).map((e) => (
-                      <tr key={e.id}>
-                        <td>{e.numeroEcheance}</td>
-                        <td className="text-secondary">{formatDate(e.dateEcheance)}</td>
-                        <td className="cell-number">{formatMontantMGA(e.montantAttendu)}</td>
-                        <td className="cell-number">{formatMontantMGA(e.montantPaye)}</td>
-                        <td className="cell-number">{formatMontantMGA(e.reste)}</td>
-                        <td>
-                          <EcheancePill statut={e.statut} />
-                        </td>
-                        <td>
-                          {e.reste > 0 ? (
-                            <Can permission="PAIEMENT_CREATE">
-                              <Link
-                                to={`/paiements/nouveau?demande=${encodeURIComponent(demande.referenceDemande)}`}
-                                state={{ echeanceId: e.id }}
-                                className="btn-link success"
-                              >
-                                Enregistrer un paiement
-                              </Link>
-                            </Can>
-                          ) : (
-                            <span className="text-muted">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="table-footer">
-                <span>
-                  Situation du service :{' '}
-                  <SituationPlanPill situation={situationPlan(ligne.plan.echeances ?? [])} />
+      {lignes.map((ligne) => {
+        const estDebours = ligne.typeService === 'DEBOURS' || ligne.categorie === 'DEBOURS'
+        const typeAffichable =
+          ligne.typePrestation === 'ABONNEMENT_MENSUEL'
+            ? 'Abonnement mensuel'
+            : ligne.typePrestation === 'PRESTATION'
+              ? 'Prestation'
+              : estDebours
+                ? 'Débours'
+                : ligne.categorie === 'DEBOURS'
+                  ? 'Débours'
+                  : 'Externalisation'
+        return (
+          <section className="card" key={ligne.ligneId}>
+            <div
+              className="card-pad"
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}
+            >
+              <div>
+                <h3 style={{ margin: 0 }}>{ligne.ligneLabel}</h3>
+                <span className={`pill ${estDebours ? 'pill warning' : 'pill wt'}`} style={{ marginTop: 6 }}>
+                  ● {typeAffichable}
                 </span>
               </div>
+              <Can permission="PAIEMENT_CREATE">
+                <Link
+                  to={`/paiements/nouveau?demande=${encodeURIComponent(demande.referenceDemande)}&ligne=${ligne.ligneId}`}
+                  className="btn-link success"
+                >
+                  Enregistrer un paiement ›
+                </Link>
+              </Can>
             </div>
-          ) : (
-            <div className="card-pad text-muted">
-              {ligne.typePrestation === 'PRESTATION' || ligne.typePrestation === 'ABONNEMENT_MENSUEL' ? (
-                <>
-                  <span>
-                    {ligne.typePrestation === 'PRESTATION'
-                      ? 'Prestation : paiement direct lié à la facture validée.'
-                      : 'Abonnement mensuel : paiement direct lié à la facture validée.'}
-                  </span>
-                  <Can permission="PAIEMENT_CREATE">
-                    <Link
-                      to={`/paiements/nouveau?demande=${encodeURIComponent(demande.referenceDemande)}&ligne=${ligne.ligneId}`}
-                      className="btn-link success"
-                      style={{ marginLeft: 8 }}
-                    >
-                      Enregistrer un paiement
-                    </Link>
-                  </Can>
-                </>
-              ) : (
-                'Le plan de paiement de ce service n&apos;est pas encore établi.'
-              )}
+            <div className="card-pad" style={{ paddingTop: 0 }}>
+              <p className="section-note" style={{ margin: 0 }}>
+                {typeAffichable === 'Abonnement mensuel'
+                  ? 'Abonnement mensuel : paiement direct sur chaque facture validée du mois, sans plan ni échéance.'
+                  : typeAffichable === 'Prestation'
+                    ? 'Prestation : paiement direct à la validation de la facture, sans plan ni échéance.'
+                    : 'Débours : paiement direct à la validation de la facture du débours, sans plan ni échéance.'}
+              </p>
             </div>
-          )}
-        </section>
-      ))}
+          </section>
+        )
+      })}
 
       <section className="card">
         <div className="card-pad" style={{ paddingBottom: 0 }}>
