@@ -112,6 +112,7 @@ final class PdfFicheCreation {
         if (dossier.getAssocies() != null && !dossier.getAssocies().isEmpty()) {
             b.addElement(tableauAssocies(st, dossier));
         }
+        b.addElement(ficheSousTitre(st, "GÉRANCE"));
         b.addElement(ficheLigne(st, "Nom du gérant",
                 PdfFormats.valeurTexte(dossier.getNomGerant())));
         b.addElement(ficheLigne(st, "Fonction",
@@ -170,15 +171,51 @@ final class PdfFicheCreation {
         return b;
     }
 
+    /** Adresse sur une grille 2×3 compacte (libellé | valeur | libellé | valeur). */
+    private static PdfPTable grilleAdresse(PdfStyleFacture st, DossierCreation dossier) {
+        PdfPTable t = new PdfPTable(4);
+        t.setWidthPercentage(100);
+        t.setWidths(new float[]{1f, 2.3f, 1f, 2.3f});
+        t.setSpacingBefore(4);
+        t.setKeepTogether(true);
+        celluleAdresse(t, st, "Adresse", PdfFormats.valeurTexte(dossier.getAdresseSiege()));
+        celluleAdresse(t, st, "Ville", PdfFormats.valeurTexte(dossier.getVille()));
+        celluleAdresse(t, st, "Commune", PdfFormats.valeurTexte(dossier.getCommune()));
+        celluleAdresse(t, st, "", "");
+        celluleAdresse(t, st, "District", PdfFormats.valeurTexte(dossier.getDistrict()));
+        celluleAdresse(t, st, "Région", PdfFormats.valeurTexte(dossier.getRegion()));
+        return t;
+    }
+
+    private static void celluleAdresse(PdfPTable t, PdfStyleFacture st,
+                                       String libelle, String valeur) {
+        PdfPCell c = new PdfPCell(new Paragraph(
+                (libelle.isEmpty() ? "" : libelle + " : "), st.petitGras));
+        c.setBorder(Rectangle.NO_BORDER);
+        c.setPaddingTop(2f);
+        c.setPaddingBottom(2f);
+        c.setPaddingLeft(0);
+        c.setPaddingRight(0);
+        if (libelle.isEmpty()) {
+            c.setPadding(0);
+        }
+        t.addCell(c);
+        PdfPCell v = new PdfPCell(new Paragraph(
+                valeur == null || valeur.isEmpty() ? "—" : valeur, st.td));
+        v.setBorder(Rectangle.NO_BORDER);
+        v.setPaddingTop(2f);
+        v.setPaddingBottom(2f);
+        v.setPaddingLeft(0);
+        v.setPaddingRight(6f);
+        t.addCell(v);
+    }
+
     private static PdfPCell adresseSiege(PdfStyleFacture st, DossierCreation dossier) {
         PdfPCell b = ficheBoite(st);
         b.addElement(ficheTitre(st, "4. ADRESSE DU SIÈGE ET DE L'ÉTABLISSEMENT"));
-        b.addElement(ficheLigne(st, "Adresse", PdfFormats.valeurTexte(dossier.getAdresseSiege())));
-        b.addElement(ficheLigne(st, "Ville", PdfFormats.valeurTexte(dossier.getVille())));
-        b.addElement(ficheLigne(st, "Commune", PdfFormats.valeurTexte(dossier.getCommune())));
-        b.addElement(ficheLigne(st, "District", PdfFormats.valeurTexte(dossier.getDistrict())));
-        b.addElement(ficheLigne(st, "Région", PdfFormats.valeurTexte(dossier.getRegion())));
+        b.addElement(grilleAdresse(st, dossier));
 
+        b.addElement(ficheSousTitre(st, "HÉBERGEMENT DU SIÈGE"));
         String hebergement = PdfFormats.code(dossier.getTypeHebergement());
         Paragraph hebergementP = new Paragraph();
         hebergementP.setSpacingBefore(3);
@@ -190,8 +227,10 @@ final class PdfFicheCreation {
         hebergementP.add(caseChunk(PdfFormats.estValeur(hebergement, "LOCATION_CABINET")));
         hebergementP.add(new Chunk("  Location de siège au Cabinet Nakay", st.td));
         b.addElement(hebergementP);
-        b.addElement(ficheLigne(st, "Autres", PdfFormats.estValeur(hebergement, "AUTRE")
-                ? PdfFormats.valeurTexte(dossier.getHebergementPrecision()) : ""));
+        if (PdfFormats.estValeur(hebergement, "AUTRE")) {
+            b.addElement(ficheLigne(st, "Précision (autres)",
+                    PdfFormats.valeurTexte(dossier.getHebergementPrecision())));
+        }
         b.addElement(contratBailLigne(st, dossier));
         return b;
     }
@@ -216,8 +255,8 @@ final class PdfFicheCreation {
     private static PdfPCell objetSocial(PdfStyleFacture st, DossierCreation dossier) {
         PdfPCell b = ficheBoite(st);
         b.addElement(ficheTitre(st, "5. PRINCIPALES ACTIVITÉS DE L'OBJET SOCIAL"));
-        b.addElement(ficheLigne(st, "", PdfFormats.valeurTexte(dossier.getObjetSocial())));
-        b.addElement(ficheTitre(st, "DATE SOUHAITÉE POUR LE DÉBUT DE L'ACTIVITÉ"));
+        b.addElement(ficheLigne(st, "Objet social", PdfFormats.valeurTexte(dossier.getObjetSocial())));
+        b.addElement(ficheSousTitre(st, "DATE SOUHAITÉE POUR LE DÉBUT DE L'ACTIVITÉ"));
         b.addElement(ficheLigne(st, "Date",
                 PdfFormats.valeurDate(dossier.getDateSouhaiteeDebut())));
 
@@ -274,6 +313,28 @@ final class PdfFicheCreation {
             new Font(Font.ZAPFDINGBATS, 10f, Font.NORMAL, PdfTheme.VERT_TEXTE);
     private static final Font F_CASE_VIDE =
             new Font(Font.ZAPFDINGBATS, 10f, Font.NORMAL, new Color(190, 205, 185));
+
+    /** Filet horizontal discret séparant deux groupes d'une même rubrique. */
+    private static PdfPTable ficheSeparateur() {
+        PdfPTable t = new PdfPTable(1);
+        t.setWidthPercentage(100);
+        t.setSpacingBefore(6);
+        t.setSpacingAfter(6);
+        PdfPCell c = new PdfPCell(new Phrase(" "));
+        c.setBorder(Rectangle.BOTTOM);
+        c.setBorderColor(PdfTheme.GRIS_BORDURE);
+        c.setBorderWidth(0.6f);
+        t.addCell(c);
+        return t;
+    }
+
+    /** Sous-titre discret (style libelleChoix) pour regrouper des lignes. */
+    private static Paragraph ficheSousTitre(PdfStyleFacture st, String texte) {
+        Paragraph p = new Paragraph(texte, st.petitGras);
+        p.setSpacingBefore(4);
+        p.setSpacingAfter(3);
+        return p;
+    }
 
     /** Puce typographique : « ✔ » verte si cochée, « ❑ » gris clair sinon. */
     private static Chunk caseChunk(boolean coche) {
