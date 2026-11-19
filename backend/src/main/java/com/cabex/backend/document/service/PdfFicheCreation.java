@@ -5,11 +5,14 @@ import com.cabex.backend.dossier.entity.DossierAssocie;
 import com.cabex.backend.dossier.entity.DossierCreation;
 import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
+import com.lowagie.text.Font;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
 import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
+
+import java.awt.Color;
 
 /**
  * Fiche de création d'entreprise ou de société (reprend la fiche papier,
@@ -97,8 +100,7 @@ final class PdfFicheCreation {
         b.addElement(ficheTitre(st, "2. SI SOCIÉTÉ"));
         b.addElement(ficheLigne(st, "Capital social",
                 PdfFormats.formatMontant(dossier.getCapitalSocial()) + " Ariary"));
-        b.addElement(ficheLigne(st, "Nombre d'associés",
-                PdfFormats.valeurNombre(dossier.getNombreAssociesDeclare())));
+        b.addElement(ficheLigne(st, "Nombre d'associés", nombreAssocies(dossier)));
         if (dossier.getAssocies() != null && !dossier.getAssocies().isEmpty()) {
             b.addElement(tableauAssocies(st, dossier));
         }
@@ -106,10 +108,29 @@ final class PdfFicheCreation {
                 PdfFormats.valeurTexte(dossier.getNomGerant())));
         b.addElement(ficheLigne(st, "Fonction",
                 PdfFormats.valeurTexte(dossier.getFonctionGerant())));
-        b.addElement(ficheLigne(st, "",
-                ficheCase(Boolean.TRUE.equals(dossier.getLocationGerance()))
-                        + "  Location de gérance"));
+        b.addElement(ficheLigneCase(st,
+                Boolean.TRUE.equals(dossier.getLocationGerance()), "Location de gérance"));
         return b;
+    }
+
+    /**
+     * Nombre réel d'associés : lignes d'associé réellement renseignées ; à défaut,
+     * la déclaration saisie ; « — » sinon (ex. entreprise individuelle).
+     */
+    private static String nombreAssocies(DossierCreation dossier) {
+        if (dossier.getAssocies() != null) {
+            long nb = dossier.getAssocies().stream()
+                    .filter(a -> a.getNom() != null && !a.getNom().isBlank())
+                    .count();
+            if (nb > 0) {
+                return String.valueOf(nb);
+            }
+        }
+        Integer declare = dossier.getNombreAssociesDeclare();
+        if (declare != null && declare > 0) {
+            return String.valueOf(declare);
+        }
+        return "—";
     }
 
     private static PdfPTable tableauAssocies(PdfStyleFacture st, DossierCreation dossier) {
@@ -151,28 +172,37 @@ final class PdfFicheCreation {
         b.addElement(ficheLigne(st, "Région", PdfFormats.valeurTexte(dossier.getRegion())));
 
         String hebergement = PdfFormats.code(dossier.getTypeHebergement());
-        b.addElement(ficheLigne(st, "",
-                ficheCase(PdfFormats.estValeur(hebergement, "DOMICILE_GERANT"))
-                        + "  Au domicile du gérant ou du propriétaire"
-                        + "      " + ficheCase(PdfFormats.estValeur(hebergement, "LOCATION_CABINET"))
-                        + "  Location de siège au Cabinet Nakay"));
+        Paragraph hebergementP = new Paragraph();
+        hebergementP.setSpacingBefore(3);
+        hebergementP.setSpacingAfter(2);
+        hebergementP.setLeading(st.td.getSize() * 1.7f);
+        hebergementP.add(caseChunk(PdfFormats.estValeur(hebergement, "DOMICILE_GERANT")));
+        hebergementP.add(new Chunk("  Au domicile du gérant ou du propriétaire", st.td));
+        hebergementP.add(new Chunk("        ", st.td));
+        hebergementP.add(caseChunk(PdfFormats.estValeur(hebergement, "LOCATION_CABINET")));
+        hebergementP.add(new Chunk("  Location de siège au Cabinet Nakay", st.td));
+        b.addElement(hebergementP);
         b.addElement(ficheLigne(st, "Autres", PdfFormats.estValeur(hebergement, "AUTRE")
                 ? PdfFormats.valeurTexte(dossier.getHebergementPrecision()) : ""));
-        b.addElement(ficheLigne(st, "", contratBail(dossier)));
+        b.addElement(contratBailLigne(st, dossier));
         return b;
     }
 
-    private static String contratBail(DossierCreation dossier) {
-        StringBuilder texte = new StringBuilder();
-        texte.append(ficheCase(dossier.getContratBail() != null))
-                .append("  Possédez-vous un contrat de bail ?");
+    private static Paragraph contratBailLigne(PdfStyleFacture st, DossierCreation dossier) {
+        Paragraph p = new Paragraph();
+        p.setSpacingBefore(3);
+        p.setSpacingAfter(2);
+        p.setLeading(st.td.getSize() * 1.6f);
+        p.add(caseChunk(dossier.getContratBail() != null));
+        p.add(new Chunk("  Possédez-vous un contrat de bail ?", st.td));
         if (dossier.getContratBail() != null) {
-            texte.append(Boolean.TRUE.equals(dossier.getContratBail()) ? "  Oui" : "  Non");
+            p.add(new Chunk(Boolean.TRUE.equals(dossier.getContratBail()) ? "  Oui" : "  Non",
+                    st.tdGras));
         }
         if (dossier.getContratBailDetail() != null && !dossier.getContratBailDetail().isBlank()) {
-            texte.append(" — ").append(dossier.getContratBailDetail());
+            p.add(new Chunk(" — " + dossier.getContratBailDetail(), st.td));
         }
-        return texte.toString();
+        return p;
     }
 
     private static PdfPCell objetSocial(PdfStyleFacture st, DossierCreation dossier) {
@@ -184,10 +214,19 @@ final class PdfFicheCreation {
                 PdfFormats.valeurDate(dossier.getDateSouhaiteeDebut())));
 
         String regime = PdfFormats.code(dossier.getRegimeActivite());
-        b.addElement(ficheLigne(st, "",
-                "Permanente " + ficheCase(PdfFormats.estValeur(regime, "PERMANENTE"))
-                        + "      Saisonnière " + ficheCase(PdfFormats.estValeur(regime, "SAISONNIERE"))
-                        + "      Ambulant " + ficheCase(PdfFormats.estValeur(regime, "AMBULANT"))));
+        Paragraph regimeP = new Paragraph();
+        regimeP.setSpacingBefore(4);
+        regimeP.setSpacingAfter(2);
+        regimeP.setLeading(st.td.getSize() * 1.8f);
+        regimeP.add(caseChunk(PdfFormats.estValeur(regime, "PERMANENTE")));
+        regimeP.add(new Chunk("  Permanente", st.td));
+        regimeP.add(new Chunk("        ", st.td));
+        regimeP.add(caseChunk(PdfFormats.estValeur(regime, "SAISONNIERE")));
+        regimeP.add(new Chunk("  Saisonnière", st.td));
+        regimeP.add(new Chunk("        ", st.td));
+        regimeP.add(caseChunk(PdfFormats.estValeur(regime, "AMBULANT")));
+        regimeP.add(new Chunk("  Ambulant", st.td));
+        b.addElement(regimeP);
         b.addElement(ficheLigne(st,
                 "Activités exercées dans l'établissement ou succursale ou filiale",
                 PdfFormats.valeurTexte(dossier.getActivitesEtablissement())));
@@ -223,9 +262,25 @@ final class PdfFicheCreation {
     // Éléments de la fiche
     // ------------------------------------------------------------------
 
-    /** Case cochée ([X]) ou vide ([ ]) façon fiche papier. */
-    private static String ficheCase(boolean coche) {
-        return coche ? "[X]" : "[ ]";
+    private static final Font F_CASE_COCHE =
+            new Font(Font.ZAPFDINGBATS, 10f, Font.NORMAL, PdfTheme.VERT_TEXTE);
+    private static final Font F_CASE_VIDE =
+            new Font(Font.ZAPFDINGBATS, 10f, Font.NORMAL, new Color(190, 205, 185));
+
+    /** Puce typographique : « ✔ » verte si cochée, « ❑ » gris clair sinon. */
+    private static Chunk caseChunk(boolean coche) {
+        return new Chunk(coche ? "4" : "q", coche ? F_CASE_COCHE : F_CASE_VIDE);
+    }
+
+    /** « Puce  Libellé » sur une ligne. */
+    private static Paragraph ficheLigneCase(PdfStyleFacture st, boolean coche, String texte) {
+        Paragraph p = new Paragraph();
+        p.setSpacingBefore(3);
+        p.setSpacingAfter(2);
+        p.setLeading(st.td.getSize() * 1.6f);
+        p.add(caseChunk(coche));
+        p.add(new Chunk("  " + texte, st.td));
+        return p;
     }
 
     /** Rubrique de la fiche : encadré à liseré vert vif, fond blanc. */
@@ -258,16 +313,17 @@ final class PdfFicheCreation {
         return p;
     }
 
+    /** Options cochables sur une ligne, disposition horizontale façon chips. */
     private static Paragraph ficheCases(PdfStyleFacture st, String[][] options, String selection) {
         Paragraph p = new Paragraph();
-        p.setLeading(st.td.getSize() * 1.6f);
-        p.setSpacingBefore(2);
+        p.setLeading(st.td.getSize() * 1.9f);
+        p.setSpacingBefore(4);
         for (int i = 0; i < options.length; i++) {
             if (i > 0) {
-                p.add(new Chunk("      ", st.td));
+                p.add(new Chunk("        ", st.td));
             }
-            p.add(new Chunk(ficheCase(PdfFormats.estValeur(selection, options[i][0]))
-                    + "  " + options[i][1], st.td));
+            p.add(caseChunk(PdfFormats.estValeur(selection, options[i][0])));
+            p.add(new Chunk("  " + options[i][1], st.td));
         }
         return p;
     }
