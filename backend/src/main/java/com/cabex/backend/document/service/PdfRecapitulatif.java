@@ -15,7 +15,6 @@ import com.lowagie.text.Element;
 import com.lowagie.text.Font;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
-import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 
@@ -31,7 +30,7 @@ final class PdfRecapitulatif {
 
     static byte[] generer(DemandeService demande, List<DomaineService> domaines) {
         List<DomaineService> domainesTries = domaines != null ? domaines : List.of();
-        return PdfDocument.generer(PdfDocument.MiseEnPage.DOCUMENT, "Fiche récapitulative",
+        return PdfDocument.generer(PdfDocument.MiseEnPage.FICHE, "Fiche récapitulative",
                 "Récapitulatif de demande " + PdfFormats.valeur(demande.getReferenceDemande()),
                 doc -> ecrire(doc, demande, domainesTries),
                 "Erreur de génération du récapitulatif de demande");
@@ -39,11 +38,11 @@ final class PdfRecapitulatif {
 
     private static void ecrire(Document doc, DemandeService demande, List<DomaineService> domaines) {
         PdfStyleFacture st = new PdfStyleFacture(1f);
-        entete(doc);
+        PdfComposants.enteteDocument(doc, st, "FICHE", "RÉCAPITULATIVE D'EXTERNALISATION");
         bandeauReferences(doc, demande, st);
         cartesSociete(doc, demande, st);
         profilChiffre(doc, demande.getSociete(), st);
-        domaine(doc, demande, domaines);
+        domaine(doc, demande, domaines, st);
         services(doc, demande, st);
         delai(doc, st);
         observation(doc, demande, st);
@@ -73,33 +72,6 @@ final class PdfRecapitulatif {
         return ids;
     }
 
-    private static void entete(Document doc) {
-        PdfPTable titre = new PdfPTable(2);
-        titre.setWidthPercentage(100);
-        titre.setWidths(new float[]{3.2f, 2f});
-
-        PdfPCell gauche = new PdfPCell();
-        gauche.setBorder(Rectangle.NO_BORDER);
-        gauche.setPadding(0);
-        gauche.addElement(new Paragraph("FICHE RÉCAPITULATIVE", PdfTheme.F_TITRE));
-        Paragraph sous = new Paragraph("Demande d'externalisation de services", PdfTheme.F_SOUS_TITRE);
-        sous.setSpacingBefore(2);
-        gauche.addElement(sous);
-        titre.addCell(gauche);
-
-        PdfPCell badge = new PdfPCell(new Phrase("EXTERNALISATION",
-                PdfTheme.font(13, Font.BOLD, Color.WHITE)));
-        badge.setBackgroundColor(PdfTheme.PRIMAIRE);
-        badge.setBorder(Rectangle.BOTTOM);
-        badge.setBorderColor(PdfTheme.ROUGE);
-        badge.setBorderWidth(3f);
-        badge.setHorizontalAlignment(Element.ALIGN_CENTER);
-        badge.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        badge.setPadding(10);
-        titre.addCell(badge);
-        titre.setSpacingAfter(10);
-        doc.add(titre);
-    }
 
     private static void bandeauReferences(Document doc, DemandeService demande, PdfStyleFacture st) {
         PdfPTable meta = new PdfPTable(new float[]{1.4f, 1.2f, 2.6f});
@@ -165,15 +137,15 @@ final class PdfRecapitulatif {
     }
 
     private static final Font F_CASE_COCHEE_VERTE =
-            new Font(Font.ZAPFDINGBATS, 11f, Font.NORMAL, PdfTheme.VERT_TEXTE);
+            new Font(Font.ZAPFDINGBATS, 10f, Font.NORMAL, PdfTheme.VERT_TEXTE);
     private static final Font F_CASE_VIDE_GRISE =
-            new Font(Font.ZAPFDINGBATS, 11f, Font.NORMAL, new Color(190, 205, 185));
+            new Font(Font.ZAPFDINGBATS, 10f, Font.NORMAL, new Color(190, 205, 185));
     private static final Font F_DOMAINE =
-            new Font(Font.HELVETICA, 9.5f, Font.NORMAL, PdfTheme.TEXTE);
+            new Font(Font.HELVETICA, 9f, Font.NORMAL, PdfTheme.TEXTE);
     private static final Font F_DOMAINE_COCHE =
-            new Font(Font.HELVETICA, 9.5f, Font.BOLD, PdfTheme.TEXTE);
+            new Font(Font.HELVETICA, 9f, Font.BOLD, PdfTheme.TEXTE);
     private static final Font F_DOMAINE_GRIS =
-            new Font(Font.HELVETICA, 9.5f, Font.NORMAL, PdfTheme.GRIS_TEXTE);
+            new Font(Font.HELVETICA, 9f, Font.NORMAL, PdfTheme.GRIS_TEXTE);
 
     /**
      * Cases de domaine sur une ligne horizontale façon « chips typographiques » :
@@ -183,11 +155,11 @@ final class PdfRecapitulatif {
      * différents sont demandés.
      */
     private static void domaine(Document doc, DemandeService demande,
-                                List<DomaineService> domaines) {
+                                List<DomaineService> domaines, PdfStyleFacture st) {
         PdfComposants.section(doc, "Domaine");
         Set<Integer> demandes = domainesDemandes(demande);
         if (domaines.isEmpty()) {
-            Paragraph p = new Paragraph(new Chunk("-", PdfTheme.F_VALEUR));
+            Paragraph p = new Paragraph(new Chunk("-", st.td));
             p.setSpacingBefore(3);
             doc.add(p);
             return;
@@ -289,7 +261,7 @@ final class PdfRecapitulatif {
     }
 
     private static void signatures(Document doc, PdfStyleFacture st) {
-        PdfPTable signatures = PdfComposants.signaturesStyle(st, 56f,
+        PdfPTable signatures = PdfComposants.signaturesStyle(st, st.hSignature,
                 new String[]{"Le Client"},
                 new String[]{"Le Commercial"},
                 new String[]{"Le Responsable du dossier"},

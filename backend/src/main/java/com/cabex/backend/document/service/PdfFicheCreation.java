@@ -24,14 +24,22 @@ final class PdfFicheCreation {
     }
 
     static byte[] generer(DemandeService demande, DossierCreation dossier) {
-        String titreMeta = "Fiche de création " + PdfFormats.valeur(demande.getReferenceDemande());
-        return PdfDocument.generer(PdfDocument.MiseEnPage.FICHE, "Fiche de création",
-                titreMeta, doc -> ecrire(doc, demande, dossier),
-                "Erreur de génération de la fiche de création");
+        byte[] pdf = null;
+        for (float echelle : PdfStyleFacture.ECHELLES) {
+            PdfStyleFacture st = new PdfStyleFacture(echelle);
+            String titreMeta = "Fiche de création " + PdfFormats.valeur(demande.getReferenceDemande());
+            pdf = PdfDocument.generer(PdfDocument.MiseEnPage.FICHE, "Fiche de création",
+                    titreMeta, doc -> ecrire(doc, demande, dossier, st),
+                    "Erreur de génération de la fiche de création");
+            if (PdfDocument.nombrePages(pdf) <= 1) {
+                break;
+            }
+        }
+        return pdf;
     }
 
-    private static void ecrire(Document doc, DemandeService demande, DossierCreation dossier) {
-        PdfStyleFacture st = new PdfStyleFacture(1f);
+    private static void ecrire(Document doc, DemandeService demande, DossierCreation dossier,
+                               PdfStyleFacture st) {
         entete(doc, st);
         bandeauReferences(doc, demande, st);
 
