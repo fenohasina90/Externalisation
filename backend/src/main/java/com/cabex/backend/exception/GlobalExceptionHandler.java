@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -129,6 +131,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiError> handleDataIntegrity(DataIntegrityViolationException ex, WebRequest request) {
         return build(HttpStatus.CONFLICT, "Conflit de données : cette référence est probablement déjà utilisée", request);
+    }
+
+    /** Méthode HTTP non supportée pour une route connue (ex. GET alors que seul POST est mappé) : 405. */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiError> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex,
+                                                             WebRequest request) {
+        return build(HttpStatus.METHOD_NOT_ALLOWED,
+                "Méthode HTTP non supportée pour cette ressource",
+                request);
+    }
+
+    /** Ressource inexistante (route API ou fichier statique) : 404, jamais 500. */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiError> handleNoResource(NoResourceFoundException ex, WebRequest request) {
+        return build(HttpStatus.NOT_FOUND, "Ressource introuvable", request);
     }
 
     @ExceptionHandler(BackupException.class)
