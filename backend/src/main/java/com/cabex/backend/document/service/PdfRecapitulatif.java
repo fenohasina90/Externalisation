@@ -164,17 +164,23 @@ final class PdfRecapitulatif {
         doc.add(profil);
     }
 
-    private static final Font F_CASE_COCHEE =
-            new Font(Font.ZAPFDINGBATS, 9.5f, Font.NORMAL, Color.WHITE);
-    private static final Font F_DOMAINE = new Font(Font.HELVETICA, 9.5f, Font.NORMAL, PdfTheme.TEXTE);
+    private static final Font F_CASE_COCHEE_VERTE =
+            new Font(Font.ZAPFDINGBATS, 11f, Font.NORMAL, PdfTheme.VERT_TEXTE);
+    private static final Font F_CASE_VIDE_GRISE =
+            new Font(Font.ZAPFDINGBATS, 11f, Font.NORMAL, new Color(190, 205, 185));
+    private static final Font F_DOMAINE =
+            new Font(Font.HELVETICA, 9.5f, Font.NORMAL, PdfTheme.TEXTE);
     private static final Font F_DOMAINE_COCHE =
-            new Font(Font.HELVETICA, 9.5f, Font.BOLD, PdfTheme.PRIMAIRE);
+            new Font(Font.HELVETICA, 9.5f, Font.BOLD, PdfTheme.TEXTE);
+    private static final Font F_DOMAINE_GRIS =
+            new Font(Font.HELVETICA, 9.5f, Font.NORMAL, PdfTheme.GRIS_TEXTE);
 
     /**
-     * Cases de domaine façon panneau de formulaire : une ligne par domaine, puce
-     * verte pleine et libellé mis en avant lorsqu'il est coché, case blanche sinon.
-     * Liste dynamique (tous les domaines en base, triés) ; plusieurs domaines
-     * peuvent être cochés quand des services de domaines différents sont demandés.
+     * Cases de domaine sur une ligne horizontale façon « chips typographiques » :
+     * ✔ vert si cochée, ❑ gris clair sinon, libellé juxtaposé ; retour à la ligne
+     * naturel si trop de domaines. Liste dynamique (tous les domaines en base) ;
+     * plusieurs domaines peuvent être cochés quand plusieurs services de domaines
+     * différents sont demandés.
      */
     private static void domaine(Document doc, DemandeService demande,
                                 List<DomaineService> domaines) {
@@ -186,64 +192,18 @@ final class PdfRecapitulatif {
             doc.add(p);
             return;
         }
-        PdfPTable table = new PdfPTable(2);
-        table.setWidthPercentage(100);
-        table.setWidths(new float[]{0.085f, 0.915f});
-        table.setSpacingBefore(6);
-        table.setSpacingAfter(4);
+        Paragraph p = new Paragraph();
+        p.setSpacingBefore(4);
+        p.setSpacingAfter(6);
+        p.setLeading(20f);
         for (DomaineService domaine : domaines) {
             boolean coche = demandes.contains(domaine.getId());
-            table.addCell(celluleCase(coche));
-            table.addCell(celluleLibelle(domaine.getNomDomaine(), coche));
+            p.add(new Chunk(coche ? "4" : "q",
+                    coche ? F_CASE_COCHEE_VERTE : F_CASE_VIDE_GRISE));
+            p.add(new Chunk("  " + PdfFormats.valeur(domaine.getNomDomaine()) + "      ",
+                    coche ? F_DOMAINE_COCHE : F_DOMAINE_GRIS));
         }
-        doc.add(table);
-    }
-
-    /** Puce de case à cocher : pleine verte avec « ✔ » si cochée, blanche sinon. */
-    private static PdfPCell celluleCase(boolean coche) {
-        PdfPCell c = new PdfPCell();
-        c.setFixedHeight(17f);
-        c.setHorizontalAlignment(Element.ALIGN_CENTER);
-        c.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        c.setPadding(2f);
-        if (coche) {
-            c.setBackgroundColor(PdfTheme.VERT_MARQUE);
-            c.setBorderColor(PdfTheme.VERT_MARQUE);
-            c.setBorderWidth(0.75f);
-            Paragraph cocheP = new Paragraph(new Phrase("4", F_CASE_COCHEE));
-            cocheP.setAlignment(Element.ALIGN_CENTER);
-            cocheP.setLeading(9f);
-            c.addElement(cocheP);
-            return c;
-        }
-        c.setBackgroundColor(Color.WHITE);
-        c.setBorderColor(PdfTheme.GRIS_BORDURE);
-        c.setBorderWidth(0.9f);
-        Paragraph videP = new Paragraph(new Phrase(" ", F_CASE_COCHEE));
-        videP.setAlignment(Element.ALIGN_CENTER);
-        videP.setLeading(9f);
-        c.addElement(videP);
-        return c;
-    }
-
-    /** Libellé du domaine : fond pâle et texte vert foncé si coché, blanc sinon. */
-    private static PdfPCell celluleLibelle(String nom, boolean coche) {
-        PdfPCell c = new PdfPCell();
-        c.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        c.setBorderWidthBottom(0.5f);
-        c.setBorderColor(PdfTheme.GRIS_BORDURE);
-        c.setBackgroundColor(coche ? PdfTheme.VERT_PALE : Color.WHITE);
-        c.setPaddingTop(6f);
-        c.setPaddingBottom(6f);
-        c.setPaddingLeft(12f);
-        c.setPaddingRight(8f);
-        Paragraph p = new Paragraph(new Phrase(PdfFormats.valeur(nom),
-                coche ? F_DOMAINE_COCHE : F_DOMAINE));
-        p.setSpacingBefore(0f);
-        p.setSpacingAfter(0f);
-        p.setLeading(12f);
-        c.addElement(p);
-        return c;
+        doc.add(p);
     }
 
     /** Type de la ligne : PRESTATION / ABONNEMENT / DEBOURS. */
