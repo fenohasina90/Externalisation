@@ -6,10 +6,6 @@ import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.entity.LigneService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.LigneServiceRepository;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
-import com.cabex.backend.echeance.entity.ProposPaiement;
-import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
-import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.facture.entity.Facture;
 import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.facture.repository.FactureRepository;
@@ -48,10 +44,6 @@ class PaiementRechercheTest {
     private DemandeServiceRepository demandeRepository;
     @Autowired
     private LigneServiceRepository ligneRepository;
-    @Autowired
-    private ProposPaiementRepository proposRepository;
-    @Autowired
-    private EcheancePaiementRepository echeanceRepository;
     @Autowired
     private ModePaiementRepository modeRepository;
     @Autowired
@@ -105,39 +97,6 @@ class PaiementRechercheTest {
                 .build());
     }
 
-    private DemandeService demandeAvecEcheance(String reference, Societe societe, String montant) {
-        DemandeService d = demande(reference, societe);
-        Service service = serviceRepository.save(Service.builder()
-                .nomService("Conseil")
-                .codeService("SRV-" + reference)
-                .typeService("STANDARD")
-                .actif(true)
-                .build());
-        LigneService ligne = ligneRepository.save(LigneService.builder()
-                .demande(d)
-                .service(service)
-                .tarif(new BigDecimal(montant))
-                .debutService(LocalDate.of(2026, 10, 18))
-                .finService(LocalDate.of(2026, 12, 16))
-                .build());
-        ProposPaiement plan = proposRepository.save(ProposPaiement.builder()
-                .demande(d)
-                .ligneService(ligne)
-                .dateDebut(LocalDate.of(2026, 10, 18))
-                .dateFin(LocalDate.of(2026, 12, 16))
-                .montantTotal(new BigDecimal(montant))
-                .restePayer(new BigDecimal(montant))
-                .nombreEcheances(1)
-                .statut("ACTIF")
-                .build());
-        return echeanceRepository.save(EcheancePaiement.builder()
-                .proposPaiement(plan)
-                .numeroEcheance(1)
-                .dateEcheance(LocalDate.of(2026, 11, 18))
-                .montantAttendu(new BigDecimal(montant))
-                .montantPaye(BigDecimal.ZERO)
-                .build()).getProposPaiement().getDemande();
-    }
 
     private void jeuDeDonnees() {
         virement = modeRepository.save(ModePaiement.builder()
@@ -161,7 +120,7 @@ class PaiementRechercheTest {
                 .actif(true)
                 .build());
 
-        DemandeService d1 = demandeAvecEcheance("DEM-2026-00017", atlas, "1000000");
+        DemandeService d1 = demande("DEM-2026-00017", atlas);
         FactureValidee fv1 = factureValidee(d1, new BigDecimal("1000000"));
         paiement("PAY-2026-00001", d1, virement, "VIR-2026-1004", true, fv1);
 

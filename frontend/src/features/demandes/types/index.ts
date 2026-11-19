@@ -33,7 +33,6 @@ export interface Demande {
   /** Situation de règlement calculée par le backend (toutes lignes confondues). */
   situationPaiement: SituationPaiement | string | null
   /** Nombre total d'échéances, tous plans de paiement confondus. */
-  nombreEcheances: number | null
 }
 
 export type SituationPaiement =

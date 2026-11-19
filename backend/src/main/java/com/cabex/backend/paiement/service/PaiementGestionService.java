@@ -8,10 +8,6 @@ import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.service.DemandeGestionService;
 import com.cabex.backend.demande.service.LigneServiceService;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
-import com.cabex.backend.echeance.entity.ProposPaiement;
-import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
-import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
@@ -55,8 +51,6 @@ public class PaiementGestionService {
     private final PaiementRepository paiementRepository;
     private final DemandeServiceRepository demandeRepository;
     private final ModePaiementRepository modeRepository;
-    private final EcheancePaiementRepository echeanceRepository;
-    private final ProposPaiementRepository proposRepository;
     private final FactureValideeRepository factureValideeRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final NotificationService notificationService;
@@ -69,8 +63,6 @@ public class PaiementGestionService {
     public PaiementGestionService(PaiementRepository paiementRepository,
                                   DemandeServiceRepository demandeRepository,
                                   ModePaiementRepository modeRepository,
-                                  EcheancePaiementRepository echeanceRepository,
-                                  ProposPaiementRepository proposRepository,
                                   FactureValideeRepository factureValideeRepository,
                                   UtilisateurRepository utilisateurRepository,
                                   NotificationService notificationService,
@@ -82,8 +74,6 @@ public class PaiementGestionService {
         this.paiementRepository = paiementRepository;
         this.demandeRepository = demandeRepository;
         this.modeRepository = modeRepository;
-        this.echeanceRepository = echeanceRepository;
-        this.proposRepository = proposRepository;
         this.factureValideeRepository = factureValideeRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.notificationService = notificationService;
@@ -208,40 +198,6 @@ public class PaiementGestionService {
             }
         }
 
-        // Échéance réglée (EXTERNALISATION avec plan de paiement) : elle doit
-        // appartenir à la demande et correspondre à la facture validée payée.
-        EcheancePaiement echeance = null;
-        if (request.echeanceId() != null) {
-            echeance = echeanceRepository.findById(request.echeanceId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            ErrorMessages.introuvable("Échéance", request.echeanceId())));
-            ProposPaiement propos = echeance.getProposPaiement();
-            if (propos == null || propos.getDemande() == null
-                    || !propos.getDemande().getId().equals(demande.getId())) {
-                throw new BusinessException("L'échéance n'appartient pas à cette demande");
-            }
-            LigneService ligneEcheance = propos.getLigneService();
-            boolean factureCorrespond = false;
-            if (ligneEcheance != null && ligneEcheance.getFacture() != null) {
-                var fvLigne = factureValideeRepository
-                        .findByFactureProformaId(ligneEcheance.getFacture().getId())
-                        .orElse(null);
-                factureCorrespond = fvLigne != null && fvLigne.getId().equals(factureValidee.getId());
-            }
-            if (!factureCorrespond) {
-                throw new BusinessException(
-                        "L'échéance ne correspond pas à la facture validée sélectionnée");
-            }
-            BigDecimal dejaSurEcheance = echeance.getMontantPaye() != null
-                    ? echeance.getMontantPaye() : BigDecimal.ZERO;
-            BigDecimal resteEcheance = echeance.getMontantAttendu().subtract(dejaSurEcheance);
-            if (request.montantPaye() != null
-                    && request.montantPaye().compareTo(resteEcheance) > 0) {
-                throw new BusinessException(
-                        "Le montant dépasse le reste de l'échéance (" + resteEcheance + ")");
-            }
-        }
-
         // Le montant payé ne peut pas dépasser le montant de la facture validée
         // (moins ce déjà payé sur cette facture).
         validerReferencesMode(mode, request.referenceVirement(),
@@ -252,7 +208,6 @@ public class PaiementGestionService {
                 .referencePaiement(genererReference(LocalDate.now().getYear()))
                 .demande(demande)
                 .factureValidee(factureValidee)
-                .echeance(echeance)
                 .modePaiement(mode)
                 .datePaiement(request.datePaiement())
                 .montantPaye(request.montantPaye())
@@ -279,21 +234,6 @@ public class PaiementGestionService {
             paiement.setMontantDejaPaye(sommeAvant);
             paiement.setResteAPayer(total.subtract(sommeApres).max(BigDecimal.ZERO));
             paiement = paiementRepository.save(paiement);
-        }
-
-        // Solder l'échéance réglée (le statut PARTIELLE/PAYEE est recalculé
-        // par les lecteurs à partir de montant_paye).
-        if (echeance != null) {
-            BigDecimal dejaSurEcheance = echeance.getMontantPaye() != null
-                    ? echeance.getMontantPaye() : BigDecimal.ZERO;
-            echeance.setMontantPaye(dejaSurEcheance.add(request.montantPaye()));
-            echeanceRepository.save(echeance);
-            ProposPaiement propos = echeance.getProposPaiement();
-            if (propos != null && propos.getRestePayer() != null) {
-                propos.setRestePayer(propos.getRestePayer().subtract(request.montantPaye())
-                        .max(BigDecimal.ZERO));
-                proposRepository.save(propos);
-            }
         }
 
         // Mettre à jour le statut des lignes liées (la facture peut couvrir
@@ -334,37 +274,6 @@ public class PaiementGestionService {
         validerReferencesMode(mode, request.referenceVirement(),
                 request.banque(), request.numeroCheque());
         validerMontantFactureValidee(factureValidee, request.montantPaye(), paiement.getMontantPaye());
-
-        // Échéance réglée : ajuster le montant payé de l'échéance selon le delta.
-        EcheancePaiement echeance = paiement.getEcheance();
-        if (echeance != null) {
-            BigDecimal ancien = paiement.getMontantPaye() != null ? paiement.getMontantPaye() : BigDecimal.ZERO;
-            BigDecimal nouveau = request.montantPaye() != null ? request.montantPaye() : BigDecimal.ZERO;
-            BigDecimal delta = nouveau.subtract(ancien);
-            if (delta.compareTo(BigDecimal.ZERO) != 0) {
-                BigDecimal dejaSurEcheance = echeance.getMontantPaye() != null
-                        ? echeance.getMontantPaye() : BigDecimal.ZERO;
-                BigDecimal nouveauEcheance = dejaSurEcheance.add(delta);
-                if (nouveauEcheance.compareTo(BigDecimal.ZERO) < 0) {
-                    throw new BusinessException(
-                            "Le montant réduit ne peut pas rendre le payé de l'échéance négatif");
-                }
-                if (delta.compareTo(BigDecimal.ZERO) > 0) {
-                    BigDecimal resteEcheance = echeance.getMontantAttendu().subtract(dejaSurEcheance);
-                    if (delta.compareTo(resteEcheance) > 0) {
-                        throw new BusinessException(
-                                "Le montant dépasse le reste de l'échéance (" + resteEcheance + ")");
-                    }
-                }
-                echeance.setMontantPaye(nouveauEcheance);
-                echeanceRepository.save(echeance);
-                ProposPaiement propos = echeance.getProposPaiement();
-                if (propos != null && propos.getRestePayer() != null) {
-                    propos.setRestePayer(propos.getRestePayer().subtract(delta).max(BigDecimal.ZERO));
-                    proposRepository.save(propos);
-                }
-            }
-        }
 
         paiement.setDatePaiement(request.datePaiement());
         paiement.setMontantPaye(request.montantPaye());
@@ -411,24 +320,6 @@ public class PaiementGestionService {
         paiement.setActif(false);
         paiement.setArchivedAt(LocalDateTime.now());
         paiementRepository.save(paiement);
-
-        // Rendre la part d'échéance payée par ce paiement (le paiement est archivé).
-        EcheancePaiement echeance = paiement.getEcheance();
-        if (echeance != null) {
-            BigDecimal montant = paiement.getMontantPaye() != null
-                    ? paiement.getMontantPaye() : BigDecimal.ZERO;
-            BigDecimal dejaSurEcheance = echeance.getMontantPaye() != null
-                    ? echeance.getMontantPaye() : BigDecimal.ZERO;
-            echeance.setMontantPaye(dejaSurEcheance.subtract(montant).max(BigDecimal.ZERO));
-            echeanceRepository.save(echeance);
-            ProposPaiement propos = echeance.getProposPaiement();
-            if (propos != null && propos.getRestePayer() != null) {
-                BigDecimal nouveauReste = propos.getRestePayer().add(montant);
-                propos.setRestePayer(propos.getMontantTotal() != null
-                        ? nouveauReste.min(propos.getMontantTotal()) : nouveauReste);
-                proposRepository.save(propos);
-            }
-        }
 
         // Mettre à jour le statut des lignes liées.
         for (LigneService ligneLiee : lignePourFacturesValidees(paiement.getFactureValidee(),

@@ -99,7 +99,4 @@ public class LigneService {
     @Builder.Default
     private Set<HistoriqueLigneService> historiques = new HashSet<>();
 
-    @OneToMany(mappedBy = "ligneService", fetch = FetchType.LAZY)
-    @Builder.Default
-    private Set<com.cabex.backend.echeance.entity.ProposPaiement> plansPaiement = new HashSet<>();
 }

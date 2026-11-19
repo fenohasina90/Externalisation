@@ -43,36 +43,36 @@ class ConfigurationServiceTest {
     }
 
     private Configuration parametre(String valeur, String type, boolean modifiable) {
-        return Configuration.builder().id(1).cle("JOURS_AVANCE_ALERTE_ECHEANCE")
+        return Configuration.builder().id(1).cle("JOURS_RETARD_DEBOURS")
                 .valeur(valeur).typeValeur(type).modifiable(modifiable).build();
     }
 
     @Test
     void updateOk() {
-        when(configurationRepository.findByCle("JOURS_AVANCE_ALERTE_ECHEANCE"))
+        when(configurationRepository.findByCle("JOURS_RETARD_DEBOURS"))
                 .thenReturn(Optional.of(parametre("3", "INTEGER", true)));
         when(configurationRepository.save(any(Configuration.class))).thenAnswer(i -> i.getArgument(0));
 
         var resultat = configurationService.update(
-                "JOURS_AVANCE_ALERTE_ECHEANCE", new UpdateConfigurationRequest("7"));
+                "JOURS_RETARD_DEBOURS", new UpdateConfigurationRequest("7"));
 
         assertEquals("7", resultat.valeur());
     }
 
     @Test
     void updateNonModifiable() {
-        when(configurationRepository.findByCle("JOURS_AVANCE_ALERTE_ECHEANCE"))
+        when(configurationRepository.findByCle("JOURS_RETARD_DEBOURS"))
                 .thenReturn(Optional.of(parametre("3", "INTEGER", false)));
         assertThrows(BadRequestException.class, () -> configurationService.update(
-                "JOURS_AVANCE_ALERTE_ECHEANCE", new UpdateConfigurationRequest("7")));
+                "JOURS_RETARD_DEBOURS", new UpdateConfigurationRequest("7")));
     }
 
     @Test
     void updateValeurInvalidePourLeType() {
-        when(configurationRepository.findByCle("JOURS_AVANCE_ALERTE_ECHEANCE"))
+        when(configurationRepository.findByCle("JOURS_RETARD_DEBOURS"))
                 .thenReturn(Optional.of(parametre("3", "INTEGER", true)));
         assertThrows(BadRequestException.class, () -> configurationService.update(
-                "JOURS_AVANCE_ALERTE_ECHEANCE", new UpdateConfigurationRequest("abc")));
+                "JOURS_RETARD_DEBOURS", new UpdateConfigurationRequest("abc")));
     }
 
     @Test
@@ -139,13 +139,13 @@ class ConfigurationServiceTest {
 
     @Test
     void lireEntierAvecRepli() {
-        when(configurationRepository.findByCle("JOURS_AVANCE_ALERTE_ECHEANCE"))
+        when(configurationRepository.findByCle("JOURS_RETARD_DEBOURS"))
                 .thenReturn(Optional.of(parametre("7", "INTEGER", true)));
         when(configurationRepository.findByCle("MAL_FORME"))
                 .thenReturn(Optional.of(parametre("abc", "INTEGER", true)));
         when(configurationRepository.findByCle("ABSENTE")).thenReturn(Optional.empty());
 
-        assertEquals(7, configurationService.lireEntier("JOURS_AVANCE_ALERTE_ECHEANCE", 3));
+        assertEquals(7, configurationService.lireEntier("JOURS_RETARD_DEBOURS", 3));
         assertEquals(3, configurationService.lireEntier("MAL_FORME", 3));
         assertEquals(3, configurationService.lireEntier("ABSENTE", 3));
     }

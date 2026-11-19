@@ -20,10 +20,6 @@ public record PaiementDetailResponse(
         Integer factureValideeId,
         String referenceFactureValidee,
         String nomService,
-        /** Échéance réglée (null pour DEBOURS / PRESTATION / ABONNEMENT). */
-        Integer echeanceId,
-        Integer numeroEcheance,
-        java.time.LocalDate dateEcheance,
         Integer modePaiementId,
         String libelleMode,
         LocalDate datePaiement,

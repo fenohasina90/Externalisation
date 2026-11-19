@@ -27,7 +27,6 @@ import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.repository.StatutDemandeRepository;
-import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
@@ -79,7 +78,6 @@ public class DemandeGestionService {
     private final LigneServiceService ligneServiceService;
     private final FactureService factureService;
     private final LigneServiceRepository ligneRepository;
-    private final ProposPaiementRepository proposRepository;
     private final ConfigurationService configurationService;
 
     public DemandeGestionService(DemandeServiceRepository demandeRepository,
@@ -96,7 +94,6 @@ public class DemandeGestionService {
                                  LigneServiceService ligneServiceService,
                                  FactureService factureService,
                                  LigneServiceRepository ligneRepository,
-                                 ProposPaiementRepository proposRepository,
                                  ConfigurationService configurationService) {
         this.demandeRepository = demandeRepository;
         this.societeRepository = societeRepository;
@@ -112,7 +109,6 @@ public class DemandeGestionService {
         this.ligneServiceService = ligneServiceService;
         this.factureService = factureService;
         this.ligneRepository = ligneRepository;
-        this.proposRepository = proposRepository;
         this.configurationService = configurationService;
     }
 
@@ -206,7 +202,7 @@ public class DemandeGestionService {
         InfoSituation info = situations.getOrDefault(demande.getId(), InfoSituation.NON_PLANIFIE);
         return DemandeMapper.toResponse(demande, statuts.get(demande.getId()),
                 montantPaye, reste, lignesReponse, montantTotal,
-                info.situation(), info.nombreEcheances(), lignes);
+                info.situation(), lignes);
     }
 
     private BigDecimal toBigDecimal(Object value) {
@@ -631,13 +627,13 @@ public class DemandeGestionService {
         InfoSituation info = situation(demande.getId(), statut);
         return DemandeMapper.toResponse(demande, statut, montantPaye, reste.max(BigDecimal.ZERO),
                 ligneServiceService.listerParDemande(demande.getId()), montantTotal,
-                info.situation(), info.nombreEcheances());
+                info.situation());
     }
 
     /**
      * Situation de règlement d'une demande isolée : déduite des factures
-     * validées et des paiements actifs (source de vérité) ; à défaut, des
-     * échéances / des lignes (compatibilité pour les demandes sans facture).
+     * validées et des paiements actifs (source de vérité) ; à défaut,
+     * de l'avancement des lignes (demandes sans facture).
      */
     private InfoSituation situation(Integer demandeId, String statut) {
         LocalDate aujourdhui = LocalDate.now();
@@ -646,20 +642,23 @@ public class DemandeGestionService {
         if (!factures.isEmpty()) {
             int[] jours = joursRetard();
             return new InfoSituation(SituationPaiement.classerFacture(factures,
-                    jours[0], jours[1], aujourdhui, statut), 0L);
+                    jours[0], jours[1], aujourdhui, statut));
         }
-        List<Object[]> lignes = demandeRepository.situations(List.of(demandeId), aujourdhui);
+        List<Object[]> lignes = demandeRepository.situationsLignes(List.of(demandeId));
         if (lignes.isEmpty()) {
             return InfoSituation.NON_PLANIFIE;
         }
-        return new InfoSituation(SituationPaiement.classer(lignes.get(0), statut),
-                ((Number) lignes.get(0)[2]).longValue());
+        return new InfoSituation(SituationPaiement.classerLignes(
+                ((Number) lignes.get(0)[1]).longValue(),
+                ((Number) lignes.get(0)[2]).longValue(),
+                ((Number) lignes.get(0)[3]).longValue(),
+                statut));
     }
 
     /**
      * Situations de toute une page, en une seule requête d'agrégats (factures)
-     * plus, pour les demandes sans facture, un repli sur l'ancien agrégat
-     * échéances / lignes. La valeur renvoyée alimente la colonne « Situation »
+     * plus, pour les demandes sans facture, un repli sur l'avancement des
+     * lignes. La valeur renvoyée alimente la colonne « Situation »
      * des listes : la demande est jugée sur l'ensemble de ses factures.
      */
     private Map<Integer, InfoSituation> situations(List<DemandeService> demandes,
@@ -686,18 +685,20 @@ public class DemandeGestionService {
             if (factures != null && !factures.isEmpty()) {
                 resultat.put(id, new InfoSituation(
                         SituationPaiement.classerFacture(factures,
-                                jours[0], jours[1], aujourdhui, statuts.get(id)), 0L));
+                                jours[0], jours[1], aujourdhui, statuts.get(id))));
             } else {
                 sansFacture.add(id);
             }
         }
-        // Repli : aucune facture validée émise → échéances / lignes (legacy).
+        // Repli : aucune facture validée émise → avancement des lignes.
         if (!sansFacture.isEmpty()) {
-            for (Object[] ligne : demandeRepository.situations(sansFacture, aujourdhui)) {
+            for (Object[] ligne : demandeRepository.situationsLignes(sansFacture)) {
                 int id = ((Number) ligne[0]).intValue();
+                long payees = ((Number) ligne[2]).longValue();
+                long partielles = ((Number) ligne[3]).longValue();
+                long nbLignes = ((Number) ligne[1]).longValue();
                 resultat.put(id, new InfoSituation(
-                        SituationPaiement.classer(ligne, statuts.get(id)),
-                        ((Number) ligne[2]).longValue()));
+                        SituationPaiement.classerLignes(nbLignes, payees, partielles, statuts.get(id))));
             }
         }
         return resultat;
@@ -715,9 +716,9 @@ public class DemandeGestionService {
     }
 
     /** Situation de règlement d'une demande et nombre total d'échéances. */
-    private record InfoSituation(String situation, Long nombreEcheances) {
+    private record InfoSituation(String situation) {
         static final InfoSituation NON_PLANIFIE =
-                new InfoSituation(SituationPaiement.NON_PLANIFIE, 0L);
+                new InfoSituation(SituationPaiement.NON_PLANIFIE);
     }
 
     private Utilisateur currentUtilisateur() {

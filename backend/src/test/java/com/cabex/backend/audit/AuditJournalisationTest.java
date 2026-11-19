@@ -14,20 +14,12 @@ import com.cabex.backend.document.entity.PieceJointe;
 import com.cabex.backend.document.repository.PieceJointeRepository;
 import com.cabex.backend.document.service.DocumentGestionService;
 import com.cabex.backend.document.service.PdfGenerator;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
-import com.cabex.backend.echeance.entity.ProposPaiement;
-import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
-import com.cabex.backend.echeance.repository.ProposPaiementRepository;
-import com.cabex.backend.echeance.service.EcheanceGestionService;
-import com.cabex.backend.echeance.service.PlanPaiementService;
 import com.cabex.backend.paiement.repository.PaiementRepository;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
 import com.cabex.backend.utilisateur.repository.RoleUtilisateurRepository;
 import com.cabex.backend.utilisateur.repository.UtilisateurRepository;
 import com.cabex.backend.client.dto.CreateResponsableRequest;
 import com.cabex.backend.document.dto.DocumentResponse;
-import com.cabex.backend.echeance.dto.CreateEcheanceRequest;
-import com.cabex.backend.echeance.dto.CreatePlanPaiementRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -52,8 +44,6 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AuditJournalisationTest {
 
-    @Mock private ProposPaiementRepository proposRepository;
-    @Mock private EcheancePaiementRepository echeanceRepository;
     @Mock private DemandeServiceRepository demandeRepository;
     @Mock private HistoriqueDemandeRepository historiqueRepository;
     @Mock private com.cabex.backend.demande.repository.LigneServiceRepository ligneRepository;
@@ -98,79 +88,6 @@ class AuditJournalisationTest {
         return demande.getLignes().iterator().next();
     }
 
-    @Test
-    void creationPlanJournalisee() {
-        DemandeService demande = demande();
-        when(ligneRepository.findByDemandeId(10))
-                .thenReturn(java.util.List.of(ligneDe(demande)));
-        lenient().when(ligneRepository.findById(1))
-                .thenReturn(Optional.of(ligneDe(demande)));
-        when(proposRepository.existsByLigneServiceId(1)).thenReturn(false);
-        when(proposRepository.save(any())).thenAnswer(inv -> {
-            ProposPaiement p = inv.getArgument(0);
-            p.setId(1);
-            return p;
-        });
-        PlanPaiementService service = new PlanPaiementService(
-                proposRepository, echeanceRepository, demandeRepository,
-                historiqueRepository, ligneRepository, historiqueLigneRepository,
-                utilisateurRepository, auditService, configurationService);
-
-        service.create(10, new CreatePlanPaiementRequest(
-                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 11, 30),
-                new BigDecimal("1000000"), 3, null, null));
-
-        verify(auditService).log(eq("CREATE"), eq("PAIEMENT"), eq("PlanPaiement"),
-                eq(1L), isNull(), contains("REF-2026-014"));
-    }
-
-    @Test
-    void modificationPlanJournalisee() {
-        DemandeService demande = demande();
-        ProposPaiement propos = ProposPaiement.builder()
-                .id(1).demande(demande).ligneService(ligneDe(demande))
-                .dateDebut(LocalDate.of(2026, 9, 1)).dateFin(LocalDate.of(2026, 11, 30))
-                .montantTotal(new BigDecimal("1000000")).restePayer(new BigDecimal("300000"))
-                .nombreEcheances(3).statut("ACTIF").build();
-        when(proposRepository.findById(1)).thenReturn(Optional.of(propos));
-        when(proposRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        PlanPaiementService service = new PlanPaiementService(
-                proposRepository, echeanceRepository, demandeRepository,
-                historiqueRepository, ligneRepository, historiqueLigneRepository,
-                utilisateurRepository, auditService, configurationService);
-
-        service.update(1, new com.cabex.backend.echeance.dto.UpdatePlanPaiementRequest(
-                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 11, 30),
-                new BigDecimal("1000000"), null));
-
-        verify(auditService).log(eq("UPDATE"), eq("PAIEMENT"), eq("PlanPaiement"),
-                eq(1L), anyString(), anyString());
-    }
-
-    @Test
-    void creationEcheanceJournalisee() {
-        DemandeService demande = demande();
-        ProposPaiement propos = ProposPaiement.builder()
-                .id(1).demande(demande)
-                .dateDebut(LocalDate.of(2026, 9, 1)).dateFin(LocalDate.of(2026, 11, 30))
-                .montantTotal(new BigDecimal("1000000")).build();
-        when(proposRepository.findById(1)).thenReturn(Optional.of(propos));
-        when(echeanceRepository.existsByProposPaiementIdAndNumeroEcheance(1, 1)).thenReturn(false);
-        when(echeanceRepository.save(any())).thenAnswer(inv -> {
-            EcheancePaiement e = inv.getArgument(0);
-            e.setId(5);
-            return e;
-        });
-        EcheanceGestionService service = new EcheanceGestionService(
-                echeanceRepository, proposRepository, auditService, configurationService);
-
-        service.create(1, new CreateEcheanceRequest(1,
-                LocalDate.of(2026, 10, 10), new BigDecimal("300000"), null));
-
-        verify(auditService).log(eq("CREATE"), eq("PAIEMENT"), eq("EcheancePaiement"),
-                eq(5L), isNull(), contains("echeance=1"));
-    }
-
     @Mock private com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository;
     @Mock private com.cabex.backend.service.repository.DomaineServiceRepository domaineServiceRepository;
 
@@ -184,7 +101,7 @@ class AuditJournalisationTest {
             return p;
         });
         DocumentGestionService service = new DocumentGestionService(
-                pieceRepository, demandeRepository, paiementRepository, proposRepository,
+                pieceRepository, demandeRepository, paiementRepository,
                 utilisateurRepository, pdfGenerator, auditService, configurationService,
                 factureRepository, factureValideeRepository, dossierRepository, dossierTransactionRepository,
                 societeRepository, factureService, domaineServiceRepository);

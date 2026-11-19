@@ -181,14 +181,8 @@ export function NotificationsPage() {
           }
           break
         case 'ECHEANCE':
-          // Plus de plans/échéances : toute notification PAIEMENT_RETARD concerne
-          // désormais la facture validée — ouvrir la demande correspondante.
-          if (notification.referenceId) {
-            const paiement = await paiementsApi.get(notification.referenceId)
-            navigate(`/paiements/suivi/${encodeURIComponent(paiement.referenceDemande)}`)
-          } else {
-            navigate('/paiements')
-          }
+          // Notifications legacy « échéance/paiement en retard » rattachées à la facture validée.
+          navigate('/paiements')
           break
         case 'FACTURE_VALIDEE':
           if (notification.referenceId) {

@@ -74,7 +74,7 @@ class LigneServiceUniqueModeTest {
     void setUp() {
         service = new LigneServiceService(ligneRepository, historiqueLigneRepository,
                 demandeRepository, historiqueDemandeRepository, statutDemandeRepository,
-                serviceRepository, null, utilisateurRepository,
+                serviceRepository, utilisateurRepository,
                 auditService, factureService, paiementRepository, factureValideeRepository,
                 factureValideeLigneRepository);
 

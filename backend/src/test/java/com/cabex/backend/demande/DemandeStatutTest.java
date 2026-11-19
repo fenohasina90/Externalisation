@@ -16,8 +16,6 @@ import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.repository.StatutDemandeRepository;
 import com.cabex.backend.demande.service.DemandeGestionService;
 import com.cabex.backend.demande.service.LigneServiceService;
-import com.cabex.backend.echeance.entity.ProposPaiement;
-import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.facture.entity.Facture;
 import com.cabex.backend.facture.service.FactureService;
@@ -61,7 +59,6 @@ class DemandeStatutTest {
     @Mock private LigneServiceService ligneServiceService;
     @Mock private FactureService factureService;
     @Mock private LigneServiceRepository ligneRepository;
-    @Mock private ProposPaiementRepository proposRepository;
     @Mock private ConfigurationService configurationService;
 
     private DemandeGestionService service;
@@ -72,7 +69,7 @@ class DemandeStatutTest {
                 responsableRepository, commercialRepository, serviceRepository,
                 historiqueRepository, statutRepository, paiementRepository,
                 utilisateurRepository, notificationService, auditService,
-                ligneServiceService, factureService, ligneRepository, proposRepository, configurationService);
+                ligneServiceService, factureService, ligneRepository, configurationService);
     }
 
     private void statutDemande(Integer id, String statut) {

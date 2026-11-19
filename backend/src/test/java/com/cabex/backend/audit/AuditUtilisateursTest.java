@@ -68,7 +68,6 @@ class AuditUtilisateursTest {
     @Mock private com.cabex.backend.demande.service.LigneServiceService ligneServiceService;
     @Mock private com.cabex.backend.facture.service.FactureService factureService;
     @Mock private com.cabex.backend.demande.repository.LigneServiceRepository ligneRepository;
-    @Mock private com.cabex.backend.echeance.repository.ProposPaiementRepository proposRepository;
     @Mock private ConfigurationService configurationService;
 
     @AfterEach

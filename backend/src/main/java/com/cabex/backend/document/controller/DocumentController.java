@@ -126,17 +126,6 @@ public class DocumentController {
         return pdfResponse(documentService.recuPaiement(id), "recu-paiement-" + id + ".pdf");
     }
 
-    @GetMapping("/demandes/{id}/plan-paiement/document")
-    @PreAuthorize("hasAuthority('DOCUMENT_DEMANDE_VIEW')")
-    @Operation(summary = "Générer le plan de paiement (PDF)",
-            description = "Par défaut envoie le PDF en téléchargement. Avec sauvegarder=true, l'enregistre comme document.")
-    public ResponseEntity<?> planPaiement(@PathVariable Integer id,
-                                          @RequestParam(defaultValue = "false") boolean sauvegarder) {
-        if (sauvegarder) {
-            return ResponseEntity.ok(Map.of("document", documentService.sauvegarderPlan(id)));
-        }
-        return pdfResponse(documentService.planPaiement(id), "plan-paiement-demande-" + id + ".pdf");
-    }
 
     @GetMapping("/factures/{id}/document/proforma")
     @PreAuthorize("hasAuthority('FACTURE_VIEW')")

@@ -41,14 +41,6 @@ public class Paiement {
     @JoinColumn(name = "facture_validee_id", nullable = false)
     private FactureValidee factureValidee;
 
-    /**
-     * Échéance réglée (EXTERNALISATION avec plan de paiement).
-     * NULL pour DEBOURS / PRESTATION / ABONNEMENT_MENSUEL.
-     */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "echeance_id")
-    private com.cabex.backend.echeance.entity.EcheancePaiement echeance;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "mode_paiement_id", nullable = false)
     private ModePaiement modePaiement;

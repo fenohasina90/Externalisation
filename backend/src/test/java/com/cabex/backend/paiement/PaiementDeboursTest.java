@@ -43,7 +43,6 @@ class PaiementDeboursTest {
     @Mock private PaiementRepository paiementRepository;
     @Mock private DemandeServiceRepository demandeRepository;
     @Mock private ModePaiementRepository modeRepository;
-    @Mock private com.cabex.backend.echeance.repository.ProposPaiementRepository proposRepository;
     @Mock private FactureValideeRepository factureValideeRepository;
     @Mock private UtilisateurRepository utilisateurRepository;
     @Mock private NotificationService notificationService;
@@ -58,7 +57,7 @@ class PaiementDeboursTest {
     @BeforeEach
     void setUp() {
         service = new PaiementGestionService(paiementRepository, demandeRepository,
-                modeRepository, null, proposRepository, factureValideeRepository,
+                modeRepository, factureValideeRepository,
                 utilisateurRepository, notificationService, auditService,
                 demandeGestionService, ligneRepository, ligneServiceService, factureService);
         lenient().when(modeRepository.findById(1)).thenReturn(Optional.of(
@@ -97,7 +96,7 @@ class PaiementDeboursTest {
     }
 
     private CreatePaiementRequest paiement(BigDecimal montant, Integer factureValideeId) {
-        return new CreatePaiementRequest(17, factureValideeId, null, 1,
+        return new CreatePaiementRequest(17, factureValideeId, 1,
                 LocalDate.of(2026, 9, 10), montant, null, null, null, null, null);
     }
 

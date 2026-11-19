@@ -10,8 +10,6 @@ import com.cabex.backend.document.dto.FichierDocument;
 import com.cabex.backend.document.entity.PieceJointe;
 import com.cabex.backend.document.mapper.DocumentMapper;
 import com.cabex.backend.document.repository.PieceJointeRepository;
-import com.cabex.backend.echeance.entity.ProposPaiement;
-import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
@@ -42,7 +40,6 @@ public class DocumentGestionService {
     private final PieceJointeRepository pieceRepository;
     private final DemandeServiceRepository demandeRepository;
     private final PaiementRepository paiementRepository;
-    private final ProposPaiementRepository proposRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final PdfGenerator pdfGenerator;
     private final AuditService auditService;
@@ -65,7 +62,6 @@ public class DocumentGestionService {
     public DocumentGestionService(PieceJointeRepository pieceRepository,
                                   DemandeServiceRepository demandeRepository,
                                   PaiementRepository paiementRepository,
-                                  ProposPaiementRepository proposRepository,
                                   UtilisateurRepository utilisateurRepository,
                                   PdfGenerator pdfGenerator,
                                   AuditService auditService,
@@ -81,7 +77,6 @@ public class DocumentGestionService {
         this.pieceRepository = pieceRepository;
         this.demandeRepository = demandeRepository;
         this.paiementRepository = paiementRepository;
-        this.proposRepository = proposRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.pdfGenerator = pdfGenerator;
         this.auditService = auditService;
@@ -266,14 +261,6 @@ public class DocumentGestionService {
         return pdfGenerator.facturationClientExcel(societe, fiches, dateDebut, dateFin, ordre, recherche);
     }
 
-    public byte[] planPaiement(Integer demandeId) {
-        ProposPaiement propos = proposRepository
-                .findFirstByDemandeIdAndStatutOrderByCreatedAtDesc(demandeId, "ACTIF")
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Aucun plan de paiement actif pour la demande " + demandeId));
-        return pdfGenerator.planPaiement(propos);
-    }
-
     public byte[] factureProforma(Integer factureId) {
         com.cabex.backend.facture.entity.Facture facture = factureRepository.findById(factureId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -341,18 +328,6 @@ public class DocumentGestionService {
     }
 
     @Transactional
-    public DocumentResponse sauvegarderPlan(Integer demandeId) {
-        DemandeService demande = verifierDemande(demandeId);
-        ProposPaiement propos = proposRepository
-                .findFirstByDemandeIdAndStatutOrderByCreatedAtDesc(demandeId, "ACTIF")
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Aucun plan de paiement actif pour la demande " + demandeId));
-        byte[] contenu = pdfGenerator.planPaiement(propos);
-        return enregistrerFichier(demande, null,
-                "plan-paiement-" + demande.getReferenceDemande() + ".pdf",
-                "Plan de paiement généré automatiquement", contenu);
-    }
-
     private DocumentResponse enregistrerFichier(DemandeService demande, Paiement paiement,
                                                 String nomFichier, String description, byte[] contenu) {
         String extension = extensionDe(nomFichier);

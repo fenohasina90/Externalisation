@@ -15,8 +15,6 @@ interface CibleDef {
 const LIBELLES_TABLES: Record<string, string> = {
   piece_jointe: 'Pièces jointes',
   paiement: 'Paiements',
-  echeance_paiement: 'Échéances',
-  propos_paiement: 'Plans de paiement',
   facture_validee_ligne: 'Lignes de facture validée',
   facture_validee: 'Factures validées',
   facture_proforma_ligne: 'Lignes de proforma',

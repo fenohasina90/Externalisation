@@ -38,7 +38,6 @@ class PaiementControllerTest {
         return new PaiementDetailResponse(
                 20, "PAY-2026-00020", 18, "DEM-2026-00018", 5, "Beta SA",
                 1, "00001/EXT/TNR/2026", "Déclarations fiscales et sociales",
-                null, null, null,
                 1, "Espèces", LocalDate.of(2026, 10, 22),
                 new BigDecimal("1300000.00"), null, null, null, null, null,
                 1, "Système Administrateur",

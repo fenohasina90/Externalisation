@@ -18,9 +18,6 @@ import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.demande.repository.HistoriqueLigneServiceRepository;
 import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.repository.StatutDemandeRepository;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
-import com.cabex.backend.echeance.entity.ProposPaiement;
-import com.cabex.backend.echeance.repository.ProposPaiementRepository;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
@@ -82,7 +79,6 @@ public class LigneServiceService {
     private final HistoriqueDemandeRepository historiqueDemandeRepository;
     private final StatutDemandeRepository statutDemandeRepository;
     private final ServiceRepository serviceRepository;
-    private final ProposPaiementRepository proposRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final AuditService auditService;
     private final FactureService factureService;
@@ -96,7 +92,6 @@ public class LigneServiceService {
                                HistoriqueDemandeRepository historiqueDemandeRepository,
                                StatutDemandeRepository statutDemandeRepository,
                                ServiceRepository serviceRepository,
-                               ProposPaiementRepository proposRepository,
                                UtilisateurRepository utilisateurRepository,
                                AuditService auditService,
                                FactureService factureService,
@@ -109,7 +104,6 @@ public class LigneServiceService {
         this.historiqueDemandeRepository = historiqueDemandeRepository;
         this.statutDemandeRepository = statutDemandeRepository;
         this.serviceRepository = serviceRepository;
-        this.proposRepository = proposRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.auditService = auditService;
         this.factureService = factureService;

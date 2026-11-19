@@ -28,8 +28,7 @@ const SECTIONS: SectionDef[] = [
     sousTitre:
       'Échéances proches, retards de paiement et rappel de création de la facture mensuelle. Toutes les valeurs sont exprimées en jours.',
     cles: [
-      'JOURS_AVANCE_ALERTE_ECHEANCE',
-      'JOURS_RETARD_PRESTATION_DEBOURS',
+          'JOURS_RETARD_PRESTATION_DEBOURS',
       'JOURS_RETARD_ABONNEMENT',
       'JOUR_CREATION_FACTURE_MENSUELLE',
       'JOURS_RAPPEL_AVANT_CREATION_MENSUELLE',
@@ -72,11 +71,6 @@ const LIBELLES: Record<string, { label: string; unite?: string; aide?: string }>
   DEVISE: { label: 'Devise', aide: 'Code ISO affiché sur les factures et dans l’interface (ex. MGA, EUR, USD).' },
   URL_APPLICATION: { label: 'URL du frontend', aide: 'Base utilisée pour construire les liens envoyés par courriel.' },
 
-  JOURS_AVANCE_ALERTE_ECHEANCE: {
-    label: 'Échéance proche',
-    unite: 'jours',
-    aide: 'Alerte préalable avant une échéance de plan de paiement non soldée.',
-  },
   JOURS_RETARD_PRESTATION_DEBOURS: {
     label: 'Retard prestation / débours',
     unite: 'jours',

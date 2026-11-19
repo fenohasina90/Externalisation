@@ -78,10 +78,6 @@ public class DemandeService {
 
     @OneToMany(mappedBy = "demande", fetch = FetchType.LAZY)
     @Builder.Default
-    private Set<com.cabex.backend.echeance.entity.ProposPaiement> proposPaiements = new HashSet<>();
-
-    @OneToMany(mappedBy = "demande", fetch = FetchType.LAZY)
-    @Builder.Default
     private Set<com.cabex.backend.paiement.entity.Paiement> paiements = new HashSet<>();
 
     @OneToMany(mappedBy = "demande", fetch = FetchType.LAZY)

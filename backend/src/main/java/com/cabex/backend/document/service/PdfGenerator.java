@@ -4,7 +4,6 @@ import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.dossier.entity.DossierCreation;
 import com.cabex.backend.dossier.entity.DossierTransactionImmobiliere;
-import com.cabex.backend.echeance.entity.ProposPaiement;
 import com.cabex.backend.facture.dto.FactureValideeFicheResponse;
 import com.cabex.backend.facture.entity.Facture;
 import com.cabex.backend.facture.entity.FactureValidee;
@@ -132,9 +131,6 @@ public class PdfGenerator {
         return PdfRecuPaiement.generer(paiement, sommePayeeSurFacture, objet, objets, piecesJointes);
     }
 
-    public byte[] planPaiement(ProposPaiement propos) {
-        return PdfPlanPaiement.generer(propos);
-    }
 
     /**
      * Facture proforma au format du modèle CABEX, générée sur une seule page.

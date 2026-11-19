@@ -65,15 +65,15 @@ public class DemandeMapper {
                                              BigDecimal montantPaye, BigDecimal resteAPayer,
                                              List<LigneServiceResponse> lignes, BigDecimal montantTotal) {
         return toResponse(d, statutActuel, montantPaye, resteAPayer, lignes, montantTotal,
-                SituationPaiement.NON_PLANIFIE, 0L);
+                SituationPaiement.NON_PLANIFIE);
     }
 
     public static DemandeResponse toResponse(DemandeService d, String statutActuel,
                                              BigDecimal montantPaye, BigDecimal resteAPayer,
                                              List<LigneServiceResponse> lignes, BigDecimal montantTotal,
-                                             String situationPaiement, Long nombreEcheances) {
+                                             String situationPaiement) {
         return toResponse(d, statutActuel, montantPaye, resteAPayer, lignes, montantTotal,
-                situationPaiement, nombreEcheances, null);
+                situationPaiement, null);
     }
 
     /**
@@ -83,7 +83,7 @@ public class DemandeMapper {
     public static DemandeResponse toResponse(DemandeService d, String statutActuel,
                                              BigDecimal montantPaye, BigDecimal resteAPayer,
                                              List<LigneServiceResponse> lignes, BigDecimal montantTotal,
-                                             String situationPaiement, Long nombreEcheances,
+                                             String situationPaiement,
                                              List<LigneService> entitesChargees) {
         if (d == null) {
             return null;
@@ -126,8 +126,7 @@ public class DemandeMapper {
                 d.getCreatedAt(),
                 lignes,
                 montantTotal,
-                situationPaiement,
-                nombreEcheances
+                situationPaiement
         );
     }
 

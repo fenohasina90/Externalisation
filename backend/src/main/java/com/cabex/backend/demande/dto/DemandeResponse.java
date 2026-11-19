@@ -30,7 +30,6 @@ public record DemandeResponse(
         LocalDateTime createdAt,
         List<LigneServiceResponse> lignes,
         BigDecimal montantTotal,
-        String situationPaiement,
-        Long nombreEcheances
+        String situationPaiement
 ) {
 }
