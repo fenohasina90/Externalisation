@@ -1,20 +1,4 @@
-import type { CategorieLigne, SituationPaiement, StatutDemande } from '../types'
-
-export const LIBELLES_STATUT_DEMANDE: Record<StatutDemande, string> = {
-  EN_ATTENTE: 'EN ATTENTE',
-  VALIDATION: 'VALIDATION',
-  EN_COURS: 'EN COURS',
-  TERMINEE: 'TERMINÉE',
-  ANNULEE: 'ANNULÉE',
-}
-
-export const LIBELLES_CATEGORIE_LIGNE: Record<CategorieLigne, string> = {
-  EXTERNALISATION: 'Externalisation',
-  DEBOURS: 'Débours',
-}
-
-export const getLibelleCategorieLigne = (categorie: string | null | undefined): string =>
-  LIBELLES_CATEGORIE_LIGNE[categorie as CategorieLigne] ?? categorie ?? 'Externalisation'
+import type { SituationPaiement } from '../types'
 
 export const LIBELLES_TYPE_PRESTATION: Record<string, string> = {
   PRESTATION: 'Prestation',
@@ -23,9 +7,6 @@ export const LIBELLES_TYPE_PRESTATION: Record<string, string> = {
 
 export const getLibelleTypePrestation = (type: string | null | undefined): string =>
   LIBELLES_TYPE_PRESTATION[type as string] ?? type ?? '—'
-
-export const getLibelleStatutDemande = (statut: string): string =>
-  LIBELLES_STATUT_DEMANDE[statut as StatutDemande] ?? statut
 
 /**
  * Situation de règlement, calculée par le backend sur l'ensemble des lignes

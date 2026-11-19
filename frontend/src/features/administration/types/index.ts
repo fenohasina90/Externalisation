@@ -87,7 +87,6 @@ export interface CreateUtilisateurPayload {
   actif?: boolean
 }
 
-export type UpdateUtilisateurPayload = Partial<CreateUtilisateurPayload>
 
 export type StatutDemandeReinitialisation =
   | 'EN_ATTENTE'
@@ -130,10 +129,6 @@ export type CibleReinitialisation =
   | 'responsable_client'
   | 'commerciaux'
 
-export interface ReinitialisationRequest {
-  cibles: CibleReinitialisation[]
-  confirmation: 'SUPPRIMER'
-}
 
 export interface ReinitialisationResponse {
   /** Lignes supprimées, par table. */
