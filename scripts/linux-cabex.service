@@ -1,0 +1,14 @@
+[Unit]
+Description=CABEX Externalisation
+After=network.target mysql.service mariadb.service
+
+[Service]
+Type=simple
+User=cabex
+WorkingDirectory=/opt/cabex
+ExecStart=/opt/cabex/linux-start.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
