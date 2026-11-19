@@ -636,8 +636,8 @@ export function RapportsPage() {
           </div>
           {general && (
             <div className="rc">
-              <span>Échéances en retard</span>
-              <strong>{general.echeancesEnRetard}</strong>
+              <span>Paiements en retard</span>
+              <strong>{general.paiementsEnRetard}</strong>
             </div>
           )}
           {parStatut.length > 0 && (

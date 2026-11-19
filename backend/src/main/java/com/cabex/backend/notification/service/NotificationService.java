@@ -1,7 +1,6 @@
 package com.cabex.backend.notification.service;
 
 import com.cabex.backend.demande.entity.DemandeService;
-import com.cabex.backend.echeance.entity.EcheancePaiement;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.notification.dto.NotificationResponse;
@@ -37,7 +36,7 @@ public class NotificationService {
             "NOUVELLE_DEMANDE", "CHANGEMENT_STATUT");
 
     private static final List<String> TYPES_PAIEMENT = List.of(
-            "PAIEMENT_ENREGISTRE", "ECHEANCE_PROCHE", "PAIEMENT_RETARD",
+            "PAIEMENT_ENREGISTRE", "PAIEMENT_RETARD",
             "FACTURE_MENSUELLE_RAPPEL");
 
     public static final String TYPE_ALERTE_SYSTEME = "ALERTE_SYSTEME";
@@ -172,45 +171,6 @@ public class NotificationService {
                 "💳 Paiement " + nullSafe(paiement.getReferencePaiement()) + " de "
                         + montant(paiement.getMontantPaye()) + " enregistré pour " + societe + ".",
                 "PAIEMENT", paiement.getId() != null ? paiement.getId().longValue() : null,
-                ROLE_SUPER_ADMIN, ROLE_ECONOMAT);
-    }
-
-    @Transactional
-    public void notifierEcheanceProche(EcheancePaiement echeance, int jours) {
-        DemandeService demande = echeance.getProposPaiement().getDemande();
-        if (demande == null) {
-            return;
-        }
-        String societe = demande.getSociete() != null ? demande.getSociete().getNomSociete() : "client";
-        String delai = jours <= 0 ? "aujourd'hui"
-                : jours == 1 ? "demain"
-                : "dans " + jours + " jours";
-        creerPourRoles(true,
-                "ECHEANCE_PROCHE",
-                "Échéance proche",
-                "⚠️ L'échéance n°" + echeance.getNumeroEcheance() + " de la société " + societe
-                        + " (" + montant(echeance.getMontantAttendu()) + ") arrive à échéance "
-                        + delai + ". Référence de la demande : "
-                        + nullSafe(demande.getReferenceDemande()) + ".",
-                "ECHEANCE", echeance.getId() != null ? echeance.getId().longValue() : null,
-                ROLE_SUPER_ADMIN, ROLE_ECONOMAT);
-    }
-
-    @Transactional
-    public void notifierEcheanceEnRetard(EcheancePaiement echeance) {
-        DemandeService demande = echeance.getProposPaiement().getDemande();
-        if (demande == null) {
-            return;
-        }
-        String societe = demande.getSociete() != null ? demande.getSociete().getNomSociete() : "client";
-        creerPourRoles(true,
-                "PAIEMENT_RETARD",
-                "Paiement en retard",
-                "⛔ L'échéance n°" + echeance.getNumeroEcheance() + " de la société " + societe
-                        + " (" + montant(echeance.getMontantAttendu()) + ") est en retard depuis le "
-                        + echeance.getDateEcheance().format(FORMAT_DATE) + ". Référence de la demande : "
-                        + nullSafe(demande.getReferenceDemande()) + ".",
-                "ECHEANCE", echeance.getId() != null ? echeance.getId().longValue() : null,
                 ROLE_SUPER_ADMIN, ROLE_ECONOMAT);
     }
 

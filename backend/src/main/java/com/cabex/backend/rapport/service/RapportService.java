@@ -8,7 +8,8 @@ import com.cabex.backend.demande.mapper.DemandeMapper;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.demande.service.LigneServiceService;
-import com.cabex.backend.echeance.repository.EcheancePaiementRepository;
+import com.cabex.backend.configuration.service.ConfigurationKeys;
+import com.cabex.backend.configuration.service.ConfigurationService;
 import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.paiement.entity.Paiement;
 import com.cabex.backend.paiement.repository.PaiementRepository;
@@ -38,28 +39,28 @@ public class RapportService {
     private final DemandeServiceRepository demandeRepository;
     private final HistoriqueDemandeRepository historiqueRepository;
     private final PaiementRepository paiementRepository;
-    private final EcheancePaiementRepository echeanceRepository;
     private final SocieteRepository societeRepository;
     private final ServiceRepository serviceRepository;
     private final LigneServiceService ligneService;
     private final FactureValideeRepository factureValideeRepository;
+    private final ConfigurationService configurationService;
 
     public RapportService(DemandeServiceRepository demandeRepository,
                           HistoriqueDemandeRepository historiqueRepository,
                           PaiementRepository paiementRepository,
-                          EcheancePaiementRepository echeanceRepository,
                           SocieteRepository societeRepository,
                           ServiceRepository serviceRepository,
                           LigneServiceService ligneService,
-                          FactureValideeRepository factureValideeRepository) {
+                          FactureValideeRepository factureValideeRepository,
+                          ConfigurationService configurationService) {
         this.demandeRepository = demandeRepository;
         this.historiqueRepository = historiqueRepository;
         this.paiementRepository = paiementRepository;
-        this.echeanceRepository = echeanceRepository;
         this.societeRepository = societeRepository;
         this.serviceRepository = serviceRepository;
         this.ligneService = ligneService;
         this.factureValideeRepository = factureValideeRepository;
+        this.configurationService = configurationService;
     }
 
     @Transactional(readOnly = true)
@@ -74,8 +75,8 @@ public class RapportService {
                 total,
                 encaisse,
                 total.subtract(encaisse).max(BigDecimal.ZERO),
-                echeanceRepository.sommeEnRetardFiltree(LocalDate.now(), f.clientId(), f.serviceId()),
-                echeanceRepository.countEnRetard(LocalDate.now())
+                paiementEnRetardMontant(f),
+                paiementEnRetardNombre(f)
         );
     }
 
@@ -85,7 +86,7 @@ public class RapportService {
         BigDecimal total = sommeFacturesPayables(f);
         BigDecimal encaisse = fin(f);
         BigDecimal reste = total.subtract(encaisse).max(BigDecimal.ZERO);
-        BigDecimal enRetard = echeanceRepository.sommeEnRetardFiltree(LocalDate.now(), f.clientId(), f.serviceId());
+        BigDecimal enRetard = paiementEnRetardMontant(f);
         List<RapportFinancierMode> parMode = paiementRepository
                 .sommeParMode(f.dateDebut(), f.dateFin(), f.clientId(), f.serviceId())
                 .stream()
@@ -194,7 +195,7 @@ public class RapportService {
                         List.of("Montant encaissé", format(r.montantEncaisse())),
                         List.of("Reste à payer", format(r.resteAPayer())),
                         List.of("Montant en retard", format(r.montantEnRetard())),
-                        List.of("Échéances en retard", r.echeancesEnRetard())
+                        List.of("Paiements en retard", r.paiementsEnRetard())
                 ));
     }
 
@@ -300,7 +301,47 @@ public class RapportService {
                 .getContent();
     }
 
-    private BigDecimal fin(RapportFilter f) {
+    private long paiementEnRetardNombre(RapportFilter f) {
+        Object[] agg = paiementsEnRetardAgrege(f);
+        Number nb = (Number) agg[0];
+        return nb != null ? nb.longValue() : 0L;
+    }
+
+    private BigDecimal paiementEnRetardMontant(RapportFilter f) {
+        Object[] agg = paiementsEnRetardAgrege(f);
+        Object raw = agg[1];
+        if (raw instanceof BigDecimal big) {
+            return big;
+        }
+        if (raw instanceof Number n) {
+            return BigDecimal.valueOf(n.doubleValue());
+        }
+        return BigDecimal.ZERO;
+    }
+
+        /**
+     * Agrégat paiements en retard : factures validées non soldées au-delà des
+     * délais d'alerte configurés (prestation/débours ou mensuelle).
+     * Colonnes : index 0 = nombre de factures, index 1 = montant total restant.
+     */
+    private Object[] paiementsEnRetardAgrege(RapportFilter f) {
+        int pdJours = Math.max(0, configurationService.lireEntier(
+                ConfigurationKeys.JOURS_RETARD_PRESTATION_DEBOURS,
+                ConfigurationKeys.JOURS_RETARD_PRESTATION_DEBOURS_DEFAUT));
+        int aboJours = Math.max(0, configurationService.lireEntier(
+                ConfigurationKeys.JOURS_RETARD_ABONNEMENT,
+                ConfigurationKeys.JOURS_RETARD_ABONNEMENT_DEFAUT));
+        LocalDate aujourd = LocalDate.now();
+        java.util.List<Object[]> rows = factureValideeRepository.paiementRetardAggregat(
+                aujourd.minusDays(pdJours), aujourd.minusDays(aboJours),
+                f.clientId(), f.serviceId());
+        if (rows.size() == 1) {
+            return rows.get(0);
+        }
+        return new Object[] { 0L, BigDecimal.ZERO };
+    }
+
+        private BigDecimal fin(RapportFilter f) {
         return paiementRepository.sommePayeeFacturesPayables(f.dateDebut(), f.dateFin(), f.clientId(), f.serviceId());
     }
 

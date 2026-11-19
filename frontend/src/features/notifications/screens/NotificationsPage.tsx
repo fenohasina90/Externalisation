@@ -110,12 +110,6 @@ export function NotificationsPage() {
       return [
         nonLuesCarte,
         {
-          tag: 'À venir',
-          label: 'Échéances proches',
-          valeur: parType.ECHEANCE_PROCHE ?? 0,
-          icone: 'clock',
-        },
-        {
           tag: 'À suivre',
           label: 'Paiements en retard',
           valeur: parType.PAIEMENT_RETARD ?? 0,
@@ -131,12 +125,6 @@ export function NotificationsPage() {
     }
     return [
       nonLuesCarte,
-      {
-        tag: 'À venir',
-        label: 'Échéances proches',
-        valeur: parType.ECHEANCE_PROCHE ?? 0,
-        icone: 'clock',
-      },
       {
         tag: 'À suivre',
         label: 'Paiements en retard',

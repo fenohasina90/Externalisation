@@ -10,6 +10,7 @@ public record RapportGeneralResponse(
         BigDecimal montantEncaisse,
         BigDecimal resteAPayer,
         BigDecimal montantEnRetard,
-        long echeancesEnRetard
+        /** Nombre de factures validées non soldées au-delà des délais d'alerte. */
+        long paiementsEnRetard
 ) {
 }

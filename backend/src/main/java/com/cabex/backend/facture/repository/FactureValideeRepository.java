@@ -185,6 +185,35 @@ public interface FactureValideeRepository extends JpaRepository<FactureValidee, 
     List<com.cabex.backend.facture.entity.FactureValidee> findFacturesMensuellesPourAlerte();
 
     /**
+     * Statistiques des paiements en retard : factures validées non soldées,
+     * émises avant le délai d'alerte applicable au type de facture
+     * (prestation/débours pour classiques, abonnement pour les mensuelles).
+     * Colonnes : nb, somme_reste.
+     */
+    @org.springframework.data.jpa.repository.Query(value =
+            "SELECT COUNT(*) AS nb,"
+            + " COALESCE(SUM(f.montant - COALESCE(p.paye, 0)), 0) AS somme_reste"
+            + " FROM facture_validee f"
+            + " JOIN demande_service d ON d.id = f.demande_id AND d.actif = 1"
+            + " LEFT JOIN (SELECT facture_validee_id, SUM(montant_paye) AS paye"
+            + "            FROM paiement WHERE actif = 1 GROUP BY facture_validee_id) p"
+            + "        ON p.facture_validee_id = f.id"
+            + " WHERE f.valide_le IS NOT NULL"
+            + "   AND ((f.mois IS NULL AND DATE(f.valide_le) <= :prestationDeboursLimite)"
+            + "       OR (f.mois IS NOT NULL AND DATE(f.valide_le) <= :abonnementLimite))"
+            + "   AND (:clientId IS NULL OR d.societe_id = :clientId)"
+            + "   AND (:serviceId IS NULL OR EXISTS ("
+            + "         SELECT 1 FROM ligne_service l"
+            + "          WHERE l.demande_id = d.id AND l.service_id = :serviceId))"
+            + "   AND f.montant - COALESCE(p.paye, 0) > 0",
+            nativeQuery = true)
+    java.util.List<Object[]> paiementRetardAggregat(
+            @org.springframework.data.repository.query.Param("prestationDeboursLimite") java.time.LocalDate prestationDeboursLimite,
+            @org.springframework.data.repository.query.Param("abonnementLimite") java.time.LocalDate abonnementLimite,
+            @org.springframework.data.repository.query.Param("clientId") Integer clientId,
+            @org.springframework.data.repository.query.Param("serviceId") Integer serviceId);
+
+    /**
      * Factures validées du mois liées à une ligne d'abonnement :
      * celles directement rattachées (ligneServiceId) et celles
      * multi-lignes dont cette ligne apparaît parmi les lignes.
