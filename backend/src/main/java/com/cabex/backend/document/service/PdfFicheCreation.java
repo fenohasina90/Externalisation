@@ -4,6 +4,7 @@ import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.dossier.entity.DossierAssocie;
 import com.cabex.backend.dossier.entity.DossierCreation;
 import com.lowagie.text.Chunk;
+import com.lowagie.text.Element;
 import com.lowagie.text.Document;
 import com.lowagie.text.Font;
 import com.lowagie.text.Paragraph;
@@ -23,34 +24,62 @@ final class PdfFicheCreation {
     private PdfFicheCreation() {
     }
 
+    /** Échelle des polices/espacements : mise en page aérée sur deux pages. */
+    private static final float ECHELLE = 1.2f;
+
     static byte[] generer(DemandeService demande, DossierCreation dossier) {
-        byte[] pdf = null;
-        for (float echelle : PdfStyleFacture.ECHELLES) {
-            PdfStyleFacture st = new PdfStyleFacture(echelle);
-            String titreMeta = "Fiche de création " + PdfFormats.valeur(demande.getReferenceDemande());
-            pdf = PdfDocument.generer(PdfDocument.MiseEnPage.FICHE, "Fiche de création",
-                    titreMeta, doc -> ecrire(doc, demande, dossier, st),
-                    "Erreur de génération de la fiche de création");
-            if (PdfDocument.nombrePages(pdf) <= 1) {
-                break;
-            }
-        }
-        return pdf;
+        PdfStyleFacture st = new PdfStyleFacture(ECHELLE);
+        String titreMeta = "Fiche de création " + PdfFormats.valeur(demande.getReferenceDemande());
+        return PdfDocument.generer(PdfDocument.MiseEnPage.FICHE, "Fiche de création",
+                titreMeta, doc -> ecrire(doc, demande, dossier, st),
+                "Erreur de génération de la fiche de création");
     }
 
     private static void ecrire(Document doc, DemandeService demande, DossierCreation dossier,
-                               PdfStyleFacture st) {
+                               PdfStyleFacture st) throws java.io.IOException {
         entete(doc, st);
         bandeauReferences(doc, demande, st);
 
         doc.add(PdfComposants.boiteFiche(formeJuridique(st, dossier)));
         doc.add(PdfComposants.boiteFiche(societe(st, dossier)));
         doc.add(PdfComposants.boiteFiche(secteurActivite(st, dossier)));
+        // Page 2 : l'adresse du siège, l'objet social et les signatures
+        doc.newPage();
+        enTeteContinuation(doc, demande, st);
         doc.add(PdfComposants.boiteFiche(adresseSiege(st, dossier)));
         doc.add(PdfComposants.boiteFiche(objetSocial(st, dossier)));
         doc.add(PdfComposants.boiteFiche(observations(st, dossier)));
 
         doc.add(signatures(st));
+    }
+
+    /** Rappel discret en haut de page 2 : fiche, référence demande. */
+    private static void enTeteContinuation(Document doc, DemandeService demande, PdfStyleFacture st) throws java.io.IOException {
+        PdfPTable t = new PdfPTable(2);
+        t.setWidthPercentage(100);
+        t.setWidths(new float[]{3.4f, 2f});
+        t.setSpacingAfter(10);
+        PdfPCell gauche = new PdfPCell(new Paragraph("FICHE DE CRÉATION", st.sousTitre));
+        gauche.setBorder(Rectangle.NO_BORDER);
+        gauche.setPadding(0);
+        t.addCell(gauche);
+        PdfPCell droite = new PdfPCell(new Paragraph(
+                "DEMANDE " + PdfFormats.valeur(demande.getReferenceDemande()), st.label));
+        droite.setBorder(Rectangle.NO_BORDER);
+        droite.setPadding(0);
+        droite.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        t.addCell(droite);
+        doc.add(t);
+        PdfPTable filet = new PdfPTable(1);
+        filet.setWidthPercentage(100);
+        PdfPCell c = new PdfPCell(new Phrase(" "));
+        c.setBorder(Rectangle.BOTTOM);
+        c.setBorderColor(PdfTheme.PRIMAIRE);
+        c.setBorderWidth(1f);
+        c.setPadding(0);
+        filet.addCell(c);
+        filet.setSpacingAfter(14);
+        doc.add(filet);
     }
 
     // ------------------------------------------------------------------
