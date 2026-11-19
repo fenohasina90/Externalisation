@@ -54,6 +54,7 @@ public class DocumentGestionService {
             dossierTransactionRepository;
     private final com.cabex.backend.client.repository.SocieteRepository societeRepository;
     private final com.cabex.backend.facture.service.FactureService factureService;
+    private final com.cabex.backend.service.repository.DomaineServiceRepository domaineServiceRepository;
 
     @Value("${app.document.storage-path}")
     private String storagePath;
@@ -75,7 +76,8 @@ public class DocumentGestionService {
                                   com.cabex.backend.dossier.repository.DossierTransactionImmobiliereRepository
                                           dossierTransactionRepository,
                                   com.cabex.backend.client.repository.SocieteRepository societeRepository,
-                                  com.cabex.backend.facture.service.FactureService factureService) {
+                                  com.cabex.backend.facture.service.FactureService factureService,
+                                  com.cabex.backend.service.repository.DomaineServiceRepository domaineServiceRepository) {
         this.pieceRepository = pieceRepository;
         this.demandeRepository = demandeRepository;
         this.paiementRepository = paiementRepository;
@@ -90,6 +92,7 @@ public class DocumentGestionService {
         this.dossierTransactionRepository = dossierTransactionRepository;
         this.societeRepository = societeRepository;
         this.factureService = factureService;
+        this.domaineServiceRepository = domaineServiceRepository;
     }
 
     /**
@@ -202,7 +205,8 @@ public class DocumentGestionService {
                 .map(dossier -> pdfGenerator.ficheCreation(demande, dossier))
                 .or(() -> dossierTransactionRepository.findByDemandeId(demandeId)
                         .map(dossier -> pdfGenerator.ficheTransactionImmobiliere(demande, dossier)))
-                .orElseGet(() -> pdfGenerator.recapitulatifDemande(demande));
+                .orElseGet(() -> pdfGenerator.recapitulatifDemande(demande,
+                        domaineServiceRepository.findAllByOrderByNomDomaineAsc()));
     }
 
     @Transactional(readOnly = true)

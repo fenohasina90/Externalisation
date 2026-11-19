@@ -56,12 +56,22 @@ public class PdfGenerator {
     }
 
     /**
-     * Fiche récapitulative d'une demande d'externalisation : titre + badge, bandeau
-     * références, cartes Entreprise / Contact, profil chiffré, domaine, tableau des
-     * services souhaités, délai, observation et signatures.
+     * Fiche récapitulative sans liste de domaines (cases de domaine non cochées).
+     * Conservée pour les tests unitaires ; préférer l'autre surcharge.
      */
     public byte[] recapitulatifDemande(DemandeService demande) {
-        return PdfRecapitulatif.generer(demande);
+        return PdfRecapitulatif.generer(demande, java.util.List.of());
+    }
+
+    /**
+     * Fiche récapitulative d'une demande d'externalisation : titre + badge, bandeau
+     * références, cartes Entreprise / Contact, profil chiffré, domaines cochés
+     * (liste dynamique), tableau des services souhaités avec leur type,
+     * délai, observation et signatures.
+     */
+    public byte[] recapitulatifDemande(DemandeService demande,
+                                       java.util.List<com.cabex.backend.service.entity.DomaineService> domaines) {
+        return PdfRecapitulatif.generer(demande, domaines);
     }
 
     /**
