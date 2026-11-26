@@ -7,7 +7,7 @@ rapports, journal d'audit et sauvegardes de la base MySQL.
 > **État du projet (novembre 2026)** : le module « plans de paiement / échéances » a été
 > supprimé. Les paiements sont désormais rattachés à une **facture validée**. Le schéma consolidé
 > contient **28 tables** et **67 permissions** (4 rôles : SUPER_ADMIN, ADMIN, ACCUEIL, ECONOMAT),
-> et le backend est couvert par **283 tests automatisés**.
+> et le backend est couvert par **284 tests automatisés**.
 >
 > La réinitialisation de mot de passe envoie désormais le mot de passe temporaire **directement à
 > l'utilisateur par e-mail** (Gmail SMTP) : les actions « approuver » / « refuser » côté

@@ -26,6 +26,9 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, Intege
 
     boolean existsByUsername(String username);
 
+    /** Contrôle d'unicité insensible à la casse (EX. « Admin » = « admin »). */
+    boolean existsByUsernameIgnoreCase(String username);
+
     long countByActifTrue();
 
     @Query("""
