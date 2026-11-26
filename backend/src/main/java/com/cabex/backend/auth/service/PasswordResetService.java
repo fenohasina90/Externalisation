@@ -3,15 +3,11 @@ package com.cabex.backend.auth.service;
 import com.cabex.backend.audit.action.AuditActions;
 import com.cabex.backend.audit.service.AuditService;
 import com.cabex.backend.auth.dto.ForgotPasswordRequest;
-import com.cabex.backend.auth.dto.MotDePasseTemporaireResponse;
 import com.cabex.backend.auth.dto.PasswordResetRequestResponse;
 import com.cabex.backend.configuration.repository.ConfigurationRepository;
-import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.mail.MailService;
-import com.cabex.backend.notification.service.NotificationService;
-import com.cabex.backend.security.SecurityUtils;
 import com.cabex.backend.utilisateur.entity.DemandeReinitialisation;
 import com.cabex.backend.utilisateur.entity.DemandeReinitialisationStatut;
 import com.cabex.backend.utilisateur.entity.Utilisateur;
@@ -30,14 +26,18 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Workflow de réinitialisation de mot de passe validé par un administrateur,
- * fondé sur la remise d'un mot de passe temporaire à l'utilisateur :
- * 1. l'utilisateur demande la réinitialisation (demande EN_ATTENTE) ;
- * 2. les administrateurs sont notifiés et approuvent la demande (APPROUVEE) ;
- * 3. l'administrateur génère un mot de passe temporaire, communiqué une seule
- *    fois puis envoyé par e-mail si l'envoi est activé ;
- * 4. à sa prochaine connexion, l'utilisateur doit changer ce mot de passe, ce
- *    qui clôture la demande (TERMINEE).
+ * Réinitialisation de mot de passe sans intervention d'un administrateur :
+ * 1. l'utilisateur soumet son adresse e-mail ({@code POST /api/auth/forgot-password}) ;
+ * 2. un mot de passe temporaire est généré immédiatement, haché (BCrypt) et envoyé
+ *    directement à l'utilisateur par e-mail (JavaMailSender) ;
+ * 3. la demande est conservée avec le statut {@code ENVOYEE} et reste consultable
+ *    par les administrateurs ;
+ * 4. à sa prochaine connexion, l'utilisateur doit remplacer ce mot de passe, ce qui
+ *    clôture la demande ({@code TERMINEE}).
+ *
+ * Les statuts {@code APPROUVEE} et {@code REFUSEE} ne sont plus produits : ils ne
+ * subsistent que dans les données historiques. Les actions « approuver » et
+ * « refuser » ont été supprimées.
  */
 @Service
 public class PasswordResetService {
@@ -57,7 +57,6 @@ public class PasswordResetService {
     private final DemandeReinitialisationRepository demandeRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final ConfigurationRepository configurationRepository;
-    private final NotificationService notificationService;
     private final MailService mailService;
     private final AuditService auditService;
     private final PasswordEncoder passwordEncoder;
@@ -66,43 +65,75 @@ public class PasswordResetService {
     public PasswordResetService(DemandeReinitialisationRepository demandeRepository,
                                 UtilisateurRepository utilisateurRepository,
                                 ConfigurationRepository configurationRepository,
-                                NotificationService notificationService,
                                 MailService mailService,
                                 AuditService auditService,
                                 PasswordEncoder passwordEncoder) {
         this.demandeRepository = demandeRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.configurationRepository = configurationRepository;
-        this.notificationService = notificationService;
         this.mailService = mailService;
         this.auditService = auditService;
         this.passwordEncoder = passwordEncoder;
     }
 
+    /**
+     * Génère le mot de passe temporaire et l'envoie directement à l'utilisateur.
+     * La réponse HTTP reste volontairement générique (que l'e-mail existe ou non).
+     * Tout échec d'envoi fait échouer la transaction : ni mot de passe ni demande
+     * ne sont conservés en base.
+     */
     @Transactional
     public void demanderReinitialisation(ForgotPasswordRequest request) {
-        Utilisateur utilisateur = utilisateurRepository.findByEmail(request.email().trim()).orElse(null);
+        String email = request.email() == null ? "" : request.email().trim();
+        Utilisateur utilisateur = utilisateurRepository.findByEmail(email).orElse(null);
         if (utilisateur == null || !Boolean.TRUE.equals(utilisateur.getActif())) {
-            log.info("Demande de réinitialisation ignorée pour l'email : {}", request.email());
+            log.info("Demande de réinitialisation ignorée pour l'email : {}", email);
             return;
         }
 
         if (demandeRepository.existsByUtilisateurIdAndStatutIn(utilisateur.getId(),
                 List.of(DemandeReinitialisationStatut.EN_ATTENTE,
-                        DemandeReinitialisationStatut.APPROUVEE))) {
+                        DemandeReinitialisationStatut.APPROUVEE,
+                        DemandeReinitialisationStatut.ENVOYEE))) {
             log.info("Une demande de réinitialisation est déjà active pour {}", utilisateur.getUsername());
             return;
         }
 
+        int validiteMinutes = dureeMdpTemporaire();
+        String motDePasse = genererMotDePasseTemporaire();
+        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime expiration = maintenant.plusMinutes(validiteMinutes);
+
         DemandeReinitialisation demande = DemandeReinitialisation.builder()
                 .utilisateur(utilisateur)
-                .statut(DemandeReinitialisationStatut.EN_ATTENTE)
+                .statut(DemandeReinitialisationStatut.ENVOYEE)
+                .dateTraitement(maintenant)
+                .dateGenerationMdp(maintenant)
+                .dateExpirationMdp(expiration)
                 .build();
         demande = demandeRepository.save(demande);
 
-        notificationService.notifierDemandeReinitialisation(utilisateur, demande.getId());
+        utilisateur.setMdpHash(passwordEncoder.encode(motDePasse));
+        utilisateur.setDoitChangerMdp(true);
+        utilisateur.setDateExpirationMdpTemporaire(expiration);
+        utilisateurRepository.save(utilisateur);
+
+        try {
+            mailService.envoyerMotDePasseTemporaire(
+                    utilisateur.getEmail(),
+                    utilisateur.getPrenom() + " " + utilisateur.getNom(),
+                    motDePasse,
+                    validiteMinutes);
+        } catch (RuntimeException e) {
+            log.error("Échec de l'envoi de l'e-mail de réinitialisation à {}", utilisateur.getEmail(), e);
+            throw new IllegalStateException(
+                    "Impossible d'envoyer l'e-mail de réinitialisation. Veuillez réessayer plus tard.");
+        }
+
         auditService.log(AuditActions.RESET_REQUEST, "AUTH", "DemandeReinitialisation",
-                demande.getId(), null, DemandeReinitialisationStatut.EN_ATTENTE);
+                demande.getId(), null, DemandeReinitialisationStatut.ENVOYEE);
+        auditService.log(AuditActions.RESET_SEND, "AUTH", "DemandeReinitialisation",
+                demande.getId(), null, "Mot de passe temporaire envoyé par e-mail");
     }
 
     @Transactional(readOnly = true)
@@ -118,102 +149,31 @@ public class PasswordResetService {
         return toResponse(getDemande(id));
     }
 
-    @Transactional
-    public PasswordResetRequestResponse approuver(Long id) {
-        DemandeReinitialisation demande = getDemande(id);
-        exigerEnAttente(demande);
-        verifierPasSoiMeme(demande);
-
-        demande.setStatut(DemandeReinitialisationStatut.APPROUVEE);
-        demande.setTraitePar(currentUtilisateur());
-        demande.setDateTraitement(LocalDateTime.now());
-        demande = demandeRepository.save(demande);
-
-        auditService.log(AuditActions.RESET_APPROVE, "AUTH", "DemandeReinitialisation",
-                demande.getId(), DemandeReinitialisationStatut.EN_ATTENTE,
-                DemandeReinitialisationStatut.APPROUVEE);
-        return toResponse(demande);
-    }
-
-    @Transactional
-    public PasswordResetRequestResponse refuser(Long id, String motif) {
-        DemandeReinitialisation demande = getDemande(id);
-        exigerEnAttente(demande);
-        verifierPasSoiMeme(demande);
-
-        demande.setStatut(DemandeReinitialisationStatut.REFUSEE);
-        demande.setMotifRefus(motif);
-        demande.setTraitePar(currentUtilisateur());
-        demande.setDateTraitement(LocalDateTime.now());
-        demande = demandeRepository.save(demande);
-
-        auditService.log(AuditActions.RESET_REJECT, "AUTH", "DemandeReinitialisation",
-                demande.getId(), DemandeReinitialisationStatut.EN_ATTENTE,
-                DemandeReinitialisationStatut.REFUSEE);
-        return toResponse(demande);
-    }
-
-    @Transactional
-    public MotDePasseTemporaireResponse reinitialiser(Long id) {
-        DemandeReinitialisation demande = getDemande(id);
-        if (!DemandeReinitialisationStatut.APPROUVEE.equals(demande.getStatut())) {
-            throw new BusinessException(
-                    "La demande doit d'abord être approuvée avant de générer un mot de passe temporaire");
-        }
-        verifierPasSoiMeme(demande);
-
-        int validiteMinutes = dureeMdpTemporaire();
-        String motDePasse = genererMotDePasseTemporaire();
-        LocalDateTime expiration = LocalDateTime.now().plusMinutes(validiteMinutes);
-
-        Utilisateur utilisateur = demande.getUtilisateur();
-        utilisateur.setMdpHash(passwordEncoder.encode(motDePasse));
-        utilisateur.setDoitChangerMdp(true);
-        utilisateur.setDateExpirationMdpTemporaire(expiration);
-        utilisateurRepository.save(utilisateur);
-
-        demande.setGenerePar(currentUtilisateur());
-        demande.setDateGenerationMdp(LocalDateTime.now());
-        demande.setDateExpirationMdp(expiration);
-        demande = demandeRepository.save(demande);
-
-        mailService.envoyerMotDePasseTemporaire(
-                utilisateur.getEmail(),
-                utilisateur.getPrenom() + " " + utilisateur.getNom(),
-                motDePasse,
-                validiteMinutes);
-
-        auditService.log(AuditActions.RESET_SEND, "AUTH", "DemandeReinitialisation",
-                demande.getId(), null, "Mot de passe temporaire généré");
-
-        return new MotDePasseTemporaireResponse(
-                motDePasse,
-                expiration,
-                "Mot de passe temporaire généré. Communiquez-le à l'utilisateur : il devra le changer "
-                        + "à sa prochaine connexion.",
-                toResponse(demande));
-    }
-
     /**
-     * Clôture les demandes approuvées de l'utilisateur après le changement effectif
-     * de son mot de passe. Appelée par {@link AuthService}.
+     * Clôture les demandes envoyées (ou approuvées dans l'ancien flux) après le
+     * changement effectif du mot de passe. Appelée par {@link AuthService}.
      */
     @Transactional
     public void terminerDemandesApresChangement(Utilisateur utilisateur) {
         List<DemandeReinitialisation> demandes = demandeRepository.findByUtilisateurIdAndStatutIn(
-                utilisateur.getId(), List.of(DemandeReinitialisationStatut.APPROUVEE));
+                utilisateur.getId(),
+                List.of(DemandeReinitialisationStatut.ENVOYEE,
+                        DemandeReinitialisationStatut.APPROUVEE));
         for (DemandeReinitialisation demande : demandes) {
             demande.setStatut(DemandeReinitialisationStatut.TERMINEE);
             demandeRepository.save(demande);
             auditService.log(AuditActions.RESET_DONE, "AUTH", "DemandeReinitialisation",
-                    demande.getId(), DemandeReinitialisationStatut.APPROUVEE,
+                    demande.getId(), DemandeReinitialisationStatut.ENVOYEE,
                     DemandeReinitialisationStatut.TERMINEE);
         }
     }
 
     /**
-     * Tâche planifiée : expire les demandes restées en attente trop longtemps et
-     * les mots de passe temporaires non changés avant leur échéance.
+     * Tâche planifiée : expire les anciennes demandes et les mots de passe
+     * temporaires non changés avant leur échéance. Le mot de passe temporaire
+     * expiré reste marqué {@code doit_changer_mdp} : {@code AuthService} refusera
+     * la connexion avec le message {@code MDP_TEMPORAIRE_EXPIRE}, obligeant
+     * l'utilisateur à en demander un nouveau.
      */
     @Transactional
     public void expirerDemandes() {
@@ -228,18 +188,14 @@ public class PasswordResetService {
             demandeRepository.save(demande);
         }
 
-        for (DemandeReinitialisation demande : demandeRepository
-                .findByStatutAndDateExpirationMdpBefore(DemandeReinitialisationStatut.APPROUVEE, maintenant)) {
-            demande.setStatut(DemandeReinitialisationStatut.EXPIREE);
-            Utilisateur utilisateur = demande.getUtilisateur();
-            if (utilisateur != null && Boolean.TRUE.equals(utilisateur.getDoitChangerMdp())
-                    && utilisateur.getDateExpirationMdpTemporaire() != null
-                    && !utilisateur.getDateExpirationMdpTemporaire().isAfter(maintenant)) {
-                utilisateur.setDoitChangerMdp(false);
-                utilisateur.setDateExpirationMdpTemporaire(null);
-                utilisateurRepository.save(utilisateur);
+        for (String statut : List.of(DemandeReinitialisationStatut.ENVOYEE,
+                DemandeReinitialisationStatut.APPROUVEE)) {
+            for (DemandeReinitialisation demande : demandeRepository
+                    .findByStatutAndDateExpirationMdpBefore(statut, maintenant)) {
+                demande.setStatut(DemandeReinitialisationStatut.EXPIREE);
+                demande.setDateTraitement(maintenant);
+                demandeRepository.save(demande);
             }
-            demandeRepository.save(demande);
         }
     }
 
@@ -247,21 +203,6 @@ public class PasswordResetService {
         return demandeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         ErrorMessages.introuvable("Demande de réinitialisation", id)));
-    }
-
-    private void exigerEnAttente(DemandeReinitialisation demande) {
-        if (!DemandeReinitialisationStatut.EN_ATTENTE.equals(demande.getStatut())) {
-            throw new BusinessException("Cette demande de réinitialisation a déjà été traitée");
-        }
-    }
-
-    private void verifierPasSoiMeme(DemandeReinitialisation demande) {
-        Utilisateur courant = currentUtilisateur();
-        if (courant != null && demande.getUtilisateur() != null
-                && courant.getId().equals(demande.getUtilisateur().getId())) {
-            throw new BusinessException(
-                    "Vous ne pouvez pas traiter votre propre demande de réinitialisation");
-        }
     }
 
     private PasswordResetRequestResponse toResponse(DemandeReinitialisation demande) {
@@ -303,14 +244,6 @@ public class PasswordResetService {
             return Integer.parseInt(valeur);
         } catch (NumberFormatException e) {
             return defaut;
-        }
-    }
-
-    private Utilisateur currentUtilisateur() {
-        try {
-            return utilisateurRepository.findById(SecurityUtils.currentUserId()).orElse(null);
-        } catch (Exception e) {
-            return null;
         }
     }
 

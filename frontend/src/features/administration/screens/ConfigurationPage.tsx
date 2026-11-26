@@ -103,7 +103,7 @@ const LIBELLES: Record<string, { label: string; unite?: string; aide?: string }>
   DUREE_VALIDITE_DEMANDE_RESET: {
     label: 'Validité de la demande de réinitialisation',
     unite: 'minutes',
-    aide: 'Durée de validité d’un lien de réinitialisation du mot de passe.',
+    aide: 'Durée après laquelle une demande restée sans traitement est expirée automatiquement.',
   },
   DUREE_VALIDITE_MDP_TEMPORAIRE: {
     label: 'Durée de validité du mot de passe temporaire',

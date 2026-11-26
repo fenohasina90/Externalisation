@@ -8,15 +8,15 @@ import { Can } from '@/components/shared/Can'
 import { Alert, Spinner } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
 import { UtilisateurFormModal, UtilisateursTable } from '../components'
-import { reinitialisationsApi, rolesApi, utilisateursApi } from '../services/administration.service'
+import { rolesApi, utilisateursApi } from '../services/administration.service'
 import { useUtilisateursList, type StatutUtilisateurFilter } from '../hooks/useUtilisateursList'
 
 
 /**
  * Utilisateurs branchés sur l'API : recherche, filtres rôle/statut,
- * création (mot de passe initial), activation, réinitialisation du
- * mot de passe via le circuit des demandes (création → approbation →
- * génération du temporaire affiché une seule fois).
+ * création (mot de passe initial), activation. La réinitialisation du mot de
+ * passe envoie directement un mot de passe temporaire par e-mail à l'utilisateur
+ * (plus d'approbation administrative, plus d'affichage du mot de passe ici).
  */
 export function UtilisateursPage() {
   // Nombre de lignes par page issu de la configuration (PAGINATION_TAILLE_DEFAUT).
@@ -28,7 +28,6 @@ export function UtilisateursPage() {
   const [confirmToggle, setConfirmToggle] = useState<{ id: number; actif: boolean } | null>(null)
   const [resetCible, setResetCible] = useState<Utilisateur | null>(null)
   const [resetEnCours, setResetEnCours] = useState(false)
-  const [motDePasseTemp, setMotDePasseTemp] = useState<string | null>(null)
 
   const { items, total, totalPages, page, loading, error, setPage, search, setSearch, role, setRole, statut, setStatut, reload } =
     useUtilisateursList(PAGE_SIZE)
@@ -96,28 +95,13 @@ export function UtilisateursPage() {
     }
   }
 
-  /** Chaîne admin : demande → approbation → mot de passe temporaire affiché une fois. */
+  /** Envoi direct du mot de passe temporaire par e-mail à l'utilisateur. */
   const handleResetPassword = async (u: Utilisateur) => {
     setResetCible(u)
     setResetEnCours(true)
-    setMotDePasseTemp(null)
     setMessage(null)
     try {
       await authApi.forgotPassword({ email: u.email })
-      const pageDemandes = await reinitialisationsApi.list('EN_ATTENTE', {
-        page: 0,
-        size: 50,
-        recherche: null,
-      })
-      const demande = pageDemandes.content.find(
-        (d) => d.email.toLowerCase() === u.email.toLowerCase(),
-      )
-      if (!demande) {
-        throw new Error('Demande de réinitialisation introuvable après création')
-      }
-      await reinitialisationsApi.approuver(demande.id)
-      const resultat = await reinitialisationsApi.reinitialiser(demande.id)
-      setMotDePasseTemp(resultat.motDePasseTemporaire)
     } catch (err) {
       setResetCible(null)
       setMessage(err instanceof Error ? err.message : 'Échec de la réinitialisation')
@@ -330,13 +314,12 @@ export function UtilisateursPage() {
         }}
       />
 
-      {(resetCible !== null || motDePasseTemp !== null) && (
+      {resetCible !== null && (
         <div
           className="modal-backdrop"
           onClick={() => {
             if (!resetEnCours) {
               setResetCible(null)
-              setMotDePasseTemp(null)
             }
           }}
         >
@@ -345,7 +328,7 @@ export function UtilisateursPage() {
             style={{ maxWidth: 480 }}
             onClick={(e) => e.stopPropagation()}
             role="dialog"
-            aria-label="Mot de passe temporaire"
+            aria-label="Envoi du mot de passe temporaire"
           >
             <header className="modal-header">
               <h3 className="modal-title">Réinitialisation du mot de passe</h3>
@@ -353,34 +336,21 @@ export function UtilisateursPage() {
                 type="button"
                 className="btn-ghost"
                 disabled={resetEnCours}
-                onClick={() => {
-                  setResetCible(null)
-                  setMotDePasseTemp(null)
-                }}
+                onClick={() => setResetCible(null)}
                 aria-label="Fermer"
               >
                 ✕
               </button>
             </header>
             <div className="modal-body">
-              {resetEnCours && <p className="text-muted">Génération en cours…</p>}
-              {!resetEnCours && motDePasseTemp && resetCible && (
-                <>
-                  <p className="section-note">
-                    Transmettez ce mot de passe temporaire à {resetCible.prenom} {resetCible.nom} :
-                    il devra le changer à sa prochaine connexion. Il ne sera plus affiché.
-                  </p>
-                  <div className="mot-de-passe-temp">
-                    <code className="code-inline">{motDePasseTemp}</code>
-                    <button
-                      type="button"
-                      className="btn-ghost"
-                      onClick={() => void navigator.clipboard.writeText(motDePasseTemp)}
-                    >
-                      Copier
-                    </button>
-                  </div>
-                </>
+              {resetEnCours && <p className="text-muted">Envoi de l'e-mail en cours…</p>}
+              {!resetEnCours && resetCible && (
+                <p className="section-note">
+                  Un e-mail contenant un mot de passe temporaire a été envoyé à{' '}
+                  {resetCible.email} ({resetCible.prenom} {resetCible.nom}). L'utilisateur devra le
+                  changer à sa prochaine connexion. Le mot de passe n'est plus affiché ici : il a
+                  été transmis directement à l'intéressé.
+                </p>
               )}
             </div>
             <footer className="modal-footer">
@@ -390,7 +360,6 @@ export function UtilisateursPage() {
                 disabled={resetEnCours}
                 onClick={() => {
                   setResetCible(null)
-                  setMotDePasseTemp(null)
                   reload()
                 }}
               >

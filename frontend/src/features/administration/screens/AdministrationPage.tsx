@@ -31,7 +31,7 @@ const SECTIONS = [
   {
     to: '/administration/reinitialisations',
     titre: 'Demandes de réinitialisation',
-    description: 'Approuvez ou refusez les demandes de nouveau mot de passe.',
+    description: 'Consultez les demandes : le mot de passe temporaire est envoyé directement par e-mail à l’utilisateur.',
     icone: (
       <svg className="sv" viewBox="0 0 24 24">
         <rect x="3" y="7" width="18" height="13" rx="2" />

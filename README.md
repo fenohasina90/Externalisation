@@ -7,7 +7,11 @@ rapports, journal d'audit et sauvegardes de la base MySQL.
 > **État du projet (novembre 2026)** : le module « plans de paiement / échéances » a été
 > supprimé. Les paiements sont désormais rattachés à une **facture validée**. Le schéma consolidé
 > contient **28 tables** et **67 permissions** (4 rôles : SUPER_ADMIN, ADMIN, ACCUEIL, ECONOMAT),
-> et le backend est couvert par **279 tests automatisés**.
+> et le backend est couvert par **283 tests automatisés**.
+>
+> La réinitialisation de mot de passe envoie désormais le mot de passe temporaire **directement à
+> l'utilisateur par e-mail** (Gmail SMTP) : les actions « approuver » / « refuser » côté
+> administrateur ont été supprimées ; la demande reste visible avec le statut `ENVOYEE`.
 
 ## Sommaire
 
@@ -436,14 +440,25 @@ partager cette clé.
 | `MYSQLDUMP_PATH` | Non | `mysqldump` | Chemin complet de `mysqldump` si absent du `PATH` |
 | `MYSQL_PATH` | Non | `mysql` | Chemin complet du client `mysql` si absent du `PATH` |
 | `BACKUP_UPLOAD_MAX_SIZE` | Non | `268435456` | Taille maximale d'un fichier de restauration (octets) |
+| `APP_MAIL_ENABLED` | Non | `true` | Active l'envoi direct du mot de passe temporaire par e-mail |
+| `APP_MAIL_FROM` | Non | `no-reply@cabex.mg` | Adresse d'expéditeur |
+| `MAIL_HOST` | Non | `smtp.gmail.com` | Hôte SMTP (Gmail) |
+| `MAIL_PORT` | Non | `587` | Port SMTP avec STARTTLS |
+| `MAIL_USERNAME` | **Oui en exploitation** | — | Adresse Gmail utilisée pour l'envoi |
+| `MAIL_PASSWORD` | **Oui en exploitation** | — | **Mot de passe d'application** Gmail (pas le mot de passe du compte) |
+
+> Gmail exige un **mot de passe d'application** (https://myaccount.google.com/apppasswords) et
+> l'authentification à deux facteurs. Sans ces variables, l'endpoint `/api/auth/forgot-password`
+> renvoie une erreur 500 et **aucun mot de passe ni demande n'est conservé**. Le mot de passe
+> temporaire n'est jamais écrit dans les logs.
 
 Paramètres complémentaires modifiables dans `backend/src/main/resources/application.properties`
 ou par argument au lancement :
 
 - `app.document.storage-path` : dossier des pièces jointes (défaut `./data/documents`) ;
 - `app.document.max-size` : taille maximale d'un document (défaut `10485760`, soit 10 Mo) ;
-- `app.mail.enabled` : activation de l'envoi d'e-mails (désactivé par défaut) ;
-- `spring.mail.*` : serveur SMTP si `app.mail.enabled=true`.
+- `app.mail.enabled` : activation de l'envoi d'e-mails (activé par défaut) ;
+- `spring.mail.*` : serveur SMTP Gmail (STARTTLS, auth, timeouts).
 
 ### Exemple de `.env`
 

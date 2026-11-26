@@ -89,11 +89,13 @@ export interface CreateUtilisateurPayload {
 
 
 export type StatutDemandeReinitialisation =
+  | 'ENVOYEE'
+  | 'TERMINEE'
+  | 'EXPIREE'
+  // Statuts de l'ancien flux, conservés pour les demandes historiques.
   | 'EN_ATTENTE'
   | 'APPROUVEE'
   | 'REFUSEE'
-  | 'EXPIREE'
-  | 'TERMINEE'
 
 export interface DemandeReinitialisation {
   id: number
@@ -111,12 +113,6 @@ export interface DemandeReinitialisation {
   genereePar: string | null
 }
 
-export interface MotDePasseTemporaire {
-  motDePasseTemporaire: string
-  expiration: string
-  message: string
-  demande: DemandeReinitialisation
-}
 export type CibleReinitialisation =
   | 'paiement'
   | 'demande'

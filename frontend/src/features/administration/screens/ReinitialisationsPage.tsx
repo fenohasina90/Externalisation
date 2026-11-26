@@ -2,70 +2,61 @@ import { useState } from 'react'
 import {
   Alert,
   Badge,
-  Button,
   Card,
-  CardTitle,
   EmptyState,
-  Field,
-  Input,
   PageHeader,
   Pagination,
   Select,
   Spinner,
 } from '@/components/ui'
 import { useApi } from '@/hooks/useApi'
-import { messageErreur } from '@/constants/messages'
 import type { ApiPage, PageQuery } from '@/types'
 import { formatDateHeure } from '@/utils/format'
 import { reinitialisationsApi } from '../services/administration.service'
 import type {
   DemandeReinitialisation,
-  MotDePasseTemporaire,
   StatutDemandeReinitialisation,
 } from '../types'
 
 const TAILLE_PAGE = 20
 
 const LIBELLES_STATUT: Record<StatutDemandeReinitialisation, string> = {
-  EN_ATTENTE: 'En attente',
-  APPROUVEE: 'Approuvée',
-  REFUSEE: 'Refusée',
-  EXPIREE: 'Expirée',
+  ENVOYEE: 'E-mail envoyé',
   TERMINEE: 'Terminée',
+  EXPIREE: 'Expirée',
+  // Ancien flux (historique).
+  EN_ATTENTE: 'En attente (ancien flux)',
+  APPROUVEE: 'Approuvée (ancien flux)',
+  REFUSEE: 'Refusée (ancien flux)',
 }
 
 type Tone = 'warning' | 'success' | 'danger' | 'neutral' | 'info' | 'default'
 
 function tonStatut(statut: StatutDemandeReinitialisation): Tone {
   switch (statut) {
-    case 'EN_ATTENTE':
-      return 'warning'
-    case 'APPROUVEE':
+    case 'ENVOYEE':
       return 'info'
-    case 'REFUSEE':
-      return 'danger'
-    case 'EXPIREE':
-      return 'neutral'
     case 'TERMINEE':
       return 'success'
-    default:
+    case 'EXPIREE':
       return 'neutral'
+    case 'REFUSEE':
+      return 'danger'
+    default:
+      return 'warning'
   }
 }
 
+/**
+ * Consultation des demandes de réinitialisation. Le mot de passe temporaire est
+ * généré et envoyé directement à l'utilisateur par e-mail : il n'existe plus
+ * d'action « Approuver » / « Refuser » / « Générer » côté administrateur.
+ */
 export function ReinitialisationsPage() {
   const [statut, setStatut] = useState<StatutDemandeReinitialisation | ''>('')
   const [page, setPage] = useState(0)
 
-  const [actionError, setActionError] = useState<string | null>(null)
-  const [traitementId, setTraitementId] = useState<number | null>(null)
-
-  const [refus, setRefus] = useState<DemandeReinitialisation | null>(null)
-  const [motif, setMotif] = useState('')
-
-  const [motDePasse, setMotDePasse] = useState<MotDePasseTemporaire | null>(null)
-
-  const { data, loading, error, reload } = useApi<ApiPage<DemandeReinitialisation>>(
+  const { data, loading, error } = useApi<ApiPage<DemandeReinitialisation>>(
     () =>
       reinitialisationsApi.list(statut || null, {
         page,
@@ -77,68 +68,11 @@ export function ReinitialisationsPage() {
 
   const demandes = data?.content ?? []
 
-  async function approuver(demande: DemandeReinitialisation): Promise<void> {
-    setActionError(null)
-    setTraitementId(demande.id)
-    try {
-      await reinitialisationsApi.approuver(demande.id)
-      reload()
-    } catch (err) {
-      setActionError(messageErreur(err))
-    } finally {
-      setTraitementId(null)
-    }
-  }
-
-  async function confirmerRefus(): Promise<void> {
-    if (!refus) return
-    if (!motif.trim()) {
-      setActionError('Le motif de refus est obligatoire.')
-      return
-    }
-    setActionError(null)
-    setTraitementId(refus.id)
-    try {
-      await reinitialisationsApi.refuser(refus.id, motif.trim())
-      setRefus(null)
-      setMotif('')
-      reload()
-    } catch (err) {
-      setActionError(messageErreur(err))
-    } finally {
-      setTraitementId(null)
-    }
-  }
-
-  async function generer(demande: DemandeReinitialisation): Promise<void> {
-    setActionError(null)
-    setMotDePasse(null)
-    setTraitementId(demande.id)
-    try {
-      const resultat = await reinitialisationsApi.reinitialiser(demande.id)
-      setMotDePasse(resultat)
-      reload()
-    } catch (err) {
-      setActionError(messageErreur(err))
-    } finally {
-      setTraitementId(null)
-    }
-  }
-
-  async function copierMotDePasse(): Promise<void> {
-    if (!motDePasse) return
-    try {
-      await navigator.clipboard.writeText(motDePasse.motDePasseTemporaire)
-    } catch {
-      setActionError('Impossible de copier automatiquement. Sélectionnez le mot de passe manuellement.')
-    }
-  }
-
   return (
     <>
       <PageHeader
         titre="Demandes de réinitialisation"
-        sousTitre="Approuvez ou refusez les demandes, puis générez un mot de passe temporaire."
+        sousTitre="Traitement automatique : un mot de passe temporaire est envoyé par e-mail directement à l'utilisateur. Aucune approbation n'est nécessaire."
       />
 
       <div className="toolbar">
@@ -159,60 +93,6 @@ export function ReinitialisationsPage() {
         </Select>
       </div>
 
-      {actionError ? <Alert tone="danger">{actionError}</Alert> : null}
-
-      {motDePasse ? (
-        <Alert tone="success">
-          <strong>Mot de passe temporaire généré.</strong> Communiquez-le à l’utilisateur.
-          <div className="mot-de-passe-temp">
-            <code className="code-inline">{motDePasse.motDePasseTemporaire}</code>
-            <Button variant="ghost" onClick={() => void copierMotDePasse()}>
-              Copier
-            </Button>
-          </div>
-          <span>
-            Valable jusqu’au {formatDateHeure(motDePasse.expiration)}. L’utilisateur devra le changer
-            à sa prochaine connexion.
-          </span>
-        </Alert>
-      ) : null}
-
-      {refus ? (
-        <Card className="form-card">
-          <CardTitle>
-            Refuser la demande de {refus.nomComplet} ({refus.username})
-          </CardTitle>
-          <Field label="Motif du refus" id="motif-refus">
-            <Input
-              id="motif-refus"
-              placeholder="Expliquez la raison du refus"
-              value={motif}
-              onChange={(event) => setMotif(event.target.value)}
-              autoFocus
-            />
-          </Field>
-          <div className="form-actions">
-            <Button
-              variant="danger"
-              loading={traitementId === refus.id}
-              loadingLabel="Enregistrement…"
-              onClick={() => void confirmerRefus()}
-            >
-              Confirmer le refus
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setRefus(null)
-                setMotif('')
-              }}
-            >
-              Annuler
-            </Button>
-          </div>
-        </Card>
-      ) : null}
-
       {loading ? (
         <Spinner label="Chargement des demandes…" />
       ) : error ? (
@@ -221,7 +101,7 @@ export function ReinitialisationsPage() {
         <Card>
           <EmptyState
             titre="Aucune demande de réinitialisation"
-            hint="Les demandes envoyées par les utilisateurs apparaîtront ici."
+            hint="Les demandes envoyées par les utilisateurs apparaîtront ici avec le statut de l'e-mail envoyé."
           />
         </Card>
       ) : (
@@ -235,8 +115,8 @@ export function ReinitialisationsPage() {
                   <th>E-mail</th>
                   <th>Demandée le</th>
                   <th>Statut</th>
-                  <th>Traitée par</th>
-                  <th>Actions</th>
+                  <th>E-mail envoyé le</th>
+                  <th>Expire le</th>
                 </tr>
               </thead>
               <tbody>
@@ -255,44 +135,19 @@ export function ReinitialisationsPage() {
                       ) : null}
                     </td>
                     <td>
-                      {demande.traiteePar ?? '—'}
-                      {demande.dateTraitement ? (
-                        <div className="cell-hint">{formatDateHeure(demande.dateTraitement)}</div>
-                      ) : null}
+                      {demande.dateGenerationMdp
+                        ? formatDateHeure(demande.dateGenerationMdp)
+                        : '—'}
+                      {demande.genereePar ? (
+                        <div className="cell-hint">Par {demande.genereePar}</div>
+                      ) : (
+                        <div className="cell-hint">Par e-mail</div>
+                      )}
                     </td>
                     <td>
-                      <div className="table-actions">
-                        {demande.statut === 'EN_ATTENTE' ? (
-                          <>
-                            <Button
-                              loading={traitementId === demande.id}
-                              onClick={() => void approuver(demande)}
-                            >
-                              Approuver
-                            </Button>
-                            <Button
-                              variant="danger"
-                              disabled={traitementId === demande.id}
-                              onClick={() => {
-                                setActionError(null)
-                                setRefus(demande)
-                                setMotif('')
-                              }}
-                            >
-                              Refuser
-                            </Button>
-                          </>
-                        ) : demande.statut === 'APPROUVEE' ? (
-                          <Button
-                            loading={traitementId === demande.id}
-                            onClick={() => void generer(demande)}
-                          >
-                            Générer un mot de passe
-                          </Button>
-                        ) : (
-                          <span className="cell-hint">Aucune action</span>
-                        )}
-                      </div>
+                      {demande.dateExpirationMdp
+                        ? formatDateHeure(demande.dateExpirationMdp)
+                        : '—'}
                     </td>
                   </tr>
                 ))}
