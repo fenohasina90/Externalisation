@@ -66,6 +66,7 @@ class DemandeDeboursTest {
     @Mock private FactureService factureService;
     @Mock private LigneServiceRepository ligneRepository;
     @Mock private ConfigurationService configurationService;
+    @Mock private com.cabex.backend.mail.ClientMailNotifier clientMailNotifier;
 
     private DemandeGestionService demandeService;
 
@@ -88,7 +89,8 @@ class DemandeDeboursTest {
                 responsableRepository, commercialRepository, serviceRepository,
                 historiqueRepository, statutRepository, paiementRepository,
                 utilisateurRepository, notificationService, auditService,
-                ligneServiceService, factureService, ligneRepository, configurationService);
+                ligneServiceService, factureService, ligneRepository, configurationService,
+                clientMailNotifier);
 
         ligneService = new LigneServiceService(ligneRepoLigne, historiqueLigneRepo,
                 demandeRepository, historiqueDemandeRepo2, statutRepo2, serviceRepo2,

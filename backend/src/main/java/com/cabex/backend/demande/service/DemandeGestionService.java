@@ -28,6 +28,7 @@ import com.cabex.backend.demande.repository.HistoriqueDemandeRepository;
 import com.cabex.backend.demande.repository.LigneServiceRepository;
 import com.cabex.backend.demande.repository.StatutDemandeRepository;
 import com.cabex.backend.exception.BusinessException;
+import com.cabex.backend.mail.ClientMailNotifier;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.facture.service.FactureService;
@@ -79,6 +80,7 @@ public class DemandeGestionService {
     private final FactureService factureService;
     private final LigneServiceRepository ligneRepository;
     private final ConfigurationService configurationService;
+    private final ClientMailNotifier clientMailNotifier;
 
     public DemandeGestionService(DemandeServiceRepository demandeRepository,
                                  SocieteRepository societeRepository,
@@ -94,7 +96,8 @@ public class DemandeGestionService {
                                  LigneServiceService ligneServiceService,
                                  FactureService factureService,
                                  LigneServiceRepository ligneRepository,
-                                 ConfigurationService configurationService) {
+                                 ConfigurationService configurationService,
+                                 ClientMailNotifier clientMailNotifier) {
         this.demandeRepository = demandeRepository;
         this.societeRepository = societeRepository;
         this.responsableRepository = responsableRepository;
@@ -110,6 +113,7 @@ public class DemandeGestionService {
         this.factureService = factureService;
         this.ligneRepository = ligneRepository;
         this.configurationService = configurationService;
+        this.clientMailNotifier = clientMailNotifier;
     }
 
     @Transactional(readOnly = true)
@@ -422,6 +426,10 @@ public class DemandeGestionService {
 
         auditService.log(AuditActions.CREATE, "DEMANDE", "DemandeService",
                 Long.valueOf(demande.getId()), null, toResponse(demande).referenceDemande());
+
+        // E-mail au client : fiche récapitulative + factures proforma en pièces jointes.
+        // Le notificateur journalise et absorbe tout échec SMTP/PDF.
+        clientMailNotifier.notifierDemandeCreee(demande.getId());
 
         return toResponse(demande);
     }

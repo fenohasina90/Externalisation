@@ -60,6 +60,7 @@ class DemandeStatutTest {
     @Mock private FactureService factureService;
     @Mock private LigneServiceRepository ligneRepository;
     @Mock private ConfigurationService configurationService;
+    @Mock private com.cabex.backend.mail.ClientMailNotifier clientMailNotifier;
 
     private DemandeGestionService service;
 
@@ -69,7 +70,8 @@ class DemandeStatutTest {
                 responsableRepository, commercialRepository, serviceRepository,
                 historiqueRepository, statutRepository, paiementRepository,
                 utilisateurRepository, notificationService, auditService,
-                ligneServiceService, factureService, ligneRepository, configurationService);
+                ligneServiceService, factureService, ligneRepository, configurationService,
+                clientMailNotifier);
     }
 
     private void statutDemande(Integer id, String statut) {

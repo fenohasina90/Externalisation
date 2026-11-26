@@ -8,6 +8,7 @@ import com.cabex.backend.facture.dto.GenererFacturesRequest;
 import com.cabex.backend.facture.dto.InclusionDisponibleResponse;
 import com.cabex.backend.facture.dto.ValiderFactureRequest;
 import com.cabex.backend.facture.service.FactureService;
+import com.cabex.backend.mail.ClientMailNotifier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,9 +34,11 @@ import java.util.List;
 public class FactureController {
 
     private final FactureService factureService;
+    private final ClientMailNotifier clientMailNotifier;
 
-    public FactureController(FactureService factureService) {
+    public FactureController(FactureService factureService, ClientMailNotifier clientMailNotifier) {
         this.factureService = factureService;
+        this.clientMailNotifier = clientMailNotifier;
     }
 
     @GetMapping("/demandes/{demandeId}/factures")
@@ -126,10 +129,13 @@ public class FactureController {
             description = "Crée la facture validée (nouvelle référence XXXXXEXT/TNR/YYYY) avec un montant propre, qui peut différer du montant proforma")
     public ResponseEntity<FactureResponse> valider(@PathVariable Integer id,
                                                    @RequestBody(required = false) ValiderFactureRequest request) {
-        return ResponseEntity.ok(factureService.valider(
+        FactureResponse response = factureService.valider(
                 id,
                 request != null ? request.commentaire() : null,
                 request != null ? request.montant() : null,
-                request != null ? request.lignes() : null));
+                request != null ? request.lignes() : null);
+        // E-mail au client avec la facture validée en PDF (échec SMTP non bloquant).
+        clientMailNotifier.notifierFactureValidee(response.factureValideeId());
+        return ResponseEntity.ok(response);
     }
 }

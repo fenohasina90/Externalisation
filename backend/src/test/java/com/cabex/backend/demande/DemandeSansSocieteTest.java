@@ -55,6 +55,7 @@ class DemandeSansSocieteTest {
     @Mock private com.cabex.backend.facture.service.FactureService factureService;
     @Mock private com.cabex.backend.demande.repository.LigneServiceRepository ligneRepository;
     @Mock private ConfigurationService configurationService;
+    @Mock private com.cabex.backend.mail.ClientMailNotifier clientMailNotifier;
 
     private DemandeGestionService service;
 
@@ -65,7 +66,7 @@ class DemandeSansSocieteTest {
                 commercialRepository, serviceRepository, historiqueRepository,
                 statutRepository, paiementRepository, utilisateurRepository,
                 notificationService, auditService, ligneServiceService,
-                factureService, ligneRepository, configurationService);
+                factureService, ligneRepository, configurationService, clientMailNotifier);
         lenient().when(statutRepository.findByStatut("EN_ATTENTE"))
                 .thenReturn(Optional.of(StatutDemande.builder().id(1).statut("EN_ATTENTE").build()));
         lenient().when(demandeRepository.countByReferenceDemandeStartingWith(anyString())).thenReturn(0L);
