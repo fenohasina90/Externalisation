@@ -1,8 +1,13 @@
 # Application web de gestion et de suivi des services d'externalisation
 
 Application full-stack de digitalisation des prestations d'externalisation : sociétés clientes,
-demandes multi-services, factures proforma, plans de paiement, échéances, paiements, documents
-PDF, notifications, rapports, journal d'audit et sauvegardes de la base MySQL.
+demandes multi-services, factures proforma et validées, paiements, documents PDF, notifications,
+rapports, journal d'audit et sauvegardes de la base MySQL.
+
+> **État du projet (novembre 2026)** : le module « plans de paiement / échéances » a été
+> supprimé. Les paiements sont désormais rattachés à une **facture validée**. Le schéma consolidé
+> contient **28 tables** et **67 permissions** (4 rôles : SUPER_ADMIN, ADMIN, ACCUEIL, ECONOMAT),
+> et le backend est couvert par **279 tests automatisés**.
 
 ## Sommaire
 
@@ -45,7 +50,7 @@ Externalisation/
 - Référentiels : clients, responsables, commerciaux, domaines et services.
 - Demandes de service multi-lignes, cycle de vie contrôlé et historique.
 - Factures proforma `UNIQUE` ou `PAR_SERVICE`, validation et PDF.
-- Plans de paiement, échéances, paiements, reçus et alertes.
+- Factures validées, paiements directs par facture, reçus, alertes de retard et facturation mensuelle d'abonnement.
 - Documents, notifications, tableau de bord, rapports (PDF/Excel/CSV), recherche globale et audit.
 - Sauvegarde/restauration MySQL : dump gzip, chiffrement AES-256-GCM optionnel, planification et
   rétention.
