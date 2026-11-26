@@ -146,6 +146,42 @@ class ClientMailNotifierTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void paiementEnvoieFactureEtRecuAuClient() {
+        DemandeService demande = demande("responsable@cabex.mg", "societe@cabex.mg");
+        when(documentService.factureValideeDocument(55))
+                .thenReturn("facture".getBytes(StandardCharsets.UTF_8));
+        when(documentService.recuPaiement(77))
+                .thenReturn("recu".getBytes(StandardCharsets.UTF_8));
+        when(mailService.envoyerDocumentsClient(
+                anyString(), anyString(), anyString(), anyString(), anyList()))
+                .thenReturn(true);
+
+        assertDoesNotThrow(() -> notifier.notifierPaiement(77, "PAY-2026-00001", 55, demande));
+
+        ArgumentCaptor<List<PieceJointeEmail>> pieces = ArgumentCaptor.forClass(List.class);
+        verify(mailService).envoyerDocumentsClient(
+                eq("societe@cabex.mg"), eq("responsable@cabex.mg"),
+                contains("PAY-2026-00001"), anyString(), pieces.capture());
+        assertEquals(2, pieces.getValue().size());
+        assertTrue(pieces.getValue().get(1).nomFichier().startsWith("recu-"));
+    }
+
+    @Test
+    void echecSmtpLorsDunPaiementNeBloquePas() {
+        DemandeService demande = demande("responsable@cabex.mg", null);
+        when(documentService.factureValideeDocument(55))
+                .thenReturn("facture".getBytes(StandardCharsets.UTF_8));
+        when(documentService.recuPaiement(77))
+                .thenReturn("recu".getBytes(StandardCharsets.UTF_8));
+        when(mailService.envoyerDocumentsClient(
+                anyString(), nullable(String.class), anyString(), anyString(), anyList()))
+                .thenReturn(false);
+
+        assertDoesNotThrow(() -> notifier.notifierPaiement(77, "PAY-2026-00001", 55, demande));
+    }
+
+    @Test
     void echecSmtpRemonteUneErreur() {
         DemandeService demande = demande("responsable@cabex.mg", null);
         FactureValidee facture = FactureValidee.builder().id(55)

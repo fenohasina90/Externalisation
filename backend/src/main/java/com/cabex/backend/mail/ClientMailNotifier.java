@@ -12,6 +12,8 @@ import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.facture.repository.FactureRepository;
 import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.mail.MailService.PieceJointeEmail;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +34,8 @@ import java.util.List;
  */
 @Service
 public class ClientMailNotifier {
+
+    private static final Logger log = LoggerFactory.getLogger(ClientMailNotifier.class);
 
     private final MailService mailService;
     private final DocumentGestionService documentService;
@@ -131,6 +135,44 @@ public class ClientMailNotifier {
                 List.of(new PieceJointeEmail(
                         "facture-" + MailService.nomFichier(reference) + ".pdf",
                         documentService.factureValideeDocument(factureValideeId)))));
+    }
+
+    /**
+     * Envoi automatique après enregistrement d'un paiement : facture validée liée
+     * et reçu de paiement en pièces jointes. Non bloquant : toute erreur est
+     * journalisée, le paiement est déjà enregistré.
+     */
+    public void notifierPaiement(Integer paiementId, String referencePaiement,
+                                 Integer factureValideeId, DemandeService demande) {
+        try {
+            Destinataires destinataires = destinataires(demande);
+            List<PieceJointeEmail> pieces = List.of(
+                    new PieceJointeEmail(
+                            "facture-" + MailService.nomFichier(
+                                    String.valueOf(factureValideeId)) + ".pdf",
+                            documentService.factureValideeDocument(factureValideeId)),
+                    new PieceJointeEmail(
+                            "recu-" + MailService.nomFichier(referencePaiement) + ".pdf",
+                            documentService.recuPaiement(paiementId)));
+            String corps = "<p>Bonjour,</p>"
+                    + "<p>Votre paiement <strong>" + referencePaiement
+                    + "</strong> a bien été enregistré.</p>"
+                    + "<p>Vous trouverez en pièces jointes la facture concernée et le reçu de paiement.</p>"
+                    + "<p>Cordialement,<br/>L'équipe CABEX</p>";
+            boolean envoye = mailService.envoyerDocumentsClient(
+                    destinataires.principal(),
+                    destinataires.copie(),
+                    "Paiement " + referencePaiement + " — CABEX",
+                    corps,
+                    pieces);
+            if (!envoye) {
+                log.warn("E-mail de paiement non envoyé à {} pour {}",
+                        destinataires.principal(), referencePaiement);
+            }
+        } catch (RuntimeException e) {
+            log.error("Échec de l'e-mail de paiement {} (paiement {})",
+                    referencePaiement, paiementId, e);
+        }
     }
 
     /**

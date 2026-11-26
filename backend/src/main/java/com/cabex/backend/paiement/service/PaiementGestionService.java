@@ -11,6 +11,7 @@ import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
+import com.cabex.backend.mail.ClientMailNotifier;
 import com.cabex.backend.notification.service.NotificationService;
 import com.cabex.backend.paiement.dto.CreatePaiementRequest;
 import com.cabex.backend.paiement.dto.ModePaiementResponse;
@@ -59,6 +60,7 @@ public class PaiementGestionService {
     private final LigneServiceRepository ligneRepository;
     private final LigneServiceService ligneServiceService;
     private final FactureService factureService;
+    private final ClientMailNotifier clientMailNotifier;
 
     public PaiementGestionService(PaiementRepository paiementRepository,
                                   DemandeServiceRepository demandeRepository,
@@ -70,7 +72,8 @@ public class PaiementGestionService {
                                   DemandeGestionService demandeGestionService,
                                   LigneServiceRepository ligneRepository,
                                   LigneServiceService ligneServiceService,
-                                  FactureService factureService) {
+                                  FactureService factureService,
+                                  ClientMailNotifier clientMailNotifier) {
         this.paiementRepository = paiementRepository;
         this.demandeRepository = demandeRepository;
         this.modeRepository = modeRepository;
@@ -82,6 +85,7 @@ public class PaiementGestionService {
         this.ligneRepository = ligneRepository;
         this.ligneServiceService = ligneServiceService;
         this.factureService = factureService;
+        this.clientMailNotifier = clientMailNotifier;
     }
 
     @Transactional(readOnly = true)
@@ -249,6 +253,14 @@ public class PaiementGestionService {
         auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
                 Long.valueOf(paiement.getId()), null,
                 paiement.getMontantPaye() + " : " + paiement.getReferencePaiement());
+
+        // E-mail automatique au client : facture liée + reçu de paiement.
+        // Le notificateur absorbe les erreurs SMTP pour ne pas annuler l'encaissement.
+        clientMailNotifier.notifierPaiement(
+                paiement.getId(),
+                paiement.getReferencePaiement(),
+                factureValidee.getId(),
+                demande);
 
         return PaiementMapper.toResponse(paiement);
     }
