@@ -37,6 +37,8 @@ class ClientMailNotifierTest {
     private FactureRepository factureRepository;
     @Mock
     private FactureValideeRepository factureValideeRepository;
+    @Mock
+    private com.cabex.backend.demande.repository.DemandeServiceRepository demandeRepository;
 
     @InjectMocks
     private ClientMailNotifier notifier;
@@ -179,6 +181,26 @@ class ClientMailNotifierTest {
                 .thenReturn(false);
 
         assertDoesNotThrow(() -> notifier.notifierPaiement(77, "PAY-2026-00001", 55, demande));
+    }
+
+    @Test
+    void ecouteurApresCommitEnvoieLeMailSansBloquer() {
+        DemandeService demande = demande("responsable@cabex.mg", "societe@cabex.mg");
+        when(demandeRepository.findById(10)).thenReturn(java.util.Optional.of(demande));
+        when(documentService.factureValideeDocument(55))
+                .thenReturn("facture".getBytes(StandardCharsets.UTF_8));
+        when(documentService.recuPaiement(77))
+                .thenReturn("recu".getBytes(StandardCharsets.UTF_8));
+        when(mailService.envoyerDocumentsClient(
+                anyString(), anyString(), anyString(), anyString(), anyList()))
+                .thenReturn(true);
+
+        assertDoesNotThrow(() -> notifier.onPaiementConfirme(
+                new com.cabex.backend.mail.PaiementMailEvent(77, "PAY-2026-00001", 55, 10)));
+
+        verify(mailService).envoyerDocumentsClient(
+                eq("societe@cabex.mg"), eq("responsable@cabex.mg"),
+                contains("PAY-2026-00001"), anyString(), anyList());
     }
 
     @Test

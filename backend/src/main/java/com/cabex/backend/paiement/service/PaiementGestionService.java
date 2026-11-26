@@ -11,7 +11,7 @@ import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
-import com.cabex.backend.mail.ClientMailNotifier;
+import com.cabex.backend.mail.PaiementMailEvent;
 import com.cabex.backend.notification.service.NotificationService;
 import com.cabex.backend.paiement.dto.CreatePaiementRequest;
 import com.cabex.backend.paiement.dto.ModePaiementResponse;
@@ -33,6 +33,7 @@ import com.cabex.backend.utilisateur.repository.UtilisateurRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,7 +61,7 @@ public class PaiementGestionService {
     private final LigneServiceRepository ligneRepository;
     private final LigneServiceService ligneServiceService;
     private final FactureService factureService;
-    private final ClientMailNotifier clientMailNotifier;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PaiementGestionService(PaiementRepository paiementRepository,
                                   DemandeServiceRepository demandeRepository,
@@ -73,7 +74,7 @@ public class PaiementGestionService {
                                   LigneServiceRepository ligneRepository,
                                   LigneServiceService ligneServiceService,
                                   FactureService factureService,
-                                  ClientMailNotifier clientMailNotifier) {
+                                  ApplicationEventPublisher eventPublisher) {
         this.paiementRepository = paiementRepository;
         this.demandeRepository = demandeRepository;
         this.modeRepository = modeRepository;
@@ -85,7 +86,7 @@ public class PaiementGestionService {
         this.ligneRepository = ligneRepository;
         this.ligneServiceService = ligneServiceService;
         this.factureService = factureService;
-        this.clientMailNotifier = clientMailNotifier;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -254,13 +255,13 @@ public class PaiementGestionService {
                 Long.valueOf(paiement.getId()), null,
                 paiement.getMontantPaye() + " : " + paiement.getReferencePaiement());
 
-        // E-mail automatique au client : facture liée + reçu de paiement.
-        // Le notificateur absorbe les erreurs SMTP pour ne pas annuler l'encaissement.
-        clientMailNotifier.notifierPaiement(
+        // E-mail au client en arrière-plan, uniquement après validation de la transaction :
+        // l'API répond immédiatement et l'encaissement n'est jamais ralenti par SMTP.
+        eventPublisher.publishEvent(new PaiementMailEvent(
                 paiement.getId(),
                 paiement.getReferencePaiement(),
                 factureValidee.getId(),
-                demande);
+                demande.getId()));
 
         return PaiementMapper.toResponse(paiement);
     }

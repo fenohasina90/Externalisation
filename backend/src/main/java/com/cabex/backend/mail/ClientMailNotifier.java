@@ -3,6 +3,7 @@ package com.cabex.backend.mail;
 import com.cabex.backend.client.entity.ClientResponsable;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.demande.entity.DemandeService;
+import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.document.service.DocumentGestionService;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
@@ -14,8 +15,12 @@ import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.mail.MailService.PieceJointeEmail;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,15 +46,36 @@ public class ClientMailNotifier {
     private final DocumentGestionService documentService;
     private final FactureRepository factureRepository;
     private final FactureValideeRepository factureValideeRepository;
+    private final DemandeServiceRepository demandeRepository;
 
     public ClientMailNotifier(MailService mailService,
                               DocumentGestionService documentService,
                               FactureRepository factureRepository,
-                              FactureValideeRepository factureValideeRepository) {
+                              FactureValideeRepository factureValideeRepository,
+                              DemandeServiceRepository demandeRepository) {
         this.mailService = mailService;
         this.documentService = documentService;
         this.factureRepository = factureRepository;
         this.factureValideeRepository = factureValideeRepository;
+        this.demandeRepository = demandeRepository;
+    }
+
+    /**
+     * Écouteur asynchrone : déclenché après la validation de la transaction de
+     * paiement, sur le pool {@code mailTaskExecutor}. Le reçu et la facture sont
+     * donc générés sur des données déjà commitées.
+     */
+    @Async("mailTaskExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public void onPaiementConfirme(PaiementMailEvent event) {
+        DemandeService demande = demandeRepository.findById(event.demandeId()).orElse(null);
+        if (demande == null) {
+            log.warn("E-mail de paiement ignoré : demande {} introuvable", event.demandeId());
+            return;
+        }
+        notifierPaiement(event.paiementId(), event.referencePaiement(),
+                event.factureValideeId(), demande);
     }
 
     /**
