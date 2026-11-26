@@ -31,12 +31,12 @@ import java.util.Set;
  *   <li>{@code paiement} : paiements + pièces jointes rattachées ;</li>
  *   <li>{@code demande} : demandes + tout ce qui en dépend — lignes,
  *       dossiers (création / transaction / associé), factures, paiements,
- *       plans de paiement proposés et échéances, historiques, pièces ;</li>
+ *       historiques, pièces ;</li>
  *   <li>{@code facture} : factures validées et proformas (lignes comprises)
  *       + paiements qui les règlent (et pièces rattachées) ;</li>
  *   <li>{@code service} : services + lignes externes qui les utilisent, et
  *       tout ce qui dépend de ces lignes (lignes de facturation validées,
- *       factures, paiements, plans, historiques de lignes). Les demandes
+ *       factures, paiements, historiques de lignes). Les demandes
  *       elles-mêmes ne sont pas supprimées ;</li>
  *   <li>{@code domaine} : domaines + leurs services, mêmes cascades que
  *       {@code service} ;</li>
@@ -123,8 +123,6 @@ public class ReinitialisationService {
                         ? "DELETE FROM piece_jointe"
                         : "DELETE FROM piece_jointe WHERE paiement_id IS NOT NULL");
         runIf(compteurs, paiement, "paiement", "DELETE FROM paiement");
-        runIf(compteurs, lignes, "echeance_paiement", "DELETE FROM echeance_paiement");
-        runIf(compteurs, lignes, "propos_paiement", "DELETE FROM propos_paiement");
         runIf(compteurs, facture, "facture_validee_ligne", "DELETE FROM facture_validee_ligne");
         runIf(compteurs, facture, "facture_validee", "DELETE FROM facture_validee");
         runIf(compteurs, facture || demande, "facture_proforma_ligne", "DELETE FROM facture_proforma_ligne");

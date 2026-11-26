@@ -28,8 +28,8 @@ public interface DemandeServiceRepository extends JpaRepository<DemandeService, 
 
     long countByReferenceDemandeStartingWith(String prefix);
 
-    /** Nombre de demandes créées dans l'année (références du nouveau format DEM-*-*-AAAA-EXT-*). */
-    @Query("SELECT COUNT(d) FROM DemandeService d WHERE d.referenceDemande LIKE CONCAT('%', :annee, 'EXT%')")
+    @Query("SELECT COUNT(d) FROM DemandeService d "
+            + "WHERE d.referenceDemande LIKE CONCAT('%', :annee, 'EXT%')")
     long countByAnnee(@Param("annee") Integer annee);
     
 

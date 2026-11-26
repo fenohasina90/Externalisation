@@ -42,7 +42,7 @@ function libelleTypeFacture(f: FactureValidee): string {
 
 /**
  * Enregistrer un paiement — POST /api/paiements.
- * Présélection via `?demande=DEM-2026-00017` depuis un onglet « Encaisser » ; la
+ * Présélection via `?demande=DEM-01-01-2026-EXT-00017` depuis un onglet « Encaisser » ; la
  * sélection de la facture se fait sur la liste des factures validées du client.
  *
  * Le paiement est toujours rattaché à la facture (jamais au service) —
@@ -320,7 +320,7 @@ export function NouveauPaiementPage() {
                     name="demande"
                   />
                   <span className="form-help">
-                    Saisissez la référence (ex. DEM-2026-00017) ou le nom du client.
+                    Saisissez la référence ou le nom du client.
                   </span>
                 </label>
 
