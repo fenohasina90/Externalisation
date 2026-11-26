@@ -3,137 +3,184 @@ package com.cabex.backend.mail;
 import com.cabex.backend.client.entity.ClientResponsable;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.demande.entity.DemandeService;
-import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.document.service.DocumentGestionService;
+import com.cabex.backend.exception.BusinessException;
+import com.cabex.backend.exception.ErrorMessages;
+import com.cabex.backend.exception.ResourceNotFoundException;
 import com.cabex.backend.facture.entity.Facture;
 import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.facture.repository.FactureRepository;
 import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.mail.MailService.PieceJointeEmail;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Notifications e-mail destinées au client : envoi de la fiche récapitulative et
- * des factures proforma à la création d'une demande, puis de la facture validée
- * à chaque validation.
- *
- * <p>L'envoi est volontairement non bloquant : un problème SMTP, une adresse
- * absente ou un PDF indisponible sont journalisés sans annuler l'opération
- * métier (création de demande ou validation de facture).</p>
+ * Envois e-mail manuels au responsable client, déclenchés par les boutons
+ * « Envoyer email » de la fiche de demande :
+ * <ul>
+ *   <li>proformas : fiche récapitulatif + factures proforma du mode PAR_SERVICE,
+ *       sauf le débours qui est remplacé par sa facture validée ;</li>
+ *   <li>facture validée : uniquement la facture concernée.</li>
+ * </ul>
+ * La société est destinataire principal et le responsable client est en copie.
+ * Si la société n'a pas d'e-mail, le responsable devient destinataire principal.
+ * Sans aucune adresse ou en cas d'échec SMTP, une erreur visible est remontée.
  */
 @Service
 public class ClientMailNotifier {
 
-    private static final Logger log = LoggerFactory.getLogger(ClientMailNotifier.class);
-
     private final MailService mailService;
     private final DocumentGestionService documentService;
-    private final DemandeServiceRepository demandeRepository;
     private final FactureRepository factureRepository;
     private final FactureValideeRepository factureValideeRepository;
 
     public ClientMailNotifier(MailService mailService,
                               DocumentGestionService documentService,
-                              DemandeServiceRepository demandeRepository,
                               FactureRepository factureRepository,
                               FactureValideeRepository factureValideeRepository) {
         this.mailService = mailService;
         this.documentService = documentService;
-        this.demandeRepository = demandeRepository;
         this.factureRepository = factureRepository;
         this.factureValideeRepository = factureValideeRepository;
     }
 
-    /** Appelé après la création complète d'une demande (factures proforma générées). */
-    public void notifierDemandeCreee(Integer demandeId) {
-        try {
-            DemandeService demande = demandeRepository.findById(demandeId).orElse(null);
-            if (demande == null) {
-                log.warn("E-mail client ignoré : demande {} introuvable", demandeId);
-                return;
-            }
-            String destinataire = destinataire(demande);
-            if (destinataire == null) {
-                log.info("E-mail client ignoré pour la demande {} : aucune adresse e-mail renseignée",
-                        demande.getReferenceDemande());
-                return;
-            }
-
-            byte[] recapitulatif = documentService.recapitulatifDemande(demandeId);
-            List<PieceJointeEmail> proformas = new ArrayList<>();
-            for (Facture facture : factureRepository.findByDemandeId(demandeId)) {
-                byte[] pdf = documentService.factureProforma(facture.getId());
-                proformas.add(new PieceJointeEmail(
-                        "proforma-" + facture.getReferenceFacture().replaceAll("[^A-Za-z0-9._-]", "-")
-                                + ".pdf",
-                        pdf));
-            }
-
-            boolean envoye = mailService.envoyerDemandeClient(
-                    destinataire, demande.getReferenceDemande(), recapitulatif, proformas);
-            logInfoEnvoi(envoye, destinataire, demande.getReferenceDemande());
-        } catch (RuntimeException e) {
-            log.error("Échec de la préparation de l'e-mail client pour la demande {}", demandeId, e);
+    /**
+     * Envoie la fiche récapitulatif et les factures proforma d'une demande.
+     * En mode PAR_SERVICE, la ligne de débours n'est pas envoyée en proforma :
+     * c'est sa facture validée qui est jointe. Tout est réuni dans un seul e-mail.
+     */
+    @Transactional(readOnly = true)
+    public void envoyerProformas(Integer factureId) {
+        Facture facture = factureRepository.findById(factureId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Facture", factureId)));
+        DemandeService demande = facture.getDemande();
+        if (demande == null) {
+            throw new BusinessException("La facture n'est rattachée à aucune demande.");
         }
+        Destinataires destinataires = destinataires(demande);
+
+        List<PieceJointeEmail> pieces = new ArrayList<>();
+        pieces.add(new PieceJointeEmail(
+                "recapitulatif-" + MailService.nomFichier(demande.getReferenceDemande()) + ".pdf",
+                documentService.recapitulatifDemande(demande.getId())));
+
+        boolean parService = "PAR_SERVICE".equals(facture.getModeFacturation());
+        if (parService) {
+            for (Facture f : factureRepository.findByDemandeId(demande.getId())) {
+                if (estDebours(f)) {
+                    continue;
+                }
+                pieces.add(new PieceJointeEmail(
+                        "proforma-" + MailService.nomFichier(f.getReferenceFacture()) + ".pdf",
+                        documentService.factureProforma(f.getId())));
+            }
+            // Le débours est représenté par sa facture validée, pas par sa proforma.
+            for (FactureValidee fv : factureValideeRepository
+                    .findByDemandeIdOrderByIdAsc(demande.getId())) {
+                if (estDebours(fv)) {
+                    pieces.add(new PieceJointeEmail(
+                            "facture-" + MailService.nomFichier(fv.getReferenceFactureValidee()) + ".pdf",
+                            documentService.factureValideeDocument(fv.getId())));
+                }
+            }
+        } else {
+            pieces.add(new PieceJointeEmail(
+                    "proforma-" + MailService.nomFichier(facture.getReferenceFacture()) + ".pdf",
+                    documentService.factureProforma(factureId)));
+        }
+
+        String corps = "<p>Bonjour,</p>"
+                + "<p>Vous trouverez en pièces jointes la fiche récapitulative et les factures "
+                + "de votre demande <strong>" + demande.getReferenceDemande() + "</strong>.</p>"
+                + "<p>Cordialement,<br/>L'équipe CABEX</p>";
+        verifierEnvoi(mailService.envoyerDocumentsClient(
+                destinataires.principal(),
+                destinataires.copie(),
+                "Documents de votre demande " + demande.getReferenceDemande() + " — CABEX",
+                corps,
+                pieces));
     }
 
-    /** Appelé après la validation d'une proforma, avec l'identifiant de la facture validée. */
-    public void notifierFactureValidee(Integer factureValideeId) {
-        if (factureValideeId == null) {
-            return;
+    /** Envoie uniquement la facture validée sur laquelle l'utilisateur a cliqué. */
+    @Transactional(readOnly = true)
+    public void envoyerFactureValidee(Integer factureValideeId) {
+        FactureValidee facture = factureValideeRepository.findById(factureValideeId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.introuvable("Facture validée", factureValideeId)));
+        DemandeService demande = facture.getDemande();
+        if (demande == null) {
+            throw new BusinessException("La facture validée n'est rattachée à aucune demande.");
         }
-        try {
-            FactureValidee facture = factureValideeRepository.findById(factureValideeId).orElse(null);
-            if (facture == null || facture.getDemande() == null) {
-                log.warn("E-mail client ignoré : facture validée {} introuvable", factureValideeId);
-                return;
-            }
-            DemandeService demande = facture.getDemande();
-            String destinataire = destinataire(demande);
-            if (destinataire == null) {
-                log.info("E-mail client ignoré pour {} : aucune adresse e-mail renseignée",
-                        facture.getReferenceFactureValidee());
-                return;
-            }
+        Destinataires destinataires = destinataires(demande);
+        String reference = facture.getReferenceFactureValidee();
 
-            byte[] pdf = documentService.factureValideeDocument(factureValideeId);
-            boolean envoye = mailService.envoyerFactureValideeClient(
-                    destinataire,
-                    demande.getReferenceDemande(),
-                    facture.getReferenceFactureValidee(),
-                    pdf);
-            logInfoEnvoi(envoye, destinataire, facture.getReferenceFactureValidee());
-        } catch (RuntimeException e) {
-            log.error("Échec de la préparation de l'e-mail client pour la facture validée {}",
-                    factureValideeId, e);
-        }
+        String corps = "<p>Bonjour,</p>"
+                + "<p>Vous trouverez en pièce jointe la facture <strong>" + reference
+                + "</strong> de votre demande " + demande.getReferenceDemande() + ".</p>"
+                + "<p>Cordialement,<br/>L'équipe CABEX</p>";
+        verifierEnvoi(mailService.envoyerDocumentsClient(
+                destinataires.principal(),
+                destinataires.copie(),
+                "Facture " + reference + " — CABEX",
+                corps,
+                List.of(new PieceJointeEmail(
+                        "facture-" + MailService.nomFichier(reference) + ".pdf",
+                        documentService.factureValideeDocument(factureValideeId)))));
     }
 
-    /** Responsable client en priorité, puis société ; {@code null} si aucune adresse. */
-    private String destinataire(DemandeService demande) {
-        ClientResponsable responsable = demande.getClientResponsable();
-        if (responsable != null && estRenseigne(responsable.getEmail())) {
-            return responsable.getEmail().trim();
-        }
+    /**
+     * Société en destinataire principal, responsable en copie. Si la société n'a
+     * pas d'adresse, le responsable devient destinataire principal (sans copie).
+     */
+    private Destinataires destinataires(DemandeService demande) {
+        String emailSociete = null;
         Societe societe = demande.getSociete();
-        if (societe != null && estRenseigne(societe.getEmail())) {
-            return societe.getEmail().trim();
+        if (societe != null && societe.getEmail() != null && !societe.getEmail().isBlank()) {
+            emailSociete = societe.getEmail().trim();
         }
-        return null;
+        String emailResponsable = null;
+        ClientResponsable responsable = demande.getClientResponsable();
+        if (responsable != null && responsable.getEmail() != null
+                && !responsable.getEmail().isBlank()) {
+            emailResponsable = responsable.getEmail().trim();
+        }
+
+        if (emailSociete == null && emailResponsable == null) {
+            throw new BusinessException(
+                    "Ni la société ni le responsable client n'a d'adresse e-mail. "
+                            + "Renseignez une adresse sur la fiche client avant l'envoi.");
+        }
+        return emailSociete != null
+                ? new Destinataires(emailSociete, emailResponsable)
+                : new Destinataires(emailResponsable, null);
     }
 
-    private boolean estRenseigne(String email) {
-        return email != null && !email.isBlank();
+    private record Destinataires(String principal, String copie) {
     }
 
-    private void logInfoEnvoi(boolean envoye, String destinataire, String reference) {
+    private boolean estDebours(Facture facture) {
+        if (facture.getLignesProforma() != null && facture.getLignesProforma().stream()
+                .anyMatch(l -> "DEBOURS".equalsIgnoreCase(l.getCategorie()))) {
+            return true;
+        }
+        return facture.getLignes() != null && facture.getLignes().stream()
+                .anyMatch(l -> "DEBOURS".equalsIgnoreCase(l.getCategorie()));
+    }
+
+    private boolean estDebours(FactureValidee facture) {
+        return facture.getMois() == null && facture.getFactureProforma() == null;
+    }
+
+    private void verifierEnvoi(boolean envoye) {
         if (!envoye) {
-            log.warn("E-mail client non envoyé à {} pour {}", destinataire, reference);
+            throw new BusinessException(
+                    "L'e-mail n'a pas pu être envoyé. Vérifiez la configuration SMTP "
+                            + "(identifiants Gmail) et réessayez.");
         }
     }
 }

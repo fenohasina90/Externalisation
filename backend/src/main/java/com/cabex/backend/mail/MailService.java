@@ -10,7 +10,6 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -77,45 +76,15 @@ public class MailService {
     }
 
     /**
-     * Envoie au client la fiche récapitulative et les factures proforma de sa demande.
-     * Contrairement au mot de passe temporaire, un échec n'est pas bloquant : la
-     * demande est déjà créée, on journalise l'incident et on retourne {@code false}.
+     * Envoie un e-mail au responsable client avec les documents PDF joints.
+     * Utilisé par les actions manuelles « Envoyer email » des fiches de factures.
      */
-    public boolean envoyerDemandeClient(String destinataire, String referenceDemande,
-                                        byte[] recapitulatif, List<PieceJointeEmail> proformas) {
-        List<PieceJointeEmail> pieces = new ArrayList<>();
-        pieces.add(new PieceJointeEmail(
-                "recapitulatif-" + nomFichier(referenceDemande) + ".pdf", recapitulatif));
-        if (proformas != null) {
-            pieces.addAll(proformas);
-        }
-        String corps = "<p>Bonjour,</p>"
-                + "<p>Votre demande <strong>" + escape(referenceDemande) + "</strong> a bien été enregistrée.</p>"
-                + "<p>Vous trouverez en pièces jointes la fiche récapitulative"
-                + (pieces.size() > 1 ? " ainsi que " + (pieces.size() - 1) + " facture(s) proforma" : "")
-                + " correspondant à votre demande.</p>"
-                + "<p>Cordialement,<br/>L'équipe CABEX</p>";
-        return envoyerAvecPiecesJointes(
-                destinataire, "Votre demande " + referenceDemande + " — CABEX", corps, pieces);
+    public boolean envoyerDocumentsClient(String destinataire, String copie, String objet,
+                                          String corpsHtml, List<PieceJointeEmail> pieces) {
+        return envoyerAvecPiecesJointes(destinataire, copie, objet, corpsHtml, pieces);
     }
 
-    /** Envoie au client la facture validée en PDF après validation de la proforma. */
-    public boolean envoyerFactureValideeClient(String destinataire, String referenceDemande,
-                                               String referenceFactureValidee, byte[] pdf) {
-        String corps = "<p>Bonjour,</p>"
-                + "<p>La facture <strong>" + escape(referenceFactureValidee) + "</strong> de votre demande "
-                + escape(referenceDemande) + " a été validée.</p>"
-                + "<p>Vous trouverez cette facture en pièce jointe.</p>"
-                + "<p>Cordialement,<br/>L'équipe CABEX</p>";
-        return envoyerAvecPiecesJointes(
-                destinataire,
-                "Facture " + referenceFactureValidee + " validée — CABEX",
-                corps,
-                List.of(new PieceJointeEmail(
-                        "facture-" + nomFichier(referenceFactureValidee) + ".pdf", pdf)));
-    }
-
-    private boolean envoyerAvecPiecesJointes(String destinataire, String sujet,
+    private boolean envoyerAvecPiecesJointes(String destinataire, String copie, String sujet,
                                              String corpsHtml, List<PieceJointeEmail> pieces) {
         JavaMailSender sender = mailSenderProvider.getIfAvailable();
         if (!enabled || sender == null) {
@@ -128,6 +97,9 @@ public class MailService {
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setFrom(from, fromName);
             helper.setTo(destinataire);
+            if (copie != null && !copie.isBlank()) {
+                helper.addCc(copie.trim());
+            }
             helper.setSubject(sujet);
             helper.setText(corpsHtml, true);
             int jointes = 0;
@@ -147,7 +119,7 @@ public class MailService {
         }
     }
 
-    private String nomFichier(String reference) {
+    public static String nomFichier(String reference) {
         if (reference == null) {
             return "document";
         }

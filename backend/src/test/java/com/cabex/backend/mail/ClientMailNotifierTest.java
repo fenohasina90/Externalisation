@@ -3,9 +3,10 @@ package com.cabex.backend.mail;
 import com.cabex.backend.client.entity.ClientResponsable;
 import com.cabex.backend.client.entity.Societe;
 import com.cabex.backend.demande.entity.DemandeService;
-import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.document.service.DocumentGestionService;
+import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.facture.entity.Facture;
+import com.cabex.backend.facture.entity.FactureProformaLigne;
 import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.facture.repository.FactureRepository;
 import com.cabex.backend.facture.repository.FactureValideeRepository;
@@ -33,8 +34,6 @@ class ClientMailNotifierTest {
     @Mock
     private DocumentGestionService documentService;
     @Mock
-    private DemandeServiceRepository demandeRepository;
-    @Mock
     private FactureRepository factureRepository;
     @Mock
     private FactureValideeRepository factureValideeRepository;
@@ -56,79 +55,111 @@ class ClientMailNotifierTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void creationEnvoieRecapitulatifEtToutesLesProformasAuResponsable() {
+    void proformasEnvoieRecapitulatifEtRemplaceLeDeboursParSaFactureValidee() {
         DemandeService demande = demande("responsable@cabex.mg", "societe@cabex.mg");
-        when(demandeRepository.findById(10)).thenReturn(Optional.of(demande));
-        byte[] recap = "recap".getBytes(StandardCharsets.UTF_8);
-        when(documentService.recapitulatifDemande(10)).thenReturn(recap);
-        Facture f1 = Facture.builder().id(101).referenceFacture("PRO-01012026-00001").build();
-        Facture f2 = Facture.builder().id(102).referenceFacture("PRO-01012026-00002").build();
-        when(factureRepository.findByDemandeId(10)).thenReturn(List.of(f1, f2));
+        Facture proformaService = Facture.builder().id(101)
+                .referenceFacture("PRO-01012026-00001").modeFacturation("PAR_SERVICE")
+                .demande(demande).build();
+        Facture proformaDebours = Facture.builder().id(102)
+                .referenceFacture("PRO-01012026-00002").modeFacturation("PAR_SERVICE")
+                .demande(demande)
+                .lignesProforma(List.of(FactureProformaLigne.builder().categorie("DEBOURS").build()))
+                .build();
+        when(factureRepository.findById(101)).thenReturn(Optional.of(proformaService));
+        when(factureRepository.findByDemandeId(10)).thenReturn(List.of(proformaService, proformaDebours));
+        FactureValidee debours = FactureValidee.builder().id(60)
+                .referenceFactureValidee("00002EXT/TNR/2026").demande(demande).build();
+        when(factureValideeRepository.findByDemandeIdOrderByIdAsc(10)).thenReturn(List.of(debours));
+        when(documentService.recapitulatifDemande(10)).thenReturn("recap".getBytes(StandardCharsets.UTF_8));
         when(documentService.factureProforma(101)).thenReturn("p1".getBytes(StandardCharsets.UTF_8));
-        when(documentService.factureProforma(102)).thenReturn("p2".getBytes(StandardCharsets.UTF_8));
-        when(mailService.envoyerDemandeClient(anyString(), anyString(), any(), anyList())).thenReturn(true);
+        when(documentService.factureValideeDocument(60)).thenReturn("debours".getBytes(StandardCharsets.UTF_8));
+        when(mailService.envoyerDocumentsClient(
+                anyString(), anyString(), anyString(), anyString(), anyList()))
+                .thenReturn(true);
 
-        notifier.notifierDemandeCreee(10);
+        notifier.envoyerProformas(101);
 
         ArgumentCaptor<List<PieceJointeEmail>> pieces = ArgumentCaptor.forClass(List.class);
-        verify(mailService).envoyerDemandeClient(
-                eq("responsable@cabex.mg"),
-                eq("DEM-01012026EXT00001"),
-                same(recap),
+        verify(mailService).envoyerDocumentsClient(
+                eq("societe@cabex.mg"), eq("responsable@cabex.mg"), anyString(), anyString(),
                 pieces.capture());
-        // Le récapitulatif est ajouté par MailService ; ici on vérifie les 2 proformas.
-        assertEquals(2, pieces.getValue().size());
-        assertTrue(pieces.getValue().get(0).nomFichier().contains("PRO-01012026-00001"));
-        assertTrue(pieces.getValue().get(1).nomFichier().contains("PRO-01012026-00002"));
+        assertEquals(3, pieces.getValue().size());
+        assertTrue(pieces.getValue().get(0).nomFichier().startsWith("recapitulatif-"));
+        assertTrue(pieces.getValue().get(1).nomFichier().contains("PRO-01012026-00001"));
+        assertTrue(pieces.getValue().get(2).nomFichier().contains("00002EXT-TNR-2026"));
+        verify(documentService, never()).factureProforma(102);
     }
 
     @Test
-    void sansAdresseClientAucunEnvoi() {
-        when(demandeRepository.findById(10)).thenReturn(Optional.of(demande(null, null)));
+    void sansAucuneAdresseErreurVisibleEtAucunEnvoi() {
+        Facture facture = Facture.builder().id(101).referenceFacture("PRO-01012026-00001")
+                .modeFacturation("UNIQUE").demande(demande(null, null)).build();
+        when(factureRepository.findById(101)).thenReturn(Optional.of(facture));
 
-        notifier.notifierDemandeCreee(10);
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> notifier.envoyerProformas(101));
 
-        verifyNoInteractions(mailService, documentService, factureRepository);
+        assertTrue(ex.getMessage().contains("adresse e-mail"));
+        verifyNoInteractions(mailService);
     }
 
     @Test
-    void validationEnvoieLaFactureValideeEnPdf() {
-        DemandeService demande = demande("responsable@cabex.mg", null);
-        FactureValidee facture = FactureValidee.builder()
-                .id(55)
-                .referenceFactureValidee("00001EXT/TNR/2026")
-                .demande(demande)
-                .build();
+    void societeSansEmailEnvoieAuResponsableCommeDestinatairePrincipal() {
+        Facture facture = Facture.builder().id(101).referenceFacture("PRO-01012026-00001")
+                .modeFacturation("UNIQUE").demande(demande("responsable@cabex.mg", null)).build();
+        when(factureRepository.findById(101)).thenReturn(Optional.of(facture));
+        when(documentService.recapitulatifDemande(10))
+                .thenReturn("recap".getBytes(StandardCharsets.UTF_8));
+        when(documentService.factureProforma(101))
+                .thenReturn("p1".getBytes(StandardCharsets.UTF_8));
+        when(mailService.envoyerDocumentsClient(
+                anyString(), nullable(String.class), anyString(), anyString(), anyList()))
+                .thenReturn(true);
+
+        notifier.envoyerProformas(101);
+
+        verify(mailService).envoyerDocumentsClient(
+                eq("responsable@cabex.mg"), isNull(), anyString(), anyString(), anyList());
+    }
+
+    @Test
+    void factureValideeEnvoieUniquementLaFactureConcernee() {
+        DemandeService demande = demande("responsable@cabex.mg", "societe@cabex.mg");
+        FactureValidee facture = FactureValidee.builder().id(55)
+                .referenceFactureValidee("00001EXT/TNR/2026").demande(demande).build();
         when(factureValideeRepository.findById(55)).thenReturn(Optional.of(facture));
         byte[] pdf = "facture".getBytes(StandardCharsets.UTF_8);
         when(documentService.factureValideeDocument(55)).thenReturn(pdf);
-        when(mailService.envoyerFactureValideeClient(
-                anyString(), anyString(), anyString(), any())).thenReturn(true);
+        when(mailService.envoyerDocumentsClient(
+                anyString(), anyString(), anyString(), anyString(), anyList()))
+                .thenReturn(true);
 
-        assertDoesNotThrow(() -> notifier.notifierFactureValidee(55));
+        notifier.envoyerFactureValidee(55);
 
-        verify(mailService).envoyerFactureValideeClient(
-                "responsable@cabex.mg",
-                "DEM-01012026EXT00001",
-                "00001EXT/TNR/2026",
-                pdf);
+        verify(mailService).envoyerDocumentsClient(
+                eq("societe@cabex.mg"),
+                eq("responsable@cabex.mg"),
+                contains("00001EXT/TNR/2026"),
+                anyString(),
+                argThat(pieces -> pieces.size() == 1
+                        && pieces.get(0).nomFichier().contains("00001EXT-TNR-2026")));
     }
 
     @Test
-    void echecSmtpNestPasBloquant() {
-        when(demandeRepository.findById(10)).thenReturn(Optional.of(demande(null, "societe@cabex.mg")));
-        when(documentService.recapitulatifDemande(10))
-                .thenReturn("recap".getBytes(StandardCharsets.UTF_8));
-        when(factureRepository.findByDemandeId(10)).thenReturn(List.of());
-        when(mailService.envoyerDemandeClient(anyString(), anyString(), any(), anyList()))
+    void echecSmtpRemonteUneErreur() {
+        DemandeService demande = demande("responsable@cabex.mg", null);
+        FactureValidee facture = FactureValidee.builder().id(55)
+                .referenceFactureValidee("00001EXT/TNR/2026").demande(demande).build();
+        when(factureValideeRepository.findById(55)).thenReturn(Optional.of(facture));
+        when(documentService.factureValideeDocument(55))
+                .thenReturn("facture".getBytes(StandardCharsets.UTF_8));
+        when(mailService.envoyerDocumentsClient(
+                anyString(), nullable(String.class), anyString(), anyString(), anyList()))
                 .thenReturn(false);
 
-        assertDoesNotThrow(() -> notifier.notifierDemandeCreee(10));
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> notifier.envoyerFactureValidee(55));
 
-        verify(mailService).envoyerDemandeClient(
-                eq("societe@cabex.mg"),
-                eq("DEM-01012026EXT00001"),
-                any(),
-                anyList());
+        assertTrue(ex.getMessage().contains("n'a pas pu être envoyé"));
     }
 }

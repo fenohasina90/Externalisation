@@ -179,6 +179,12 @@ export const facturesApi = {
     return data
   },
 
+  /** Envoie au responsable client la fiche récapitulative et les proformas en PDF. */
+  async envoyerEmail(id: number): Promise<{ message: string }> {
+    const { data } = await http.post<{ message: string }>(`/factures/${id}/envoyer-email`)
+    return data
+  },
+
   /** URL de téléchargement du PDF proforma. */
   proformaUrl(id: number): string {
     return `/api/factures/${id}/document/proforma`
@@ -224,6 +230,12 @@ export const facturesValideesApi = {
   /** Télécharger le PDF de la facture mensuelle (références facture générale / proforma / demande). */
   abonnementUrl(id: number): string {
     return `/factures-validees/${id}/document/abonnement`
+  },
+
+  /** Envoie au responsable client cette facture validée en PDF. */
+  async envoyerEmail(id: number): Promise<{ message: string }> {
+    const { data } = await http.post<{ message: string }>(`/factures-validees/${id}/envoyer-email`)
+    return data
   },
 
   /** Supprimer une facture du mois — uniquement si aucun paiement n'y a été enregistré. */

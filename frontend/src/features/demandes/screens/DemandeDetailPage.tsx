@@ -90,6 +90,7 @@ export function DemandeDetailPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [traitement, setTraitement] = useState(false)
+  const [envoiEmail, setEnvoiEmail] = useState<number | null>(null)
 
   const { data: demande, loading, error, reload } = useApi<Demande | null>(
     () => (!reference ? Promise.resolve(null) : demandesApi.getByReference(reference)),
@@ -158,6 +159,36 @@ export function DemandeDetailPage() {
       URL.revokeObjectURL(url)
     } catch {
       setErreur('Téléchargement du récapitulatif impossible')
+    }
+  }
+
+  /** Envoi manuel des proformas + récapitulatif au responsable client. */
+  const envoyerEmailProforma = async (facture: Facture) => {
+    setEnvoiEmail(facture.id)
+    setErreur(null)
+    setMessage(null)
+    try {
+      const reponse = await facturesApi.envoyerEmail(facture.id)
+      setMessage(reponse.message)
+    } catch (err) {
+      setErreur(messageErreur(err))
+    } finally {
+      setEnvoiEmail(null)
+    }
+  }
+
+  /** Envoi manuel d'une facture validée au responsable client. */
+  const envoyerEmailValidee = async (facture: FactureValidee) => {
+    setEnvoiEmail(facture.id)
+    setErreur(null)
+    setMessage(null)
+    try {
+      const reponse = await facturesValideesApi.envoyerEmail(facture.id)
+      setMessage(reponse.message)
+    } catch (err) {
+      setErreur(messageErreur(err))
+    } finally {
+      setEnvoiEmail(null)
     }
   }
 
@@ -323,7 +354,10 @@ export function DemandeDetailPage() {
           demandeId={demande.id}
           demandeReference={demande.referenceDemande}
           traitement={traitement}
+          envoiEmail={envoiEmail}
           onTelecharger={(f) => void telechargerProforma(f)}
+          onEnvoyerProforma={(f) => void envoyerEmailProforma(f)}
+          onEnvoyerValidee={(f) => void envoyerEmailValidee(f)}
           onErreur={setErreur}
           onMessage={setMessage}
           onChange={toutRecharger}
@@ -332,6 +366,8 @@ export function DemandeDetailPage() {
       {onglet === 'factures-mensuelles' && (
         <FacturesAbonnementSection
           demande={demande}
+          envoiEmail={envoiEmail}
+          onEnvoyerValidee={(f) => void envoyerEmailValidee(f)}
           onErreur={setErreur}
           onMessage={setMessage}
         />
@@ -427,7 +463,10 @@ function FacturesTab({
   demandeId,
   demandeReference,
   traitement,
+  envoiEmail,
   onTelecharger,
+  onEnvoyerProforma,
+  onEnvoyerValidee,
   onErreur,
   onMessage,
   onChange,
@@ -436,7 +475,10 @@ function FacturesTab({
   demandeId: number
   demandeReference: string
   traitement: boolean
+  envoiEmail: number | null
   onTelecharger: (facture: Facture) => void
+  onEnvoyerProforma: (facture: Facture) => void
+  onEnvoyerValidee: (facture: FactureValidee) => void
   onErreur: (message: string | null) => void
   onMessage: (message: string | null) => void
   onChange: () => void
@@ -684,19 +726,30 @@ function FacturesTab({
                         </div>
                       </td>
                       <td>
-                        {reste > 0 ? (
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                          {reste > 0 ? (
+                            <button
+                              type="button"
+                              className="btn-primary"
+                              onClick={() => navigate(
+                                `/paiements/nouveau?demande=${encodeURIComponent(demandeReference)}&ligne=${f.ligneServiceId ?? ''}`,
+                              )}
+                            >
+                              Encaisser
+                            </button>
+                          ) : (
+                            <span className="pill ok">Soldée</span>
+                          )}
                           <button
                             type="button"
-                            className="btn-primary"
-                            onClick={() => navigate(
-                              `/paiements/nouveau?demande=${encodeURIComponent(demandeReference)}&ligne=${f.ligneServiceId ?? ''}`,
-                            )}
+                            className="btn-ghost"
+                            disabled={envoiEmail === f.id}
+                            onClick={() => onEnvoyerValidee(f)}
+                            title="Envoyer cette facture par e-mail au responsable client"
                           >
-                            Encaisser
+                            {envoiEmail === f.id ? 'Envoi…' : 'Envoyer email'}
                           </button>
-                        ) : (
-                          <span className="pill ok">Soldée</span>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -732,6 +785,15 @@ function FacturesTab({
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button type="button" className="btn-ghost" onClick={() => onTelecharger(f)}>
               Télécharger le PDF
+            </button>
+            <button
+              type="button"
+              className="btn-ghost"
+              disabled={envoiEmail === f.id}
+              onClick={() => onEnvoyerProforma(f)}
+              title="Envoyer le récapitulatif et les proformas par e-mail au responsable client"
+            >
+              {envoiEmail === f.id ? 'Envoi…' : 'Envoyer email'}
             </button>
           </div>
         </section>
@@ -1935,10 +1997,14 @@ function abonnementMessageLigne(ligne: LigneService): { classe: string; libelle:
 
 function FacturesAbonnementSection({
   demande,
+  envoiEmail,
+  onEnvoyerValidee,
   onErreur,
   onMessage,
 }: {
   demande: Demande
+  envoiEmail: number | null
+  onEnvoyerValidee: (facture: FactureValidee) => void
   onErreur: (message: string | null) => void
   onMessage: (message: string | null) => void
 }) {
@@ -2276,6 +2342,15 @@ function FacturesAbonnementSection({
                                   onClick={() => void telecharger(f)}
                                 >
                                   {telechargement === f.id ? '…' : 'PDF'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-ghost"
+                                  disabled={envoiEmail === f.id}
+                                  onClick={() => onEnvoyerValidee(f)}
+                                  title="Envoyer cette facture par e-mail au responsable client"
+                                >
+                                  {envoiEmail === f.id ? 'Envoi…' : 'Envoyer email'}
                                 </button>
                               </div>
                             </td>

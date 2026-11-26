@@ -129,13 +129,31 @@ public class FactureController {
             description = "Crée la facture validée (nouvelle référence XXXXXEXT/TNR/YYYY) avec un montant propre, qui peut différer du montant proforma")
     public ResponseEntity<FactureResponse> valider(@PathVariable Integer id,
                                                    @RequestBody(required = false) ValiderFactureRequest request) {
-        FactureResponse response = factureService.valider(
+        return ResponseEntity.ok(factureService.valider(
                 id,
                 request != null ? request.commentaire() : null,
                 request != null ? request.montant() : null,
-                request != null ? request.lignes() : null);
-        // E-mail au client avec la facture validée en PDF (échec SMTP non bloquant).
-        clientMailNotifier.notifierFactureValidee(response.factureValideeId());
-        return ResponseEntity.ok(response);
+                request != null ? request.lignes() : null));
+    }
+
+    @PostMapping("/factures/{id}/envoyer-email")
+    @PreAuthorize("hasAuthority('FACTURE_VIEW')")
+    @Operation(summary = "Envoyer les proformas par e-mail au responsable client",
+            description = "Envoie la fiche récapitulative et les factures proforma en pièces jointes. "
+                    + "En mode PAR_SERVICE, la ligne de débours est représentée par sa facture validée.")
+    public ResponseEntity<java.util.Map<String, String>> envoyerProformas(@PathVariable Integer id) {
+        clientMailNotifier.envoyerProformas(id);
+        return ResponseEntity.ok(java.util.Map.of(
+                "message", "E-mail envoyé au responsable client avec les documents PDF joints."));
+    }
+
+    @PostMapping("/factures-validees/{id}/envoyer-email")
+    @PreAuthorize("hasAuthority('FACTURE_VIEW')")
+    @Operation(summary = "Envoyer une facture validée par e-mail au responsable client",
+            description = "Envoie uniquement la facture validée concernée, en PDF.")
+    public ResponseEntity<java.util.Map<String, String>> envoyerFactureValidee(@PathVariable Integer id) {
+        clientMailNotifier.envoyerFactureValidee(id);
+        return ResponseEntity.ok(java.util.Map.of(
+                "message", "Facture envoyée par e-mail au responsable client."));
     }
 }

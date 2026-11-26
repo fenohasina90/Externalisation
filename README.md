@@ -7,7 +7,7 @@ rapports, journal d'audit et sauvegardes de la base MySQL.
 > **État du projet (novembre 2026)** : le module « plans de paiement / échéances » a été
 > supprimé. Les paiements sont désormais rattachés à une **facture validée**. Le schéma consolidé
 > contient **28 tables** et **67 permissions** (4 rôles : SUPER_ADMIN, ADMIN, ACCUEIL, ECONOMAT),
-> et le backend est couvert par **288 tests automatisés**.
+> et le backend est couvert par **289 tests automatisés**.
 >
 > La réinitialisation de mot de passe envoie désormais le mot de passe temporaire **directement à
 > l'utilisateur par e-mail** (Gmail SMTP) : les actions « approuver » / « refuser » côté
@@ -56,9 +56,9 @@ Externalisation/
 - Factures proforma `UNIQUE` ou `PAR_SERVICE`, validation et PDF.
 - Factures validées, paiements directs par facture, reçus, alertes de retard et facturation mensuelle d'abonnement.
 - Documents, notifications, tableau de bord, rapports (PDF/Excel/CSV), recherche globale et audit.
-- E-mails clients avec pièces jointes PDF : récapitulatif + proformas à la création d'une demande,
-  facture validée à chaque validation (destinataire : responsable client, puis société ; échec SMTP
-  journalisé sans bloquer l'opération).
+- E-mails clients **manuels** (boutons « Envoyer email ») : récapitulatif + proformas, ou facture
+  validée seule, en pièces jointes PDF ; société en destinataire principal et responsable en copie
+  (repli sur le responsable si la société n'a pas d'e-mail).
 - Sauvegarde/restauration MySQL : dump gzip, chiffrement AES-256-GCM optionnel, planification et
   rétention.
 
