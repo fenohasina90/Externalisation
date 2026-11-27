@@ -42,7 +42,7 @@ function libelleTypeFacture(f: FactureValidee): string {
 
 /**
  * Enregistrer un paiement — POST /api/paiements.
- * Présélection via `?demande=DEM-2026-00017` depuis un onglet « Encaisser » ; la
+ * Présélection via `?demande=DEM-01-01-2026-EXT-00017` depuis un onglet « Encaisser » ; la
  * sélection de la facture se fait sur la liste des factures validées du client.
  *
  * Le paiement est toujours rattaché à la facture (jamais au service) —
@@ -242,22 +242,31 @@ export function NouveauPaiementPage() {
         })
         paiement = { id: cree.id, reference: cree.referencePaiement }
         setPaiementCree(paiement)
+      }
+      if (!paiement) return
 
+      // L'e-mail est envoyé en arrière-plan côté backend (après commit) :
+      // on redirige immédiatement vers la demande, sans attendre SMTP.
+      setConfirmation(false)
+      setSubmitting(false)
+      const reference = (reglatable?.referenceDemande ?? demandeTexte).split(' — ')[0]
+      navigate(`/demandes/${encodeURIComponent(reference)}`)
+
+      // Téléchargement du reçu et pièces jointes : tâches de fond non bloquantes.
+      const idPaiement = paiement.id
+      const referencePaiement = paiement.reference
+      void (async () => {
         if (hasPermission('DOCUMENT_PAIEMENT_VIEW')) {
-          const recu = await paiementsApi.telechargerRecu(cree.id).catch(() => null)
-          if (recu) telechargerBlob(recu, `recu-${cree.referencePaiement}.pdf`)
+          const recu = await paiementsApi.telechargerRecu(idPaiement).catch(() => null)
+          if (recu) telechargerBlob(recu, `recu-${referencePaiement}.pdf`)
         }
-      }
-      for (const fichier of fichiers) {
-        await documentsApi.uploadPaiement(paiement.id, fichier, null)
-      }
-
-      navigate(`/demandes/${encodeURIComponent((reglatable?.referenceDemande ?? demandeTexte)
-        .split(' — ')[0])}`)
+        for (const fichier of fichiers) {
+          await documentsApi.uploadPaiement(idPaiement, fichier, null)
+        }
+      })().catch(() => undefined)
     } catch (err) {
       setErreurEnregistrement(messageErreur(err))
       setConfirmation(false)
-    } finally {
       setSubmitting(false)
     }
   }
@@ -320,7 +329,7 @@ export function NouveauPaiementPage() {
                     name="demande"
                   />
                   <span className="form-help">
-                    Saisissez la référence (ex. DEM-2026-00017) ou le nom du client.
+                    Saisissez la référence ou le nom du client.
                   </span>
                 </label>
 
@@ -644,7 +653,7 @@ export function NouveauPaiementPage() {
         titre="Confirmer l'enregistrement du paiement"
         message={
           cible
-            ? `Ce règlement sera imputé sur la facture ${cible.referenceFactureValidee} « ${libelleTypeFacture(cible)} » de la demande ${reglatable?.referenceDemande}. L'opération est définitive : le reçu PDF pourra être téléchargé depuis l'historique.`
+            ? `Ce règlement sera imputé sur la facture ${cible.referenceFactureValidee} « ${libelleTypeFacture(cible)} » de la demande ${reglatable?.referenceDemande}. L'opération est définitive. Vous serez ramené à la demande ; le reçu et l'e-mail au client sont traités en arrière-plan.`
             : ''
         }
         confirmer="Enregistrer le paiement"

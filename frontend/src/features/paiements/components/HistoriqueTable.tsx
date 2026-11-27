@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatDate, formatMontantMGA } from '@/utils/format'
+import { messageErreur } from '@/constants/messages'
 import { telechargerBlob } from '@/utils/telechargement'
 import { Can } from '@/components/shared/Can'
 import { paiementsApi } from '../services/paiements.service'
@@ -10,6 +11,8 @@ import { ModePill } from './PaiementsTable'
 /** Historique des règlements enregistrés. */
 export function HistoriqueTable({ items }: { items:Paiement[] }) {
   const [erreur, setErreur] = useState<string | null>(null)
+  const [succes, setSucces] = useState<string | null>(null)
+  const [envoiEnCours, setEnvoiEnCours] = useState<number | null>(null)
 
   if (items.length === 0)
     return <div className="card-pad text-muted">Aucun paiement trouvé.</div>
@@ -24,12 +27,33 @@ export function HistoriqueTable({ items }: { items:Paiement[] }) {
     }
   }
 
+  async function envoyerEmail(paiement: Paiement) {
+    setErreur(null)
+    setSucces(null)
+    setEnvoiEnCours(paiement.id)
+    try {
+      const reponse = await paiementsApi.envoyerEmail(paiement.id)
+      setSucces(`${paiement.referencePaiement} : ${reponse.message}`)
+    } catch (err) {
+      setErreur(messageErreur(err))
+    } finally {
+      setEnvoiEnCours(null)
+    }
+  }
+
   return (
     <>
       {erreur && (
         <div className="card-pad">
           <div className="alert alert-danger" role="alert">
             {erreur}
+          </div>
+        </div>
+      )}
+      {succes && (
+        <div className="card-pad">
+          <div className="alert alert-success" role="status">
+            {succes}
           </div>
         </div>
       )}
@@ -74,15 +98,26 @@ export function HistoriqueTable({ items }: { items:Paiement[] }) {
               </Link>
             </td>
             <td>
-              <Can permission="DOCUMENT_PAIEMENT_VIEW">
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Can permission="DOCUMENT_PAIEMENT_VIEW">
+                  <button
+                    type="button"
+                    className="btn-link success"
+                    onClick={() => void telechargerRecu(p)}
+                  >
+                    PDF ›
+                  </button>
+                </Can>
                 <button
                   type="button"
-                  className="btn-link success"
-                  onClick={() => void telechargerRecu(p)}
+                  className="btn-link"
+                  disabled={envoiEnCours === p.id}
+                  onClick={() => void envoyerEmail(p)}
+                  title="Envoyer la facture liée et le reçu par e-mail au client"
                 >
-                  PDF ›
+                  {envoiEnCours === p.id ? 'Envoi…' : 'E-mail ›'}
                 </button>
-              </Can>
+              </div>
             </td>
           </tr>
         ))}

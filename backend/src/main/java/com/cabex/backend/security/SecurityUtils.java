@@ -1,5 +1,6 @@
 package com.cabex.backend.security;
 
+import com.cabex.backend.exception.ForbiddenException;
 import com.cabex.backend.exception.UnauthorizedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -36,10 +37,16 @@ public final class SecurityUtils {
         return currentUser().getRoleName();
     }
 
+    /**
+     * Vérifie que l'utilisateur authentifié possède la permission demandée.
+     * L'utilisateur étant déjà authentifié (sinon {@link #currentUser()} lève
+     * un 401), l'absence de permission doit produire un 403 et non un 401 :
+     * sinon le frontend déconnecte la session au lieu d'afficher un refus.
+     */
     public static void requirePermission(String codePermission) {
         UserPrincipal principal = currentUser();
         if (!principal.hasPermission(codePermission)) {
-            throw new UnauthorizedException("Permission requise: " + codePermission);
+            throw new ForbiddenException("Permission requise: " + codePermission);
         }
     }
 }

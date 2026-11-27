@@ -86,7 +86,7 @@ class AuditUtilisateursTest {
     void creationUtilisateurJournalisee() {
         RoleUtilisateur role = RoleUtilisateur.builder().id(2).nomRole("ACCUEIL").actif(true).build();
         when(roleRepository.findById(2)).thenReturn(Optional.of(role));
-        when(utilisateurRepository.existsByUsername("sarah.cohen")).thenReturn(false);
+        when(utilisateurRepository.existsByUsernameIgnoreCase("sarah.cohen")).thenReturn(false);
         when(utilisateurRepository.existsByEmail("sarah.cohen@cabinet-excellent.mg")).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("hash");
         when(utilisateurRepository.save(any())).thenAnswer(inv -> {

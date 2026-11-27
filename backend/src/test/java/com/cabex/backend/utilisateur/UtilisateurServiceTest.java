@@ -55,7 +55,7 @@ class UtilisateurServiceTest {
     @Test
     void createOkActifParDefaut() {
         when(roleRepository.findById(2)).thenReturn(Optional.of(roleAccueil()));
-        when(utilisateurRepository.existsByUsername("sarah.cohen")).thenReturn(false);
+        when(utilisateurRepository.existsByUsernameIgnoreCase("sarah.cohen")).thenReturn(false);
         when(utilisateurRepository.existsByEmail("sarah.cohen@cabinet-excellent.mg")).thenReturn(false);
         when(passwordEncoder.encode("secret123")).thenReturn("hash");
         when(utilisateurRepository.save(any())).thenAnswer(inv -> {
@@ -76,13 +76,27 @@ class UtilisateurServiceTest {
     }
 
     @Test
-    void createUsernameDuplique409() {
-        when(utilisateurRepository.existsByUsername("sarah.cohen")).thenReturn(true);
+    void createUsernameDuplique409AvecMessageClair() {
+        when(utilisateurRepository.existsByUsernameIgnoreCase("sarah.cohen")).thenReturn(true);
 
-        assertThrows(DuplicateResourceException.class,
+        DuplicateResourceException ex = assertThrows(DuplicateResourceException.class,
                 () -> utilisateurService.create(new CreateUtilisateurRequest(
                         "Cohen", "Sarah", "sarah.cohen", "sarah.cohen@cabinet-excellent.mg",
                         "secret123", 2, true)));
+        assertEquals("Le nom d'utilisateur « sarah.cohen » est déjà utilisé. "
+                + "Choisissez un autre identifiant.", ex.getMessage());
+        verify(utilisateurRepository, never()).save(any());
+    }
+
+    @Test
+    void createUsernameDupliqueIgnoreLaCasse() {
+        when(utilisateurRepository.existsByUsernameIgnoreCase("Sarah.Cohen")).thenReturn(true);
+
+        DuplicateResourceException ex = assertThrows(DuplicateResourceException.class,
+                () -> utilisateurService.create(new CreateUtilisateurRequest(
+                        "Cohen", "Sarah", "Sarah.Cohen", "sarah.cohen@cabinet-excellent.mg",
+                        "secret123", 2, true)));
+        assertTrue(ex.getMessage().contains("est déjà utilisé"));
         verify(utilisateurRepository, never()).save(any());
     }
 

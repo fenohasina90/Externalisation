@@ -56,11 +56,15 @@ public class UtilisateurService {
     @Transactional
     public UtilisateurResponse create(CreateUtilisateurRequest request) {
         String username = request.username().trim();
-        if (utilisateurRepository.existsByUsername(username)) {
-            throw new DuplicateResourceException("Un utilisateur avec l'username '" + username + "' existe déjà");
+        if (utilisateurRepository.existsByUsernameIgnoreCase(username)) {
+            throw new DuplicateResourceException(
+                    "Le nom d'utilisateur « " + username
+                            + " » est déjà utilisé. Choisissez un autre identifiant.");
         }
         if (utilisateurRepository.existsByEmail(request.email().trim().toLowerCase())) {
-            throw new DuplicateResourceException("Un utilisateur avec l'email '" + request.email() + "' existe déjà");
+            throw new DuplicateResourceException(
+                    "L'adresse e-mail « " + request.email().trim()
+                            + " » est déjà utilisée par un autre compte.");
         }
         RoleUtilisateur role = getRole(request.roleId());
 
@@ -87,14 +91,18 @@ public class UtilisateurService {
 
         String username = request.username().trim();
         if (!utilisateur.getUsername().equalsIgnoreCase(username)
-                && utilisateurRepository.existsByUsername(username)) {
-            throw new DuplicateResourceException("Un utilisateur avec l'username '" + username + "' existe déjà");
+                && utilisateurRepository.existsByUsernameIgnoreCase(username)) {
+            throw new DuplicateResourceException(
+                    "Le nom d'utilisateur « " + username
+                            + " » est déjà utilisé. Choisissez un autre identifiant.");
         }
 
         String email = request.email().trim().toLowerCase();
         if (!utilisateur.getEmail().equalsIgnoreCase(email)
                 && utilisateurRepository.existsByEmail(email)) {
-            throw new DuplicateResourceException("Un utilisateur avec l'email '" + request.email() + "' existe déjà");
+            throw new DuplicateResourceException(
+                    "L'adresse e-mail « " + request.email().trim()
+                            + " » est déjà utilisée par un autre compte.");
         }
 
         utilisateur.setNom(request.nom().trim());

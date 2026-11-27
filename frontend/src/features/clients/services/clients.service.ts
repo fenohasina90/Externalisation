@@ -56,6 +56,24 @@ export const clientsApi = {
     return data
   },
 
+  /** Envoie par e-mail le PDF de facturation avec les filtres appliqués. */
+  async envoyerEmailFacturation(
+    id: number,
+    params: { dateDebut?: string | null; dateFin?: string | null; ordre?: 'asc' | 'desc'; recherche?: string | null },
+  ): Promise<{ message: string }> {
+    const query = new URLSearchParams()
+    if (params.dateDebut) query.set('dateDebut', params.dateDebut)
+    if (params.dateFin) query.set('dateFin', params.dateFin)
+    query.set('ordre', params.ordre ?? 'desc')
+    if (params.recherche && params.recherche.trim()) query.set('recherche', params.recherche.trim())
+    const { data } = await http.post<{ message: string }>(
+      `/clients/${id}/factures/envoyer-email`,
+      null,
+      { params: query },
+    )
+    return data
+  },
+
   /** Export Excel de la facturation du client (.xlsx, filtre appliqué). */
   async downloadExcelFacturation(
     id: number,

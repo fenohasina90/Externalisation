@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import type { Utilisateur } from '@/features/auth/types'
+import { messageErreur } from '@/constants/messages'
 
 export interface RoleOption {
   id: number
@@ -113,11 +114,16 @@ export function UtilisateurFormModal({ open, utilisateur, roles, onClose, onSave
         roleId: form.roleId,
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Échec de l'enregistrement")
+      // Le backend renvoie un message explicite (409) pour un username déjà utilisé :
+      // messageErreur lit ApiError.message, contrairement à `instanceof Error`.
+      setError(messageErreur(err))
     } finally {
       setSaving(false)
     }
   }
+
+  /** L'erreur de doublon concerne l'identifiant : on le signale aussi sur le champ. */
+  const identifiantEnErreur = error !== null && /identifiant|username/i.test(error)
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -143,7 +149,11 @@ export function UtilisateurFormModal({ open, utilisateur, roles, onClose, onSave
         </header>
 
         <form onSubmit={handleSubmit} className="modal-body">
-          {error && <div style={{ color: 'var(--danger)', fontSize: 14 }}>{error}</div>}
+          {error && (
+            <div role="alert" aria-live="polite" className="alert alert-danger" style={{ marginBottom: 12 }}>
+              {error}
+            </div>
+          )}
 
           <div className="form-grid">
             <label className="field">
@@ -173,8 +183,12 @@ export function UtilisateurFormModal({ open, utilisateur, roles, onClose, onSave
               <input
                 name="username"
                 value={form.username}
-                onChange={handleChange}
+                onChange={(event) => {
+                  handleChange(event)
+                  if (identifiantEnErreur) setError(null)
+                }}
                 placeholder="Ex. prenom.nom"
+                aria-invalid={identifiantEnErreur}
                 required
               />
             </label>

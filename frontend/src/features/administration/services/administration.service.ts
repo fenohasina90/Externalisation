@@ -11,7 +11,6 @@ import type {
   CreateUtilisateurPayload,
   DemandeReinitialisation,
   ModePaiementAdmin,
-  MotDePasseTemporaire,
   Permission,
   ReinitialisationResponse,
   RoleDetail,
@@ -222,28 +221,6 @@ export const reinitialisationsApi = {
 
   async get(id: number): Promise<DemandeReinitialisation> {
     const { data } = await http.get<DemandeReinitialisation>(`/password-resets/${id}`)
-    return data
-  },
-
-  async approuver(id: number): Promise<DemandeReinitialisation> {
-    const { data } = await http.post<DemandeReinitialisation>(
-      `/password-resets/${id}/approuver`,
-    )
-    return data
-  },
-
-  async refuser(id: number, motif: string): Promise<DemandeReinitialisation> {
-    const { data } = await http.post<DemandeReinitialisation>(
-      `/password-resets/${id}/refuser`,
-      { motif },
-    )
-    return data
-  },
-
-  async reinitialiser(id: number): Promise<MotDePasseTemporaire> {
-    const { data } = await http.post<MotDePasseTemporaire>(
-      `/password-resets/${id}/reinitialiser`,
-    )
     return data
   },
 }

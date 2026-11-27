@@ -29,7 +29,7 @@ export function ForgotPasswordPage() {
   return (
     <AuthLayout
       title="Mot de passe oublié"
-      subtitle="Saisissez votre adresse e-mail : un administrateur approuvera votre demande et vous communiquera un mot de passe temporaire."
+      subtitle="Saisissez votre adresse e-mail : un mot de passe temporaire vous sera envoyé directement par e-mail. Vous devrez le changer à votre prochaine connexion."
     >
       {message ? <Alert tone="success">{message}</Alert> : null}
       {error ? <Alert tone="danger">{error}</Alert> : null}

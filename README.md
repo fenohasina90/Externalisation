@@ -1,8 +1,17 @@
 # Application web de gestion et de suivi des services d'externalisation
 
 Application full-stack de digitalisation des prestations d'externalisation : sociétés clientes,
-demandes multi-services, factures proforma, plans de paiement, échéances, paiements, documents
-PDF, notifications, rapports, journal d'audit et sauvegardes de la base MySQL.
+demandes multi-services, factures proforma et validées, paiements, documents PDF, notifications,
+rapports, journal d'audit et sauvegardes de la base MySQL.
+
+> **État du projet (novembre 2026)** : le module « plans de paiement / échéances » a été
+> supprimé. Les paiements sont désormais rattachés à une **facture validée**. Le schéma consolidé
+> contient **28 tables** et **67 permissions** (4 rôles : SUPER_ADMIN, ADMIN, ACCUEIL, ECONOMAT),
+> et le backend est couvert par **294 tests automatisés**.
+>
+> La réinitialisation de mot de passe envoie désormais le mot de passe temporaire **directement à
+> l'utilisateur par e-mail** (Gmail SMTP) : les actions « approuver » / « refuser » côté
+> administrateur ont été supprimées ; la demande reste visible avec le statut `ENVOYEE`.
 
 ## Sommaire
 
@@ -45,8 +54,16 @@ Externalisation/
 - Référentiels : clients, responsables, commerciaux, domaines et services.
 - Demandes de service multi-lignes, cycle de vie contrôlé et historique.
 - Factures proforma `UNIQUE` ou `PAR_SERVICE`, validation et PDF.
-- Plans de paiement, échéances, paiements, reçus et alertes.
+- Factures validées, paiements directs par facture, reçus, alertes de retard et facturation mensuelle d'abonnement.
 - Documents, notifications, tableau de bord, rapports (PDF/Excel/CSV), recherche globale et audit.
+- E-mails clients **manuels** (boutons « Envoyer email ») : récapitulatif + proformas, ou facture
+  validée seule, en pièces jointes PDF ; société en destinataire principal et responsable en copie
+  (repli sur le responsable si la société n'a pas d'e-mail).
+- E-mail **automatique** après chaque paiement : facture validée liée + reçu de paiement en PDF.
+  Envoi asynchrone après commit (`PaiementMailEvent`, pool `mailTaskExecutor`) : la confirmation
+  est immédiate, l'échec SMTP est journalisé sans bloquer l'encaissement. Le montant reçu est
+  indiqué dans le message ; l'historique des paiements et l'onglet « Facturation » du client ont
+  un bouton d'envoi manuel (ce dernier rappelle les filtres appliqués).
 - Sauvegarde/restauration MySQL : dump gzip, chiffrement AES-256-GCM optionnel, planification et
   rétention.
 
@@ -431,14 +448,25 @@ partager cette clé.
 | `MYSQLDUMP_PATH` | Non | `mysqldump` | Chemin complet de `mysqldump` si absent du `PATH` |
 | `MYSQL_PATH` | Non | `mysql` | Chemin complet du client `mysql` si absent du `PATH` |
 | `BACKUP_UPLOAD_MAX_SIZE` | Non | `268435456` | Taille maximale d'un fichier de restauration (octets) |
+| `APP_MAIL_ENABLED` | Non | `true` | Active l'envoi direct du mot de passe temporaire par e-mail |
+| `APP_MAIL_FROM` | Non | `no-reply@cabex.mg` | Adresse d'expéditeur |
+| `MAIL_HOST` | Non | `smtp.gmail.com` | Hôte SMTP (Gmail) |
+| `MAIL_PORT` | Non | `587` | Port SMTP avec STARTTLS |
+| `MAIL_USERNAME` | **Oui en exploitation** | — | Adresse Gmail utilisée pour l'envoi |
+| `MAIL_PASSWORD` | **Oui en exploitation** | — | **Mot de passe d'application** Gmail (pas le mot de passe du compte) |
+
+> Gmail exige un **mot de passe d'application** (https://myaccount.google.com/apppasswords) et
+> l'authentification à deux facteurs. Sans ces variables, l'endpoint `/api/auth/forgot-password`
+> renvoie une erreur 500 et **aucun mot de passe ni demande n'est conservé**. Le mot de passe
+> temporaire n'est jamais écrit dans les logs.
 
 Paramètres complémentaires modifiables dans `backend/src/main/resources/application.properties`
 ou par argument au lancement :
 
 - `app.document.storage-path` : dossier des pièces jointes (défaut `./data/documents`) ;
 - `app.document.max-size` : taille maximale d'un document (défaut `10485760`, soit 10 Mo) ;
-- `app.mail.enabled` : activation de l'envoi d'e-mails (désactivé par défaut) ;
-- `spring.mail.*` : serveur SMTP si `app.mail.enabled=true`.
+- `app.mail.enabled` : activation de l'envoi d'e-mails (activé par défaut) ;
+- `spring.mail.*` : serveur SMTP Gmail (STARTTLS, auth, timeouts).
 
 ### Exemple de `.env`
 

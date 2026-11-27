@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Alert, Spinner } from '@/components/ui'
 import { Can } from '@/components/shared/Can'
 import { useApi } from '@/hooks/useApi'
+import { messageErreur } from '@/constants/messages'
 import { useTaillePaginationFacturation } from '@/hooks/useTaillePaginationFacturation'
 import { useDebounce } from '@/hooks/useDebounce'
 import { formatDate, formatMontantMGA } from '@/utils/format'
@@ -104,6 +105,8 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
   const [ouverts, setOuverts] = useState<Set<number>>(new Set())
   const [page, setPage] = useState(0)
   const [erreurPdf, setErreurPdf] = useState<string | null>(null)
+  const [messageEmail, setMessageEmail] = useState<string | null>(null)
+  const [envoiEmailEnCours, setEnvoiEmailEnCours] = useState(false)
   const [pleinEcran, setPleinEcran] = useState(false)
   const [showFilters, setShowFilters] = useState(true)
 
@@ -234,6 +237,26 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
     }
   }
 
+  const envoyerParEmail = async (): Promise<void> => {
+    if (societeId === null) return
+    setErreurPdf(null)
+    setMessageEmail(null)
+    setEnvoiEmailEnCours(true)
+    try {
+      const reponse = await clientsApi.envoyerEmailFacturation(societeId, {
+        dateDebut: dateDebut || null,
+        dateFin: dateFin || null,
+        ordre: tri,
+        recherche,
+      })
+      setMessageEmail(reponse.message)
+    } catch (err) {
+      setErreurPdf(messageErreur(err))
+    } finally {
+      setEnvoiEmailEnCours(false)
+    }
+  }
+
   const telechargerExcel = async (): Promise<void> => {
     if (societeId === null) return
     setErreurPdf(null)
@@ -293,6 +316,11 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
           <Alert tone="danger">{erreurPdf}</Alert>
         </div>
       )}
+      {messageEmail && (
+        <div style={{ padding: '16px 16px 0' }}>
+          <Alert tone="success">{messageEmail}</Alert>
+        </div>
+      )}
       <div className="facture-toolbar">
         <div className="facturation-toolbar__info">
           <span className="facture-toolbar__titre">Facturation du client</span>
@@ -319,6 +347,18 @@ export function ClientFacturationTab({ societeId, nomClient }: { societeId: numb
                 <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
               </svg>
               Exporter en PDF
+            </button>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => void envoyerParEmail()}
+              disabled={envoiEmailEnCours}
+              title="Envoyer ce PDF de facturation par e-mail au client avec les filtres appliqués"
+            >
+              <svg className="sv" viewBox="0 0 24 24">
+                <path d="M3 6h18v12H3zM3 7l9 6 9-6" />
+              </svg>
+              {envoiEmailEnCours ? 'Envoi…' : 'Envoyer par e-mail'}
             </button>
             <button type="button" className="btn-ghost" onClick={() => void telechargerExcel()}
                     title="Exporter en Excel (.xlsx)">

@@ -64,19 +64,21 @@ private final AuthService authService;
 
     @PostMapping("/forgot-password")
     @Operation(summary = "Demander la réinitialisation du mot de passe",
-            description = "Enregistre une demande de réinitialisation et notifie les administrateurs. "
-                    + "Après approbation, un mot de passe temporaire est généré que l'utilisateur devra "
-                    + "changer à sa prochaine connexion. La réponse est identique que l'email existe ou non.")
+            description = "Génère immédiatement un mot de passe temporaire et l'envoie directement "
+                    + "par e-mail à l'utilisateur (JavaMailSender / Gmail). Aucune approbation "
+                    + "administrateur n'est requise. La réponse est identique que l'email existe ou non.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Demande enregistrée"),
-            @ApiResponse(responseCode = "400", description = "Email invalide")
+            @ApiResponse(responseCode = "200", description = "Demande traitée ; e-mail envoyé si le compte existe"),
+            @ApiResponse(responseCode = "400", description = "Email invalide"),
+            @ApiResponse(responseCode = "500", description = "Configuration SMTP indisponible")
     })
     public ResponseEntity<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         passwordResetService.demanderReinitialisation(request);
         return ResponseEntity.ok(Map.of(
                 "message",
-                "Votre demande a été enregistrée. Un administrateur doit l'approuver ; "
-                        + "un mot de passe temporaire vous sera ensuite communiqué."));
+                "Si cette adresse correspond à un compte actif, un mot de passe temporaire "
+                        + "vient de vous être envoyé par e-mail. Vous devrez le changer à votre "
+                        + "prochaine connexion."));
     }
 
     @PostMapping("/change-password")

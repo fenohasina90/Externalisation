@@ -11,6 +11,8 @@ import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
+import com.cabex.backend.mail.ClientMailNotifier;
+import com.cabex.backend.mail.PaiementMailEvent;
 import com.cabex.backend.notification.service.NotificationService;
 import com.cabex.backend.paiement.dto.CreatePaiementRequest;
 import com.cabex.backend.paiement.dto.ModePaiementResponse;
@@ -32,6 +34,7 @@ import com.cabex.backend.utilisateur.repository.UtilisateurRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +62,8 @@ public class PaiementGestionService {
     private final LigneServiceRepository ligneRepository;
     private final LigneServiceService ligneServiceService;
     private final FactureService factureService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final ClientMailNotifier clientMailNotifier;
 
     public PaiementGestionService(PaiementRepository paiementRepository,
                                   DemandeServiceRepository demandeRepository,
@@ -70,7 +75,9 @@ public class PaiementGestionService {
                                   DemandeGestionService demandeGestionService,
                                   LigneServiceRepository ligneRepository,
                                   LigneServiceService ligneServiceService,
-                                  FactureService factureService) {
+                                  FactureService factureService,
+                                  ApplicationEventPublisher eventPublisher,
+                                  ClientMailNotifier clientMailNotifier) {
         this.paiementRepository = paiementRepository;
         this.demandeRepository = demandeRepository;
         this.modeRepository = modeRepository;
@@ -82,6 +89,8 @@ public class PaiementGestionService {
         this.ligneRepository = ligneRepository;
         this.ligneServiceService = ligneServiceService;
         this.factureService = factureService;
+        this.eventPublisher = eventPublisher;
+        this.clientMailNotifier = clientMailNotifier;
     }
 
     @Transactional(readOnly = true)
@@ -98,6 +107,21 @@ public class PaiementGestionService {
     @Transactional(readOnly = true)
     public PaiementResponse getById(Integer id) {
         return PaiementMapper.toResponse(getEntity(id));
+    }
+
+    /** Envoi manuel, depuis l'historique, de la facture liée et du reçu. */
+    @Transactional(readOnly = true)
+    public void envoyerEmailPaiement(Integer id) {
+        Paiement paiement = getEntity(id);
+        if (paiement.getFactureValidee() == null || paiement.getDemande() == null) {
+            throw new BusinessException(
+                    "Ce paiement n'a pas de facture validée ou de demande rattachée.");
+        }
+        clientMailNotifier.envoyerPaiement(
+                paiement.getId(),
+                paiement.getReferencePaiement(),
+                paiement.getFactureValidee().getId(),
+                paiement.getDemande());
     }
 
     @Transactional(readOnly = true)
@@ -249,6 +273,14 @@ public class PaiementGestionService {
         auditService.log(AuditActions.PAYMENT, "PAIEMENT", "Paiement",
                 Long.valueOf(paiement.getId()), null,
                 paiement.getMontantPaye() + " : " + paiement.getReferencePaiement());
+
+        // E-mail au client en arrière-plan, uniquement après validation de la transaction :
+        // l'API répond immédiatement et l'encaissement n'est jamais ralenti par SMTP.
+        eventPublisher.publishEvent(new PaiementMailEvent(
+                paiement.getId(),
+                paiement.getReferencePaiement(),
+                factureValidee.getId(),
+                demande.getId()));
 
         return PaiementMapper.toResponse(paiement);
     }

@@ -36,11 +36,14 @@ public class DocumentController {
 
     private final DocumentGestionService documentService;
     private final com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository;
+    private final com.cabex.backend.mail.ClientMailNotifier clientMailNotifier;
 
     public DocumentController(DocumentGestionService documentService,
-                              com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository) {
+                              com.cabex.backend.facture.repository.FactureValideeRepository factureValideeRepository,
+                              com.cabex.backend.mail.ClientMailNotifier clientMailNotifier) {
         this.documentService = documentService;
         this.factureValideeRepository = factureValideeRepository;
+        this.clientMailNotifier = clientMailNotifier;
     }
 
     @GetMapping("/demandes/{id}/documents")
@@ -155,6 +158,21 @@ public class DocumentController {
             @RequestParam(required = false) String recherche) {
         return pdfResponse(documentService.facturationClientPdf(id, dateDebut, dateFin, ordre, recherche),
                 "facturation-client-" + id + ".pdf");
+    }
+
+    @PostMapping("/clients/{id}/factures/envoyer-email")
+    @PreAuthorize("hasAuthority('FACTURE_VIEW')")
+    @Operation(summary = "Envoyer le PDF de facturation d'un client par e-mail",
+            description = "Applique les mêmes filtres que l'export PDF et les rappelle dans le message")
+    public ResponseEntity<java.util.Map<String, String>> envoyerFacturationClient(
+            @PathVariable Integer id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
+            @RequestParam(required = false, defaultValue = "desc") String ordre,
+            @RequestParam(required = false) String recherche) {
+        clientMailNotifier.envoyerFacturationClient(id, dateDebut, dateFin, ordre, recherche);
+        return ResponseEntity.ok(java.util.Map.of(
+                "message", "PDF de facturation envoyé par e-mail au client."));
     }
 
     @GetMapping("/clients/{id}/factures/excel")

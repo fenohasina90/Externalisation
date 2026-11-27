@@ -136,7 +136,7 @@ export function RecherchePage() {
       {!lancee && (
         <EmptyState
           titre="Saisissez un terme pour lancer la recherche"
-          hint="Par exemple une référence DEM-2026-00001, un nom de société ou un code service."
+          hint="Par exemple une référence, un nom de société ou un code service."
         />
       )}
 
