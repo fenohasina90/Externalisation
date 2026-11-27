@@ -11,6 +11,7 @@ import com.cabex.backend.demande.service.LigneServiceService;
 import com.cabex.backend.exception.BusinessException;
 import com.cabex.backend.exception.ErrorMessages;
 import com.cabex.backend.exception.ResourceNotFoundException;
+import com.cabex.backend.mail.ClientMailNotifier;
 import com.cabex.backend.mail.PaiementMailEvent;
 import com.cabex.backend.notification.service.NotificationService;
 import com.cabex.backend.paiement.dto.CreatePaiementRequest;
@@ -62,6 +63,7 @@ public class PaiementGestionService {
     private final LigneServiceService ligneServiceService;
     private final FactureService factureService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ClientMailNotifier clientMailNotifier;
 
     public PaiementGestionService(PaiementRepository paiementRepository,
                                   DemandeServiceRepository demandeRepository,
@@ -74,7 +76,8 @@ public class PaiementGestionService {
                                   LigneServiceRepository ligneRepository,
                                   LigneServiceService ligneServiceService,
                                   FactureService factureService,
-                                  ApplicationEventPublisher eventPublisher) {
+                                  ApplicationEventPublisher eventPublisher,
+                                  ClientMailNotifier clientMailNotifier) {
         this.paiementRepository = paiementRepository;
         this.demandeRepository = demandeRepository;
         this.modeRepository = modeRepository;
@@ -87,6 +90,7 @@ public class PaiementGestionService {
         this.ligneServiceService = ligneServiceService;
         this.factureService = factureService;
         this.eventPublisher = eventPublisher;
+        this.clientMailNotifier = clientMailNotifier;
     }
 
     @Transactional(readOnly = true)
@@ -103,6 +107,21 @@ public class PaiementGestionService {
     @Transactional(readOnly = true)
     public PaiementResponse getById(Integer id) {
         return PaiementMapper.toResponse(getEntity(id));
+    }
+
+    /** Envoi manuel, depuis l'historique, de la facture liée et du reçu. */
+    @Transactional(readOnly = true)
+    public void envoyerEmailPaiement(Integer id) {
+        Paiement paiement = getEntity(id);
+        if (paiement.getFactureValidee() == null || paiement.getDemande() == null) {
+            throw new BusinessException(
+                    "Ce paiement n'a pas de facture validée ou de demande rattachée.");
+        }
+        clientMailNotifier.envoyerPaiement(
+                paiement.getId(),
+                paiement.getReferencePaiement(),
+                paiement.getFactureValidee().getId(),
+                paiement.getDemande());
     }
 
     @Transactional(readOnly = true)

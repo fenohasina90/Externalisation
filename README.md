@@ -7,7 +7,7 @@ rapports, journal d'audit et sauvegardes de la base MySQL.
 > **État du projet (novembre 2026)** : le module « plans de paiement / échéances » a été
 > supprimé. Les paiements sont désormais rattachés à une **facture validée**. Le schéma consolidé
 > contient **28 tables** et **67 permissions** (4 rôles : SUPER_ADMIN, ADMIN, ACCUEIL, ECONOMAT),
-> et le backend est couvert par **292 tests automatisés**.
+> et le backend est couvert par **294 tests automatisés**.
 >
 > La réinitialisation de mot de passe envoie désormais le mot de passe temporaire **directement à
 > l'utilisateur par e-mail** (Gmail SMTP) : les actions « approuver » / « refuser » côté
@@ -61,7 +61,9 @@ Externalisation/
   (repli sur le responsable si la société n'a pas d'e-mail).
 - E-mail **automatique** après chaque paiement : facture validée liée + reçu de paiement en PDF.
   Envoi asynchrone après commit (`PaiementMailEvent`, pool `mailTaskExecutor`) : la confirmation
-  est immédiate, l'échec SMTP est journalisé sans bloquer l'encaissement.
+  est immédiate, l'échec SMTP est journalisé sans bloquer l'encaissement. Le montant reçu est
+  indiqué dans le message ; l'historique des paiements et l'onglet « Facturation » du client ont
+  un bouton d'envoi manuel (ce dernier rappelle les filtres appliqués).
 - Sauvegarde/restauration MySQL : dump gzip, chiffrement AES-256-GCM optionnel, planification et
   rétention.
 

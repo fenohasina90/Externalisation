@@ -18,7 +18,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,6 +41,12 @@ class ClientMailNotifierTest {
     private FactureValideeRepository factureValideeRepository;
     @Mock
     private com.cabex.backend.demande.repository.DemandeServiceRepository demandeRepository;
+    @Mock
+    private com.cabex.backend.paiement.repository.PaiementRepository paiementRepository;
+    @Mock
+    private com.cabex.backend.client.repository.SocieteRepository societeRepository;
+    @Mock
+    private com.cabex.backend.client.repository.ClientResponsableRepository responsableRepository;
 
     @InjectMocks
     private ClientMailNotifier notifier;
@@ -201,6 +209,51 @@ class ClientMailNotifierTest {
         verify(mailService).envoyerDocumentsClient(
                 eq("societe@cabex.mg"), eq("responsable@cabex.mg"),
                 contains("PAY-2026-00001"), anyString(), anyList());
+    }
+
+    @Test
+    void emailPaiementMentionneLeMontantRecu() {
+        DemandeService demande = demande("responsable@cabex.mg", "societe@cabex.mg");
+        when(paiementRepository.findById(77)).thenReturn(java.util.Optional.of(
+                com.cabex.backend.paiement.entity.Paiement.builder()
+                        .id(77).montantPaye(new BigDecimal("1250000")).build()));
+        when(documentService.factureValideeDocument(55))
+                .thenReturn("facture".getBytes(StandardCharsets.UTF_8));
+        when(documentService.recuPaiement(77))
+                .thenReturn("recu".getBytes(StandardCharsets.UTF_8));
+        when(mailService.envoyerDocumentsClient(
+                anyString(), anyString(), anyString(), anyString(), anyList()))
+                .thenReturn(true);
+
+        notifier.notifierPaiement(77, "PAY-2026-00001", 55, demande);
+
+        verify(mailService).envoyerDocumentsClient(
+                eq("societe@cabex.mg"), eq("responsable@cabex.mg"), anyString(),
+                argThat(corps -> corps.matches(".*1.{0,2}250.{0,2}000 Ar.*")), anyList());
+    }
+
+    @Test
+    void emailFacturationClientRappelleLesFiltresAppliques() {
+        com.cabex.backend.client.entity.Societe societe =
+                com.cabex.backend.client.entity.Societe.builder()
+                        .id(3).nomSociete("TechPro").email("societe@cabex.mg").build();
+        when(societeRepository.findById(3)).thenReturn(java.util.Optional.of(societe));
+        when(responsableRepository.findBySocieteIdAndActifTrue(3)).thenReturn(List.of());
+        when(documentService.facturationClientPdf(
+                3, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), "desc", "PRO-"))
+                .thenReturn("pdf".getBytes(StandardCharsets.UTF_8));
+        when(mailService.envoyerDocumentsClient(
+                anyString(), nullable(String.class), anyString(), anyString(), anyList()))
+                .thenReturn(true);
+
+        notifier.envoyerFacturationClient(
+                3, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), "desc", "PRO-");
+
+        verify(mailService).envoyerDocumentsClient(
+                eq("societe@cabex.mg"), isNull(), anyString(),
+                argThat(corps -> corps.contains("01/06/2026")
+                        && corps.contains("30/06/2026") && corps.contains("PRO-")),
+                anyList());
     }
 
     @Test

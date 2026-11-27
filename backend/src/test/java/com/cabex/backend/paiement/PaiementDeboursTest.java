@@ -52,6 +52,7 @@ class PaiementDeboursTest {
     @Mock private LigneServiceService ligneServiceService;
     @Mock private com.cabex.backend.facture.service.FactureService factureService;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    @Mock private com.cabex.backend.mail.ClientMailNotifier clientMailNotifier;
 
     private PaiementGestionService service;
 
@@ -61,7 +62,7 @@ class PaiementDeboursTest {
                 modeRepository, factureValideeRepository,
                 utilisateurRepository, notificationService, auditService,
                 demandeGestionService, ligneRepository, ligneServiceService, factureService,
-                eventPublisher);
+                eventPublisher, clientMailNotifier);
         lenient().when(modeRepository.findById(1)).thenReturn(Optional.of(
                 ModePaiement.builder().id(1).code("ESPECES").libelle("Espèces").build()));
         lenient().when(paiementRepository.save(any())).thenAnswer(inv -> {

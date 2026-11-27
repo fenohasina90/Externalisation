@@ -80,6 +80,16 @@ public class PaiementController {
         return ResponseEntity.ok(paiementService.getByReference(reference));
     }
 
+    @PostMapping("/{id}/envoyer-email")
+    @PreAuthorize("hasAuthority('PAIEMENT_VIEW')")
+    @Operation(summary = "Envoyer la facture liée et le reçu par e-mail au client",
+            description = "Destinataire : société, responsable en copie ; le montant reçu est rappelé dans le message")
+    public ResponseEntity<java.util.Map<String, String>> envoyerEmail(@PathVariable Integer id) {
+        paiementService.envoyerEmailPaiement(id);
+        return ResponseEntity.ok(java.util.Map.of(
+                "message", "Facture et reçu envoyés par e-mail au client."));
+    }
+
     @PostMapping
     @PreAuthorize("hasAuthority('PAIEMENT_CREATE')")
     @Operation(summary = "Enregistrer un paiement",

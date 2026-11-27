@@ -2,6 +2,8 @@ package com.cabex.backend.mail;
 
 import com.cabex.backend.client.entity.ClientResponsable;
 import com.cabex.backend.client.entity.Societe;
+import com.cabex.backend.client.repository.ClientResponsableRepository;
+import com.cabex.backend.client.repository.SocieteRepository;
 import com.cabex.backend.demande.entity.DemandeService;
 import com.cabex.backend.demande.repository.DemandeServiceRepository;
 import com.cabex.backend.document.service.DocumentGestionService;
@@ -13,6 +15,8 @@ import com.cabex.backend.facture.entity.FactureValidee;
 import com.cabex.backend.facture.repository.FactureRepository;
 import com.cabex.backend.facture.repository.FactureValideeRepository;
 import com.cabex.backend.mail.MailService.PieceJointeEmail;
+import com.cabex.backend.paiement.entity.Paiement;
+import com.cabex.backend.paiement.repository.PaiementRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
@@ -22,8 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Envois e-mail manuels au responsable client, déclenchés par les boutons
@@ -47,17 +54,26 @@ public class ClientMailNotifier {
     private final FactureRepository factureRepository;
     private final FactureValideeRepository factureValideeRepository;
     private final DemandeServiceRepository demandeRepository;
+    private final PaiementRepository paiementRepository;
+    private final SocieteRepository societeRepository;
+    private final ClientResponsableRepository responsableRepository;
 
     public ClientMailNotifier(MailService mailService,
                               DocumentGestionService documentService,
                               FactureRepository factureRepository,
                               FactureValideeRepository factureValideeRepository,
-                              DemandeServiceRepository demandeRepository) {
+                              DemandeServiceRepository demandeRepository,
+                              PaiementRepository paiementRepository,
+                              SocieteRepository societeRepository,
+                              ClientResponsableRepository responsableRepository) {
         this.mailService = mailService;
         this.documentService = documentService;
         this.factureRepository = factureRepository;
         this.factureValideeRepository = factureValideeRepository;
         this.demandeRepository = demandeRepository;
+        this.paiementRepository = paiementRepository;
+        this.societeRepository = societeRepository;
+        this.responsableRepository = responsableRepository;
     }
 
     /**
@@ -171,34 +187,130 @@ public class ClientMailNotifier {
     public void notifierPaiement(Integer paiementId, String referencePaiement,
                                  Integer factureValideeId, DemandeService demande) {
         try {
-            Destinataires destinataires = destinataires(demande);
-            List<PieceJointeEmail> pieces = List.of(
-                    new PieceJointeEmail(
-                            "facture-" + MailService.nomFichier(
-                                    String.valueOf(factureValideeId)) + ".pdf",
-                            documentService.factureValideeDocument(factureValideeId)),
-                    new PieceJointeEmail(
-                            "recu-" + MailService.nomFichier(referencePaiement) + ".pdf",
-                            documentService.recuPaiement(paiementId)));
-            String corps = "<p>Bonjour,</p>"
-                    + "<p>Votre paiement <strong>" + referencePaiement
-                    + "</strong> a bien été enregistré.</p>"
-                    + "<p>Vous trouverez en pièces jointes la facture concernée et le reçu de paiement.</p>"
-                    + "<p>Cordialement,<br/>L'équipe CABEX</p>";
-            boolean envoye = mailService.envoyerDocumentsClient(
-                    destinataires.principal(),
-                    destinataires.copie(),
-                    "Paiement " + referencePaiement + " — CABEX",
-                    corps,
-                    pieces);
-            if (!envoye) {
-                log.warn("E-mail de paiement non envoyé à {} pour {}",
-                        destinataires.principal(), referencePaiement);
-            }
+            envoyerPaiement(paiementId, referencePaiement, factureValideeId, demande, false);
         } catch (RuntimeException e) {
             log.error("Échec de l'e-mail de paiement {} (paiement {})",
                     referencePaiement, paiementId, e);
         }
+    }
+
+    /** Envoi manuel depuis l'historique des paiements : les erreurs sont visibles. */
+    @Transactional(readOnly = true)
+    public void envoyerPaiement(Integer paiementId, String referencePaiement,
+                                Integer factureValideeId, DemandeService demande) {
+        envoyerPaiement(paiementId, referencePaiement, factureValideeId, demande, true);
+    }
+
+    private void envoyerPaiement(Integer paiementId, String referencePaiement,
+                                 Integer factureValideeId, DemandeService demande,
+                                 boolean erreurVisible) {
+        Destinataires destinataires = destinataires(demande);
+        List<PieceJointeEmail> pieces = List.of(
+                new PieceJointeEmail(
+                        "facture-" + MailService.nomFichier(String.valueOf(factureValideeId)) + ".pdf",
+                        documentService.factureValideeDocument(factureValideeId)),
+                new PieceJointeEmail(
+                        "recu-" + MailService.nomFichier(referencePaiement) + ".pdf",
+                        documentService.recuPaiement(paiementId)));
+        String montant = montantRecu(paiementId);
+        String corps = "<p>Bonjour,</p>"
+                + "<p>Votre paiement <strong>" + referencePaiement
+                + "</strong> a bien été enregistré.</p>"
+                + "<p><strong>Montant reçu : " + montant + "</strong></p>"
+                + "<p>Vous trouverez en pièces jointes la facture concernée et le reçu de paiement.</p>"
+                + "<p>Cordialement,<br/>L'équipe CABEX</p>";
+        boolean envoye = mailService.envoyerDocumentsClient(
+                destinataires.principal(),
+                destinataires.copie(),
+                "Paiement " + referencePaiement + " — CABEX",
+                corps,
+                pieces);
+        if (!envoye) {
+            if (erreurVisible) {
+                verifierEnvoi(false);
+            } else {
+                log.warn("E-mail de paiement non envoyé à {} pour {}",
+                        destinataires.principal(), referencePaiement);
+            }
+        }
+    }
+
+    private String montantRecu(Integer paiementId) {
+        Paiement paiement = paiementRepository.findById(paiementId).orElse(null);
+        if (paiement == null || paiement.getMontantPaye() == null) {
+            return "non précisé";
+        }
+        return String.format(Locale.FRANCE, "%,.0f Ar", paiement.getMontantPaye());
+    }
+
+    /**
+     * Envoie le PDF de facturation d'un client avec les mêmes filtres que
+     * l'export PDF de l'onglet « Facturation ». Les filtres appliqués sont
+     * rappelés dans le corps du message.
+     */
+    @Transactional(readOnly = true)
+    public void envoyerFacturationClient(Integer societeId, LocalDate dateDebut, LocalDate dateFin,
+                                         String ordre, String recherche) {
+        Destinataires destinataires = destinatairesSociete(societeId);
+        byte[] pdf = documentService.facturationClientPdf(
+                societeId, dateDebut, dateFin, ordre, recherche);
+        String corps = "<p>Bonjour,</p>"
+                + "<p>Vous trouverez en pièce jointe le PDF de facturation de votre compte CABEX.</p>"
+                + "<p><strong>Filtres appliqués :</strong><br/>" + filtresFacturation(
+                        dateDebut, dateFin, ordre, recherche) + "</p>"
+                + "<p>Cordialement,<br/>L'équipe CABEX</p>";
+        verifierEnvoi(mailService.envoyerDocumentsClient(
+                destinataires.principal(),
+                destinataires.copie(),
+                "Facturation CABEX — client " + societeId,
+                corps,
+                List.of(new PieceJointeEmail(
+                        "facturation-client-" + societeId + ".pdf", pdf))));
+    }
+
+    private String filtresFacturation(LocalDate dateDebut, LocalDate dateFin,
+                                      String ordre, String recherche) {
+        List<String> lignes = new ArrayList<>();
+        DateTimeFormatter format = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        if (dateDebut != null || dateFin != null) {
+            String debut = dateDebut != null ? dateDebut.format(format) : "début";
+            String fin = dateFin != null ? dateFin.format(format) : "aujourd'hui";
+            lignes.add("Période : du " + debut + " au " + fin);
+        } else {
+            lignes.add("Période : toutes les dates");
+        }
+        if (recherche != null && !recherche.isBlank()) {
+            lignes.add("Recherche : « " + recherche.trim() + " »");
+        }
+        lignes.add("Tri : " + ("asc".equalsIgnoreCase(ordre)
+                ? "du plus ancien au plus récent"
+                : "du plus récent au plus ancien"));
+        if (dateDebut == null && dateFin == null && (recherche == null || recherche.isBlank())) {
+            lignes.add("Aucun autre filtre : toutes les factures sont incluses.");
+        }
+        return String.join("<br/>", lignes);
+    }
+
+    /** Société en destinataire principal, responsable actif en copie. */
+    private Destinataires destinatairesSociete(Integer societeId) {
+        Societe societe = societeRepository.findById(societeId).orElse(null);
+        String emailSociete = societe != null && societe.getEmail() != null
+                && !societe.getEmail().isBlank() ? societe.getEmail().trim() : null;
+        String emailResponsable = responsableRepository.findBySocieteIdAndActifTrue(societeId)
+                .stream()
+                .map(ClientResponsable::getEmail)
+                .filter(email -> email != null && !email.isBlank())
+                .findFirst()
+                .map(String::trim)
+                .orElse(null);
+        if (emailSociete == null && emailResponsable == null) {
+            throw new BusinessException(
+                    "Ni la société ni un responsable actif n'a d'adresse e-mail. "
+                            + "Renseignez une adresse avant l'envoi.");
+        }
+        return emailSociete != null
+                ? new Destinataires(emailSociete, emailResponsable)
+                : new Destinataires(emailResponsable, null);
     }
 
     /**

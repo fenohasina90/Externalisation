@@ -38,6 +38,12 @@ export const paiementsApi = {
     return data
   },
 
+  /** Envoie au client la facture liée et le reçu (montant reçu rappelé dans le mail). */
+  async envoyerEmail(id: number): Promise<{ message: string }> {
+    const { data } = await http.post<{ message: string }>(`/paiements/${id}/envoyer-email`)
+    return data
+  },
+
   async create(payload: CreatePaiementPayload): Promise<Paiement> {
     const { data } = await http.post<Paiement>('/paiements', payload)
     return data
