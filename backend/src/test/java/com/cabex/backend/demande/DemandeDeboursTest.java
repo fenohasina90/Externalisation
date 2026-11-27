@@ -132,7 +132,7 @@ class DemandeDeboursTest {
         var reponse = demandeService.create(requeteDebours("Divers + timbres", 1));
 
         assertNotNull(reponse.referenceDemande());
-        // Format documenté : DEM-JJ-MM-AAAA-EXT-XXXXX (date de la demande 01/09/2026).
+        // Format documenté : DEM-DDMMYYYYEXTXXXXX (date de la demande 01/09/2026).
         assertEquals("DEM-01092026EXT00001", reponse.referenceDemande());
         verify(ligneRepository).save(argThat(l ->
                 "DEBOURS".equals(l.getCategorie()) && "Divers + timbres".equals(l.getDesignationDebours())));

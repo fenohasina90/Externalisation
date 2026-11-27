@@ -75,7 +75,7 @@ public class DemandeController {
 
     @GetMapping("/reference/{reference}")
     @PreAuthorize("hasAuthority('DEMANDE_VIEW')")
-    @Operation(summary = "Consulter le détail d'une demande par sa référence (ex. DEM-2026-00017)")
+    @Operation(summary = "Consulter le détail d'une demande par sa référence (ex. DEM-12112026EXT00009)")
     public ResponseEntity<DemandeResponse> getByReference(@PathVariable String reference) {
         return ResponseEntity.ok(demandeService.getByReference(reference));
     }
@@ -91,7 +91,7 @@ public class DemandeController {
     @PostMapping
     @PreAuthorize("hasAuthority('DEMANDE_CREATE')")
     @Operation(summary = "Créer une demande de service",
-            description = "Génère une référence unique DEM-YYYY-NNNNN et crée l'historique initial (EN_ATTENTE)")
+            description = "Génère une référence unique DEM-DDMMYYYYEXTXXXXX et crée l'historique initial (EN_ATTENTE)")
     public ResponseEntity<DemandeResponse> create(@Valid @RequestBody CreateDemandeRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(demandeService.create(request));
     }

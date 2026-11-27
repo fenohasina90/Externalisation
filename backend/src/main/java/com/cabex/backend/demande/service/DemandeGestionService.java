@@ -585,9 +585,9 @@ public class DemandeGestionService {
     }
 
     /**
-     * Génère une référence au format DEM-JJ-MM-AAAA-EXT-XXXXX.
+     * Génère une référence au format DEM-DDMMYYYYEXTXXXXX.
      * EXT-XXXXX se réinitialise chaque année (séquence par année).
-     * Exemple : 01/01/2026 → DEM-01-01-2026-EXT-00001.
+     * Exemple : 01/01/2026 → DEM-01012026EXT00001.
      */
     private String genererReference(LocalDate dateDemande) {
         int annee = dateDemande.getYear();
